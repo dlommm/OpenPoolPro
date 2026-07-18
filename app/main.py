@@ -60,4 +60,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import today as today_router
     app.include_router(today_router.router)
 
+    from app.routers import visits as visits_router
+    app.include_router(visits_router.router)
+
     return app
