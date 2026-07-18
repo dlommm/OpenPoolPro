@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Money{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-3">
+  <a href="/money?ym={{ prev }}" class="min-h-11 px-3 flex items-center text-sky-700">‹</a>
+  <h1 class="text-xl font-bold">{{ year }}-{{ "%02d"|format(month) }}</h1>
+  <a href="/money?ym={{ next }}" class="min-h-11 px-3 flex items-center text-sky-700">›</a>
+</div>
+<p class="text-2xl font-bold mb-3">{{ grand | dollars }} <span class="text-sm text-slate-500 font-normal">billable</span></p>
+<div class="space-y-2">
+  {% for r in rows %}
+  <details class="bg-white rounded-lg p-3 shadow-sm">
+    <summary class="min-h-11 flex items-center justify-between font-semibold">
+      <span>{{ r.customer.name }}</span><span>{{ r.total_cents | dollars }}</span></summary>
+    <div class="text-sm text-slate-600 pt-2 space-y-1">
+      <div class="flex justify-between"><span>Labor ({{ r.labor_visits }} visits)</span><span>{{ r.labor_cents | dollars }}</span></div>
+      <div class="flex justify-between"><span>Chemicals (cost {{ r.chem_cost_cents | dollars }})</span><span>{{ r.chem_billable_cents | dollars }}</span></div>
+      {% for j in r.jobs %}<div class="flex justify-between"><span>Job: {{ j.title }}</span><span>{{ j.labor_cents | dollars }}</span></div>{% endfor %}
+    </div>
+  </details>
+  {% else %}<p class="text-slate-500">Nothing billable this month.</p>{% endfor %}
+</div>
+<a href="/money/export?ym={{ ym }}" class="block text-center mt-4 min-h-11 py-2 rounded-lg bg-sky-800 text-white font-semibold">⬇ Export QuickBooks CSV</a>
+{% endblock %}

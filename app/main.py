@@ -69,4 +69,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import jobs as jobs_router
     app.include_router(jobs_router.router)
 
+    from app.routers import money as money_router
+    app.include_router(money_router.router)
+
     return app

@@ -1,0 +1,41 @@
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import PlainTextResponse
+from sqlalchemy.orm import Session
+
+from app import config
+from app.db import get_session
+from app.main import templates
+from app.qbo import export_csv, month_rollup
+
+router = APIRouter()
+
+
+def _parse_ym(ym: str | None) -> tuple[int, int]:
+    if ym:
+        y, m = ym.split("-")
+        return int(y), int(m)
+    now = datetime.now(config.tz())
+    return now.year, now.month
+
+
+@router.get("/money")
+def money_page(request: Request, ym: str | None = None,
+               session: Session = Depends(get_session)):
+    year, month = _parse_ym(ym)
+    rows = month_rollup(session, year, month)
+    prev = f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
+    nxt = f"{year + 1}-01" if month == 12 else f"{year}-{month + 1:02d}"
+    return templates.TemplateResponse(request, "money.html", {
+        "rows": rows, "year": year, "month": month,
+        "ym": f"{year}-{month:02d}", "prev": prev, "next": nxt,
+        "grand": sum(r.total_cents for r in rows)})
+
+
+@router.get("/money/export")
+def money_export(ym: str | None = None, session: Session = Depends(get_session)):
+    year, month = _parse_ym(ym)
+    csv_text = export_csv(session, year, month)
+    return PlainTextResponse(csv_text, media_type="text/csv", headers={
+        "Content-Disposition": f"attachment; filename=qbo-{year}-{month:02d}.csv"})
