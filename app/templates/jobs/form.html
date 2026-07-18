@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-3">{{ "Edit" if j else "New" }} job</h1>
+<form method="post" class="space-y-3">
+  <label class="block"><span class="text-sm text-slate-600">Property</span>
+    <select name="property_id" class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+      {% for p in props %}
+      <option value="{{ p.id }}" {{ "selected" if selected == p.id }}>{{ p.customer.name }} — {{ p.label }}</option>
+      {% endfor %}
+    </select></label>
+  <label class="block"><span class="text-sm text-slate-600">Title</span>
+    <input name="title" value="{{ j.title if j else '' }}" required class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  <label class="block"><span class="text-sm text-slate-600">Description</span>
+    <textarea name="description" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ j.description if j else "" }}</textarea></label>
+  <div class="grid grid-cols-3 gap-3">
+    <label class="block"><span class="text-sm text-slate-600">Priority</span>
+      <select name="priority" class="w-full min-h-11 rounded-lg border border-slate-300 px-2">
+        {% for pr in ["normal","high"] %}<option {{ "selected" if j and j.priority == pr }}>{{ pr }}</option>{% endfor %}
+      </select></label>
+    <label class="block"><span class="text-sm text-slate-600">Labor $</span>
+      <input inputmode="decimal" name="labor_dollars"
+             value="{{ '%.2f'|format(j.labor_cents / 100) if j else '' }}"
+             class="w-full min-h-11 rounded-lg border border-slate-300 px-2"></label>
+    <label class="block"><span class="text-sm text-slate-600">Date</span>
+      <input type="date" name="scheduled_date" value="{{ j.scheduled_date or '' if j else '' }}"
+             class="w-full min-h-11 rounded-lg border border-slate-300 px-2"></label>
+  </div>
+  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save</button>
+</form>
+{% endblock %}

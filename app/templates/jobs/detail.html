@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex justify-between items-center mb-1">
+  <h1 class="text-xl font-bold">{{ "🔴 " if j.priority == "high" }}{{ j.title }}</h1>
+  <a href="/jobs/{{ j.id }}/edit" class="text-sky-700 min-h-11 flex items-center px-2">Edit</a>
+</div>
+<p class="text-sm text-slate-600 mb-1">{{ j.property.customer.name }} — {{ j.property.label }}</p>
+<p class="text-sm text-slate-500 mb-3">{{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %} · {{ j.labor_cents | dollars }}</p>
+{% if j.description %}<p class="bg-white rounded-lg p-3 shadow-sm mb-3">{{ j.description }}</p>{% endif %}
+
+<div id="photo-strip" class="flex gap-2 flex-wrap mb-2">
+  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="w-20 h-20 object-cover rounded-lg">{% endfor %}
+</div>
+<input type="file" accept="image/*" capture="environment" multiple name="files"
+       hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
+       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="w-full min-h-11 mb-3">
+
+{% if j.status != "done" %}
+<form method="post" action="/jobs/{{ j.id }}/schedule" class="flex gap-2 mb-2">
+  <input type="date" name="scheduled_date" required class="flex-1 min-h-11 rounded-lg border border-slate-300 px-3">
+  <button class="min-h-11 px-4 rounded-lg border border-sky-700 text-sky-700">Schedule</button>
+</form>
+<form method="post" action="/jobs/{{ j.id }}/complete">
+  <button class="w-full min-h-12 rounded-xl bg-emerald-600 text-white text-lg font-bold">✅ Complete</button>
+</form>
+{% endif %}
+{% endblock %}

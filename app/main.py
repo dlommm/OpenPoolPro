@@ -66,4 +66,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import week as week_router
     app.include_router(week_router.router)
 
+    from app.routers import jobs as jobs_router
+    app.include_router(jobs_router.router)
+
     return app

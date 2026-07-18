@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-3">
+  <h1 class="text-xl font-bold">Jobs</h1>
+  <a href="/jobs/new" class="min-h-11 px-4 flex items-center rounded-lg bg-sky-800 text-white font-semibold">+ Add</a>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-3">
+  {% for st in ["open","scheduled","done"] %}
+  <a href="/jobs?status={{ st }}" class="min-h-11 flex items-center justify-center rounded-lg
+     {{ 'bg-sky-800 text-white' if st == status else 'bg-white border border-slate-300' }}">{{ st }}</a>
+  {% endfor %}
+</div>
+<div class="space-y-2">
+  {% for j in jobs %}
+  <a href="/jobs/{{ j.id }}" class="block bg-white rounded-lg p-3 shadow-sm">
+    <div class="flex justify-between">
+      <span class="font-semibold">{{ "🔴 " if j.priority == "high" }}{{ j.title }}</span>
+      <span class="text-sm">{{ j.labor_cents | dollars }}</span>
+    </div>
+    <div class="text-sm text-slate-500">{{ j.property.customer.name }} — {{ j.property.label }}
+      {% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %}</div>
+  </a>
+  {% else %}<p class="text-slate-500">No {{ status }} jobs.</p>{% endfor %}
+</div>
+{% endblock %}
