@@ -45,10 +45,6 @@ def create_app(engine=None) -> FastAPI:
     def sw():
         return FileResponse("app/static/sw.js", media_type="application/javascript")
 
-    @app.get("/")
-    def index(request: Request):
-        return RedirectResponse("/health")
-
     from app.routers import auth as auth_router
     app.include_router(auth_router.router)
 
@@ -60,5 +56,8 @@ def create_app(engine=None) -> FastAPI:
 
     from app.routers import photos as photos_router
     app.include_router(photos_router.router)
+
+    from app.routers import today as today_router
+    app.include_router(today_router.router)
 
     return app

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Today{% endblock %}
+{% block content %}
+<h1 class="text-xl font-bold">{{ d.strftime("%A, %b %-d") }}</h1>
+<p class="text-slate-500 mb-2">{{ done }} of {{ total }} done</p>
+<div class="h-2 bg-slate-200 rounded-full mb-4">
+  <div class="h-2 bg-emerald-500 rounded-full" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
+</div>
+
+{% if missed %}
+<h2 class="font-bold text-red-700 mb-2">Missed</h2>
+<div class="space-y-2 mb-4">
+  {% for m in missed %}
+  <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+    <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="font-semibold block">
+      {{ m.property.customer.name }} — {{ m.property.label }}</a>
+    <div class="text-sm text-slate-600">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+    <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
+      <button class="text-sm text-red-700 min-h-11">Dismiss</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="space-y-2">
+  {% for s in stops %}
+  <div class="bg-white rounded-lg p-3 shadow-sm {{ 'opacity-60' if s.status != 'due' }}">
+    <div class="flex justify-between items-start">
+      <a href="/visit/{{ s.property.id }}/{{ d }}" class="font-semibold">
+        {{ s.property.customer.name }} — {{ s.property.label }}
+        {% if s.moved_in %}<span class="text-xs text-amber-600">(moved)</span>{% endif %}</a>
+      <span>{{ "✅" if s.status == "done" else "⏭" if s.status == "skipped" else "" }}</span>
+    </div>
+    <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
+       class="text-sm text-sky-700 block min-h-11 flex items-center">📍 {{ s.property.address }}</a>
+    <div class="text-sm text-slate-500">
+      {% if s.property.gate_code %}Gate {{ s.property.gate_code }}{% endif %}
+      {% if s.property.dog_warning %} · 🐕 {{ s.property.dog_note }}{% endif %}
+    </div>
+  </div>
+  {% else %}<p class="text-slate-500">No stops today. 🏖</p>{% endfor %}
+</div>
+
+{% if jobs %}
+<h2 class="font-bold mt-4 mb-2">Jobs today</h2>
+<div class="space-y-2">
+  {% for j in jobs %}
+  <a href="/jobs/{{ j.id }}" class="block bg-amber-50 rounded-lg p-3 shadow-sm">
+    <span class="font-semibold">🔧 {{ j.title }}</span>
+    <span class="text-sm text-slate-600 block">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
