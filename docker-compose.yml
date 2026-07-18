@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      APP_TZ: ${APP_TZ:-America/New_York}
+    restart: unless-stopped
