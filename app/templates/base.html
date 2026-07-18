@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <title>{% block title %}Coastline Pools{% endblock %}</title>
+</head>
+<body class="bg-slate-100 text-slate-900 pb-24" style="padding-top: env(safe-area-inset-top)">
+  <main class="max-w-lg mx-auto px-3 pt-3">{% block content %}{% endblock %}</main>
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200"
+       style="padding-bottom: env(safe-area-inset-bottom)">
+    <div class="max-w-lg mx-auto grid grid-cols-6 text-center text-[11px]">
+      {% for href, label, icon in [("/", "Today", "☀️"), ("/week", "Week", "📅"),
+        ("/customers", "Customers", "👤"), ("/jobs", "Jobs", "🔧"),
+        ("/money", "Money", "💵"), ("/settings", "Settings", "⚙️")] %}
+      <a href="{{ href }}" class="min-h-11 py-2 flex flex-col items-center justify-center">
+        <span class="text-lg leading-none">{{ icon }}</span><span>{{ label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </nav>
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
+</body>
+</html>
