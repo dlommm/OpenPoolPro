@@ -72,4 +72,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import money as money_router
     app.include_router(money_router.router)
 
+    from app.routers import settings as settings_router
+    app.include_router(settings_router.router)
+
     return app
