@@ -46,3 +46,11 @@ def test_deactivate_customer_hides_from_list(client, engine):
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/deactivate")
     assert "Old Guy" not in client.get("/customers").text
+
+
+def test_missing_records_return_404(client):
+    assert client.get("/customers/999").status_code == 404
+    assert client.get("/customers/999/edit").status_code == 404
+    assert client.get("/properties/999/edit").status_code == 404
+    assert client.post("/customers/999/deactivate").status_code == 404
+    assert client.post("/properties/999/deactivate").status_code == 404

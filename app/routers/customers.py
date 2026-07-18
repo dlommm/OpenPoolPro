@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.db import get_session
+from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
 
@@ -46,7 +46,7 @@ def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
 
 @router.get("/customers/{cid}")
 def customer_detail(request: Request, cid: int, session: Session = Depends(get_session)):
-    c = session.get(models.Customer, cid)
+    c = get_or_404(session, models.Customer, cid)
     props = [p for p in c.properties if p.active]
     rates = {p.id: effective_rate_cents(session, p) for p in props}
     visits = session.scalars(
@@ -63,14 +63,14 @@ def customer_detail(request: Request, cid: int, session: Session = Depends(get_s
 @router.get("/customers/{cid}/edit")
 def edit_customer_form(request: Request, cid: int, session: Session = Depends(get_session)):
     return templates.TemplateResponse(request, "customers/form.html",
-                                      {"c": session.get(models.Customer, cid)})
+                                      {"c": get_or_404(session, models.Customer, cid)})
 
 
 @router.post("/customers/{cid}/edit")
 def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form(""),
                   phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
                   session: Session = Depends(get_session)):
-    c = session.get(models.Customer, cid)
+    c = get_or_404(session, models.Customer, cid)
     c.name, c.phone, c.email, c.notes = name, phone, email, notes
     c.qb_display_name = qb_display_name.strip() or name
     session.commit()
@@ -79,7 +79,7 @@ def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form("
 
 @router.post("/customers/{cid}/deactivate")
 def deactivate_customer(cid: int, session: Session = Depends(get_session)):
-    session.get(models.Customer, cid).active = False
+    get_or_404(session, models.Customer, cid).active = False
     session.commit()
     return RedirectResponse("/customers", status_code=303)
 
@@ -96,7 +96,7 @@ def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
 @router.get("/customers/{cid}/properties/new")
 def new_property_form(request: Request, cid: int, session: Session = Depends(get_session)):
     return templates.TemplateResponse(request, "customers/property_form.html",
-        {"p": None, "customer": session.get(models.Customer, cid)})
+        {"p": None, "customer": get_or_404(session, models.Customer, cid)})
 
 
 @router.post("/customers/{cid}/properties/new")
@@ -117,7 +117,7 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
 
 @router.get("/properties/{pid}/edit")
 def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session)):
-    p = session.get(models.Property, pid)
+    p = get_or_404(session, models.Property, pid)
     return templates.TemplateResponse(request, "customers/property_form.html",
                                       {"p": p, "customer": p.customer})
 
@@ -129,7 +129,7 @@ def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
                   session: Session = Depends(get_session)):
-    p = session.get(models.Property, pid)
+    p = get_or_404(session, models.Property, pid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars)
     session.commit()
@@ -138,7 +138,7 @@ def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
 
 @router.post("/properties/{pid}/deactivate")
 def deactivate_property(pid: int, session: Session = Depends(get_session)):
-    p = session.get(models.Property, pid)
+    p = get_or_404(session, models.Property, pid)
     p.active = False
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)

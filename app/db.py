@@ -34,3 +34,12 @@ def make_engine(url: str | None = None):
 def get_session(request: Request):
     with Session(request.app.state.engine) as session:
         yield session
+
+
+def get_or_404(session, model, id_):
+    from fastapi import HTTPException
+
+    obj = session.get(model, id_)
+    if obj is None:
+        raise HTTPException(status_code=404)
+    return obj
