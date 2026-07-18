@@ -1,5 +1,6 @@
 import os
 
+from fastapi import Request
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.pool import StaticPool
@@ -30,6 +31,6 @@ def make_engine(url: str | None = None):
     return engine
 
 
-def get_session(request):
+def get_session(request: Request):
     with Session(request.app.state.engine) as session:
         yield session
