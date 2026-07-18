@@ -17,12 +17,14 @@ def create_app(engine=None) -> FastAPI:
     Base.metadata.create_all(app.state.engine)
     seeds.run(app.state.engine)
 
-    EXEMPT = ("/login", "/static", "/manifest.json", "/sw.js", "/health")
+    EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health"}
+    EXEMPT_PREFIX = ("/static",)
 
     @app.middleware("http")
     async def require_auth(request, call_next):
         path = request.url.path
-        if not any(path.startswith(p) for p in EXEMPT) and not request.session.get("auth"):
+        exempt = path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
+        if not exempt and not request.session.get("auth"):
             return RedirectResponse("/login", status_code=303)
         return await call_next(request)
 

@@ -31,3 +31,16 @@ def test_login_logout_flow(engine, monkeypatch):
     c.post("/logout")
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303
+
+
+def test_prefixed_lookalike_paths_not_exempt(engine, monkeypatch):
+    c = make_client(engine, monkeypatch)
+    for path in ["/healthz", "/loginfoo", "/sw.js.map"]:
+        r = c.get(path, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+def test_exempt_paths_reachable_logged_out(engine, monkeypatch):
+    c = make_client(engine, monkeypatch)
+    for path in ["/login", "/manifest.json", "/sw.js", "/health"]:
+        assert c.get(path, follow_redirects=False).status_code == 200

@@ -7,6 +7,7 @@ def test_health(client):
 def test_get_session_dependency_injects(engine, monkeypatch, tmp_path):
     import app.config as config
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(config, "APP_PASSWORD", "probe-pass")
     from fastapi import Depends
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import Session
@@ -19,4 +20,8 @@ def test_get_session_dependency_injects(engine, monkeypatch, tmp_path):
     def probe(session: Session = Depends(get_session)):
         return {"ok": session.is_active}
 
-    assert TestClient(app).get("/session-probe").status_code == 200
+    client = TestClient(app)
+    client.post("/login", data={"password": "probe-pass"})
+    r = client.get("/session-probe")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
