@@ -55,4 +55,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import customers as customers_router
     app.include_router(customers_router.router)
 
+    from app.routers import pools as pools_router
+    app.include_router(pools_router.router)
+
     return app

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-3">{{ "Edit" if pool else "Add" }} pool</h1>
+<form method="post" class="space-y-3">
+  <label class="block"><span class="text-sm text-slate-600">Label</span>
+    <input name="label" value="{{ pool.label if pool else 'Main pool' }}" class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  <div>
+    <span class="text-sm text-slate-600">Shape</span>
+    <div class="grid grid-cols-4 gap-2 mt-1">
+      {% for s, icon in [("rectangle","▭"),("round","◯"),("oval","⬭"),("kidney","🫘")] %}
+      <label class="min-h-11 rounded-lg border border-slate-300 flex flex-col items-center justify-center has-[:checked]:border-sky-700 has-[:checked]:bg-sky-50">
+        <input type="radio" name="shape" value="{{ s }}" class="sr-only" hx-get="/pools/gallons-preview"
+               hx-include="closest form" hx-target="#gallons" {{ "checked" if (pool.shape if pool else "rectangle") == s }}>
+        <span class="text-xl">{{ icon }}</span><span class="text-[11px]">{{ s }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="grid grid-cols-3 gap-2">
+    {% for name, label in [("length_ft","Length/diam ft"),("width_ft","Width ft"),("avg_depth_ft","Avg depth ft")] %}
+    <label class="block"><span class="text-xs text-slate-600">{{ label }}</span>
+      <input inputmode="decimal" name="{{ name }}" value="{{ pool|attr(name) or '' if pool else '' }}"
+             hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons"
+             hx-trigger="input changed delay:300ms"
+             class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+    {% endfor %}
+  </div>
+  <div id="gallons" class="min-h-11 flex items-center bg-sky-50 rounded-lg px-3">
+    {% if pool %}≈ {{ "{:,}".format(pool.gallons) }} gal{% else %}<span class="text-slate-400">Enter dimensions</span>{% endif %}
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="text-sm text-slate-600">Water</span>
+      <select name="water_type" class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+        {% for w in ["chlorine","salt"] %}<option {{ "selected" if pool and pool.water_type == w }}>{{ w }}</option>{% endfor %}
+      </select></label>
+    <label class="block"><span class="text-sm text-slate-600">Surface</span>
+      <select name="surface" class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+        {% for su in ["plaster","pebble","fiberglass","vinyl","tile","other"] %}<option {{ "selected" if pool and pool.surface == su }}>{{ su }}</option>{% endfor %}
+      </select></label>
+  </div>
+  <label class="block"><span class="text-sm text-slate-600">Notes</span>
+    <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ pool.notes if pool else "" }}</textarea></label>
+  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save pool</button>
+</form>
+
+{% if pool %}
+<h2 class="font-bold mt-5 mb-2">Reference photos</h2>
+<div id="photo-strip" class="flex gap-2 flex-wrap mb-2">
+  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="w-20 h-20 object-cover rounded-lg">{% endfor %}
+</div>
+<input type="file" accept="image/*" capture="environment" multiple name="files"
+       hx-post="/photos/pool/{{ pool.id }}" hx-encoding="multipart/form-data"
+       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="w-full min-h-11 mb-3">
+
+<h2 class="font-bold mt-5 mb-2">Equipment</h2>
+<div class="space-y-2 mb-3">
+  {% for e in pool.equipment %}
+  <div class="bg-white rounded-lg p-3 shadow-sm flex justify-between text-sm">
+    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}</span>
+    <form method="post" action="/equipment/{{ e.id }}/delete"><button class="text-red-600">Remove</button></form>
+  </div>
+  {% endfor %}
+</div>
+<form method="post" action="/pools/{{ pool.id }}/equipment/new" class="space-y-2 bg-white rounded-lg p-3 shadow-sm">
+  <div class="grid grid-cols-2 gap-2">
+    <select name="kind" class="min-h-11 rounded-lg border border-slate-300 px-2">
+      {% for k in ["pump","filter","heater","chlorinator","cleaner","automation","other"] %}<option>{{ k }}</option>{% endfor %}
+    </select>
+    <input name="brand" placeholder="Brand" class="min-h-11 rounded-lg border border-slate-300 px-2">
+    <input name="model" placeholder="Model" class="min-h-11 rounded-lg border border-slate-300 px-2">
+    <input name="serial" placeholder="Serial" class="min-h-11 rounded-lg border border-slate-300 px-2">
+    <input type="date" name="install_date" class="min-h-11 rounded-lg border border-slate-300 px-2">
+    <input name="notes" placeholder="Notes" class="min-h-11 rounded-lg border border-slate-300 px-2">
+  </div>
+  <button class="w-full min-h-11 rounded-lg bg-slate-700 text-white">+ Add equipment</button>
+</form>
+<form method="post" action="/pools/{{ pool.id }}/deactivate" class="mt-3">
+  <button class="w-full min-h-11 rounded-lg border border-red-300 text-red-600">Remove pool</button>
+</form>
+{% endif %}
+{% endblock %}

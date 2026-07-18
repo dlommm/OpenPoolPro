@@ -1,0 +1,123 @@
+from datetime import date
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
+from app.db import get_session, get_or_404
+from app.main import templates
+from app.rates import gallons
+
+router = APIRouter()
+
+
+def _tier_rate_for(session, g: int) -> int:
+    tiers = session.scalars(
+        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None),
+                                         models.RateTier.max_gallons)).all()
+    for t in tiers:
+        if t.max_gallons is None or g <= t.max_gallons:
+            return t.rate_cents
+    return 0
+
+
+@router.get("/pools/gallons-preview", response_class=HTMLResponse)
+def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str = "",
+                    avg_depth_ft: str = "", session: Session = Depends(get_session)):
+    try:
+        g = gallons(shape, float(length_ft or 0), float(width_ft or 0) or None,
+                    float(avg_depth_ft or 0))
+    except (ValueError, TypeError):
+        return HTMLResponse("<span class='text-slate-400'>—</span>")
+    rate = _tier_rate_for(session, g)
+    return HTMLResponse(
+        f"<span class='font-semibold'>≈ {g:,} gal</span>"
+        f"<span class='text-slate-500'> — suggested rate ${rate / 100:.2f}</span>")
+
+
+def _pool_form(request, session, pool, property_id):
+    photos = []
+    if pool is not None:
+        photos = session.scalars(select(models.Photo).where(
+            models.Photo.entity_type == "pool",
+            models.Photo.entity_id == pool.id)).all()
+    return templates.TemplateResponse(request, "pools/form.html",
+        {"pool": pool, "property_id": property_id, "photos": photos})
+
+
+@router.get("/properties/{pid}/pools/new")
+def new_pool(request: Request, pid: int, session: Session = Depends(get_session)):
+    return _pool_form(request, session, None, pid)
+
+
+@router.get("/pools/{pool_id}/edit")
+def edit_pool(request: Request, pool_id: int, session: Session = Depends(get_session)):
+    pool = get_or_404(session, models.Pool, pool_id)
+    return _pool_form(request, session, pool, pool.property_id)
+
+
+def _apply(pool: models.Pool, form) -> None:
+    pool.label = form["label"]
+    pool.shape = form["shape"]
+    pool.length_ft = float(form["length_ft"])
+    pool.width_ft = float(form["width_ft"]) if form["width_ft"] else None
+    pool.avg_depth_ft = float(form["avg_depth_ft"])
+    pool.gallons = gallons(pool.shape, pool.length_ft, pool.width_ft, pool.avg_depth_ft)
+    pool.water_type = form["water_type"]
+    pool.surface = form["surface"]
+    pool.notes = form["notes"]
+
+
+async def _save(request: Request, session: Session, pool: models.Pool, redirect_cid: int):
+    form = await request.form()
+    try:
+        _apply(pool, form)
+    except (ValueError, TypeError):
+        return HTMLResponse("Invalid dimensions: must be > 0 and ≤ 100 ft", status_code=400)
+    session.add(pool)
+    session.commit()
+    return RedirectResponse(f"/customers/{redirect_cid}", status_code=303)
+
+
+@router.post("/properties/{pid}/pools/new")
+async def create_pool(request: Request, pid: int, session: Session = Depends(get_session)):
+    prop = get_or_404(session, models.Property, pid)
+    return await _save(request, session, models.Pool(property_id=pid), prop.customer_id)
+
+
+@router.post("/pools/{pool_id}/edit")
+async def update_pool(request: Request, pool_id: int, session: Session = Depends(get_session)):
+    pool = get_or_404(session, models.Pool, pool_id)
+    return await _save(request, session, pool, pool.property.customer_id)
+
+
+@router.post("/pools/{pool_id}/deactivate")
+def deactivate_pool(pool_id: int, session: Session = Depends(get_session)):
+    pool = get_or_404(session, models.Pool, pool_id)
+    pool.active = False
+    session.commit()
+    return RedirectResponse(f"/customers/{pool.property.customer_id}", status_code=303)
+
+
+@router.post("/pools/{pool_id}/equipment/new")
+def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
+                  model: str = Form(""), serial: str = Form(""),
+                  install_date: str = Form(""), notes: str = Form(""),
+                  session: Session = Depends(get_session)):
+    session.add(models.Equipment(
+        pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
+        install_date=date.fromisoformat(install_date) if install_date else None, notes=notes))
+    session.commit()
+    pool = get_or_404(session, models.Pool, pool_id)
+    return RedirectResponse(f"/pools/{pool_id}/edit", status_code=303)
+
+
+@router.post("/equipment/{eid}/delete")
+def delete_equipment(eid: int, session: Session = Depends(get_session)):
+    eq = get_or_404(session, models.Equipment, eid)
+    pool_id = eq.pool_id
+    session.delete(eq)
+    session.commit()
+    return RedirectResponse(f"/pools/{pool_id}/edit", status_code=303)
