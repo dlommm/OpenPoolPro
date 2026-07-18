@@ -30,8 +30,8 @@ def week_page(request: Request, start: date | None = None,
 def move(property_id: int = Form(...), from_date: date = Form(...),
          to_date: date = Form(...), mode: str = Form("once"),
          session: Session = Depends(get_session)):
+    p = get_or_404(session, models.Property, property_id)
     if mode == "forever":
-        p = get_or_404(session, models.Property, property_id)
         p.weekday, p.anchor_date = to_date.weekday(), to_date
     else:
         exists = session.scalars(select(models.Visit).where(

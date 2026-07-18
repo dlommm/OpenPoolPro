@@ -66,3 +66,30 @@ def test_reorder(client, engine):
     with Session(engine) as s:
         assert s.get(models.Property, b).route_order == 0
         assert s.get(models.Property, a).route_order == 1
+
+
+def test_move_once_dedupes_existing_visit(client, engine):
+    pid = seed(engine)
+    mon = monday()
+    tue = mon + timedelta(days=1)
+    data = {"property_id": str(pid), "from_date": str(mon),
+            "to_date": str(tue), "mode": "once"}
+    client.post("/week/move", data=data)
+    client.post("/week/move", data=data)
+    with Session(engine) as s:
+        assert len(s.scalars(select(models.Visit)).all()) == 1
+
+
+def test_reorder_clamps_at_edges(client, engine):
+    a = seed(engine)
+    for direction in ["up", "down"]:
+        client.post("/week/reorder", data={"property_id": str(a), "direction": direction})
+        with Session(engine) as s:
+            assert s.get(models.Property, a).route_order == 0
+
+
+def test_move_missing_property_404(client, engine):
+    mon = monday()
+    r = client.post("/week/move", data={"property_id": "999", "from_date": str(mon),
+                                        "to_date": str(mon), "mode": "once"})
+    assert r.status_code == 404
