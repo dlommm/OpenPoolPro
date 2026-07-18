@@ -66,3 +66,19 @@ def test_skip_and_dismiss(client, engine):
     client.post(f"/visit/{pid}/2026-07-13/dismiss")
     with Session(engine) as s:
         assert s.get(models.Visit, vid).resolved is True
+
+
+def test_negative_and_garbage_chem_lines_ignored(client, engine):
+    pid, chem_id = seed(engine)
+    client.get(f"/visit/{pid}/2026-07-13")
+    with Session(engine) as s:
+        vid = s.scalars(select(models.Visit)).one().id
+    r = client.post(f"/visit/{vid}/complete", data={
+        "fc": "abc", "ph": "", "ta": "", "cya": "", "salt": "",
+        "notes": "", "chem_id": [str(chem_id), "zzz"],
+        "chem_amount": ["-2.5", "1.0"]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        v = s.scalars(select(models.Visit)).one()
+        assert v.status == "done" and v.fc is None
+        assert s.scalars(select(models.VisitChemical)).all() == []

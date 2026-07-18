@@ -23,7 +23,7 @@
       <div class="flex items-center gap-2 bg-white rounded-lg p-2 shadow-sm">
         <input type="hidden" name="chem_id" value="{{ chem.id }}">
         <span class="flex-1 text-sm">{{ chem.name }} <span class="text-slate-400">({{ chem.unit }}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }})</span></span>
-        <input inputmode="decimal" name="chem_amount" placeholder="0"
+        <input inputmode="decimal" name="chem_amount" placeholder="0" min="0"
                class="w-20 min-h-11 rounded-lg border border-slate-300 text-center">
       </div>
       {% endfor %}

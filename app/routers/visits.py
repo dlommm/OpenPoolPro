@@ -25,7 +25,12 @@ def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
 
 def _f(val: str) -> float | None:
     val = (val or "").strip()
-    return float(val) if val else None
+    if not val:
+        return None
+    try:
+        return float(val)
+    except ValueError:
+        return None
 
 
 @router.get("/visit/{property_id}/{visit_date}")
@@ -59,9 +64,14 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
         session.delete(old)
     for cid, amt in zip(form.getlist("chem_id"), form.getlist("chem_amount")):
         amount = _f(amt)
-        if not amount:
+        if amount is None or amount <= 0:
             continue
-        chem = get_or_404(session, models.Chemical, int(cid))
+        try:
+            chem = session.get(models.Chemical, int(cid))
+        except (TypeError, ValueError):
+            continue
+        if chem is None:
+            continue
         session.add(models.VisitChemical(
             visit_id=v.id, chemical_id=chem.id, amount=amount,
             unit_cost_cents_frozen=chem.cost_per_unit_cents,
