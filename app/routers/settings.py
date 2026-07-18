@@ -119,7 +119,17 @@ async def save_tasks(request: Request, session: Session = Depends(get_session)):
 @router.post("/settings/general")
 async def save_general(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
-    models.set_setting(session, "chem_markup_percent", form.get("chem_markup_percent", "0") or "0")
+    raw = (form.get("chem_markup_percent", "0") or "0").strip()
+    if raw.endswith("%"):
+        raw = raw[:-1].strip()
+    try:
+        float(raw)
+        markup = raw
+    except ValueError:
+        # Garbage input: keep whatever was previously stored rather than
+        # overwriting it with something that will 500 the Money page.
+        markup = models.get_setting(session, "chem_markup_percent", "0")
+    models.set_setting(session, "chem_markup_percent", markup)
     models.set_setting(session, "business_name", form.get("business_name", ""))
     session.commit()
     return RedirectResponse("/settings", status_code=303)

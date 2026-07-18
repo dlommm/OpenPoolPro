@@ -1,3 +1,5 @@
+import html
+
 from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
@@ -41,5 +43,6 @@ async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
                 f"<img src='/photos/file/{ph.id}?thumb=1' class='w-20 h-20 object-cover rounded-lg'>")
         except ValueError:
             session.rollback()
-            frags.append(f"<span class='text-red-600 text-sm'>{f.filename} failed — retry</span>")
+            frags.append(
+                f"<span class='text-red-600 text-sm'>{html.escape(f.filename or '')} failed — retry</span>")
     return HTMLResponse("".join(frags))

@@ -34,6 +34,8 @@
     </div>
     <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
        class="text-sm text-sky-700 block min-h-11 flex items-center">📍 {{ s.property.address }}</a>
+    <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}"
+       class="text-xs text-sky-600 block">G-Maps</a>
     <div class="text-sm text-slate-500">
       {% if s.property.gate_code %}Gate {{ s.property.gate_code }}{% endif %}
       {% if s.property.dog_warning %} · 🐕 {{ s.property.dog_note }}{% endif %}

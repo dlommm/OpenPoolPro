@@ -16,7 +16,7 @@ def login_page(request: Request):
 
 @router.post("/login")
 def login(request: Request, password: str = Form(...)):
-    if not secrets.compare_digest(password, config.APP_PASSWORD):
+    if not secrets.compare_digest(password.encode(), config.APP_PASSWORD.encode()):
         return templates.TemplateResponse(request, "login.html", {"error": "Wrong password"})
     request.session["auth"] = True
     return RedirectResponse("/", status_code=303)

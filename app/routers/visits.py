@@ -45,9 +45,11 @@ def visit_form(request: Request, property_id: int, visit_date: date,
                             .order_by(models.TaskTemplate.sort_order)).all()
     photos = session.scalars(select(models.Photo).where(
         models.Photo.entity_type == "visit", models.Photo.entity_id == v.id)).all()
+    existing = {vc.chemical_id: vc for vc in v.chemicals}
     return templates.TemplateResponse(request, "visits/form.html", {
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
-        "photos": photos, "rate": effective_rate_cents(session, v.property)})
+        "photos": photos, "rate": effective_rate_cents(session, v.property),
+        "existing": existing})
 
 
 @router.post("/visit/{visit_id}/complete")
@@ -62,6 +64,10 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.completed_at = models.utcnow()
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
+    # Preserve frozen history: a prior line's frozen unit cost must survive a
+    # re-complete (e.g. fixing a pH typo) even if the catalog price moved on.
+    # Only genuinely new lines freeze the current catalog cost.
+    prior = {vc.chemical_id: vc.unit_cost_cents_frozen for vc in v.chemicals}
     for old in list(v.chemicals):
         session.delete(old)
     for cid, amt in zip(form.getlist("chem_id"), form.getlist("chem_amount")):
@@ -74,10 +80,11 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
             continue
         if chem is None:
             continue
+        frozen = prior.get(chem.id, chem.cost_per_unit_cents)
         session.add(models.VisitChemical(
             visit_id=v.id, chemical_id=chem.id, amount=amount,
-            unit_cost_cents_frozen=chem.cost_per_unit_cents,
-            total_cost_cents=round(amount * chem.cost_per_unit_cents)))
+            unit_cost_cents_frozen=frozen,
+            total_cost_cents=round(amount * frozen)))
     session.commit()
     return RedirectResponse("/", status_code=303)
 

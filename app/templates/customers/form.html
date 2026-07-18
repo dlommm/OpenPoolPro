@@ -12,4 +12,10 @@
     <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ c.notes if c else "" }}</textarea></label>
   <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save</button>
 </form>
+
+{% if c %}
+<form method="post" action="/customers/{{ c.id }}/deactivate" class="mt-3">
+  <button class="w-full min-h-11 rounded-lg border border-red-300 text-red-600">Deactivate customer</button>
+</form>
+{% endif %}
 {% endblock %}

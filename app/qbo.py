@@ -34,7 +34,10 @@ def _local_date(dt: datetime) -> date:
 
 def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]:
     first, last = _month_range(year, month)
-    markup = float(models.get_setting(session, "chem_markup_percent", "0"))
+    try:
+        markup = float(models.get_setting(session, "chem_markup_percent", "0"))
+    except ValueError:
+        markup = 0.0
     out: dict[int, CustomerMonth] = {}
 
     def row(cust: models.Customer) -> CustomerMonth:

@@ -30,6 +30,14 @@ def test_today_lists_stops_and_jobs(client, engine):
     assert "0 of 1 done" in html
 
 
+def test_today_has_google_maps_fallback_link(client, engine):
+    # M2 pin: alongside the Apple Maps link, a secondary Google Maps link
+    # must be present for techs whose default maps app isn't Apple's.
+    seed_route(engine, date.today())
+    html = client.get("/").text
+    assert "maps.google.com" in html
+
+
 def test_today_progress_counts_done(client, engine):
     today = date.today()
     pid = seed_route(engine, today)

@@ -31,7 +31,9 @@ def move(property_id: int = Form(...), from_date: date = Form(...),
          to_date: date = Form(...), mode: str = Form("once"),
          session: Session = Depends(get_session)):
     p = get_or_404(session, models.Property, property_id)
-    if mode == "forever":
+    if to_date == from_date:
+        pass  # no-op: moving a stop to its own day must not mutate anything
+    elif mode == "forever":
         p.weekday, p.anchor_date = to_date.weekday(), to_date
     else:
         exists = session.scalars(select(models.Visit).where(

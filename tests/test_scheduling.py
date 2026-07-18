@@ -37,6 +37,21 @@ def test_is_due_biweekly_and_every4(engine):
         assert is_due(q, date(2026, 7, 20)) is False
 
 
+def test_is_due_false_before_anchor_date(engine):
+    # I4 pin: onboarding a weekly property with an anchor date next Monday
+    # must not generate phantom stops (or missed stops) for the Mondays
+    # before that anchor.
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        anchor = date(2026, 7, 20)  # a Monday
+        p = make_prop(s, "weekly", weekday=0, anchor=anchor)
+        prev_monday = date(2026, 7, 13)
+        assert is_due(p, prev_monday) is False
+        assert is_due(p, anchor) is True
+        assert missed_stops(s, date(2026, 7, 15)) == []  # Wed before anchor: nothing missed
+
+
 def test_stops_merge_and_suppression(engine):
     from app.db import Base
     Base.metadata.create_all(engine)

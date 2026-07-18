@@ -42,6 +42,20 @@ def test_move_once(client, engine):
         assert s.get(models.Property, pid).weekday == 0
 
 
+def test_move_to_same_day_is_noop(client, engine):
+    # I3 pin: moving a stop to its own day must not black-hole it (no Visit
+    # row created, no suppression) — it should just stay a normal due stop.
+    from app.scheduling import stops_for_date
+    pid = seed(engine)
+    mon = monday()
+    client.post("/week/move", data={"property_id": str(pid), "from_date": str(mon),
+                                    "to_date": str(mon), "mode": "once"})
+    with Session(engine) as s:
+        assert s.scalars(select(models.Visit)).all() == []
+        stops = stops_for_date(s, mon)
+        assert len(stops) == 1 and stops[0].property.id == pid and stops[0].status == "due"
+
+
 def test_move_forever(client, engine):
     pid = seed(engine)
     mon = monday()

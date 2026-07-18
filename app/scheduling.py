@@ -25,6 +25,8 @@ class MissedStop:
 def is_due(prop: models.Property, on_date: date) -> bool:
     if prop.frequency == "none" or not prop.active or prop.weekday != on_date.weekday():
         return False
+    if prop.anchor_date is not None and on_date < prop.anchor_date:
+        return False
     if prop.frequency == "weekly":
         return True
     if prop.anchor_date is None:
@@ -45,6 +47,7 @@ def stops_for_date(session: Session, d: date) -> list[Stop]:
     suppressed = {v.property_id for v in suppressed_visits}
     stops: list[Stop] = []
     props = session.scalars(select(models.Property).where(models.Property.active)).all()
+    props = [p for p in props if p.customer.active]
     for p in props:
         v = visits.get(p.id)
         if v is not None and v.original_date != d:

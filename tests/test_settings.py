@@ -39,6 +39,25 @@ def test_markup_setting(client, engine):
         assert models.get_setting(s, "chem_markup_percent", "0") == "25"
 
 
+def test_garbage_markup_does_not_500_money_page(client, engine):
+    # I2 pin: a trailing "%" is tolerated and normalized; a value that
+    # isn't a number at all is rejected and the previously stored value is
+    # kept — either way /money must keep returning 200, never 500.
+    client.post("/settings/general", data={"chem_markup_percent": "5%",
+                                           "business_name": "Coastline Pools"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "chem_markup_percent", "0") == "5"
+    assert client.get("/money").status_code == 200
+
+    r = client.post("/settings/general", data={"chem_markup_percent": "abc",
+                                                "business_name": "Coastline Pools"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "chem_markup_percent", "0") == "5"  # previous value retained
+    assert client.get("/money").status_code == 200
+
+
 def test_stale_and_garbage_rows_skipped(client, engine):
     client.post("/settings/tiers", data={"tier_id": ["9999", "abc"],
                                          "max_gallons": ["", ""],

@@ -38,6 +38,16 @@ def test_bad_file_does_not_block_good_ones(client, engine):
     assert "failed" in r.text.lower()
 
 
+def test_bad_filename_is_escaped_in_error_fragment(client, engine):
+    # M1 pin: an uploaded filename is attacker-controlled and lands raw in
+    # the error fragment HTML — it must be HTML-escaped.
+    r = client.post("/photos/visit/5", files=[
+        ("files", ("<img>.jpg", b"not an image", "image/jpeg"))])
+    assert r.status_code == 200
+    assert "&lt;img&gt;" in r.text
+    assert "<img>.jpg" not in r.text
+
+
 def test_delete_photo(client, engine):
     client.post("/photos/pool/1", files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
     with Session(engine) as s:

@@ -26,6 +26,11 @@ def create_app(engine=None) -> FastAPI:
         exempt = path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
         if not exempt and not request.session.get("auth"):
             return RedirectResponse("/login", status_code=303)
+        if request.session.get("auth"):
+            # Re-set the session value so SessionMiddleware re-issues the
+            # cookie on every authenticated request — rolling 90-day expiry
+            # instead of a hard cutoff from the original login.
+            request.session["auth"] = True
         return await call_next(request)
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
