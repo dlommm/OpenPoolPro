@@ -1,9 +1,14 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+
+def utcnow() -> datetime:
+	"""Naive UTC now — replacement for deprecated datetime.utcnow()."""
+	return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Customer(Base):
@@ -15,7 +20,7 @@ class Customer(Base):
     email: Mapped[str] = mapped_column(String(120), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 
@@ -78,7 +83,7 @@ class Photo(Base):
     filename: Mapped[str] = mapped_column(String(200))
     thumb_filename: Mapped[str] = mapped_column(String(200))
     caption: Mapped[str] = mapped_column(String(200), default="")
-    taken_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    taken_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class RateTier(Base):

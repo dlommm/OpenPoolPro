@@ -28,3 +28,8 @@ def test_settings_helpers(engine):
         models.set_setting(s, "chem_markup_percent", "15")
         s.commit()
         assert models.get_setting(s, "chem_markup_percent", "0") == "15"
+
+
+def test_utcnow_naive():
+    from app.models import utcnow
+    assert utcnow().tzinfo is None
