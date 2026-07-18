@@ -74,9 +74,9 @@ def test_negative_and_garbage_chem_lines_ignored(client, engine):
     with Session(engine) as s:
         vid = s.scalars(select(models.Visit)).one().id
     r = client.post(f"/visit/{vid}/complete", data={
-        "fc": "abc", "ph": "", "ta": "", "cya": "", "salt": "",
-        "notes": "", "chem_id": [str(chem_id), "zzz"],
-        "chem_amount": ["-2.5", "1.0"]}, follow_redirects=False)
+        "fc": "inf", "ph": "", "ta": "", "cya": "", "salt": "",
+        "notes": "", "chem_id": [str(chem_id), "zzz", str(chem_id), str(chem_id)],
+        "chem_amount": ["-2.5", "1.0", "inf", "nan"]}, follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:
         v = s.scalars(select(models.Visit)).one()

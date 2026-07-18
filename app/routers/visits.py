@@ -1,3 +1,4 @@
+import math
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
@@ -28,9 +29,10 @@ def _f(val: str) -> float | None:
     if not val:
         return None
     try:
-        return float(val)
+        f = float(val)
     except ValueError:
         return None
+    return f if math.isfinite(f) else None
 
 
 @router.get("/visit/{property_id}/{visit_date}")
