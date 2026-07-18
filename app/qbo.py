@@ -2,12 +2,12 @@ import calendar
 import csv
 import io
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import config, models
 
 
 @dataclass
@@ -25,6 +25,11 @@ class CustomerMonth:
 def _month_range(year: int, month: int) -> tuple[date, date]:
     return (date(year, month, 1),
             date(year, month, calendar.monthrange(year, month)[1]))
+
+
+def _local_date(dt: datetime) -> date:
+    """Business-local calendar date for a naive-UTC timestamp."""
+    return dt.replace(tzinfo=timezone.utc).astimezone(config.tz()).date()
 
 
 def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]:
@@ -45,9 +50,12 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         r.chem_cost_cents += sum(vc.total_cost_cents for vc in v.chemicals)
 
     jobs = session.scalars(select(models.Job).where(
-        models.Job.status == "done", models.Job.completed_at.is_not(None))).all()
+        models.Job.status == "done",
+        models.Job.completed_at.is_not(None),
+        models.Job.completed_at >= datetime.combine(first - timedelta(days=1), time.min),
+        models.Job.completed_at <= datetime.combine(last + timedelta(days=1), time.max))).all()
     for j in jobs:
-        if first <= j.completed_at.date() <= last:
+        if first <= _local_date(j.completed_at) <= last:
             r = row(j.property.customer)
             r.jobs.append(j)
             r.job_cents += j.labor_cents
@@ -78,6 +86,6 @@ def export_csv(session: Session, year: int, month: int) -> str:
                         f"Chemicals {first:%b %Y}",
                         f"{r.chem_billable_cents / 100:.2f}"])
         for j in r.jobs:
-            w.writerow([name, j.completed_at.date().isoformat(), "Pool Service — Job",
+            w.writerow([name, _local_date(j.completed_at).isoformat(), "Pool Service — Job",
                         j.title, f"{j.labor_cents / 100:.2f}"])
     return buf.getvalue()

@@ -53,3 +53,29 @@ def test_money_page(client, engine):
     seed_month(engine)
     html = client.get("/money?ym=2026-07").text
     assert "Bill Me" in html and "$110.00" in html
+
+
+def test_job_month_boundary_uses_business_tz(engine):
+    from app.db import Base
+    from app import seeds
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        c = models.Customer(name="Boundary")
+        p = models.Property(customer=c)
+        s.add(p)
+        # 2026-08-01 01:30 UTC == 2026-07-31 21:30 America/New_York -> July
+        s.add(models.Job(property=p, title="Late job", status="done",
+                         labor_cents=5000, completed_at=datetime(2026, 8, 1, 1, 30)))
+        s.commit()
+        july = month_rollup(s, 2026, 7)
+        assert len(july) == 1 and july[0].job_cents == 5000
+        assert month_rollup(s, 2026, 8) == []
+
+
+def test_money_page_tolerates_bad_ym_and_year_boundaries(client, engine):
+    assert client.get("/money?ym=abc").status_code == 200
+    html = client.get("/money?ym=2026-01").text
+    assert "/money?ym=2025-12" in html
+    html = client.get("/money?ym=2026-12").text
+    assert "/money?ym=2027-01" in html

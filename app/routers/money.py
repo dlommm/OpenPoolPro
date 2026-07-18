@@ -14,8 +14,13 @@ router = APIRouter()
 
 def _parse_ym(ym: str | None) -> tuple[int, int]:
     if ym:
-        y, m = ym.split("-")
-        return int(y), int(m)
+        try:
+            y, m = ym.split("-")
+            y, m = int(y), int(m)
+            if 1 <= m <= 12:
+                return y, m
+        except ValueError:
+            pass
     now = datetime.now(config.tz())
     return now.year, now.month
 
