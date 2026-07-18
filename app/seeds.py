@@ -1,0 +1,30 @@
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
+
+CHEMICALS = [
+    ("Liquid chlorine", "gal"), ("Muriatic acid", "gal"), ("Chlorine tabs 3in", "tab"),
+    ("Shock (cal-hypo)", "lb"), ("Salt", "lb"), ("Soda ash", "lb"),
+    ("Baking soda", "lb"), ("Stabilizer (CYA)", "lb"),
+]
+TASKS = ["Skim surface", "Brush walls", "Vacuum", "Empty skimmer baskets",
+         "Empty pump trap", "Backwash/clean filter", "Test water", "Add chemicals"]
+TIERS = [(15000, 4500, "Small (to 15k gal)"), (25000, 5500, "Medium (to 25k gal)"),
+         (None, 7000, "Large")]
+
+
+def run(engine) -> None:
+    with Session(engine) as s:
+        if not s.scalars(select(models.Chemical)).first():
+            for name, unit in CHEMICALS:
+                s.add(models.Chemical(name=name, unit=unit, cost_per_unit_cents=0))
+        if not s.scalars(select(models.TaskTemplate)).first():
+            for i, label in enumerate(TASKS):
+                s.add(models.TaskTemplate(label=label, sort_order=i))
+        if not s.scalars(select(models.RateTier)).first():
+            for max_g, cents, label in TIERS:
+                s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label))
+        if not s.scalars(select(models.User)).first():
+            s.add(models.User(name="Owner", role="owner"))
+        s.commit()
