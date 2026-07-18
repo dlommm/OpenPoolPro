@@ -57,31 +57,16 @@ def stops_for_date(session: Session, d: date) -> list[Stop]:
 
 
 def missed_stops(session: Session, today: date, lookback_days: int = 14) -> list[MissedStop]:
-    # Collect missed stops from the most recent due date for each property
-    most_recent: dict[int, MissedStop] = {}
-    found_recent_due: dict[int, bool] = {}  # Track if we found the most recent due date
-
+    latest_unresolved: dict[int, MissedStop] = {}
     for i in range(1, lookback_days + 1):
         d = today - timedelta(days=i)
         for stop in stops_for_date(session, d):
-            prop_id = stop.property.id
-
-            # If we've already processed the most recent due date for this property, skip older ones
-            if found_recent_due.get(prop_id, False):
+            pid = stop.property.id
+            if pid in latest_unresolved:
                 continue
-
-            # We found a due date for this property
-            found_recent_due[prop_id] = True
-
-            # Skip done stops and resolved visits
             if stop.status == "done":
                 continue
             if stop.visit is not None and stop.visit.resolved:
                 continue
-
-            ms = MissedStop(property=stop.property, date=d, visit=stop.visit)
-            most_recent[prop_id] = ms
-
-    out = list(most_recent.values())
-    out.sort(key=lambda m: m.date)
-    return out
+            latest_unresolved[pid] = MissedStop(property=stop.property, date=d, visit=stop.visit)
+    return sorted(latest_unresolved.values(), key=lambda m: m.date)

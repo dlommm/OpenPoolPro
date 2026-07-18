@@ -69,4 +69,19 @@ def test_missed(engine):
         assert len(missed_stops(s, today)) == 1
         v.resolved = True
         s.commit()
-        assert missed_stops(s, today) == []
+        # After resolving July 13, July 6 (the previous Monday) becomes the next unmet stop
+        assert len(missed_stops(s, today)) == 1
+        assert missed_stops(s, today)[0].date == date(2026, 7, 6)
+
+
+def test_missed_not_hidden_by_newer_done(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        p = make_prop(s, "weekly", weekday=0)
+        s.add(models.Visit(property_id=p.id, date=date(2026, 7, 6), status="skipped"))
+        s.add(models.Visit(property_id=p.id, date=date(2026, 7, 13), status="done"))
+        s.commit()
+        missed = missed_stops(s, date(2026, 7, 15))
+        assert len(missed) == 1
+        assert missed[0].date == date(2026, 7, 6)
