@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Week{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-3">
+  <a href="/week?start={{ prev }}" class="min-h-11 px-3 flex items-center text-sky-700">‹ Prev</a>
+  <h1 class="text-lg font-bold">Week of {{ start.strftime("%b %-d") }}</h1>
+  <a href="/week?start={{ next }}" class="min-h-11 px-3 flex items-center text-sky-700">Next ›</a>
+</div>
+{% for d in days %}
+<div class="mb-3">
+  <h2 class="font-bold text-slate-700">{{ d.strftime("%a %b %-d") }}
+    <span class="text-slate-400 font-normal">· {{ day_stops[d] | length }} stops</span></h2>
+  <div class="space-y-1 mt-1">
+    {% for s in day_stops[d] %}
+    <details class="bg-white rounded-lg p-2 shadow-sm text-sm">
+      <summary class="min-h-11 flex items-center justify-between">
+        <span>{{ s.property.customer.name }} — {{ s.property.label }}
+          {{ "✅" if s.status == "done" }}{{ "(moved)" if s.moved_in }}</span>
+      </summary>
+      <div class="pt-2 space-y-2">
+        <form method="post" action="/week/move" class="flex gap-2 items-center flex-wrap">
+          <input type="hidden" name="property_id" value="{{ s.property.id }}">
+          <input type="hidden" name="from_date" value="{{ d }}">
+          <input type="date" name="to_date" value="{{ d }}" class="min-h-11 rounded border border-slate-300 px-2">
+          <label class="min-h-11 flex items-center gap-1"><input type="radio" name="mode" value="once" checked> Just this week</label>
+          <label class="min-h-11 flex items-center gap-1"><input type="radio" name="mode" value="forever"> From now on</label>
+          <button class="min-h-11 px-3 rounded bg-sky-800 text-white">Move</button>
+        </form>
+        <form method="post" action="/week/reorder" class="flex gap-2">
+          <input type="hidden" name="property_id" value="{{ s.property.id }}">
+          <button name="direction" value="up" class="min-h-11 px-3 rounded border border-slate-300">▲ Earlier</button>
+          <button name="direction" value="down" class="min-h-11 px-3 rounded border border-slate-300">▼ Later</button>
+        </form>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
