@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="pt-16">
+  <h1 class="text-2xl font-bold text-center mb-6">Coastline Pools</h1>
+  {% if error %}<p class="text-red-600 text-center mb-3">{{ error }}</p>{% endif %}
+  <form method="post" action="/login" class="space-y-3">
+    <input type="password" name="password" placeholder="Password" autofocus
+           class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+    <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Sign in</button>
+  </form>
+</div>
+{% endblock %}

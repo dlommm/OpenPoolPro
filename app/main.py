@@ -1,7 +1,8 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from app import config, models, seeds  # noqa: F401
 from app.db import Base, make_engine
@@ -16,6 +17,18 @@ def create_app(engine=None) -> FastAPI:
     Base.metadata.create_all(app.state.engine)
     seeds.run(app.state.engine)
 
+    EXEMPT = ("/login", "/static", "/manifest.json", "/sw.js", "/health")
+
+    @app.middleware("http")
+    async def require_auth(request, call_next):
+        path = request.url.path
+        if not any(path.startswith(p) for p in EXEMPT) and not request.session.get("auth"):
+            return RedirectResponse("/login", status_code=303)
+        return await call_next(request)
+
+    app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
+                        max_age=60 * 60 * 24 * 90)
+
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
     @app.get("/health")
@@ -29,5 +42,12 @@ def create_app(engine=None) -> FastAPI:
     @app.get("/sw.js", include_in_schema=False)
     def sw():
         return FileResponse("app/static/sw.js", media_type="application/javascript")
+
+    @app.get("/")
+    def index(request: Request):
+        return RedirectResponse("/health")
+
+    from app.routers import auth as auth_router
+    app.include_router(auth_router.router)
 
     return app
