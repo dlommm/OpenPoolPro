@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-3">{{ "Edit" if c else "New" }} customer</h1>
+<form method="post" class="space-y-3">
+  {% for name, label, type in [("name","Name","text"),("qb_display_name","QuickBooks name (blank = same)","text"),
+     ("phone","Phone","tel"),("email","Email","email")] %}
+  <label class="block"><span class="text-sm text-slate-600">{{ label }}</span>
+    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}"
+           class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  {% endfor %}
+  <label class="block"><span class="text-sm text-slate-600">Notes</span>
+    <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ c.notes if c else "" }}</textarea></label>
+  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save</button>
+</form>
+{% endblock %}

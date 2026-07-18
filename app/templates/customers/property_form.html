@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-3">{{ "Edit" if p else "New" }} property — {{ customer.name }}</h1>
+<form method="post" class="space-y-3">
+  <label class="block"><span class="text-sm text-slate-600">Label</span>
+    <input name="label" value="{{ p.label if p else 'Home' }}" class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  <label class="block"><span class="text-sm text-slate-600">Address</span>
+    <input name="address" value="{{ p.address if p else '' }}" class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="text-sm text-slate-600">Gate code</span>
+      <input name="gate_code" value="{{ p.gate_code if p else '' }}" class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+    <label class="block"><span class="text-sm text-slate-600">Dog note</span>
+      <input name="dog_note" value="{{ p.dog_note if p else '' }}" class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  </div>
+  <label class="flex items-center gap-2 min-h-11"><input type="checkbox" name="dog_warning"
+         {{ "checked" if p and p.dog_warning }} class="w-5 h-5"> Dog on property</label>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="text-sm text-slate-600">Frequency</span>
+      <select name="frequency" class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+        {% for f in ["weekly","biweekly","every4weeks","none"] %}
+        <option value="{{ f }}" {{ "selected" if p and p.frequency == f }}>{{ f }}</option>
+        {% endfor %}
+      </select></label>
+    <label class="block"><span class="text-sm text-slate-600">Day</span>
+      <select name="weekday" class="w-full min-h-11 rounded-lg border border-slate-300 px-3">
+        {% for i, d in [(0,"Mon"),(1,"Tue"),(2,"Wed"),(3,"Thu"),(4,"Fri"),(5,"Sat"),(6,"Sun")] %}
+        <option value="{{ i }}" {{ "selected" if p and p.weekday == i }}>{{ d }}</option>
+        {% endfor %}
+      </select></label>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="text-sm text-slate-600">Anchor date (first visit)</span>
+      <input type="date" name="anchor_date" value="{{ p.anchor_date or '' if p else '' }}"
+             class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+    <label class="block"><span class="text-sm text-slate-600">Rate override $ (blank = tier)</span>
+      <input inputmode="decimal" name="rate_override_dollars"
+             value="{{ '%.2f'|format(p.rate_override_cents / 100) if p and p.rate_override_cents is not none else '' }}"
+             class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  </div>
+  <label class="block"><span class="text-sm text-slate-600">Notes</span>
+    <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ p.notes if p else "" }}</textarea></label>
+  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save</button>
+</form>
+{% endblock %}

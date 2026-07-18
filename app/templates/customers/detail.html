@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-1">
+  <h1 class="text-xl font-bold">{{ c.name }}</h1>
+  <a href="/customers/{{ c.id }}/edit" class="text-sky-700 min-h-11 flex items-center px-2">Edit</a>
+</div>
+<p class="text-sm text-slate-600 mb-3">
+  {% if c.phone %}<a href="tel:{{ c.phone }}" class="text-sky-700">{{ c.phone }}</a>{% endif %}
+  {% if c.email %} · <a href="mailto:{{ c.email }}" class="text-sky-700">{{ c.email }}</a>{% endif %}
+</p>
+{% if c.notes %}<p class="bg-amber-50 rounded-lg p-3 text-sm mb-3">{{ c.notes }}</p>{% endif %}
+
+<h2 class="font-bold mt-4 mb-2">Properties</h2>
+<div class="space-y-2">
+  {% for p in props %}
+  <div class="bg-white rounded-lg p-3 shadow-sm">
+    <div class="flex justify-between">
+      <div class="font-semibold">{{ p.label }}</div>
+      <a href="/properties/{{ p.id }}/edit" class="text-sky-700 text-sm">Edit</a>
+    </div>
+    <a href="https://maps.apple.com/?q={{ p.address | urlencode }}" class="text-sm text-sky-700">{{ p.address }}</a>
+    <div class="text-sm text-slate-500">
+      {{ p.frequency }} · {{ ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][p.weekday] }}
+      · {{ rates[p.id] | dollars }}/visit{{ " (override)" if p.rate_override_cents is not none }}
+      {% if p.gate_code %} · Gate {{ p.gate_code }}{% endif %}
+      {% if p.dog_warning %} · 🐕 {{ p.dog_note }}{% endif %}
+    </div>
+    <div class="mt-2 space-y-1">
+      {% for pool in p.pools if pool.active %}
+      <a href="/pools/{{ pool.id }}/edit" class="block text-sm">
+        🏊 {{ pool.label }} — {{ pool.length_ft|int }}{% if pool.width_ft %}×{{ pool.width_ft|int }}{% endif %} ft,
+        {{ "{:,}".format(pool.gallons) }} gal, {{ pool.water_type }}</a>
+      {% endfor %}
+      <a href="/properties/{{ p.id }}/pools/new" class="text-sky-700 text-sm min-h-11 inline-flex items-center">+ Add pool</a>
+    </div>
+  </div>
+  {% endfor %}
+  <a href="/customers/{{ c.id }}/properties/new" class="block text-center min-h-11 py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-600">+ Add property</a>
+</div>
+
+{% if jobs %}
+<h2 class="font-bold mt-4 mb-2">Open jobs</h2>
+{% for j in jobs %}<a href="/jobs/{{ j.id }}" class="block bg-white rounded-lg p-3 shadow-sm mb-2">{{ j.title }} <span class="text-sm text-slate-500">({{ j.status }})</span></a>{% endfor %}
+{% endif %}
+
+<h2 class="font-bold mt-4 mb-2">Visit history</h2>
+<div class="space-y-2">
+  {% for v in visits %}
+  <div class="bg-white rounded-lg p-3 shadow-sm text-sm">
+    <div class="flex justify-between">
+      <a href="/visit/{{ v.property_id }}/{{ v.date }}" class="font-semibold text-sky-700">{{ v.date }}</a>
+      <span>{{ "✅" if v.status == "done" else "⏭" }} {{ v.rate_cents | dollars if v.rate_cents }}</span></div>
+    {% if v.fc is not none or v.ph is not none %}
+    <div class="text-slate-500">FC {{ v.fc }} · pH {{ v.ph }} · TA {{ v.ta }}{% if v.cya is not none %} · CYA {{ v.cya }}{% endif %}{% if v.salt is not none %} · Salt {{ v.salt }}{% endif %}</div>
+    {% endif %}
+    {% if v.notes %}<div>{{ v.notes }}</div>{% endif %}
+  </div>
+  {% else %}<p class="text-slate-500 text-sm">No visits yet.</p>{% endfor %}
+</div>
+{% endblock %}
