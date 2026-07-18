@@ -58,4 +58,7 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import pools as pools_router
     app.include_router(pools_router.router)
 
+    from app.routers import photos as photos_router
+    app.include_router(photos_router.router)
+
     return app
