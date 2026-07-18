@@ -49,6 +49,7 @@ def _pool_form(request, session, pool, property_id):
 
 @router.get("/properties/{pid}/pools/new")
 def new_pool(request: Request, pid: int, session: Session = Depends(get_session)):
+    get_or_404(session, models.Property, pid)
     return _pool_form(request, session, None, pid)
 
 
@@ -59,15 +60,16 @@ def edit_pool(request: Request, pool_id: int, session: Session = Depends(get_ses
 
 
 def _apply(pool: models.Pool, form) -> None:
-    pool.label = form["label"]
-    pool.shape = form["shape"]
-    pool.length_ft = float(form["length_ft"])
-    pool.width_ft = float(form["width_ft"]) if form["width_ft"] else None
-    pool.avg_depth_ft = float(form["avg_depth_ft"])
+    pool.label = form.get("label", "Main pool")
+    pool.shape = form.get("shape", "rectangle")
+    pool.length_ft = float(form.get("length_ft") or 0)
+    width = form.get("width_ft") or ""
+    pool.width_ft = float(width) if width else None
+    pool.avg_depth_ft = float(form.get("avg_depth_ft") or 0)
     pool.gallons = gallons(pool.shape, pool.length_ft, pool.width_ft, pool.avg_depth_ft)
-    pool.water_type = form["water_type"]
-    pool.surface = form["surface"]
-    pool.notes = form["notes"]
+    pool.water_type = form.get("water_type", "chlorine")
+    pool.surface = form.get("surface", "plaster")
+    pool.notes = form.get("notes", "")
 
 
 async def _save(request: Request, session: Session, pool: models.Pool, redirect_cid: int):
@@ -106,11 +108,11 @@ def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
                   model: str = Form(""), serial: str = Form(""),
                   install_date: str = Form(""), notes: str = Form(""),
                   session: Session = Depends(get_session)):
+    pool = get_or_404(session, models.Pool, pool_id)
     session.add(models.Equipment(
         pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
         install_date=date.fromisoformat(install_date) if install_date else None, notes=notes))
     session.commit()
-    pool = get_or_404(session, models.Pool, pool_id)
     return RedirectResponse(f"/pools/{pool_id}/edit", status_code=303)
 
 

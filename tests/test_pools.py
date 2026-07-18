@@ -60,3 +60,19 @@ def test_equipment_crud(client, engine):
     with Session(engine) as s:
         eq = s.scalars(select(models.Equipment)).one()
         assert eq.brand == "Pentair"
+
+
+def test_missing_ids_return_404(client, engine):
+    assert client.get("/properties/999/pools/new").status_code == 404
+    assert client.get("/pools/999/edit").status_code == 404
+    assert client.post("/pools/999/deactivate").status_code == 404
+    assert client.post("/pools/999/equipment/new", data={
+        "kind": "pump", "brand": "", "model": "", "serial": "",
+        "install_date": "", "notes": ""}).status_code == 404
+    assert client.post("/equipment/999/delete").status_code == 404
+
+
+def test_missing_form_fields_return_400_not_500(client, engine):
+    pid = _prop(client, engine)
+    r = client.post(f"/properties/{pid}/pools/new", data={"shape": "rectangle"})
+    assert r.status_code == 400
