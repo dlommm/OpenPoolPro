@@ -75,4 +75,8 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import settings as settings_router
     app.include_router(settings_router.router)
 
+    if config.RUN_SCHEDULER:
+        from app.backup import start_scheduler
+        start_scheduler(app.state.engine)
+
     return app
