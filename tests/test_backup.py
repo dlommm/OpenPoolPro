@@ -3,7 +3,7 @@ import os
 from sqlalchemy.orm import Session
 
 from app import config, models
-from app.backup import run_backup
+from app.backup import run_backup, start_scheduler
 
 
 def test_backup_creates_snapshot_and_prunes(engine, monkeypatch, tmp_path):
@@ -32,3 +32,29 @@ def test_backup_error_recorded(engine, monkeypatch, tmp_path):
         pass
     with Session(engine) as s:
         assert "disk full" in models.get_setting(s, "last_backup_error", "")
+
+
+def test_backup_success_clears_prior_error(engine, monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "last_backup_error", "old boom")
+        s.commit()
+    run_backup(engine)
+    with Session(engine) as s:
+        assert models.get_setting(s, "last_backup_error", "") == ""
+
+
+def test_start_scheduler_wiring(engine):
+    sched = start_scheduler(engine)
+    try:
+        jobs = sched.get_jobs()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.func is run_backup
+        assert tuple(job.args) == (engine,)
+        trigger = str(job.trigger)
+        assert "hour='1'" in trigger and "minute='0'" in trigger
+    finally:
+        sched.shutdown(wait=False)

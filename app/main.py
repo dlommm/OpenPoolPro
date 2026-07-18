@@ -77,6 +77,6 @@ def create_app(engine=None) -> FastAPI:
 
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
-        start_scheduler(app.state.engine)
+        app.state.scheduler = start_scheduler(app.state.engine)
 
     return app
