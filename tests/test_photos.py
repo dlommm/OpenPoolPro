@@ -46,3 +46,37 @@ def test_delete_photo(client, engine):
     assert r.status_code == 200
     with Session(engine) as s:
         assert s.scalars(select(models.Photo)).all() == []
+
+
+def test_bad_entity_type_rejected(client):
+    r = client.post("/photos/badtype/1",
+                    files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    assert r.status_code == 400
+
+
+def test_delete_idempotent(client, engine):
+    assert client.post("/photos/99999/delete").status_code == 200
+    client.post("/photos/pool/1", files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Photo)).one().id
+    assert client.post(f"/photos/{pid}/delete").status_code == 200
+    assert client.post(f"/photos/{pid}/delete").status_code == 200
+
+
+def exif_rotated_jpeg(w=800, h=600):
+    img = Image.new("RGB", (w, h), "red")
+    exif = img.getexif()
+    exif[274] = 6  # EXIF orientation: rotate 90 CW
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", exif=exif)
+    return buf.getvalue()
+
+
+def test_exif_orientation_applied(client, engine):
+    client.post("/photos/pool/2",
+                files=[("files", ("r.jpg", exif_rotated_jpeg(), "image/jpeg"))])
+    with Session(engine) as s:
+        ph = s.scalars(select(models.Photo).where(
+            models.Photo.entity_type == "pool", models.Photo.entity_id == 2)).one()
+    img = Image.open(io.BytesIO(client.get(f"/photos/file/{ph.id}").content))
+    assert img.size == (600, 800)

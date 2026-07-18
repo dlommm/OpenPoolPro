@@ -18,6 +18,8 @@ def _dir(entity_type: str, entity_id: int) -> str:
 
 def save_photo(session, entity_type: str, entity_id: int,
                file_bytes: bytes, caption: str = "") -> models.Photo:
+    # Isolation scope: only undecodable input is caught per-file (ValueError);
+    # disk/DB failures after decode intentionally propagate.
     try:
         img = Image.open(io.BytesIO(file_bytes))
         img = ImageOps.exif_transpose(img).convert("RGB")
