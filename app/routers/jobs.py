@@ -12,11 +12,18 @@ from app.main import templates
 router = APIRouter()
 
 
+def _labor_cents(val: str) -> int:
+    try:
+        return round(float(val or 0) * 100)
+    except ValueError:
+        return 0
+
+
 @router.get("/jobs")
 def list_jobs(request: Request, status: str = "open",
               session: Session = Depends(get_session)):
     jobs = session.scalars(select(models.Job).where(models.Job.status == status)
-                           .order_by(models.Job.priority.desc(), models.Job.id.desc())).all()
+                           .order_by(models.Job.priority.asc(), models.Job.id.desc())).all()
     return templates.TemplateResponse(request, "jobs/list.html",
                                       {"jobs": jobs, "status": status})
 
@@ -39,7 +46,7 @@ def create_job(property_id: int = Form(...), title: str = Form(...),
     get_or_404(session, models.Property, property_id)
     j = models.Job(property_id=property_id, title=title, description=description,
                    priority=priority,
-                   labor_cents=round(float(labor_dollars or 0) * 100))
+                   labor_cents=_labor_cents(labor_dollars))
     if scheduled_date:
         j.scheduled_date = date.fromisoformat(scheduled_date)
         j.status = "scheduled"
@@ -75,7 +82,7 @@ def edit_job(jid: int, property_id: int = Form(...), title: str = Form(...),
     get_or_404(session, models.Property, property_id)
     j = get_or_404(session, models.Job, jid)
     j.property_id, j.title, j.description, j.priority = property_id, title, description, priority
-    j.labor_cents = round(float(labor_dollars or 0) * 100)
+    j.labor_cents = _labor_cents(labor_dollars)
     j.scheduled_date = date.fromisoformat(scheduled_date) if scheduled_date else None
     if j.status != "done":
         j.status = "scheduled" if j.scheduled_date else "open"
@@ -98,3 +105,12 @@ def complete_job(jid: int, session: Session = Depends(get_session)):
     j.status, j.completed_at = "done", models.utcnow()
     session.commit()
     return RedirectResponse("/jobs", status_code=303)
+
+
+@router.post("/jobs/{jid}/reopen")
+def reopen_job(jid: int, session: Session = Depends(get_session)):
+    j = get_or_404(session, models.Job, jid)
+    j.status = "scheduled" if j.scheduled_date else "open"
+    j.completed_at = None
+    session.commit()
+    return RedirectResponse(f"/jobs/{jid}", status_code=303)

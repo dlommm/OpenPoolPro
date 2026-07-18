@@ -24,4 +24,9 @@
   <button class="w-full min-h-12 rounded-xl bg-emerald-600 text-white text-lg font-bold">✅ Complete</button>
 </form>
 {% endif %}
+{% if j.status == "done" %}
+<form method="post" action="/jobs/{{ j.id }}/reopen">
+  <button class="w-full min-h-11 rounded-lg border border-slate-400 text-slate-600">↩ Reopen</button>
+</form>
+{% endif %}
 {% endblock %}

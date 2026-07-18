@@ -37,3 +37,39 @@ def test_job_lifecycle(client, engine):
         assert jj.status == "done" and jj.completed_at is not None
     assert "Filter clean" not in client.get("/jobs?status=open").text
     assert "Filter clean" in client.get("/jobs?status=done").text
+
+
+def test_edit_never_undones_and_reopen(client, engine):
+    pid = prop(engine)
+    client.post("/jobs/new", data={"property_id": str(pid), "title": "T", "description": "",
+                                   "priority": "normal", "labor_dollars": "50", "scheduled_date": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    client.post(f"/jobs/{jid}/complete")
+    client.post(f"/jobs/{jid}/edit", data={"property_id": str(pid), "title": "T2", "description": "",
+                                           "priority": "normal", "labor_dollars": "60", "scheduled_date": ""})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.status == "done" and j.title == "T2" and j.labor_cents == 6000
+    client.post(f"/jobs/{jid}/reopen")
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.status == "open" and j.completed_at is None
+
+
+def test_high_priority_sorts_first(client, engine):
+    pid = prop(engine)
+    for pr, title in [("normal", "NormalJob"), ("high", "HighJob")]:
+        client.post("/jobs/new", data={"property_id": str(pid), "title": title, "description": "",
+                                       "priority": pr, "labor_dollars": "", "scheduled_date": ""})
+    html = client.get("/jobs").text
+    assert html.index("HighJob") < html.index("NormalJob")
+
+
+def test_garbage_labor_dollars_defaults_zero(client, engine):
+    pid = prop(engine)
+    client.post("/jobs/new", data={"property_id": str(pid), "title": "G", "description": "",
+                                   "priority": "normal", "labor_dollars": "abc", "scheduled_date": ""})
+    with Session(engine) as s:
+        assert s.scalars(select(models.Job).where(
+            models.Job.title == "G")).one().labor_cents == 0
