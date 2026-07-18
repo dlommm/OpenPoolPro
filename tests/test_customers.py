@@ -54,3 +54,10 @@ def test_missing_records_return_404(client):
     assert client.get("/properties/999/edit").status_code == 404
     assert client.post("/customers/999/deactivate").status_code == 404
     assert client.post("/properties/999/deactivate").status_code == 404
+    assert client.post("/customers/999/edit", data={"name": "X", "qb_display_name": "",
+                                                    "phone": "", "email": "", "notes": ""}).status_code == 404
+    assert client.get("/customers/999/properties/new").status_code == 404
+    assert client.post("/properties/999/edit", data={
+        "label": "H", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "",
+        "rate_override_dollars": ""}).status_code == 404
