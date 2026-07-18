@@ -83,3 +83,36 @@ def test_backup_download_route(client, engine):
     assert client.get("/settings/backups/app-2026-07-01.db").status_code == 200
     assert client.get("/settings/backups/missing.db").status_code == 404
     assert client.get("/settings/backups/..%2fsecret").status_code in (400, 404)
+
+
+def test_deactivate_ignores_malformed_cost(client, engine):
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Chemical)).first().id
+    client.post("/settings/chemicals", data={"chem_id": [str(cid)], "name": [""],
+                                             "unit": ["gal"], "cost_dollars": ["abc"]})
+    with Session(engine) as s:
+        assert s.get(models.Chemical, cid).active is False
+
+
+def test_stale_tier_blank_rate_skipped(client, engine):
+    with Session(engine) as s:
+        before = len(s.scalars(select(models.RateTier)).all())
+    client.post("/settings/tiers", data={"tier_id": ["9999"], "max_gallons": [""],
+                                         "rate_dollars": [""], "label": [""]})
+    with Session(engine) as s:
+        assert len(s.scalars(select(models.RateTier)).all()) == before
+
+
+def test_mixed_batch_legit_rows_survive(client, engine):
+    client.post("/settings/tiers", data={
+        "tier_id": ["abc", ""], "max_gallons": ["", "50000"],
+        "rate_dollars": ["60", "80"], "label": ["Bad", "Good"]})
+    with Session(engine) as s:
+        labels = {t.label for t in s.scalars(select(models.RateTier)).all()}
+        assert "Good" in labels and "Bad" not in labels
+    client.post("/settings/chemicals", data={
+        "chem_id": ["zzz", ""], "name": ["Ghost", "Borax"],
+        "unit": ["gal", "lb"], "cost_dollars": ["1", "2"]})
+    with Session(engine) as s:
+        names = {c.name for c in s.scalars(select(models.Chemical)).all()}
+        assert "Borax" in names and "Ghost" not in names

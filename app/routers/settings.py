@@ -67,10 +67,6 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
     rows = zip(form.getlist("chem_id"), form.getlist("name"),
                form.getlist("unit"), form.getlist("cost_dollars"))
     for cid, name, unit, cost in rows:
-        try:
-            cost_cents = round(float(cost or 0) * 100)
-        except ValueError:
-            continue
         if cid:
             try:
                 c = session.get(models.Chemical, int(cid))
@@ -81,10 +77,18 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
             if not name.strip():
                 c.active = False
                 continue
+            try:
+                cost_cents = round(float(cost or 0) * 100)
+            except ValueError:
+                continue
             c.name, c.unit = name, unit
             c.cost_per_unit_cents = cost_cents
             c.active = form.get(f"active_{cid}") == "on"
         elif name.strip():
+            try:
+                cost_cents = round(float(cost or 0) * 100)
+            except ValueError:
+                continue
             session.add(models.Chemical(name=name, unit=unit,
                                         cost_per_unit_cents=cost_cents))
     session.commit()
