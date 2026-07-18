@@ -37,3 +37,49 @@ def test_markup_setting(client, engine):
                                            "business_name": "Coastline Pools"})
     with Session(engine) as s:
         assert models.get_setting(s, "chem_markup_percent", "0") == "25"
+
+
+def test_stale_and_garbage_rows_skipped(client, engine):
+    client.post("/settings/tiers", data={"tier_id": ["9999", "abc"],
+                                         "max_gallons": ["", ""],
+                                         "rate_dollars": ["50", "60"],
+                                         "label": ["Stale", "Garbage"]})
+    with Session(engine) as s:
+        labels = {t.label for t in s.scalars(select(models.RateTier)).all()}
+        assert "Stale" not in labels and "Garbage" not in labels
+    client.post("/settings/chemicals", data={
+        "chem_id": ["9999", "abc"], "name": ["X", "Y"], "unit": ["gal", "gal"],
+        "cost_dollars": ["1", "2"]})
+    client.post("/settings/tasks", data={
+        "task_id": ["9999", "abc"], "label": ["X", "Y"]})
+
+
+def test_tier_delete_via_blank_rate(client, engine):
+    with Session(engine) as s:
+        tid = s.scalars(select(models.RateTier)).first().id
+        before = len(s.scalars(select(models.RateTier)).all())
+    client.post("/settings/tiers", data={"tier_id": [str(tid)], "max_gallons": [""],
+                                         "rate_dollars": [""], "label": [""]})
+    with Session(engine) as s:
+        assert len(s.scalars(select(models.RateTier)).all()) == before - 1
+
+
+def test_chemical_deactivate_via_blank_name(client, engine):
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Chemical)).first().id
+    client.post("/settings/chemicals", data={"chem_id": [str(cid)], "name": [""],
+                                             "unit": ["gal"], "cost_dollars": ["0"]})
+    with Session(engine) as s:
+        assert s.get(models.Chemical, cid).active is False
+
+
+def test_backup_download_route(client, engine):
+    import os
+    import app.config as config
+    bdir = os.path.join(config.DATA_DIR, "backups")
+    os.makedirs(bdir, exist_ok=True)
+    with open(os.path.join(bdir, "app-2026-07-01.db"), "wb") as f:
+        f.write(b"data")
+    assert client.get("/settings/backups/app-2026-07-01.db").status_code == 200
+    assert client.get("/settings/backups/missing.db").status_code == 404
+    assert client.get("/settings/backups/..%2fsecret").status_code in (400, 404)
