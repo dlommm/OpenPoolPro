@@ -34,7 +34,8 @@ def new_job(request: Request, property_id: int | None = None,
     props = session.scalars(select(models.Property).where(models.Property.active)
                             .join(models.Customer).order_by(models.Customer.name)).all()
     return templates.TemplateResponse(request, "jobs/form.html",
-        {"j": None, "props": props, "selected": property_id})
+        {"j": None, "props": props, "selected": property_id,
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/jobs/new")
@@ -70,11 +71,12 @@ def edit_job_form(request: Request, jid: int, session: Session = Depends(get_ses
     props = session.scalars(select(models.Property).where(models.Property.active)
                             .join(models.Customer).order_by(models.Customer.name)).all()
     return templates.TemplateResponse(request, "jobs/form.html",
-        {"j": j, "props": props, "selected": j.property_id})
+        {"j": j, "props": props, "selected": j.property_id,
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/jobs/{jid}/edit")
-def edit_job(jid: int, property_id: int = Form(...), title: str = Form(...),
+def edit_job(request: Request, jid: int, property_id: int = Form(...), title: str = Form(...),
              description: str = Form(""), priority: str = Form("normal"),
              labor_dollars: str = Form(""), scheduled_date: str = Form(""),
              session: Session = Depends(get_session)):
@@ -82,7 +84,8 @@ def edit_job(jid: int, property_id: int = Form(...), title: str = Form(...),
     get_or_404(session, models.Property, property_id)
     j = get_or_404(session, models.Job, jid)
     j.property_id, j.title, j.description, j.priority = property_id, title, description, priority
-    j.labor_cents = _labor_cents(labor_dollars)
+    if request.state.user.can("view_money"):
+        j.labor_cents = _labor_cents(labor_dollars)
     j.scheduled_date = date.fromisoformat(scheduled_date) if scheduled_date else None
     if j.status != "done":
         j.status = "scheduled" if j.scheduled_date else "open"

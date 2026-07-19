@@ -18,10 +18,12 @@
       <select name="priority" class="field">
         {% for pr in ["normal","high"] %}<option {{ "selected" if j and j.priority == pr }}>{{ pr }}</option>{% endfor %}
       </select></label>
+    {% if show_money %}
     <label class="block"><span class="field-label">Labor $</span>
       <input inputmode="decimal" name="labor_dollars"
              value="{{ '%.2f'|format(j.labor_cents / 100) if j else '' }}"
              class="field font-data"></label>
+    {% endif %}
     <label class="block"><span class="field-label">Date</span>
       <input type="date" name="scheduled_date" value="{{ j.scheduled_date or '' if j else '' }}"
              class="field font-data"></label>

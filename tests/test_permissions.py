@@ -74,3 +74,37 @@ def test_admin_sees_money_everywhere(client):
     _seed_customer(client)
     html = client.get("/customers/1").text
     assert "$" in html and 'href="/money"' in html
+
+
+def test_job_form_hides_and_preserves_labor(client, tech_client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    _seed_customer(client)
+    client.post("/jobs/new", data={"property_id": "1", "title": "Priced job",
+                                   "description": "", "priority": "normal",
+                                   "labor_dollars": "425", "scheduled_date": "",
+                                   "job_type": "service", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    t = tech_client(name="fieldtech")
+    html = t.get(f"/jobs/{jid}/edit").text
+    assert "$" not in html and "Labor" not in html
+    t.post(f"/jobs/{jid}/edit", data={"property_id": "1", "title": "Renamed",
+                                      "description": "", "priority": "normal",
+                                      "scheduled_date": ""})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.title == "Renamed" and j.labor_cents == 42500  # preserved
+
+
+def test_gallons_preview_gated_and_money_scoped(client, tech_client):
+    params = {"shape": "rectangle", "length_ft": "30", "width_ft": "15", "avg_depth_ft": "5"}
+    bare = tech_client(name="bare2")
+    assert bare.get("/pools/gallons-preview", params=params,
+                    follow_redirects=False).status_code == 403
+    mgr = tech_client(name="mgr2", manage_customers=True)
+    r = mgr.get("/pools/gallons-preview", params=params)
+    assert "16,875" in r.text and "$" not in r.text
+    admin = client.get("/pools/gallons-preview", params=params)
+    assert "$55.00" in admin.text
