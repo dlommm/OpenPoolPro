@@ -9,6 +9,9 @@ COLUMNS = {
         ("manage_customers", "BOOLEAN DEFAULT 0"),
         ("can_repairs", "BOOLEAN DEFAULT 0"),
         ("view_all_routes", "BOOLEAN DEFAULT 0"),
+        ("totp_secret", "VARCHAR(200)"),
+        ("totp_enabled", "BOOLEAN DEFAULT 0"),
+        ("session_epoch", "INTEGER DEFAULT 0"),
     ],
     "properties": [("assigned_tech_id", "INTEGER REFERENCES users(id)")],
     "jobs": [
