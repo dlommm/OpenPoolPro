@@ -71,6 +71,10 @@ def visit_doses(request: Request, visit_id: int,
 def visit_form(request: Request, property_id: int, visit_date: date,
                session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
+    from app.routers.today import business_today
+    if v.status == "due" and v.started_at is None and business_today() >= v.date:
+        v.started_at = models.utcnow()
+        session.commit()
     chems = session.scalars(select(models.Chemical).where(models.Chemical.active)
                             .order_by(models.Chemical.name)).all()
     tasks = session.scalars(select(models.TaskTemplate).where(models.TaskTemplate.active)
@@ -93,7 +97,15 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.tasks_done = form.getlist("tasks")
     v.notes = form.get("notes", "")
     v.status = "done"
-    v.completed_at = models.utcnow()
+    from app.timefmt import from_local_hhmm
+    started = from_local_hhmm(v.date, form.get("started_hhmm"))
+    if started is not None:
+        v.started_at = started
+    ended = from_local_hhmm(v.date, form.get("ended_hhmm"))
+    if ended is not None:
+        v.completed_at = ended
+    elif v.completed_at is None:
+        v.completed_at = models.utcnow()
     v.completed_by_id = request.state.user.id
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
