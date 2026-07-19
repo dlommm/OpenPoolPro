@@ -19,3 +19,12 @@ folder.
     python scripts/build_css.py
     APP_PASSWORD=dev uvicorn app.main:create_app --factory --reload
     pytest
+
+## Visual smoke check
+
+Proves every screen renders with the design system applied (catches stale
+service-worker CSS):
+
+    APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py
+
+Requires `pip install playwright && playwright install chromium`.
