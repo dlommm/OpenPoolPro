@@ -40,8 +40,10 @@ class Property(Base):
     anchor_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     rate_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     route_order: Mapped[int] = mapped_column(Integer, default=0)
+    assigned_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     customer: Mapped[Customer] = relationship(back_populates="properties")
     pools: Mapped[list["Pool"]] = relationship(back_populates="property")
+    assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
 
 
 class Pool(Base):
@@ -120,8 +122,10 @@ class Visit(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     property: Mapped[Property] = relationship()
     chemicals: Mapped[list["VisitChemical"]] = relationship(back_populates="visit")
+    completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
 
 
 class VisitChemical(Base):
@@ -148,7 +152,12 @@ class Job(Base):
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    assigned_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    job_type: Mapped[str] = mapped_column(String(10), default="service")
+    completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     property: Mapped[Property] = relationship()
+    assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
+    completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
 
 
 class TaskTemplate(Base):
@@ -163,8 +172,23 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80))
-    role: Mapped[str] = mapped_column(String(12), default="owner")
+    role: Mapped[str] = mapped_column(String(12), default="tech")  # admin|tech
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(40), unique=True, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    view_money: Mapped[bool] = mapped_column(Boolean, default=False)
+    manage_customers: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_repairs: Mapped[bool] = mapped_column(Boolean, default=False)
+    view_all_routes: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes")
+
+    def can(self, flag: str) -> bool:
+        if self.role == "admin":
+            return True
+        if flag not in self.PERMISSION_FLAGS:
+            return False
+        return bool(getattr(self, flag, False))
 
 
 class Setting(Base):
