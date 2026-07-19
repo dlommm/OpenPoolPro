@@ -15,6 +15,24 @@ def utcnow() -> datetime:
 	return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def normalize_tags(raw: str) -> list[str]:
+    """Parse a comma-separated tag string into a normalized list.
+
+    Splits on commas, strips whitespace, lowercases, drops empty entries,
+    dedupes while preserving order, drops tags longer than 24 characters,
+    and caps the result at 10 tags.
+    """
+    tags: list[str] = []
+    for part in raw.split(","):
+        tag = part.strip().lower()
+        if not tag or len(tag) > 24 or tag in tags:
+            continue
+        tags.append(tag)
+        if len(tags) == 10:
+            break
+    return tags
+
+
 class Customer(Base):
     __tablename__ = "customers"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -25,6 +43,7 @@ class Customer(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 
@@ -77,6 +96,7 @@ class Equipment(Base):
     model: Mapped[str] = mapped_column(String(80), default="")
     serial: Mapped[str] = mapped_column(String(80), default="")
     install_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    warranty_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     pool: Mapped[Pool] = relationship(back_populates="equipment")
 
@@ -89,6 +109,7 @@ class Photo(Base):
     filename: Mapped[str] = mapped_column(String(200))
     thumb_filename: Mapped[str] = mapped_column(String(200))
     caption: Mapped[str] = mapped_column(String(200), default="")
+    tag: Mapped[str] = mapped_column(String(10), default="")  # before|after|issue|""
     taken_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -170,6 +191,7 @@ class Job(Base):
     assigned_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     job_type: Mapped[str] = mapped_column(String(10), default="service")
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    rule_id: Mapped[int | None] = mapped_column(ForeignKey("maintenance_rules.id"), nullable=True)
     property: Mapped[Property] = relationship()
     assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
@@ -188,6 +210,82 @@ class TaskTemplate(Base):
     label: Mapped[str] = mapped_column(String(80))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CommLog(Base):
+    __tablename__ = "comm_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    kind: Mapped[str] = mapped_column(String(8))  # call|email|text|note
+    note: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class ServiceHold(Base):
+    __tablename__ = "service_holds"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
+    start_date: Mapped[date] = mapped_column(Date)
+    resume_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # None = indefinite
+    reason: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class PropertyTask(Base):
+    __tablename__ = "property_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
+    label: Mapped[str] = mapped_column(String(120))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class MaintenanceRule(Base):
+    __tablename__ = "maintenance_rules"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    job_type: Mapped[str] = mapped_column(String(10), default="service")  # service|repair
+    interval_weeks: Mapped[int] = mapped_column(Integer, default=4)
+    lead_days: Mapped[int] = mapped_column(Integer, default=7)
+    next_due: Mapped[date] = mapped_column(Date)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Quote(Base):
+    __tablename__ = "quotes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    property_id: Mapped[int | None] = mapped_column(ForeignKey("properties.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(10), default="draft")  # draft|sent|accepted|declined|converted
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
+    lines: Mapped[list["QuoteLine"]] = relationship(back_populates="quote",
+                                                     order_by="QuoteLine.sort_order")
+
+
+class QuoteLine(Base):
+    __tablename__ = "quote_lines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"))
+    description: Mapped[str] = mapped_column(String(200))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    quote: Mapped[Quote] = relationship(back_populates="lines")
+
+
+class JobTemplate(Base):
+    __tablename__ = "job_templates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    job_type: Mapped[str] = mapped_column(String(10), default="service")
+    labor_cents: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class User(Base):
