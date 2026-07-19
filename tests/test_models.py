@@ -33,3 +33,23 @@ def test_settings_helpers(engine):
 def test_utcnow_naive():
     from app.models import utcnow
     assert utcnow().tzinfo is None
+
+
+def test_seed_chemicals_get_roles(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    seeds.run(engine)  # idempotent
+    with Session(engine) as s:
+        by_name = {c.name: c for c in s.scalars(select(models.Chemical)).all()}
+        assert by_name["Liquid chlorine"].role == "chlorine_liquid"
+        assert by_name["Liquid chlorine"].strength_pct == 12.5
+        assert by_name["Shock (cal-hypo)"].role == "chlorine_granular"
+        assert by_name["Shock (cal-hypo)"].strength_pct == 65
+        assert by_name["Muriatic acid"].role == "ph_down"
+        assert abs(by_name["Muriatic acid"].strength_pct - 31.45) < 0.01
+        assert by_name["Soda ash"].role == "ph_up"
+        assert by_name["Baking soda"].role == "alkalinity_up"
+        assert by_name["Stabilizer (CYA)"].role == "stabilizer"
+        assert by_name["Salt"].role == "salt"
+        assert by_name["Chlorine tabs 3in"].role == "chlorine_tab"

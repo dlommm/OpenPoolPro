@@ -17,6 +17,7 @@ def test_migrate_adds_columns_to_legacy_db(engine):
         c.execute(text("CREATE TABLE properties (id INTEGER PRIMARY KEY)"))
         c.execute(text("CREATE TABLE jobs (id INTEGER PRIMARY KEY)"))
         c.execute(text("CREATE TABLE visits (id INTEGER PRIMARY KEY)"))
+        c.execute(text("CREATE TABLE chemicals (id INTEGER PRIMARY KEY, name VARCHAR(80))"))
         c.commit()
     migrate.run(engine)
     migrate.run(engine)  # idempotent
@@ -25,6 +26,7 @@ def test_migrate_adds_columns_to_legacy_db(engine):
     assert "assigned_tech_id" in _cols(engine, "properties")
     assert {"assigned_tech_id", "job_type", "completed_by_id"} <= _cols(engine, "jobs")
     assert "completed_by_id" in _cols(engine, "visits")
+    assert {"role", "strength_pct"} <= _cols(engine, "chemicals")
 
 
 def test_user_can_matrix(engine):

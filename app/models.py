@@ -5,6 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
+ROLE_VALUES = ("chlorine_liquid", "chlorine_granular", "chlorine_tab", "ph_up",
+               "ph_down", "alkalinity_up", "stabilizer", "salt", "other")
+
 
 def utcnow() -> datetime:
 	"""Naive UTC now — replacement for deprecated datetime.utcnow()."""
@@ -103,6 +106,8 @@ class Chemical(Base):
     unit: Mapped[str] = mapped_column(String(8))  # gal|lb|oz|tab|each
     cost_per_unit_cents: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    role: Mapped[str] = mapped_column(String(20), default="other")
+    strength_pct: Mapped[float] = mapped_column(Float, default=100.0)
 
 
 class Visit(Base):
