@@ -4,13 +4,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, models, seeds  # noqa: F401
+from app import config, models, seeds, timefmt  # noqa: F401
 from app.db import Base, make_engine
 
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["dollars"] = lambda cents: f"${(cents or 0) / 100:,.2f}"
 templates.env.filters["initials"] = lambda name: "".join(
     w[0] for w in (name or "?").split()[:2]).upper()
+templates.env.filters["hhmm"] = timefmt.to_local_hhmm
+templates.env.filters["minutes_display"] = lambda m: (
+    "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
 
 
 def create_app(engine=None) -> FastAPI:

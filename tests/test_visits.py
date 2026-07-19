@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -144,3 +144,60 @@ def test_negative_and_garbage_chem_lines_ignored(client, engine):
         v = s.scalars(select(models.Visit)).one()
         assert v.status == "done" and v.fc is None
         assert s.scalars(select(models.VisitChemical)).all() == []
+
+
+def test_visit_autostamp_on_due_day_only(client, engine):
+    from datetime import timedelta
+    pid, _ = seed(engine)
+    past = "2026-07-13"
+    client.get(f"/visit/{pid}/{past}")
+    with Session(engine) as s:
+        v = s.scalars(select(models.Visit).where(
+            models.Visit.date == date(2026, 7, 13))).one()
+        first_stamp = v.started_at
+        assert first_stamp is not None  # past due date opened -> stamped
+    client.get(f"/visit/{pid}/{past}")
+    with Session(engine) as s:
+        v = s.scalars(select(models.Visit).where(
+            models.Visit.date == date(2026, 7, 13))).one()
+        assert v.started_at == first_stamp  # no re-stamp
+    future = (date.today() + timedelta(days=14)).isoformat()
+    client.get(f"/visit/{pid}/{future}")
+    with Session(engine) as s:
+        vf = s.scalars(select(models.Visit)).all()[-1]
+        assert vf.started_at is None  # future open -> no stamp
+
+
+def test_complete_with_edited_times(client, engine):
+    pid, _ = seed(engine)
+    client.get(f"/visit/{pid}/2026-07-13")
+    with Session(engine) as s:
+        vid = s.scalars(select(models.Visit)).one().id
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "started_hhmm": "09:15", "ended_hhmm": "09:57"})
+    with Session(engine) as s:
+        v = s.get(models.Visit, vid)
+        assert v.duration_minutes == 42
+    # garbage keeps stamped values (re-complete)
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "started_hhmm": "9:99", "ended_hhmm": "abc"})
+    with Session(engine) as s:
+        assert s.get(models.Visit, vid).duration_minutes == 42
+
+
+def test_late_completion_keeps_real_duration(client, engine):
+    from app.timefmt import local_date, to_local_hhmm
+    pid, _ = seed(engine)
+    client.get(f"/visit/{pid}/2026-07-13")  # past due date -> autostamp = real now
+    with Session(engine) as s:
+        v = s.scalars(select(models.Visit)).one()
+        vid, prefill = v.id, to_local_hhmm(v.started_at)
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "started_hhmm": prefill, "ended_hhmm": ""})
+    with Session(engine) as s:
+        v = s.get(models.Visit, vid)
+        assert v.duration_minutes is not None and v.duration_minutes < 60
+        assert local_date(v.started_at) == local_date(v.completed_at)

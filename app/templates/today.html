@@ -48,8 +48,11 @@
         {% if techs and s.property.assigned_tech_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
         {% if techs and not s.property.assigned_tech_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
         {% if techs and s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}</a>
-      {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}
-      {% elif s.status == "skipped" %}<span class="tag shrink-0">skipped</span>{% endif %}
+      <div class="flex items-center gap-1.5">
+        {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}{% endif %}
+        {% if s.visit and s.visit.duration_minutes is not none %}<span class="tag font-data">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
+        {% if s.status == "skipped" %}<span class="tag shrink-0">skipped</span>{% endif %}
+      </div>
     </div>
     <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
        class="mt-1 flex min-h-11 items-center gap-1.5 text-sm text-pool">

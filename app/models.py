@@ -1,3 +1,4 @@
+from builtins import property as builtin_property
 from datetime import date, datetime, timezone
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, select
@@ -124,6 +125,7 @@ class Visit(Base):
     salt: Mapped[float | None] = mapped_column(Float, nullable=True)
     tasks_done: Mapped[list] = mapped_column(JSON, default=list)
     notes: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     original_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -131,6 +133,13 @@ class Visit(Base):
     property: Mapped[Property] = relationship()
     chemicals: Mapped[list["VisitChemical"]] = relationship(back_populates="visit")
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
+
+    @builtin_property
+    def duration_minutes(self) -> int | None:
+        if self.started_at is None or self.completed_at is None:
+            return None
+        delta = (self.completed_at - self.started_at).total_seconds()
+        return int(delta // 60) if delta >= 0 else None
 
 
 class VisitChemical(Base):
@@ -156,6 +165,7 @@ class Job(Base):
     priority: Mapped[str] = mapped_column(String(8), default="normal")
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     job_type: Mapped[str] = mapped_column(String(10), default="service")
@@ -163,6 +173,13 @@ class Job(Base):
     property: Mapped[Property] = relationship()
     assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
+
+    @builtin_property
+    def duration_minutes(self) -> int | None:
+        if self.started_at is None or self.completed_at is None:
+            return None
+        delta = (self.completed_at - self.started_at).total_seconds()
+        return int(delta // 60) if delta >= 0 else None
 
 
 class TaskTemplate(Base):

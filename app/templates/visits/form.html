@@ -6,6 +6,13 @@
 <p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }}{% if show_money %} · <span class="money">{{ rate | dollars }}</span>/visit{% endif %}</p>
 
 <form method="post" action="/visit/{{ v.id }}/complete" class="space-y-5">
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="field-label">Started</span>
+      <input type="time" name="started_hhmm" value="{{ v.started_at | hhmm }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Finished</span>
+      <input type="time" name="ended_hhmm" value="{{ v.completed_at | hhmm }}" class="field font-data"></label>
+  </div>
+
   <div>
     <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Readings</h2>
     <div class="grid grid-cols-5 gap-2">
