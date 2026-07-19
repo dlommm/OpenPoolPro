@@ -4,6 +4,7 @@ Deadbands (fixed): FC doses only below target-0.5 ppm; pH only outside
 7.2-7.8; TA below target-10; CYA below target-10 (raise only, >100 warns);
 salt below target-200 on salt pools. Doses rounding to zero are dropped.
 """
+import math
 from dataclasses import dataclass
 
 DEADBAND_FC = 0.5
@@ -33,7 +34,7 @@ class Dose:
 
 def _first(chemicals, role):
     for c in sorted(chemicals, key=lambda c: c.name):
-        if c.active and c.role == role:
+        if c.active and c.role == role and math.isfinite(c.strength_pct) and c.strength_pct > 0:
             return c
     return None
 
@@ -67,7 +68,10 @@ def recommend(readings, gallons, water_type, chemicals, targets):
 
     def r(key):
         v = readings.get(key)
-        return float(v) if v is not None else None
+        if v is None:
+            return None
+        v = float(v)
+        return v if v >= 0 else None
 
     fc, ph, ta, cya, salt = r("fc"), r("ph"), r("ta"), r("cya"), r("salt")
 

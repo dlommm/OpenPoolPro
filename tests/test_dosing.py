@@ -141,3 +141,29 @@ def test_no_readings_no_doses():
 
 def test_tiny_dose_rounds_to_zero_dropped():
     assert rec({"fc": 3.4}, gallons=800) == []  # deficit 0.6 on tiny pool -> < 0.05 gal
+
+
+def test_zero_strength_chemical_skipped():
+    catalog = [Chem(1, "Liquid chlorine", "gal", "chlorine_liquid", 0),
+               Chem(2, "Shock (cal-hypo)", "lb", "chlorine_granular", 65)]
+    d = by_role(rec({"fc": 2.0}, catalog=catalog), "Shock")
+    assert d is not None  # zero-strength liquid skipped, granular used
+
+
+def test_all_strengths_unusable_advisory():
+    catalog = [Chem(1, "Liquid chlorine", "gal", "chlorine_liquid", 0),
+               Chem(2, "Shock (cal-hypo)", "lb", "chlorine_granular", -5)]
+    doses = rec({"fc": 2.0}, catalog=catalog)
+    assert len(doses) == 1 and doses[0].chemical_id is None and not doses[0].applyable
+
+
+def test_negative_readings_ignored():
+    assert rec({"fc": -2.0}) == []
+    assert rec({"cya": -100.0}) == []
+
+
+def test_negative_ta_does_not_corrupt_acid_dose():
+    doses = rec({"ph": 8.2, "ta": -50.0})
+    acid = by_role(doses, "Muriatic")
+    assert acid is not None and acid.amount > 0  # ta treated absent -> factor 1.0
+    assert by_role(doses, "Baking soda") is None  # no phantom TA-raise advice

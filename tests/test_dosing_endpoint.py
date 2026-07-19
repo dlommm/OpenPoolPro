@@ -73,6 +73,43 @@ def test_dose_fragment_missing_visit_404(client, engine):
     assert client.get("/visit/999/doses", params={"fc": "2"}).status_code == 404
 
 
+def test_dose_fragment_zero_strength_chemical_never_500(client, engine):
+    # C1 pin: a zero-strength chemical directly in the DB must not crash
+    # the doses endpoint — the guard in dosing._first() must skip it.
+    vid = seed(client, engine)
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        chem.strength_pct = 0
+        s.commit()
+    r = client.get(f"/visit/{vid}/doses", params={"fc": "2.0"})
+    assert r.status_code == 200
+
+
+def test_dose_fragment_non_finite_target_falls_back_to_default(client, engine):
+    # I2 pin: a non-finite target stored directly in the DB (bypassing the
+    # settings-form guard) must not crash the endpoint — it falls back to
+    # the hardcoded default (target_fc=4.0), reproducing the 0.2 gal golden.
+    vid = seed(client, engine)
+    with Session(engine) as s:
+        s.add(models.Setting(key="target_fc", value="inf"))
+        s.commit()
+    r = client.get(f"/visit/{vid}/doses", params={"fc": "2.0"})
+    assert r.status_code == 200
+    assert "0.2" in r.text and "gal" in r.text
+
+
+def test_dose_fragment_garbage_target_falls_back_to_default(client, engine):
+    # The plain corrupt-string case for the same fallback path.
+    vid = seed(client, engine)
+    with Session(engine) as s:
+        s.add(models.Setting(key="target_fc", value="garbage"))
+        s.commit()
+    r = client.get(f"/visit/{vid}/doses", params={"fc": "2.0"})
+    assert r.status_code == 200
+    assert "0.2" in r.text and "gal" in r.text
+
+
 def test_visit_form_wires_dose_panel(client, engine):
     vid = seed(client, engine)
     with Session(engine) as s:

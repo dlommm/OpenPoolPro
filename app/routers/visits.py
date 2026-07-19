@@ -57,7 +57,9 @@ def visit_doses(request: Request, visit_id: int,
             "cya": float(models.get_setting(session, "target_cya", "50")),
             "salt": float(models.get_setting(session, "target_salt", "3200")),
         }
-    except ValueError:
+        if not all(math.isfinite(v) for v in targets.values()):
+            raise ValueError("non-finite target")
+    except (ValueError, OverflowError):
         targets = {"fc": 4.0, "ph": 7.5, "ta": 90.0, "cya": 50.0, "salt": 3200.0}
     chems = session.scalars(select(models.Chemical).where(models.Chemical.active)).all()
     doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets)

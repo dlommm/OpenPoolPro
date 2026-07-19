@@ -1,3 +1,4 @@
+import math
 import os
 
 from fastapi import APIRouter, Depends, Request
@@ -42,9 +43,11 @@ async def save_targets(request: Request, session: Session = Depends(get_session)
     for key in TARGET_KEYS:
         raw = (form.get(key) or "").strip()
         try:
-            float(raw)
+            v = float(raw)
         except ValueError:
             continue  # invalid keeps the previously stored value
+        if not math.isfinite(v):
+            continue  # inf/nan keeps the previously stored value
         models.set_setting(session, key, raw)
     session.commit()
     return RedirectResponse("/settings", status_code=303)
@@ -115,9 +118,11 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
             c.cost_per_unit_cents = cost_cents
             c.role = role if role in models.ROLE_VALUES else "other"
             try:
-                c.strength_pct = float(strength) if strength.strip() else c.strength_pct
+                new_strength = float(strength) if strength.strip() else c.strength_pct
             except ValueError:
-                pass
+                new_strength = c.strength_pct
+            if math.isfinite(new_strength) and new_strength > 0:
+                c.strength_pct = new_strength
             c.active = form.get(f"active_{cid}") == "on"
         elif name.strip():
             try:
@@ -128,6 +133,8 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
             try:
                 strength_pct = float(strength) if strength.strip() else 100.0
             except ValueError:
+                strength_pct = 100.0
+            if not (math.isfinite(strength_pct) and strength_pct > 0):
                 strength_pct = 100.0
             session.add(models.Chemical(name=name, unit=unit,
                                         cost_per_unit_cents=cost_cents,
