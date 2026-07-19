@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,23 @@ def _labor_cents(val: str) -> int:
         return 0
 
 
+def _parse_assignee(assigned_tech_id: str) -> int | None:
+    if not assigned_tech_id.strip():
+        return None
+    try:
+        return int(assigned_tech_id)
+    except ValueError:
+        return None
+
+
+def _eligible_assignees(session: Session, job_type: str):
+    users = session.scalars(select(models.User).where(models.User.active)
+                            .order_by(models.User.name)).all()
+    if job_type == "repair":
+        return [u for u in users if u.can("can_repairs")]
+    return users
+
+
 @router.get("/jobs")
 def list_jobs(request: Request, status: str = "open",
               session: Session = Depends(get_session)):
@@ -33,8 +50,11 @@ def new_job(request: Request, property_id: int | None = None,
             session: Session = Depends(get_session)):
     props = session.scalars(select(models.Property).where(models.Property.active)
                             .join(models.Customer).order_by(models.Customer.name)).all()
+    assignees_all = session.scalars(select(models.User).where(models.User.active)
+                                    .order_by(models.User.name)).all()
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": None, "props": props, "selected": property_id,
+         "assignees_all": assignees_all,
          "show_money": request.state.user.can("view_money")})
 
 
@@ -42,12 +62,20 @@ def new_job(request: Request, property_id: int | None = None,
 def create_job(property_id: int = Form(...), title: str = Form(...),
                description: str = Form(""), priority: str = Form("normal"),
                labor_dollars: str = Form(""), scheduled_date: str = Form(""),
+               job_type: str = Form("service"), assigned_tech_id: str = Form(""),
                session: Session = Depends(get_session)):
     # Validate property exists
     get_or_404(session, models.Property, property_id)
+    job_type = "repair" if job_type == "repair" else "service"
+    assigned_id = _parse_assignee(assigned_tech_id)
+    if assigned_id is not None:
+        eligible_ids = {u.id for u in _eligible_assignees(session, job_type)}
+        if assigned_id not in eligible_ids:
+            return HTMLResponse("That tech can't take this job type", status_code=400)
     j = models.Job(property_id=property_id, title=title, description=description,
                    priority=priority,
                    labor_cents=_labor_cents(labor_dollars))
+    j.job_type, j.assigned_tech_id = job_type, assigned_id
     if scheduled_date:
         j.scheduled_date = date.fromisoformat(scheduled_date)
         j.status = "scheduled"
@@ -70,8 +98,11 @@ def edit_job_form(request: Request, jid: int, session: Session = Depends(get_ses
     j = get_or_404(session, models.Job, jid)
     props = session.scalars(select(models.Property).where(models.Property.active)
                             .join(models.Customer).order_by(models.Customer.name)).all()
+    assignees_all = session.scalars(select(models.User).where(models.User.active)
+                                    .order_by(models.User.name)).all()
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": j, "props": props, "selected": j.property_id,
+         "assignees_all": assignees_all,
          "show_money": request.state.user.can("view_money")})
 
 
@@ -79,11 +110,19 @@ def edit_job_form(request: Request, jid: int, session: Session = Depends(get_ses
 def edit_job(request: Request, jid: int, property_id: int = Form(...), title: str = Form(...),
              description: str = Form(""), priority: str = Form("normal"),
              labor_dollars: str = Form(""), scheduled_date: str = Form(""),
+             job_type: str = Form("service"), assigned_tech_id: str = Form(""),
              session: Session = Depends(get_session)):
     # Validate property exists
     get_or_404(session, models.Property, property_id)
     j = get_or_404(session, models.Job, jid)
+    job_type = "repair" if job_type == "repair" else "service"
+    assigned_id = _parse_assignee(assigned_tech_id)
+    if assigned_id is not None:
+        eligible_ids = {u.id for u in _eligible_assignees(session, job_type)}
+        if assigned_id not in eligible_ids:
+            return HTMLResponse("That tech can't take this job type", status_code=400)
     j.property_id, j.title, j.description, j.priority = property_id, title, description, priority
+    j.job_type, j.assigned_tech_id = job_type, assigned_id
     if request.state.user.can("view_money"):
         j.labor_cents = _labor_cents(labor_dollars)
     j.scheduled_date = date.fromisoformat(scheduled_date) if scheduled_date else None
@@ -103,9 +142,10 @@ def schedule_job(jid: int, scheduled_date: date = Form(...),
 
 
 @router.post("/jobs/{jid}/complete")
-def complete_job(jid: int, session: Session = Depends(get_session)):
+def complete_job(jid: int, request: Request, session: Session = Depends(get_session)):
     j = get_or_404(session, models.Job, jid)
     j.status, j.completed_at = "done", models.utcnow()
+    j.completed_by_id = request.state.user.id
     session.commit()
     return RedirectResponse("/jobs", status_code=303)
 
@@ -115,5 +155,6 @@ def reopen_job(jid: int, session: Session = Depends(get_session)):
     j = get_or_404(session, models.Job, jid)
     j.status = "scheduled" if j.scheduled_date else "open"
     j.completed_at = None
+    j.completed_by_id = None
     session.commit()
     return RedirectResponse(f"/jobs/{jid}", status_code=303)

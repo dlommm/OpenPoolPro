@@ -62,6 +62,7 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.notes = form.get("notes", "")
     v.status = "done"
     v.completed_at = models.utcnow()
+    v.completed_by_id = request.state.user.id
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
     # Preserve frozen history: a prior line's frozen unit cost must survive a
@@ -94,6 +95,7 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
     v.status = "skipped"
+    v.completed_by_id = request.state.user.id
     reason = form.get("reason", "").strip()
     if reason:
         v.notes = (v.notes + "\n" if v.notes else "") + f"Skipped: {reason}"

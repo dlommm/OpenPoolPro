@@ -13,6 +13,20 @@
     <input name="title" value="{{ j.title if j else '' }}" required class="field"></label>
   <label class="block"><span class="field-label">Description</span>
     <textarea name="description" class="field min-h-24 py-2">{{ j.description if j else "" }}</textarea></label>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="field-label">Type</span>
+      <select name="job_type" class="field">
+        <option value="service" {{ "selected" if not j or j.job_type == "service" }}>Service</option>
+        <option value="repair" {{ "selected" if j and j.job_type == "repair" }}>Repair</option>
+      </select></label>
+    <label class="block"><span class="field-label">Assigned to</span>
+      <select name="assigned_tech_id" class="field">
+        <option value="">— Unassigned —</option>
+        {% for t in assignees_all %}
+        <option value="{{ t.id }}" {{ "selected" if j and j.assigned_tech_id == t.id }}>{{ t.name }}</option>
+        {% endfor %}
+      </select></label>
+  </div>
   <div class="grid grid-cols-3 gap-3">
     <label class="block"><span class="field-label">Priority</span>
       <select name="priority" class="field">
