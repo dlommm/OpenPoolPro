@@ -1,6 +1,7 @@
 import io
 import os
 import zipfile
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -44,6 +45,15 @@ def test_generate_is_idempotent(client, engine):
     with Session(engine) as s:
         after = {i.number for i in s.scalars(select(models.Invoice)).all()}
     assert before == after
+
+
+def test_generate_on_empty_month_creates_nothing_without_error(client, engine):
+    r = _generate(client, ym="2030-01")
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert s.scalars(select(models.Invoice)).all() == []
+        created, skipped = invoicing.generate_month(s, 2030, 1, 1)
+    assert (created, skipped) == (0, 0)
 
 
 def test_void_then_regenerate_month_gives_new_number(client, engine):
@@ -120,10 +130,23 @@ def test_regenerate_rerenders_same_number_and_updates_total(client, engine):
     _fix(engine)
     _generate(client)
     with Session(engine) as s:
-        inv = s.scalars(select(models.Invoice)).first()
-        iid, number, old_generated = inv.id, inv.number, inv.generated_at
+        inv = s.scalars(select(models.Invoice).join(models.Customer).where(
+            models.Customer.name == "Alpha")).one()
+        iid, number, old_generated, old_total = inv.id, inv.number, inv.generated_at, inv.total_cents
+        customer_id = inv.customer_id
+        property_id = inv.customer.properties[0].id
         path = os.path.join(config.DATA_DIR, "invoices", inv.pdf_filename)
         before_bytes = open(path, "rb").read()
+
+    # Mutate source data: add another done visit with a rate in the same
+    # billing period, so the regenerated total must actually change.
+    with Session(engine) as s:
+        s.add(models.Visit(property_id=property_id, date=date(2026, 7, 20),
+                           status="done", rate_cents=9999))
+        s.commit()
+        expected_total = invoicing.invoice_data(
+            s, s.get(models.Customer, customer_id), 2026, 7).total_cents
+    assert expected_total == old_total + 9999
 
     r = client.post(f"/invoices/{iid}/regenerate", follow_redirects=False)
     assert r.status_code == 303
@@ -131,8 +154,11 @@ def test_regenerate_rerenders_same_number_and_updates_total(client, engine):
         inv = s.get(models.Invoice, iid)
         assert inv.number == number  # same number, not a new invoice
         assert inv.generated_at >= old_generated
+        assert inv.total_cents == expected_total
         path = os.path.join(config.DATA_DIR, "invoices", inv.pdf_filename)
         assert os.path.isfile(path)
+        after_bytes = open(path, "rb").read()
+    assert after_bytes != before_bytes
 
 
 def test_pdf_serve_200_and_404_missing(client, engine):
@@ -192,6 +218,23 @@ def test_register_filters_by_status(client, engine):
     r = client.get(f"/invoices?ym={YM}")
     assert r.status_code == 200
     assert number in r.text  # unfiltered shows all
+
+
+def test_register_shows_pdf_missing_tag_after_file_deleted(client, engine):
+    _fix(engine)
+    _generate(client)
+    with Session(engine) as s:
+        inv = s.scalars(select(models.Invoice)).first()
+        path = os.path.join(config.DATA_DIR, "invoices", inv.pdf_filename)
+
+    r = client.get(f"/invoices?ym={YM}")
+    assert r.status_code == 200
+    assert "pdf missing" not in r.text
+
+    os.remove(path)
+    r = client.get(f"/invoices?ym={YM}")
+    assert r.status_code == 200
+    assert "pdf missing" in r.text
 
 
 def test_register_tolerant_bad_ym_and_status(client, engine):

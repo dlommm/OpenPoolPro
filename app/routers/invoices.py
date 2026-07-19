@@ -11,24 +11,11 @@ from app import invoicing, models
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import templates
-from app.routers.today import business_today
+from app.timefmt import parse_ym
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 STATUSES = ("draft", "sent", "void")
-
-
-def _parse_ym(ym: str | None) -> tuple[int, int]:
-    if ym:
-        try:
-            y, m = ym.split("-")
-            y, m = int(y), int(m)
-            if 1 <= m <= 12:
-                return y, m
-        except ValueError:
-            pass
-    d = business_today()
-    return d.year, d.month
 
 
 def _pdf_path(inv: models.Invoice) -> str:
@@ -38,7 +25,7 @@ def _pdf_path(inv: models.Invoice) -> str:
 @router.get("/invoices")
 def invoices_page(request: Request, ym: str | None = None, status: str | None = None,
                    session: Session = Depends(get_session)):
-    year, month = _parse_ym(ym)
+    year, month = parse_ym(ym)
     status_filter = status if status in STATUSES else None
     q = select(models.Invoice).where(models.Invoice.period_year == year,
                                       models.Invoice.period_month == month)
@@ -55,14 +42,14 @@ def invoices_page(request: Request, ym: str | None = None, status: str | None = 
 @router.post("/invoices/generate")
 def invoices_generate(request: Request, ym: str = Form(""),
                        session: Session = Depends(get_session)):
-    year, month = _parse_ym(ym)
+    year, month = parse_ym(ym)
     invoicing.generate_month(session, year, month, request.state.user.id)
     return RedirectResponse(f"/invoices?ym={year}-{month:02d}", status_code=303)
 
 
 @router.get("/invoices/batch.zip")
 def invoices_batch_zip(ym: str | None = None, session: Session = Depends(get_session)):
-    year, month = _parse_ym(ym)
+    year, month = parse_ym(ym)
     invoices = session.scalars(select(models.Invoice).where(
         models.Invoice.period_year == year, models.Invoice.period_month == month,
         models.Invoice.status != "void")).all()
@@ -113,9 +100,12 @@ def invoice_regenerate(iid: int, session: Session = Depends(get_session)):
     data = invoicing.invoice_data(session, customer, inv.period_year, inv.period_month)
     data.number = inv.number
     pdf_bytes = invoice_pdf.render_invoice(data)
-    with open(_pdf_path(inv), "wb") as f:
-        f.write(pdf_bytes)
     inv.total_cents = data.total_cents
     inv.generated_at = models.utcnow()
     session.commit()
+    # File write comes after the commit: if this fails, the DB reflects the
+    # fresh total and the register's "pdf missing" tag flags it for a retry,
+    # rather than leaving a fresh PDF paired with a stale DB row.
+    with open(_pdf_path(inv), "wb") as f:
+        f.write(pdf_bytes)
     return RedirectResponse(f"/invoices?ym={inv.period_year}-{inv.period_month:02d}", status_code=303)

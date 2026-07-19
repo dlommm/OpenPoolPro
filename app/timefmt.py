@@ -28,3 +28,24 @@ def from_local_hhmm(d: date, hhmm: str | None) -> datetime | None:
 
 def local_date(dt: datetime) -> date:
     return to_local(dt).date()
+
+
+def parse_ym(raw: str | None, default: tuple[int, int] | None = None) -> tuple[int, int]:
+    """Tolerant "YYYY-M" -> (year, month) parser.
+
+    Falls back to `default` if given, otherwise to business-today's
+    (year, month), whenever `raw` is missing, malformed, or has an
+    out-of-range month.
+    """
+    if raw:
+        try:
+            y, m = raw.split("-")
+            y, m = int(y), int(m)
+            if 1 <= m <= 12:
+                return y, m
+        except ValueError:
+            pass
+    if default is not None:
+        return default
+    today = datetime.now(config.tz())
+    return today.year, today.month
