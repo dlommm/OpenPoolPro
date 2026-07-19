@@ -213,6 +213,16 @@ class User(Base):
         return bool(getattr(self, flag, False))
 
 
+class RateChange(Base):
+    __tablename__ = "rate_changes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    applied_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    percent: Mapped[float] = mapped_column(Float)
+    scope: Mapped[str] = mapped_column(String(20))  # tiers|overrides|both
+    affected_count: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)

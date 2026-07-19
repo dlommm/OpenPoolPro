@@ -122,6 +122,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import users as users_router
     app.include_router(users_router.router)
 
+    from app.routers import analytics as analytics_router
+    app.include_router(analytics_router.router)
+
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
         app.state.scheduler = start_scheduler(app.state.engine)

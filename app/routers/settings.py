@@ -173,11 +173,13 @@ async def save_general(request: Request, session: Session = Depends(get_session)
     if raw.endswith("%"):
         raw = raw[:-1].strip()
     try:
-        float(raw)
+        v = float(raw)
+        if not math.isfinite(v):
+            raise ValueError("inf/nan markup")
         markup = raw
     except ValueError:
-        # Garbage input: keep whatever was previously stored rather than
-        # overwriting it with something that will 500 the Money page.
+        # Garbage (or inf/nan) input: keep whatever was previously stored
+        # rather than overwriting it with something that will 500 the Money page.
         markup = models.get_setting(session, "chem_markup_percent", "0")
     models.set_setting(session, "chem_markup_percent", markup)
     models.set_setting(session, "business_name", form.get("business_name", ""))

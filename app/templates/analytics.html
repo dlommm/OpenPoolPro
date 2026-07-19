@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Business analytics", "Analytics") }}
+
+<form method="get" action="/analytics" class="mb-3 flex flex-wrap items-end gap-2">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div>
+    <label class="field-label" for="start">Start</label>
+    <input class="field font-data" type="date" id="start" name="start" value="{{ start }}">
+  </div>
+  <div>
+    <label class="field-label" for="end">End</label>
+    <input class="field font-data" type="date" id="end" name="end" value="{{ end }}">
+  </div>
+  <button class="btn-secondary">Apply</button>
+</form>
+
+<div class="mb-3 flex flex-wrap gap-1.5">
+  {% for label, qstart, qend in quick %}
+  <a href="/analytics?tab={{ tab }}&start={{ qstart }}&end={{ qend }}"
+     class="tag {{ 'border-pool bg-shallow' if start == qstart and end == qend }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="mb-4 flex flex-wrap gap-1.5 border-b border-seam pb-3">
+  {% for key, label in tab_labels.items() %}
+  <a href="/analytics?tab={{ key }}&start={{ start }}&end={{ end }}"
+     class="tag {{ 'border-pool bg-shallow' if key == tab }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if too_large %}
+<div class="card p-6 text-center">
+  <p class="font-display text-xl font-bold uppercase tracking-wide">Range too large</p>
+  <p class="mt-1 text-sm text-mist">Pick a range under 5 years and try again.</p>
+</div>
+{% else %}
+
+<div class="mb-3">
+  <a href="/analytics/export?tab={{ tab }}&start={{ start }}&end={{ end }}" class="btn-secondary">Export CSV</a>
+</div>
+
+<div class="overflow-x-auto">
+
+{% if tab == "income" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Week</th>
+      <th class="py-1.5 pr-3 font-medium">Labor</th>
+      <th class="py-1.5 pr-3 font-medium">Chem cost</th>
+      <th class="py-1.5 pr-3 font-medium">Chem billable</th>
+      <th class="py-1.5 pr-3 font-medium">Jobs</th>
+      <th class="py-1.5 pr-3 font-medium">Total</th>
+      <th class="py-1.5 font-medium">&nbsp;</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
+      <td class="py-1.5 pr-3">{{ r.labor_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.chem_cost_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.chem_billable_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.job_cents | dollars }}</td>
+      <td class="py-1.5 pr-3 money">{{ r.total_cents | dollars }}</td>
+      <td class="py-1.5 w-32">
+        <div class="h-2 rounded bg-shallow">
+          <div class="h-2 bg-pool/70 rounded" style="width: {{ (r.total_cents / max_total * 100) if max_total else 0 }}%"></div>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="py-6 text-center text-mist">No income for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "customers" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Customer</th>
+      <th class="py-1.5 pr-3 font-medium">Visits</th>
+      <th class="py-1.5 pr-3 font-medium">Labor</th>
+      <th class="py-1.5 pr-3 font-medium">Chemicals</th>
+      <th class="py-1.5 pr-3 font-medium">Jobs</th>
+      <th class="py-1.5 font-medium">Total</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 font-body">{{ r.customer.name }}</td>
+      <td class="py-1.5 pr-3">{{ r.visit_count }}</td>
+      <td class="py-1.5 pr-3">{{ r.labor_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.chem_billable_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.job_cents | dollars }}</td>
+      <td class="py-1.5 money">{{ r.total_cents | dollars }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="py-6 text-center text-mist">No customer revenue for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "crew" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Tech</th>
+      <th class="py-1.5 pr-3 font-medium">Visits</th>
+      <th class="py-1.5 pr-3 font-medium">Jobs</th>
+      <th class="py-1.5 pr-3 font-medium">Minutes</th>
+      <th class="py-1.5 pr-3 font-medium">Revenue</th>
+      <th class="py-1.5 font-medium">Rev / hr</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 font-body">{{ r.user.name if r.user else "Unattributed" }}</td>
+      <td class="py-1.5 pr-3">{{ r.visit_count }}</td>
+      <td class="py-1.5 pr-3">{{ r.job_count }}</td>
+      <td class="py-1.5 pr-3">{{ r.total_minutes }}</td>
+      <td class="py-1.5 pr-3 money">{{ r.total_cents | dollars }}</td>
+      <td class="py-1.5">{{ (r.revenue_per_hour_cents | dollars) if r.revenue_per_hour_cents is not none else "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="py-6 text-center text-mist">No crew activity for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "types" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Type</th>
+      <th class="py-1.5 font-medium">Total</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 font-body">{{ r.label }}</td>
+      <td class="py-1.5 money">{{ r.total_cents | dollars }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="2" class="py-6 text-center text-mist">No job-type revenue for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "chemicals" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Chemical</th>
+      <th class="py-1.5 pr-3 font-medium">Quantity</th>
+      <th class="py-1.5 pr-3 font-medium">Cost</th>
+      <th class="py-1.5 pr-3 font-medium">Billable</th>
+      <th class="py-1.5 font-medium">Margin</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 font-body">{{ r.chemical.name }}</td>
+      <td class="py-1.5 pr-3">{{ "%.2f" | format(r.quantity) }} {{ r.chemical.unit }}</td>
+      <td class="py-1.5 pr-3">{{ r.cost_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.billable_cents | dollars }}</td>
+      <td class="py-1.5 money">{{ r.margin_cents | dollars }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="py-6 text-center text-mist">No chemical usage for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "volume" %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Week</th>
+      <th class="py-1.5 pr-3 font-medium">Done</th>
+      <th class="py-1.5 pr-3 font-medium">Skipped</th>
+      <th class="py-1.5 font-medium">Avg minutes</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
+      <td class="py-1.5 pr-3">{{ r.done }}</td>
+      <td class="py-1.5 pr-3">{{ r.skipped }}</td>
+      <td class="py-1.5">{{ r.avg_minutes if r.avg_minutes is not none else "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="py-6 text-center text-mist">No visit activity for this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif tab == "rates" %}
+{% if applied %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Applied to {{ applied }} rates</div>
+<p class="text-xs text-mist">Tier targets rose too — review flags recompute against the new tiers.</p>
+{% endif %}
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Customer</th>
+      <th class="py-1.5 pr-3 font-medium">Property</th>
+      <th class="py-1.5 pr-3 font-medium">Current</th>
+      <th class="py-1.5 pr-3 font-medium">Tier</th>
+      <th class="py-1.5 font-medium">Delta</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 font-body">{{ r.property.customer.name }}</td>
+      <td class="py-1.5 pr-3 font-body">{{ r.property.label }}</td>
+      <td class="py-1.5 pr-3">{{ r.current_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.tier_cents | dollars }}</td>
+      <td class="py-1.5 money">{{ r.delta_cents | dollars }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="py-6 text-center text-mist">No underpriced properties found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{# rates ops: task 3 #}
+
+<div class="card mt-4 p-4">
+  <p class="font-display text-sm font-bold uppercase tracking-wide">Bulk rate raise</p>
+  {% if rate_error %}
+  <p class="mt-2 text-sm text-safety">{{ rate_error }}</p>
+  {% endif %}
+  <form method="post" action="/analytics/rates/preview" class="mt-2 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="field-label" for="percent">Percent increase</label>
+      <input class="field font-data w-28" type="text" inputmode="decimal" id="percent" name="percent"
+             value="{{ preview_percent if preview_percent is defined else '' }}" placeholder="e.g. 5">
+    </div>
+    <label class="flex min-h-11 items-center gap-1.5 text-sm">
+      <input type="checkbox" name="scope_tiers" {{ "checked" if preview_scope_tiers is defined and preview_scope_tiers }}> Rate tiers
+    </label>
+    <label class="flex min-h-11 items-center gap-1.5 text-sm">
+      <input type="checkbox" name="scope_overrides" {{ "checked" if preview_scope_overrides is defined and preview_scope_overrides }}> Property overrides
+    </label>
+    <button class="btn-secondary">Preview</button>
+  </form>
+</div>
+
+{% if preview_rows is defined %}
+<div class="card mt-4 p-4">
+  <p class="font-display text-sm font-bold uppercase tracking-wide">Preview — {{ preview_rows|length }} affected</p>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm mt-2">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="py-1.5 pr-3 font-medium">Row</th>
+        <th class="py-1.5 pr-3 font-medium">Old</th>
+        <th class="py-1.5 font-medium">New</th>
+      </tr>
+    </thead>
+    <tbody class="font-data">
+      {% for r in preview_rows %}
+      <tr class="border-b border-seam/60">
+        <td class="py-1.5 pr-3 font-body">{{ r.label }}</td>
+        <td class="py-1.5 pr-3">{{ r.old_cents | dollars }}</td>
+        <td class="py-1.5">{{ r.new_cents | dollars }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="py-6 text-center text-mist">Nothing matches the selected scope.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form method="post" action="/analytics/rates/apply" class="mt-3">
+    <input type="hidden" name="percent" value="{{ preview_percent }}">
+    {% if preview_scope_tiers %}<input type="hidden" name="scope_tiers" value="on">{% endif %}
+    {% if preview_scope_overrides %}<input type="hidden" name="scope_overrides" value="on">{% endif %}
+    <button class="btn-primary">Apply to {{ preview_rows|length }} rates</button>
+  </form>
+</div>
+{% endif %}
+
+{% endif %}
+</div>
+{% endif %}
+{% endblock %}

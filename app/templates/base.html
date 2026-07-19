@@ -21,6 +21,7 @@
   {% set u = request.state.user if request is not none and request.state is defined else None %}
   {% set items = [] %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/dashboard", "Dashboard", "money")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/analytics", "Analytics", "week")] %}{% endif %}
   {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
     ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
   {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}

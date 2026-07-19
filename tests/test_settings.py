@@ -58,6 +58,23 @@ def test_garbage_markup_does_not_500_money_page(client, engine):
     assert client.get("/money").status_code == 200
 
 
+def test_markup_non_finite_rejected(client, engine):
+    # inf/nan markup would blow up round(cost * (1 + markup/100)) on the
+    # Money page and every analytics tab — reject it like save_targets does.
+    client.post("/settings/general", data={"chem_markup_percent": "10",
+                                           "business_name": "Coastline Pools"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "chem_markup_percent", "0") == "10"
+
+    r = client.post("/settings/general", data={"chem_markup_percent": "inf",
+                                                "business_name": "Coastline Pools"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "chem_markup_percent", "0") == "10"  # inf rejected
+    assert client.get("/money").status_code == 200
+
+
 def test_stale_and_garbage_rows_skipped(client, engine):
     client.post("/settings/tiers", data={"tier_id": ["9999", "abc"],
                                          "max_gallons": ["", ""],

@@ -36,3 +36,9 @@ def test_user_can_matrix(engine):
     assert tech.can("view_money") is True
     assert tech.can("manage_customers") is False
     assert tech.can("nonexistent_flag") is False
+
+
+def test_rate_changes_table_created_fresh(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    assert _cols(engine, "rate_changes")
