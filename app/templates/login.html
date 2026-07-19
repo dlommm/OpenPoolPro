@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Sign in — Coastline Pools{% endblock %}
 {% block nav %}{% endblock %}
+{% block main_offset %}{% endblock %}
 {% block content %}
 <div class="flex min-h-[70vh] flex-col justify-center pb-16">
   <div class="text-center">
+    {% if has_logo_check() %}<img src="/branding/logo" alt="" class="mx-auto mb-4 max-h-16">{% endif %}
     <p class="page-eyebrow">Pool service planner</p>
     <h1 class="font-display text-5xl font-bold uppercase leading-none tracking-wide">Coastline</h1>
     <svg class="waterline mx-auto mt-3 h-2.5 w-36 text-pool" viewBox="0 0 112 10" fill="none" aria-hidden="true">

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Search", "Customers & properties") }}
+
+{% if q %}
+{% if customers or properties %}
+{% if customers %}
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Customers</h2>
+<div class="rise mb-5 space-y-2">
+  {% for c in customers %}
+  <a href="/customers/{{ c.id }}" class="card p-3.5">
+    <div class="font-semibold">{{ c.name }}</div>
+    {% if c.phone %}<div class="mt-1 font-data text-sm text-mist">{{ c.phone }}</div>{% endif %}
+    {% if c.email %}<div class="font-data text-sm text-mist">{{ c.email }}</div>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if properties %}
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
+<div class="rise space-y-2">
+  {% for p in properties %}
+  <a href="/customers/{{ p.customer.id }}" class="card p-3.5">
+    <div class="font-semibold">{{ p.customer.name }} — {{ p.label }}</div>
+    <div class="mt-1 text-sm text-mist">{{ p.address }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% else %}
+<div class="card p-6 text-center">
+  <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing found</p>
+  <p class="mt-1 text-sm text-mist">Try searching by name, phone, email, address, or label.</p>
+</div>
+{% endif %}
+{% else %}
+<div class="card p-6 text-center">
+  <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing found</p>
+  <p class="mt-1 text-sm text-mist">Enter a search term to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

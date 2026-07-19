@@ -18,6 +18,7 @@ TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt
 
 @router.get("/settings")
 def settings_page(request: Request, session: Session = Depends(get_session)):
+    from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
@@ -34,7 +35,8 @@ def settings_page(request: Request, session: Session = Depends(get_session)):
         "business_name": models.get_setting(session, "business_name", ""),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
         "role_values": models.ROLE_VALUES,
-        "targets": targets})
+        "targets": targets,
+        "company": company_info(session)})
 
 
 @router.post("/settings/targets")

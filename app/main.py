@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +16,7 @@ templates.env.filters["initials"] = lambda name: "".join(
 templates.env.filters["hhmm"] = timefmt.to_local_hhmm
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
+templates.env.globals["has_logo_check"] = lambda: os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
 
 
 def create_app(engine=None) -> FastAPI:
@@ -24,7 +27,7 @@ def create_app(engine=None) -> FastAPI:
     migrate.run(app.state.engine)
     seeds.run(app.state.engine)
 
-    EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health"}
+    EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
     EXEMPT_PREFIX = ("/static",)
 
     @app.middleware("http")
@@ -108,6 +111,13 @@ def create_app(engine=None) -> FastAPI:
 
     from app.routers import settings as settings_router
     app.include_router(settings_router.router)
+
+    from app.routers import company as company_router
+    app.include_router(company_router.router)
+    app.include_router(company_router.serve_router)
+
+    from app.routers import console as console_router
+    app.include_router(console_router.router)
 
     from app.routers import users as users_router
     app.include_router(users_router.router)

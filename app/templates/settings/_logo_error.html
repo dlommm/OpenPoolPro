@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Business settings", "Logo") }}
+<div class="card border-safety/40 bg-safety/5 p-4">
+  <p class="font-medium text-safety">{{ message }}</p>
+</div>
+<a href="/settings" class="btn-secondary mt-4 w-full">Back to settings</a>
+{% endblock %}
