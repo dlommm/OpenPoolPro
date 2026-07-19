@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from app import config, models
 from app.db import get_session
+from app.deps import require_admin
 from app.main import templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/settings")

@@ -24,7 +24,7 @@
        class="mt-0.5 flex min-h-11 items-center gap-1.5 text-sm text-pool">{{ ui.icon("pin", "h-4 w-4 shrink-0") }}{{ p.address }}</a>
     <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-mist">
       <span>{{ p.frequency }} · {{ ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][p.weekday] }}</span>
-      <span class="money">{{ rates[p.id] | dollars }}/visit{{ " (override)" if p.rate_override_cents is not none }}</span>
+      {% if show_money %}· <span class="money">{{ rates[p.id] | dollars }}</span>/visit{{ " (override)" if p.rate_override_cents is not none }}{% endif %}
       {% if p.gate_code %}<span class="tag">Gate {{ p.gate_code }}</span>{% endif %}
       {% if p.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ p.dog_note }}</span>{% endif %}
     </div>
@@ -59,7 +59,7 @@
       <a href="/visit/{{ v.property_id }}/{{ v.date }}" class="font-data font-semibold text-pool">{{ v.date }}</a>
       <span class="flex items-center gap-1.5">
         {% if v.status == "done" %}{{ ui.icon("check", "h-4 w-4 text-pool") }}{% else %}<span class="tag">skipped</span>{% endif %}
-        {% if v.rate_cents %}<span class="money">{{ v.rate_cents | dollars }}</span>{% endif %}</span>
+        {% if show_money and v.rate_cents %}<span class="money">{{ v.rate_cents | dollars }}</span>{% endif %}</span>
     </div>
     {% if v.fc is not none or v.ph is not none %}
     <div class="mt-0.5 font-data text-xs text-mist">FC {{ v.fc }} · pH {{ v.ph }} · TA {{ v.ta }}{% if v.cya is not none %} · CYA {{ v.cya }}{% endif %}{% if v.salt is not none %} · Salt {{ v.salt }}{% endif %}</div>

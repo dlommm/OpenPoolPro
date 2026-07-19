@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.db import get_session, get_or_404
+from app.deps import require_perm
 from app.main import templates
 from app.rates import effective_rate_cents
 
@@ -29,14 +30,15 @@ def list_customers(request: Request, q: str = "", session: Session = Depends(get
 
 
 @router.get("/customers/new")
-def new_customer_form(request: Request):
+def new_customer_form(request: Request, user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/form.html", {"c": None})
 
 
 @router.post("/customers/new")
 def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
                     phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
-                    session: Session = Depends(get_session)):
+                    session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     c = models.Customer(name=name, qb_display_name=qb_display_name.strip() or name,
                         phone=phone, email=email, notes=notes)
     session.add(c)
@@ -57,11 +59,13 @@ def customer_detail(request: Request, cid: int, session: Session = Depends(get_s
         select(models.Job).join(models.Property)
         .where(models.Property.customer_id == cid, models.Job.status != "done")).all()
     return templates.TemplateResponse(request, "customers/detail.html",
-        {"c": c, "props": props, "rates": rates, "visits": visits, "jobs": jobs})
+        {"c": c, "props": props, "rates": rates, "visits": visits, "jobs": jobs,
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/customers/{cid}/edit")
-def edit_customer_form(request: Request, cid: int, session: Session = Depends(get_session)):
+def edit_customer_form(request: Request, cid: int, session: Session = Depends(get_session),
+                       user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/form.html",
                                       {"c": get_or_404(session, models.Customer, cid)})
 
@@ -69,7 +73,8 @@ def edit_customer_form(request: Request, cid: int, session: Session = Depends(ge
 @router.post("/customers/{cid}/edit")
 def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form(""),
                   phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
-                  session: Session = Depends(get_session)):
+                  session: Session = Depends(get_session),
+                  user=Depends(require_perm("manage_customers"))):
     c = get_or_404(session, models.Customer, cid)
     c.name, c.phone, c.email, c.notes = name, phone, email, notes
     c.qb_display_name = qb_display_name.strip() or name
@@ -78,7 +83,8 @@ def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form("
 
 
 @router.post("/customers/{cid}/deactivate")
-def deactivate_customer(cid: int, session: Session = Depends(get_session)):
+def deactivate_customer(cid: int, session: Session = Depends(get_session),
+                        user=Depends(require_perm("manage_customers"))):
     get_or_404(session, models.Customer, cid).active = False
     session.commit()
     return RedirectResponse("/customers", status_code=303)
@@ -94,7 +100,8 @@ def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
 
 
 @router.get("/customers/{cid}/properties/new")
-def new_property_form(request: Request, cid: int, session: Session = Depends(get_session)):
+def new_property_form(request: Request, cid: int, session: Session = Depends(get_session),
+                      user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/property_form.html",
         {"p": None, "customer": get_or_404(session, models.Customer, cid)})
 
@@ -106,7 +113,8 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     notes: str = Form(""), frequency: str = Form("weekly"),
                     weekday: int = Form(0), anchor_date: str = Form(""),
                     rate_override_dollars: str = Form(""),
-                    session: Session = Depends(get_session)):
+                    session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     p = models.Property(customer_id=cid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars)
@@ -116,7 +124,8 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
 
 
 @router.get("/properties/{pid}/edit")
-def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session)):
+def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session),
+                       user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     return templates.TemplateResponse(request, "customers/property_form.html",
                                       {"p": p, "customer": p.customer})
@@ -128,7 +137,8 @@ def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
                   dog_note: str = Form(""), notes: str = Form(""),
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
-                  session: Session = Depends(get_session)):
+                  session: Session = Depends(get_session),
+                  user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars)
@@ -137,7 +147,8 @@ def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
 
 
 @router.post("/properties/{pid}/deactivate")
-def deactivate_property(pid: int, session: Session = Depends(get_session)):
+def deactivate_property(pid: int, session: Session = Depends(get_session),
+                        user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     p.active = False
     session.commit()

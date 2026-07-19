@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.db import get_session
+from app.deps import require_perm
 from app.main import templates
 from app.qbo import export_csv, month_rollup
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_perm("view_money"))])
 
 
 def _parse_ym(ym: str | None) -> tuple[int, int]:

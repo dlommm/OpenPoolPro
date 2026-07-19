@@ -49,7 +49,7 @@ def visit_form(request: Request, property_id: int, visit_date: date,
     return templates.TemplateResponse(request, "visits/form.html", {
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
         "photos": photos, "rate": effective_rate_cents(session, v.property),
-        "existing": existing})
+        "existing": existing, "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/visit/{visit_id}/complete")

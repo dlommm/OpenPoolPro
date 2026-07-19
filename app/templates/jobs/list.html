@@ -17,7 +17,7 @@
   <a href="/jobs/{{ j.id }}" class="card block p-3.5">
     <div class="flex items-center justify-between gap-2">
       <span class="font-semibold">{% if j.priority == "high" %}<span class="tag tag-safety mr-1 align-middle">High</span>{% endif %}{{ j.title }}</span>
-      <span class="money">{{ j.labor_cents | dollars }}</span>
+      {% if show_money %}<span class="money">{{ j.labor_cents | dollars }}</span>{% endif %}
     </div>
     <div class="mt-0.5 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}
       {% if j.scheduled_date %} · <span class="font-data">{{ j.scheduled_date }}</span>{% endif %}</div>

@@ -25,7 +25,7 @@ def list_jobs(request: Request, status: str = "open",
     jobs = session.scalars(select(models.Job).where(models.Job.status == status)
                            .order_by(models.Job.priority.asc(), models.Job.id.desc())).all()
     return templates.TemplateResponse(request, "jobs/list.html",
-                                      {"jobs": jobs, "status": status})
+        {"jobs": jobs, "status": status, "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/jobs/new")
@@ -61,7 +61,7 @@ def job_detail(request: Request, jid: int, session: Session = Depends(get_sessio
     photos = session.scalars(select(models.Photo).where(
         models.Photo.entity_type == "job", models.Photo.entity_id == jid)).all()
     return templates.TemplateResponse(request, "jobs/detail.html",
-                                      {"j": j, "photos": photos})
+        {"j": j, "photos": photos, "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/jobs/{jid}/edit")
