@@ -43,6 +43,9 @@ async def save_company(request: Request, session: Session = Depends(get_session)
 @router.post("/settings/company/logo")
 async def upload_logo(request: Request, file: UploadFile,
                       session: Session = Depends(get_session)):
+    if file.content_type not in ("image/png", "image/jpeg"):
+        return templates.TemplateResponse(request, "settings/_logo_error.html",
+                                          {"message": "Logo must be a PNG or JPEG"})
     data = await file.read()
     if len(data) > MAX_LOGO_BYTES:
         return templates.TemplateResponse(request, "settings/_logo_error.html",

@@ -54,6 +54,13 @@ def test_logo_rejects_garbage_and_oversize(client, engine):
     assert not os.path.isfile(path)
 
 
+def test_logo_rejects_non_png_jpeg(client, engine):
+    r = client.post("/settings/company/logo",
+                    files={"file": ("anim.gif", png_bytes(100, 100), "image/gif")})
+    assert r.status_code == 200 and "PNG or JPEG" in r.text
+    assert not os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
+
+
 def test_company_admin_only(client, tech_client):
     t = tech_client(name="nocorp")
     assert t.post("/settings/company", data={"business_name": "X"},
