@@ -108,3 +108,39 @@ def test_gallons_preview_gated_and_money_scoped(client, tech_client):
     assert "16,875" in r.text and "$" not in r.text
     admin = client.get("/pools/gallons-preview", params=params)
     assert "$55.00" in admin.text
+
+
+def test_property_form_rate_hidden_and_preserved(client, tech_client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    _seed_customer(client)
+    client.post("/properties/1/edit", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "",
+        "rate_override_dollars": "88", "assigned_tech_id": ""})
+    t = tech_client(name="mgrnomoney", manage_customers=True)
+    html = t.get("/properties/1/edit").text
+    assert "$" not in html and "88" not in html
+    t.post("/properties/1/edit", data={
+        "label": "Home2", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "",
+        "rate_override_dollars": "1", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        p = s.get(models.Property, 1)
+        assert p.label == "Home2" and p.rate_override_cents == 8800  # preserved
+
+
+def test_create_job_labor_zeroed_for_bare_tech(client, tech_client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    _seed_customer(client)
+    t = tech_client(name="laborless")
+    t.post("/jobs/new", data={"property_id": "1", "title": "Sneaky", "description": "",
+                              "priority": "normal", "labor_dollars": "999",
+                              "scheduled_date": "", "job_type": "service",
+                              "assigned_tech_id": ""})
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "Sneaky")).one()
+        assert j.labor_cents == 0

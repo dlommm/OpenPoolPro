@@ -59,7 +59,7 @@ def new_job(request: Request, property_id: int | None = None,
 
 
 @router.post("/jobs/new")
-def create_job(property_id: int = Form(...), title: str = Form(...),
+def create_job(request: Request, property_id: int = Form(...), title: str = Form(...),
                description: str = Form(""), priority: str = Form("normal"),
                labor_dollars: str = Form(""), scheduled_date: str = Form(""),
                job_type: str = Form("service"), assigned_tech_id: str = Form(""),
@@ -74,7 +74,7 @@ def create_job(property_id: int = Form(...), title: str = Form(...),
             return HTMLResponse("That tech can't take this job type", status_code=400)
     j = models.Job(property_id=property_id, title=title, description=description,
                    priority=priority,
-                   labor_cents=_labor_cents(labor_dollars))
+                   labor_cents=_labor_cents(labor_dollars) if request.state.user.can("view_money") else 0)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
     if scheduled_date:
         j.scheduled_date = date.fromisoformat(scheduled_date)
