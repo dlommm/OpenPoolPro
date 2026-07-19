@@ -40,6 +40,7 @@ with sync_playwright() as p:
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
     page = ctx.new_page()
     page.goto(f"{BASE}/login")
+    page.fill("input[name=username]", "owner")
     page.fill("input[name=password]", PASSWORD)
     page.click("button")
     page.wait_for_load_state("networkidle")
@@ -52,6 +53,31 @@ with sync_playwright() as p:
         if SHOTS:
             name = path.strip("/").replace("/", "_") or "today"
             page.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+
+    # Tech pass
+    page.goto(f"{BASE}/users")
+    if "visual-tech" not in page.content():
+        page.goto(f"{BASE}/users/new")
+        page.fill("input[name=name]", "Visual Tech")
+        page.fill("input[name=username]", "visual-tech")
+        page.fill("input[name=password]", os.environ.get("VC_TECH_PASSWORD", "visual-pass-1"))
+        page.click("button.btn-primary")
+    tctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    tpage = tctx.new_page()
+    tpage.goto(f"{BASE}/login")
+    tpage.fill("input[name=username]", "visual-tech")
+    tpage.fill("input[name=password]", os.environ.get("VC_TECH_PASSWORD", "visual-pass-1"))
+    tpage.click("button")
+    tpage.wait_for_load_state("networkidle")
+    tpage.goto(f"{BASE}/")
+    content = tpage.content()
+    for forbidden in ['href="/money"', 'href="/settings"']:
+        if forbidden in content:
+            failures.append(("/ (tech)", [f"tech nav leaks {forbidden}"]))
+    probs = tpage.evaluate(CHECKS)
+    if probs:
+        failures.append(("/ (tech)", probs))
+    tctx.close()
     browser.close()
 
 if failures:
