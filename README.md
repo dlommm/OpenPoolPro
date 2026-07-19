@@ -1,7 +1,8 @@
 # Coastline Pools Planner
 
 Self-hosted pool-route app. Phase 0: customers, properties, pools, routes,
-visits with chemistry costs, jobs, monthly QuickBooks Online CSV export.
+visits with chemistry costs and dose suggestions, jobs, monthly QuickBooks
+Online CSV export.
 
 ## Run
 
