@@ -223,6 +223,20 @@ class RateChange(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
+class Invoice(Base):
+    __tablename__ = "invoices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[str] = mapped_column(String(20), unique=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    period_year: Mapped[int] = mapped_column(Integer)
+    period_month: Mapped[int] = mapped_column(Integer)
+    total_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(8), default="draft")  # draft|sent|void
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    pdf_filename: Mapped[str] = mapped_column(String(200))
+    customer: Mapped[Customer] = relationship()
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)
