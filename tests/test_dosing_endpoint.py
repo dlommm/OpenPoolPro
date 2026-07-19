@@ -71,3 +71,14 @@ def test_dose_fragment_salt_pool(client, engine):
 
 def test_dose_fragment_missing_visit_404(client, engine):
     assert client.get("/visit/999/doses", params={"fc": "2"}).status_code == 404
+
+
+def test_visit_form_wires_dose_panel(client, engine):
+    vid = seed(client, engine)
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Visit)).one().property_id
+    html = client.get(f"/visit/{pid}/2026-07-13").text
+    assert f'hx-get="/visit/{vid}/doses"' in html
+    assert 'id="dose-panel"' in html
+    assert 'data-chem-input=' in html
+    assert "Suggested doses" in html
