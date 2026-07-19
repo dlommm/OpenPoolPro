@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Not allowed{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+<div class="flex min-h-[60vh] flex-col items-center justify-center text-center">
+  <p class="page-eyebrow">403</p>
+  <h1 class="page-title mt-1">Not allowed</h1>
+  <p class="mt-3 max-w-xs text-sm text-mist">This area needs a permission you don't have. Ask your admin to switch it on.</p>
+  <a href="/" class="btn-secondary mt-6 px-6">Back to today</a>
+</div>
+{% endblock %}
