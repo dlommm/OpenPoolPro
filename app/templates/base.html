@@ -25,7 +25,9 @@
   {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
     ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
   {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/inventory", "Inventory", "inventory")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
+  {% set low_count = low_stock_count(request) if request is not none and (u is none or u.role == "admin") else 0 %}
   <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-white p-4">
     <a href="/" class="mb-6 block">
       {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
@@ -38,7 +40,9 @@
       {% for href, label, name in items %}
       {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
       <a href="{{ href }}" class="flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-         {{ 'bg-shallow text-pool' if active else 'text-mist' }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}</a>
+         {{ 'bg-shallow text-pool' if active else 'text-mist' }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}
+        {% if href == "/inventory" and low_count > 0 %}<span class="tag tag-safety ml-auto">{{ low_count }}</span>{% endif %}
+      </a>
       {% endfor %}
     </div>
     <div class="mt-auto pt-4 text-sm text-mist">
@@ -52,9 +56,12 @@
          style="grid-template-columns: repeat({{ items | length }}, minmax(0, 1fr))">
       {% for href, label, name in items %}
       {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
-      <a href="{{ href }}" class="tab {{ 'tab-active' if active }}"
+      <a href="{{ href }}" class="tab relative {{ 'tab-active' if active }}"
          {% if active %}aria-current="page"{% endif %}>
         {{ ui.icon(name) }}<span>{{ label }}</span>
+        {% if href == "/inventory" and low_count > 0 %}
+        <span class="absolute right-2 top-0.5 rounded-full bg-safety px-1 text-[9px] font-bold leading-4 text-white">{{ low_count }}</span>
+        {% endif %}
       </a>
       {% endfor %}
     </div>

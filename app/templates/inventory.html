@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Chemical stock", "Inventory") }}
+{% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Stock on hand</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-seam text-left text-mist">
+          <th class="py-1.5 pr-3 font-medium">Chemical</th>
+          <th class="py-1.5 pr-3 font-medium">Unit</th>
+          <th class="py-1.5 pr-3 font-medium">On hand</th>
+          <th class="py-1.5 pr-3 font-medium">Reorder pt / qty</th>
+          <th class="py-1.5 pr-3 font-medium">Last purchase</th>
+          <th class="py-1.5 font-medium">Set on-hand</th>
+        </tr>
+      </thead>
+      <tbody class="font-data">
+        {% for c in chems %}
+        <tr class="border-b border-seam/60 {{ 'bg-safety/5' if c.id in low_ids }} {{ 'text-mist' if not c.active }}">
+          <td class="py-1.5 pr-3 font-body">{{ c.name }}{% if not c.active %} <span class="tag">inactive</span>{% endif %}
+            {% if c.id in low_ids %}<span class="tag tag-safety ml-1">low</span>{% endif %}</td>
+          <td class="py-1.5 pr-3">{{ c.unit }}</td>
+          <td class="py-1.5 pr-3 {{ 'text-safety' if c.stock_qty < 0 }}">{{ "%.2f"|format(c.stock_qty) }}</td>
+          <td class="py-1.5 pr-3 text-mist">{{ "%.2f"|format(c.reorder_point) if c.reorder_point is not none else "—" }}
+            / {{ "%.2f"|format(c.reorder_qty) if c.reorder_qty is not none else "—" }}</td>
+          <td class="py-1.5 pr-3 text-mist">
+            {% if last_purchase[c.id] %}
+              {{ last_purchase[c.id].at.strftime("%Y-%m-%d") }}
+              {% if last_purchase_unit_cost[c.id] is not none %}· <span class="money">{{ last_purchase_unit_cost[c.id] | dollars }}</span>/{{ c.unit }}{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="py-1.5">
+            <form method="post" action="/inventory/adjust/{{ c.id }}" class="flex flex-wrap gap-1">
+              <input inputmode="decimal" name="target" placeholder="{{ '%.2f'|format(c.stock_qty) }}" class="field w-20 px-2 text-xs">
+              <input name="note" placeholder="note" class="field w-24 px-2 text-xs">
+              <button class="btn-secondary px-2 text-xs">Set</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="py-6 text-center font-body text-mist">No chemicals in the catalog yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Log a purchase</h2>
+  <form method="post" action="/inventory/purchase" class="space-y-2">
+    <label class="block"><span class="field-label">Chemical</span>
+      <select name="chemical_id" class="field">
+        {% for c in active_chems %}<option value="{{ c.id }}">{{ c.name }} ({{ c.unit }})</option>{% endfor %}
+      </select></label>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block"><span class="field-label">Quantity</span>
+        <input inputmode="decimal" name="quantity" class="field font-data"></label>
+      <label class="block"><span class="field-label">Total cost $</span>
+        <input inputmode="decimal" name="cost_dollars" class="field font-data"></label>
+    </div>
+    <label class="flex min-h-11 items-center gap-2.5">
+      <input type="checkbox" name="update_cost" checked class="h-5 w-5">
+      <span class="text-sm">Update catalog cost from this purchase</span></label>
+    <label class="block"><span class="field-label">Note</span>
+      <input name="note" class="field"></label>
+    <button class="btn-primary">Log purchase</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Purchase history</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-seam text-left text-mist">
+          <th class="py-1.5 pr-3 font-medium">Date</th>
+          <th class="py-1.5 pr-3 font-medium">Chemical</th>
+          <th class="py-1.5 pr-3 font-medium">Qty</th>
+          <th class="py-1.5 pr-3 font-medium">Total</th>
+          <th class="py-1.5 pr-3 font-medium">Note</th>
+          <th class="py-1.5 font-medium">By</th>
+        </tr>
+      </thead>
+      <tbody class="font-data">
+        {% for p in history %}
+        <tr class="border-b border-seam/60">
+          <td class="py-1.5 pr-3 whitespace-nowrap">{{ p.at.strftime("%Y-%m-%d") }}</td>
+          <td class="py-1.5 pr-3 font-body">{{ p.chemical.name }}</td>
+          <td class="py-1.5 pr-3 {{ 'text-safety' if p.quantity < 0 }}">{{ "%+.2f"|format(p.quantity) }}</td>
+          <td class="py-1.5 pr-3 money">{{ p.total_cost_cents | dollars }}</td>
+          <td class="py-1.5 pr-3 font-body text-mist">{{ p.note }}</td>
+          <td class="py-1.5">{% if p.user_id in users_by_id %}<span class="tag">{{ users_by_id[p.user_id].name | initials }}</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="py-6 text-center font-body text-mist">No purchases logged yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

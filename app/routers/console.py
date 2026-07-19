@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, qbo
+from app import inventory, models, qbo
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
@@ -28,13 +28,14 @@ def dashboard(request: Request, session: Session = Depends(get_session),
         count = sum(1 for s_ in stops if s_.property.assigned_tech_id == t.id)
         if count:
             crew.append((t, count))
+    low_chems = inventory.low_stock(session)
     return templates.TemplateResponse(request, "dashboard.html", {
         "revenue_mtd_cents": sum(r.total_cents for r in rows),
         "stops_done": sum(1 for s_ in stops if s_.status == "done"),
         "stops_total": len(stops), "missed_count": len(missed),
         "open_jobs": len(open_jobs),
         "high_jobs": sum(1 for j in open_jobs if j.priority == "high"),
-        "crew": crew, "d": d})
+        "crew": crew, "d": d, "low_chems": low_chems})
 
 
 @router.get("/today/print")
