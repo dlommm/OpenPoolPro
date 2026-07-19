@@ -45,6 +45,25 @@ def test_migrate_adds_2fa_columns_with_defaults(engine):
     assert row[2] == 0
 
 
+def test_migrate_preserves_preexisting_row_with_2fa_defaults(engine):
+    # A row inserted into the legacy (pre-2FA) schema BEFORE migrate.run()
+    # must still read back sane 2FA defaults afterward.
+    with engine.connect() as c:
+        c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(80), "
+                       "role VARCHAR(12), password_hash VARCHAR(200))"))
+        c.execute(text("INSERT INTO users (id, name, role) VALUES (1, 'Legacy', 'admin')"))
+        c.commit()
+
+    migrate.run(engine)
+
+    with Session(engine) as s:
+        u = s.get(models.User, 1)
+        assert u is not None
+        assert u.totp_secret is None
+        assert not u.totp_enabled
+        assert u.session_epoch == 0
+
+
 def test_user_can_matrix(engine):
     admin = models.User(name="A", role="admin")
     tech = models.User(name="T", role="tech", view_money=True)

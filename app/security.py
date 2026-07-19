@@ -4,13 +4,14 @@ Pure logic, no FastAPI/DB imports here — routers wire this into request
 handling and models.audit().
 """
 import base64
-import hashlib
 import io
 import secrets
 import time
 
 import pyotp
 import segno
+
+from app.auth_core import pwd_context
 
 ISSUER = "Coastline Pools"
 
@@ -52,14 +53,35 @@ def qr_svg_data_uri(uri: str) -> str:
 
 
 def make_backup_codes() -> list[str]:
-    """10 random 8-hex-char single-use backup codes (shown once, stored hashed)."""
-    return [secrets.token_hex(4) for _ in range(10)]
+    """10 random 10-hex-char single-use backup codes (shown once, stored hashed)."""
+    return [secrets.token_hex(5) for _ in range(10)]
 
 
 def hash_code(code: str) -> str:
-    """SHA-256 hex digest of a normalized (lowercased, stripped) code."""
+    """Bcrypt hash of a normalized (lowercased, stripped) code.
+
+    Reuses the app's configured passlib CryptContext (see app.auth_core) so
+    backup codes get the same salted, slow-to-brute-force treatment as
+    passwords rather than a bare, unsalted digest.
+    """
     normalized = code.strip().lower()
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return pwd_context.hash(normalized)
+
+
+def verify_code(code: str | None, code_hash: str | None) -> bool:
+    """Verify a backup code against its bcrypt hash.
+
+    Normalizes the same way ``hash_code`` does (strip + lowercase) before
+    comparing. Tolerant of bad input: a None/blank code or an unparsable
+    hash returns False instead of raising.
+    """
+    if not code or not code_hash:
+        return False
+    normalized = code.strip().lower()
+    try:
+        return pwd_context.verify(normalized, code_hash)
+    except Exception:
+        return False
 
 
 class RateLimiter:
@@ -67,13 +89,28 @@ class RateLimiter:
 
     Monotonic-clock based so wall-clock adjustments can't reset a lockout.
     The clock is injectable for tests.
+
+    Fails are counted in a rolling window per key: ``_fails[key] = (count,
+    window_start)`` where ``window_start`` is the clock time of that key's
+    first fail. If a key comes back to fail again after its window has aged
+    past ``lock_seconds`` without ever reaching ``max_fails``, the count
+    resets to 1 with a fresh window rather than accumulating forever — this
+    keeps a handful of stale, sub-threshold entries from being treated as
+    part of a fresh burst long after the fact.
+
+    Memory is bounded opportunistically rather than with a background
+    task: once the number of tracked keys exceeds 1024, a ``.fail()`` call
+    prunes entries whose window (or lock) has already expired. Keys that
+    are actively failing or locked are never pruned.
     """
+
+    _PRUNE_THRESHOLD = 1024
 
     def __init__(self, max_fails: int = 5, lock_seconds: int = 300, clock=time.monotonic):
         self.max_fails = max_fails
         self.lock_seconds = lock_seconds
         self._clock = clock
-        self._fails: dict[str, int] = {}
+        self._fails: dict[str, tuple[int, float]] = {}
         self._locked_until: dict[str, float] = {}
 
     def locked(self, key: str) -> bool:
@@ -88,10 +125,26 @@ class RateLimiter:
         return True
 
     def fail(self, key: str) -> None:
-        count = self._fails.get(key, 0) + 1
-        self._fails[key] = count
+        now = self._clock()
+        count, window_start = self._fails.get(key, (0, now))
+        if now - window_start > self.lock_seconds:
+            # Window aged out without reaching the threshold; start fresh.
+            count, window_start = 0, now
+        count += 1
+        self._fails[key] = (count, window_start)
         if count >= self.max_fails:
-            self._locked_until[key] = self._clock() + self.lock_seconds
+            self._locked_until[key] = now + self.lock_seconds
+        if len(self._fails) > self._PRUNE_THRESHOLD:
+            self._prune(now)
+
+    def _prune(self, now: float) -> None:
+        """Drop keys whose fail-window or lock has already expired."""
+        for key, (_, window_start) in list(self._fails.items()):
+            if now - window_start > self.lock_seconds:
+                self._fails.pop(key, None)
+        for key, until in list(self._locked_until.items()):
+            if now >= until:
+                self._locked_until.pop(key, None)
 
     def reset(self, key: str) -> None:
         self._fails.pop(key, None)

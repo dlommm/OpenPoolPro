@@ -73,23 +73,37 @@ def test_qr_svg_data_uri_is_base64_svg():
 # Backup codes
 # ---------------------------------------------------------------------------
 
-def test_make_backup_codes_returns_10_unique_8char_hex():
+def test_make_backup_codes_returns_10_unique_10char_hex():
     codes = security.make_backup_codes()
     assert len(codes) == 10
     assert len(set(codes)) == 10
     for c in codes:
-        assert len(c) == 8
+        assert len(c) == 10
         int(c, 16)  # raises if not hex
 
 
-def test_hash_code_stable_and_case_space_insensitive():
-    h1 = security.hash_code("ABCD1234")
-    h2 = security.hash_code(" abcd1234 ")
-    h3 = security.hash_code("abcd1234")
-    assert h1 == h2 == h3
-    assert len(h1) == 64  # sha256 hex digest length
-    # sanity: different code -> different hash
-    assert security.hash_code("00000000") != h1
+def test_hash_code_salted_but_verify_code_accepts_both_and_normalizes():
+    h1 = security.hash_code("ABCD1234EF")
+    h2 = security.hash_code("abcd1234ef")
+    # bcrypt salts each hash, so identical input produces different hashes...
+    assert h1 != h2
+    # ...but both verify against the original code (and its normalized forms).
+    assert security.verify_code("ABCD1234EF", h1) is True
+    assert security.verify_code("abcd1234ef", h1) is True
+    assert security.verify_code(" AbCd1234Ef ", h1) is True
+    assert security.verify_code("ABCD1234EF", h2) is True
+    # sanity: wrong code fails
+    assert security.verify_code("0000000000", h1) is False
+
+
+def test_verify_code_tolerant_of_bad_input():
+    h = security.hash_code("ABCD1234EF")
+    assert security.verify_code(None, h) is False
+    assert security.verify_code("", h) is False
+    assert security.verify_code("   ", h) is False
+    assert security.verify_code("ABCD1234EF", None) is False
+    assert security.verify_code("ABCD1234EF", "") is False
+    assert security.verify_code("ABCD1234EF", "not-a-valid-bcrypt-hash") is False
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +160,50 @@ def test_rate_limiter_default_clock_is_monotonic():
     assert rl.locked("anyone") is False
 
 
+def test_rate_limiter_stale_subthreshold_key_resets_after_window_expiry():
+    clock = {"t": 0.0}
+    rl = security.RateLimiter(max_fails=5, lock_seconds=300, clock=lambda: clock["t"])
+    key = "tester"
+
+    for _ in range(3):
+        rl.fail(key)
+    assert rl._fails[key] == (3, 0.0)
+    assert rl.locked(key) is False
+
+    clock["t"] += 301  # window has aged past lock_seconds without locking
+    rl.fail(key)
+    count, window_start = rl._fails[key]
+    assert count == 1  # reset, not accumulated to 4
+    assert window_start == clock["t"]
+    assert rl.locked(key) is False
+
+    # confirm the reset really happened: it takes a fresh max_fails run to lock
+    for _ in range(3):
+        rl.fail(key)
+    assert rl.locked(key) is False  # only 4 in the new window so far
+    rl.fail(key)
+    assert rl.locked(key) is True  # 5th in the new window locks
+
+
+def test_rate_limiter_prunes_expired_stale_keys_past_threshold():
+    clock = {"t": 0.0}
+    rl = security.RateLimiter(max_fails=5, lock_seconds=300, clock=lambda: clock["t"])
+
+    # Construct >1024 stale, sub-threshold, expired-window entries directly.
+    for i in range(1025):
+        rl._fails[f"stale-{i}"] = (1, 0.0)
+    rl._locked_until["stale-locked"] = 100.0  # also already-expired lock
+    assert len(rl._fails) == 1025
+
+    clock["t"] = 400.0  # 400 - 0 > lock_seconds (300): all stale windows expired
+    rl.fail("fresh-key")  # crosses the 1024 threshold -> opportunistic prune
+
+    assert len(rl._fails) < 1025
+    assert "fresh-key" in rl._fails
+    assert all(not k.startswith("stale-") for k in rl._fails)
+    assert "stale-locked" not in rl._locked_until
+
+
 # ---------------------------------------------------------------------------
 # Models: User 2FA/session columns, BackupCode, AuditLog, audit()
 # ---------------------------------------------------------------------------
@@ -170,12 +228,14 @@ def test_backup_code_model(engine):
         u = models.User(name="A", role="admin")
         s.add(u)
         s.commit()
-        bc = models.BackupCode(user_id=u.id, code_hash=security.hash_code("abcd1234"))
+        code_hash = security.hash_code("abcd1234ef")
+        bc = models.BackupCode(user_id=u.id, code_hash=code_hash)
         s.add(bc)
         s.commit()
         s.refresh(bc)
         assert bc.used_at is None
-        assert bc.code_hash == security.hash_code("abcd1234")
+        assert bc.code_hash == code_hash
+        assert security.verify_code("abcd1234ef", bc.code_hash) is True
 
 
 def test_audit_writes_row_with_utcnow(engine):
