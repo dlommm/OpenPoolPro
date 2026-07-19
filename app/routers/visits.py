@@ -71,6 +71,7 @@ def visit_doses(request: Request, visit_id: int,
 def visit_form(request: Request, property_id: int, visit_date: date,
                session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
+    # Local import avoids a circular import with app.routers.today.
     from app.routers.today import business_today
     if v.status == "due" and v.started_at is None and business_today() >= v.date:
         v.started_at = models.utcnow()
@@ -98,6 +99,7 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.notes = form.get("notes", "")
     v.status = "done"
     from app.timefmt import from_local_hhmm
+    # Product decision: times are minute-grained; an unedited prefilled form re-writing started_at at minute precision is accepted (minutes are the billing/analytics grain).
     started = from_local_hhmm(v.date, form.get("started_hhmm"))
     if started is not None:
         v.started_at = started
@@ -106,6 +108,7 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
         v.completed_at = ended
     elif v.completed_at is None:
         v.completed_at = models.utcnow()
+    # A visit completed without ever being opened keeps started_at=None (unknown), by design — duration stays None and analytics must tolerate it.
     v.completed_by_id = request.state.user.id
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
