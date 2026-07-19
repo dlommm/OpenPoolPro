@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Map columns{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Import CSV", "Map columns") }}
+<p class="mb-3 text-sm text-mist">{{ count }} rows found. Match your spreadsheet's columns to the app's fields — guessed matches are pre-selected.</p>
+<form method="post" action="/customers/import/{{ token }}/preview" class="space-y-2">
+  {% for t in targets %}
+  <label class="flex items-center gap-2">
+    <span class="field-label mb-0 w-40 shrink-0">{{ t.replace("_", " ") }}</span>
+    <select name="map_{{ t }}" class="field">
+      <option value="">— skip —</option>
+      {% for h in headers %}
+      <option value="{{ h }}" {{ "selected" if guesses[t] == h }}>{{ h }}</option>
+      {% endfor %}
+    </select></label>
+  {% endfor %}
+  <button class="btn-primary mt-3">Preview import</button>
+</form>
+{% endblock %}
