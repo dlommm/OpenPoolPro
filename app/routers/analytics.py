@@ -1,9 +1,11 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import analytics
+from app import analytics, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
@@ -63,6 +65,7 @@ def _quick_links() -> list[tuple[str, date, date]]:
 @router.get("/analytics")
 def analytics_page(request: Request, tab: str = "income",
                     start: str | None = None, end: str | None = None,
+                    applied: str | None = None,
                     session: Session = Depends(get_session)):
     if tab not in TAB_LABELS:
         tab = "income"
@@ -82,6 +85,7 @@ def analytics_page(request: Request, tab: str = "income",
         "quick": _quick_links(),
         "too_large": False,
         "rows": [],
+        "applied": applied,
     }
 
     if (end_d - start_d).days > MAX_SPAN_DAYS:
@@ -106,3 +110,115 @@ def analytics_page(request: Request, tab: str = "income",
 
     ctx["rows"] = rows
     return templates.TemplateResponse(request, "analytics.html", ctx)
+
+
+# --- Rates tab ops: bulk raise preview/apply -------------------------------
+
+def _rates_ctx(session: Session) -> dict:
+    start_d, end_d = _current_month()
+    return {
+        "tab": "rates",
+        "tab_labels": TAB_LABELS,
+        "start": start_d,
+        "end": end_d,
+        "quick": _quick_links(),
+        "too_large": False,
+        "rows": analytics.rate_review(session),
+        "applied": None,
+    }
+
+
+def _parse_percent(raw: str | None) -> float | None:
+    try:
+        pct = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return pct if pct == pct else None  # NaN guard
+
+
+def _validate_rate_form(percent: str | None, scope_tiers: bool,
+                         scope_overrides: bool) -> tuple[float | None, str | None]:
+    """Returns (percent-as-float-or-None, error-message-or-None)."""
+    pct = _parse_percent(percent)
+    if pct is None or pct <= 0 or pct > 100:
+        return None, "Percent must be between 0 and 100"
+    if not scope_tiers and not scope_overrides:
+        return pct, "Pick at least one scope"
+    return pct, None
+
+
+def _tier_rows(session: Session) -> list["models.RateTier"]:
+    return session.scalars(
+        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
+    ).all()
+
+
+def _override_props(session: Session) -> list["models.Property"]:
+    return session.scalars(
+        select(models.Property).join(models.Customer).where(
+            models.Property.active.is_(True), models.Customer.active.is_(True),
+            models.Property.rate_override_cents.is_not(None))
+    ).all()
+
+
+def _preview_rows(session: Session, pct: float, scope_tiers: bool, scope_overrides: bool) -> list[dict]:
+    rows = []
+    if scope_tiers:
+        for t in _tier_rows(session):
+            rows.append({"label": t.label or "Tier", "old_cents": t.rate_cents,
+                        "new_cents": round(t.rate_cents * (1 + pct / 100))})
+    if scope_overrides:
+        for p in _override_props(session):
+            rows.append({"label": f"{p.customer.name} — {p.label}",
+                        "old_cents": p.rate_override_cents,
+                        "new_cents": round(p.rate_override_cents * (1 + pct / 100))})
+    return rows
+
+
+@router.post("/analytics/rates/preview")
+def rates_preview(request: Request, percent: str = Form(""),
+                   scope_tiers: bool = Form(False), scope_overrides: bool = Form(False),
+                   session: Session = Depends(get_session)):
+    pct, error = _validate_rate_form(percent, scope_tiers, scope_overrides)
+    ctx = _rates_ctx(session)
+    ctx.update({
+        "rate_error": error,
+        "preview_percent": percent,
+        "preview_scope_tiers": scope_tiers,
+        "preview_scope_overrides": scope_overrides,
+    })
+    if error is None:
+        ctx["preview_rows"] = _preview_rows(session, pct, scope_tiers, scope_overrides)
+    return templates.TemplateResponse(request, "analytics.html", ctx)
+
+
+@router.post("/analytics/rates/apply")
+def rates_apply(request: Request, percent: str = Form(""),
+                 scope_tiers: bool = Form(False), scope_overrides: bool = Form(False),
+                 session: Session = Depends(get_session)):
+    pct, error = _validate_rate_form(percent, scope_tiers, scope_overrides)
+    if error is not None:
+        ctx = _rates_ctx(session)
+        ctx.update({
+            "rate_error": error,
+            "preview_percent": percent,
+            "preview_scope_tiers": scope_tiers,
+            "preview_scope_overrides": scope_overrides,
+        })
+        return templates.TemplateResponse(request, "analytics.html", ctx)
+
+    affected = 0
+    if scope_tiers:
+        for t in _tier_rows(session):
+            t.rate_cents = round(t.rate_cents * (1 + pct / 100))
+            affected += 1
+    if scope_overrides:
+        for p in _override_props(session):
+            p.rate_override_cents = round(p.rate_override_cents * (1 + pct / 100))
+            affected += 1
+
+    scope = "both" if scope_tiers and scope_overrides else ("tiers" if scope_tiers else "overrides")
+    session.add(models.RateChange(percent=pct, scope=scope, affected_count=affected,
+                                   user_id=request.state.user.id))
+    session.commit()
+    return RedirectResponse(f"/analytics?tab=rates&applied={affected}", status_code=303)

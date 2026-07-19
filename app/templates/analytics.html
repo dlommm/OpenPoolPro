@@ -205,6 +205,9 @@
 </table>
 
 {% elif tab == "rates" %}
+{% if applied %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Applied to {{ applied }} rates</div>
+{% endif %}
 <table class="w-full text-sm">
   <thead>
     <tr class="border-b border-seam text-left text-mist">
@@ -230,6 +233,61 @@
   </tbody>
 </table>
 {# rates ops: task 3 #}
+
+<div class="card mt-4 p-4">
+  <p class="font-display text-sm font-bold uppercase tracking-wide">Bulk rate raise</p>
+  {% if rate_error %}
+  <p class="mt-2 text-sm text-safety">{{ rate_error }}</p>
+  {% endif %}
+  <form method="post" action="/analytics/rates/preview" class="mt-2 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="field-label" for="percent">Percent increase</label>
+      <input class="field font-data w-28" type="text" inputmode="decimal" id="percent" name="percent"
+             value="{{ preview_percent if preview_percent is defined else '' }}" placeholder="e.g. 5">
+    </div>
+    <label class="flex min-h-11 items-center gap-1.5 text-sm">
+      <input type="checkbox" name="scope_tiers" {{ "checked" if preview_scope_tiers is defined and preview_scope_tiers }}> Rate tiers
+    </label>
+    <label class="flex min-h-11 items-center gap-1.5 text-sm">
+      <input type="checkbox" name="scope_overrides" {{ "checked" if preview_scope_overrides is defined and preview_scope_overrides }}> Property overrides
+    </label>
+    <button class="btn-secondary">Preview</button>
+  </form>
+</div>
+
+{% if preview_rows is defined %}
+<div class="card mt-4 p-4">
+  <p class="font-display text-sm font-bold uppercase tracking-wide">Preview — {{ preview_rows|length }} affected</p>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm mt-2">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="py-1.5 pr-3 font-medium">Row</th>
+        <th class="py-1.5 pr-3 font-medium">Old</th>
+        <th class="py-1.5 font-medium">New</th>
+      </tr>
+    </thead>
+    <tbody class="font-data">
+      {% for r in preview_rows %}
+      <tr class="border-b border-seam/60">
+        <td class="py-1.5 pr-3 font-body">{{ r.label }}</td>
+        <td class="py-1.5 pr-3">{{ r.old_cents | dollars }}</td>
+        <td class="py-1.5">{{ r.new_cents | dollars }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="py-6 text-center text-mist">Nothing matches the selected scope.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form method="post" action="/analytics/rates/apply" class="mt-3">
+    <input type="hidden" name="percent" value="{{ preview_percent }}">
+    {% if preview_scope_tiers %}<input type="hidden" name="scope_tiers" value="on">{% endif %}
+    {% if preview_scope_overrides %}<input type="hidden" name="scope_overrides" value="on">{% endif %}
+    <button class="btn-primary">Apply to {{ preview_rows|length }} rates</button>
+  </form>
+</div>
+{% endif %}
 
 {% endif %}
 </div>
