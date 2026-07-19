@@ -36,6 +36,15 @@ def _parse_date(s: str | None) -> date | None:
         return None
 
 
+def _parse_applied(s: str | None) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None  # non-int: ignore banner rather than 500 or render garbage
+
+
 def _month_bounds(year: int, month: int) -> tuple[date, date]:
     start = date(year, month, 1)
     end = (date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)) - timedelta(days=1)
@@ -87,7 +96,7 @@ def analytics_page(request: Request, tab: str = "income",
         "quick": _quick_links(),
         "too_large": False,
         "rows": [],
-        "applied": applied,
+        "applied": _parse_applied(applied),
     }
 
     if (end_d - start_d).days > MAX_SPAN_DAYS:
@@ -115,14 +124,7 @@ def analytics_page(request: Request, tab: str = "income",
 
 
 def _format_cents(cents: int | None) -> str:
-    """Format cents as dollars with 2 decimal places."""
-    if cents is None:
-        return ""
-    return f"{cents / 100:.2f}"
-
-
-def _format_optional_cents(cents: int | None) -> str:
-    """Format cents as dollars, or empty string if None."""
+    """Format cents as dollars with 2 decimal places, or empty string if None."""
     if cents is None:
         return ""
     return f"{cents / 100:.2f}"
@@ -199,7 +201,7 @@ def analytics_export(tab: str = "income",
                 r.job_count,
                 r.total_minutes,
                 _format_cents(r.total_cents),
-                _format_optional_cents(r.revenue_per_hour_cents),
+                _format_cents(r.revenue_per_hour_cents),
             ])
     elif tab == "types":
         writer.writerow(["type", "total"])

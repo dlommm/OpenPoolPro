@@ -32,6 +32,15 @@ def _local_date(dt: datetime) -> date:
     return dt.replace(tzinfo=timezone.utc).astimezone(config.tz()).date()
 
 
+def line_billable_cents(cost_cents: int, markup_percent: float) -> int:
+    """Atomic-grain markup rounding: round per VisitChemical line, not per bucket.
+
+    Shared by qbo.month_rollup and all app.analytics chem-billable computations
+    so every screen agrees to the cent.
+    """
+    return round(cost_cents * (1 + markup_percent / 100))
+
+
 def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]:
     first, last = _month_range(year, month)
     try:
@@ -50,7 +59,9 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         r = row(v.property.customer)
         r.labor_cents += v.rate_cents or 0
         r.labor_visits += 1
-        r.chem_cost_cents += sum(vc.total_cost_cents for vc in v.chemicals)
+        for vc in v.chemicals:
+            r.chem_cost_cents += vc.total_cost_cents
+            r.chem_billable_cents += line_billable_cents(vc.total_cost_cents, markup)
 
     jobs = session.scalars(select(models.Job).where(
         models.Job.status == "done",
@@ -65,7 +76,6 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
 
     rows = []
     for r in out.values():
-        r.chem_billable_cents = round(r.chem_cost_cents * (1 + markup / 100))
         r.total_cents = r.labor_cents + r.chem_billable_cents + r.job_cents
         if r.total_cents > 0:
             rows.append(r)

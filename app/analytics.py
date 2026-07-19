@@ -12,7 +12,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, qbo
 from app.qbo import _local_date
 from app.rates import effective_rate_cents
 
@@ -90,10 +90,6 @@ def _markup(session) -> float:
     return m if m == m and m not in (float("inf"), float("-inf")) else 0.0
 
 
-def _billable(cost_cents: int, markup: float) -> int:
-    return round(cost_cents * (1 + markup / 100))
-
-
 def _done_visits(session, start, end):
     return session.scalars(select(models.Visit).where(
         models.Visit.status == "done",
@@ -142,7 +138,9 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
     for v in _done_visits(session, start, end):
         r = row(_week_key(v.date))
         r.labor_cents += v.rate_cents or 0
-        r.chem_cost_cents += sum(vc.total_cost_cents for vc in v.chemicals)
+        for vc in v.chemicals:
+            r.chem_cost_cents += vc.total_cost_cents
+            r.chem_billable_cents += qbo.line_billable_cents(vc.total_cost_cents, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(_week_key(_local_date(j.completed_at)))
@@ -150,7 +148,6 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
 
     out = list(rows.values())
     for r in out:
-        r.chem_billable_cents = _billable(r.chem_cost_cents, markup)
         r.total_cents = r.labor_cents + r.chem_billable_cents + r.job_cents
     out.sort(key=lambda r: (r.iso_year, r.iso_week))
     return out
@@ -159,7 +156,7 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
 def revenue_by_customer(session: Session, start: date, end: date) -> list[CustomerRow]:
     markup = _markup(session)
     rows: dict[int, CustomerRow] = {}
-    chem_cost: dict[int, int] = defaultdict(int)
+    chem_billable: dict[int, int] = defaultdict(int)
 
     def row(cust: "models.Customer") -> CustomerRow:
         return rows.setdefault(cust.id, CustomerRow(customer=cust))
@@ -169,14 +166,15 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
         r = row(cust)
         r.labor_cents += v.rate_cents or 0
         r.visit_count += 1
-        chem_cost[cust.id] += sum(vc.total_cost_cents for vc in v.chemicals)
+        for vc in v.chemicals:
+            chem_billable[cust.id] += qbo.line_billable_cents(vc.total_cost_cents, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(j.property.customer)
         r.job_cents += j.labor_cents
 
     for cid, r in rows.items():
-        r.chem_billable_cents = _billable(chem_cost.get(cid, 0), markup)
+        r.chem_billable_cents = chem_billable.get(cid, 0)
         r.total_cents = r.labor_cents + r.chem_billable_cents + r.job_cents
 
     return sorted(rows.values(), key=lambda r: r.total_cents, reverse=True)
@@ -185,7 +183,7 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
 def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
     markup = _markup(session)
     rows: dict[int | None, TechRow] = {}
-    chem_cost: dict[int | None, int] = defaultdict(int)
+    chem_billable: dict[int | None, int] = defaultdict(int)
 
     def row(user: "models.User | None") -> TechRow:
         key = user.id if user is not None else None
@@ -196,7 +194,8 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
         r = row(v.completed_by)
         r.total_cents += v.rate_cents or 0
         r.visit_count += 1
-        chem_cost[key] += sum(vc.total_cost_cents for vc in v.chemicals)
+        for vc in v.chemicals:
+            chem_billable[key] += qbo.line_billable_cents(vc.total_cost_cents, markup)
         dur = v.duration_minutes
         if dur is not None:
             r.total_minutes += dur
@@ -211,7 +210,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
             r.total_minutes += dur
 
     for key, r in rows.items():
-        r.total_cents += _billable(chem_cost.get(key, 0), markup)
+        r.total_cents += chem_billable.get(key, 0)
         r.revenue_per_hour_cents = (
             round(r.total_cents / (r.total_minutes / 60)) if r.total_minutes > 0 else None
         )
@@ -223,8 +222,9 @@ def revenue_by_job_type(session: Session, start: date, end: date) -> list[TypeRo
     markup = _markup(session)
     visits = _done_visits(session, start, end)
     visit_labor = sum(v.rate_cents or 0 for v in visits)
-    visit_chem_cost = sum(vc.total_cost_cents for v in visits for vc in v.chemicals)
-    visits_total = visit_labor + _billable(visit_chem_cost, markup)
+    visit_chem_billable = sum(qbo.line_billable_cents(vc.total_cost_cents, markup)
+                               for v in visits for vc in v.chemicals)
+    visits_total = visit_labor + visit_chem_billable
 
     jobs = _done_jobs(session, start, end)
     repairs_total = sum(j.labor_cents for j in jobs if j.job_type == "repair")
@@ -250,9 +250,9 @@ def chem_margin(session: Session, start: date, end: date) -> list[ChemRow]:
         r = rows.setdefault(vc.chemical_id, ChemRow(chemical=vc.chemical))
         r.quantity += vc.amount
         r.cost_cents += vc.total_cost_cents
+        r.billable_cents += qbo.line_billable_cents(vc.total_cost_cents, markup)
 
     for r in rows.values():
-        r.billable_cents = _billable(r.cost_cents, markup)
         r.margin_cents = r.billable_cents - r.cost_cents
 
     return sorted(rows.values(), key=lambda r: r.chemical.name)

@@ -121,6 +121,46 @@ def test_visit_volume(engine):
     assert rows[28].avg_minutes == 60          # only v1 has duration
 
 
+def test_markup_rounding_agrees_across_screens(engine):
+    """Atomic per-line rounding: every chem-billable consumer sums
+    round(line_cost * (1 + markup/100)) per VisitChemical line, so odd-cent
+    lines reconcile to the same total on every screen. Two lines of 33 cents
+    at 50% markup: round(33*1.5)=50 each -> 100 total everywhere (not
+    round(66*1.5)=99, which is what bucket-level rounding would give)."""
+    from app import qbo
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "chem_markup_percent", "50")
+        c1 = models.Customer(name="OddA")
+        c2 = models.Customer(name="OddB")
+        p1 = models.Property(customer=c1)
+        p2 = models.Property(customer=c2)
+        s.add_all([p1, p2])
+        s.flush()
+        chem = s.scalars(select(models.Chemical)).first()
+        for p in (p1, p2):
+            v = models.Visit(property_id=p.id, date=date(2026, 7, 6), status="done",
+                             rate_cents=0)
+            s.add(v)
+            s.flush()
+            s.add(models.VisitChemical(visit_id=v.id, chemical_id=chem.id, amount=1,
+                                       unit_cost_cents_frozen=33, total_cost_cents=33))
+        s.commit()
+        money_total = sum(r.total_cents for r in qbo.month_rollup(s, 2026, 7))
+        income_total = sum(r.total_cents for r in analytics.income_by_week(
+            s, date(2026, 7, 1), date(2026, 7, 31)))
+        cust_total = sum(r.total_cents for r in analytics.revenue_by_customer(
+            s, date(2026, 7, 1), date(2026, 7, 31)))
+        types_total = sum(r.total_cents for r in analytics.revenue_by_job_type(
+            s, date(2026, 7, 1), date(2026, 7, 31)))
+        chem_total = sum(r.billable_cents for r in analytics.chem_margin(
+            s, date(2026, 7, 1), date(2026, 7, 31)))
+        assert money_total == income_total == cust_total == types_total == chem_total == 100
+        # per-line: round(33*1.5)=50 twice -> 100 everywhere
+
+
 def test_rate_review_flags_underpriced(engine):
     _fix(engine)
     with Session(engine) as s:

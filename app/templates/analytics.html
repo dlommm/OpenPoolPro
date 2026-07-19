@@ -169,7 +169,7 @@
     {% for r in rows %}
     <tr class="border-b border-seam/60">
       <td class="py-1.5 pr-3 font-body">{{ r.chemical.name }}</td>
-      <td class="py-1.5 pr-3">{{ r.quantity }} {{ r.chemical.unit }}</td>
+      <td class="py-1.5 pr-3">{{ "%.2f" | format(r.quantity) }} {{ r.chemical.unit }}</td>
       <td class="py-1.5 pr-3">{{ r.cost_cents | dollars }}</td>
       <td class="py-1.5 pr-3">{{ r.billable_cents | dollars }}</td>
       <td class="py-1.5 money">{{ r.margin_cents | dollars }}</td>
@@ -207,6 +207,7 @@
 {% elif tab == "rates" %}
 {% if applied %}
 <div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Applied to {{ applied }} rates</div>
+<p class="text-xs text-mist">Tier targets rose too — review flags recompute against the new tiers.</p>
 {% endif %}
 <table class="w-full text-sm">
   <thead>

@@ -206,6 +206,13 @@ def test_rate_ops_tech_forbidden(client, engine, tech_client):
                   data={"percent": "10", "scope_tiers": "on"}).status_code == 403
 
 
+def test_applied_non_int_ignored(client, engine):
+    _fix(engine)
+    r = client.get("/analytics", params={"tab": "rates", "applied": "notanumber"})
+    assert r.status_code == 200
+    assert "Applied to" not in r.text
+
+
 def test_apply_midway_failure_rolls_back(client, engine, monkeypatch):
     _fix(engine)
     from app import models as m
