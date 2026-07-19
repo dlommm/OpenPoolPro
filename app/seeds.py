@@ -30,6 +30,9 @@ def run(engine) -> None:
 
         owner = s.scalars(select(models.User).where(models.User.username == "owner")).first()
         if owner is None:
+            # Recovery path: APP_PASSWORD env is authoritative for the owner account.
+            # Any future in-app owner password change will be overwritten at next boot
+            # unless .env is updated in lockstep.
             legacy = s.scalars(select(models.User).where(models.User.username.is_(None))).first()
             if legacy is not None:
                 legacy.username, legacy.role, legacy.active = "owner", "admin", True
