@@ -4,9 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth_core import verify_password
+from app.auth_core import hash_password, verify_password
 from app.db import get_session
 from app.main import templates
+
+# Verified against when the username is unknown, so both failure paths pay
+# the same bcrypt cost (no timing-based username enumeration).
+_DUMMY_HASH = hash_password("timing-equalizer")
 
 router = APIRouter()
 
@@ -22,7 +26,8 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     user = session.scalars(select(models.User).where(
         models.User.username == username.strip().lower(),
         models.User.active)).first()
-    if user is None or not verify_password(password, user.password_hash):
+    ok = verify_password(password, user.password_hash if user else _DUMMY_HASH)
+    if user is None or not ok:
         return templates.TemplateResponse(request, "login.html",
                                           {"error": "Wrong username or password"})
     request.session.clear()

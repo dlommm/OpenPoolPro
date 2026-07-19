@@ -31,11 +31,13 @@ def tech_client(engine, client):
 
     def make(name="sam", password="techpass", **flags):
         with Session(engine) as s:
-            s.add(models.User(name=name.title(), username=name, role="tech", active=True,
+            s.add(models.User(name=name.title(), username=name.strip().lower(), role="tech", active=True,
                               password_hash=hash_password(password), **flags))
             s.commit()
         c = TestClient(create_app(engine=engine))
-        c.post("/login", data={"username": name, "password": password})
+        r = c.post("/login", data={"username": name.strip().lower(), "password": password},
+                   follow_redirects=False)
+        assert r.status_code == 303, f"tech_client login failed for {name!r}"
         return c
 
     return make

@@ -73,3 +73,10 @@ def test_exempt_paths_reachable_logged_out(engine, monkeypatch):
     c = make_client(engine, monkeypatch)
     for path in ["/login", "/manifest.json", "/sw.js", "/health"]:
         assert c.get(path, follow_redirects=False).status_code == 200
+
+
+def test_authenticated_request_rolls_session_cookie(engine, monkeypatch):
+    c = make_client(engine, monkeypatch)
+    login(c)
+    r = c.get("/", follow_redirects=False)
+    assert any(k.lower() == "set-cookie" for k in r.headers.keys())
