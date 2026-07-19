@@ -1,3 +1,4 @@
+import math
 import os
 
 from fastapi import APIRouter, Depends, Request
@@ -12,6 +13,8 @@ from app.main import templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
+TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
+
 
 @router.get("/settings")
 def settings_page(request: Request, session: Session = Depends(get_session)):
@@ -22,11 +25,32 @@ def settings_page(request: Request, session: Session = Depends(get_session)):
                             .order_by(models.TaskTemplate.sort_order)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
+    targets = {k: models.get_setting(session, k, d) for k, d in [
+        ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
+        ("target_cya", "50"), ("target_salt", "3200")]}
     return templates.TemplateResponse(request, "settings/index.html", {
         "tiers": tiers, "chems": chems, "tasks": tasks, "backups": backups,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "business_name": models.get_setting(session, "business_name", ""),
-        "backup_error": models.get_setting(session, "last_backup_error", "")})
+        "backup_error": models.get_setting(session, "last_backup_error", ""),
+        "role_values": models.ROLE_VALUES,
+        "targets": targets})
+
+
+@router.post("/settings/targets")
+async def save_targets(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    for key in TARGET_KEYS:
+        raw = (form.get(key) or "").strip()
+        try:
+            v = float(raw)
+        except ValueError:
+            continue  # invalid keeps the previously stored value
+        if not math.isfinite(v):
+            continue  # inf/nan keeps the previously stored value
+        models.set_setting(session, key, raw)
+    session.commit()
+    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/settings/tiers")
@@ -65,9 +89,17 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
 @router.post("/settings/chemicals")
 async def save_chemicals(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
-    rows = zip(form.getlist("chem_id"), form.getlist("name"),
-               form.getlist("unit"), form.getlist("cost_dollars"))
-    for cid, name, unit, cost in rows:
+    chem_ids = form.getlist("chem_id")
+    names = form.getlist("name")
+    units = form.getlist("unit")
+    costs = form.getlist("cost_dollars")
+    roles = form.getlist("role")
+    strengths = form.getlist("strength_pct")
+
+    for i, (cid, name, unit, cost) in enumerate(zip(chem_ids, names, units, costs)):
+        role = roles[i] if i < len(roles) else "other"
+        strength = strengths[i] if i < len(strengths) else ""
+
         if cid:
             try:
                 c = session.get(models.Chemical, int(cid))
@@ -84,14 +116,29 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
                 continue
             c.name, c.unit = name, unit
             c.cost_per_unit_cents = cost_cents
+            c.role = role if role in models.ROLE_VALUES else "other"
+            try:
+                new_strength = float(strength) if strength.strip() else c.strength_pct
+            except ValueError:
+                new_strength = c.strength_pct
+            if math.isfinite(new_strength) and new_strength > 0:
+                c.strength_pct = new_strength
             c.active = form.get(f"active_{cid}") == "on"
         elif name.strip():
             try:
                 cost_cents = round(float(cost or 0) * 100)
             except ValueError:
                 continue
+            chem_role = role if role in models.ROLE_VALUES else "other"
+            try:
+                strength_pct = float(strength) if strength.strip() else 100.0
+            except ValueError:
+                strength_pct = 100.0
+            if not (math.isfinite(strength_pct) and strength_pct > 0):
+                strength_pct = 100.0
             session.add(models.Chemical(name=name, unit=unit,
-                                        cost_per_unit_cents=cost_cents))
+                                        cost_per_unit_cents=cost_cents,
+                                        role=chem_role, strength_pct=strength_pct))
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

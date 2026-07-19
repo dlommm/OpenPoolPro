@@ -12,8 +12,16 @@
       {% for name, label in [("fc","FC"),("ph","pH"),("ta","TA"),("cya","CYA"),("salt","Salt")] %}
       <label class="block text-center"><span class="field-label font-data">{{ label }}</span>
         <input inputmode="decimal" name="{{ name }}" value="{{ v|attr(name) if v|attr(name) is not none else '' }}"
+               hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="input changed delay:400ms"
                class="field text-center font-data text-lg"></label>
       {% endfor %}
+    </div>
+  </div>
+
+  <div>
+    <h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Suggested doses</h2>
+    <div id="dose-panel" class="card bg-shallow/40 p-3">
+      <p class="text-sm text-mist">Enter readings to get dose suggestions</p>
     </div>
   </div>
 
@@ -26,6 +34,7 @@
         <span class="flex-1 text-sm">{{ chem.name }} <span class="text-mist">({{ chem.unit }}{% if show_money %}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }}{% endif %})</span></span>
         <input inputmode="decimal" name="chem_amount" placeholder="0" min="0"
                value="{{ existing[chem.id].amount if chem.id in existing else '' }}"
+               data-chem-input="{{ chem.id }}"
                class="field w-20 text-center font-data">
       </div>
       {% endfor %}
@@ -65,4 +74,14 @@
   <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">
   <button class="btn-secondary">Skip</button>
 </form>
+
+<script>
+document.addEventListener("click", function (e) {
+  if (e.target.id !== "apply-doses") return;
+  document.querySelectorAll("#dose-panel [data-chem-id]").forEach(function (el) {
+    var input = document.querySelector('[data-chem-input="' + el.dataset.chemId + '"]');
+    if (input) input.value = el.dataset.amount;
+  });
+});
+</script>
 {% endblock %}

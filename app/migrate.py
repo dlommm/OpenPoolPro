@@ -17,6 +17,10 @@ COLUMNS = {
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
     ],
     "visits": [("completed_by_id", "INTEGER REFERENCES users(id)")],
+    "chemicals": [
+        ("role", "VARCHAR(20) DEFAULT 'other'"),
+        ("strength_pct", "FLOAT DEFAULT 100"),
+    ],
 }
 
 

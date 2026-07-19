@@ -135,3 +135,100 @@ def test_mixed_batch_legit_rows_survive(client, engine):
     with Session(engine) as s:
         names = {c.name for c in s.scalars(select(models.Chemical)).all()}
         assert "Borax" in names and "Ghost" not in names
+
+
+def test_targets_save_and_tolerant(client, engine):
+    r = client.post("/settings/targets", data={
+        "target_fc": "5.0", "target_ph": "7.4", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"
+        assert models.get_setting(s, "target_ph", "7.5") == "7.4"
+    client.post("/settings/targets", data={
+        "target_fc": "abc", "target_ph": "7.6", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"  # kept previous
+        assert models.get_setting(s, "target_ph", "7.5") == "7.6"
+
+
+def test_targets_admin_only(client, tech_client):
+    t = tech_client(name="targetless")
+    assert t.post("/settings/targets", data={"target_fc": "9"},
+                  follow_redirects=False).status_code == 403
+
+
+def test_target_non_finite_rejected(client, engine):
+    client.post("/settings/targets", data={
+        "target_fc": "5.0", "target_ph": "7.4", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"
+    client.post("/settings/targets", data={
+        "target_fc": "inf", "target_ph": "7.6", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"  # inf rejected, kept previous
+    client.post("/settings/targets", data={
+        "target_fc": "1e999", "target_ph": "7.6", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"  # 1e999 -> inf, rejected
+
+
+def test_chemical_role_strength_editable(client, engine):
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        cid = chem.id
+    client.post("/settings/chemicals", data={
+        "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+        "cost_dollars": ["4.50"], "role": ["chlorine_granular"],
+        "strength_pct": ["10"], f"active_{cid}": "on"})
+    with Session(engine) as s:
+        c = s.get(models.Chemical, cid)
+        assert c.role == "chlorine_granular" and c.strength_pct == 10.0
+    # unknown role value coerced to other; garbage strength keeps previous row values
+    client.post("/settings/chemicals", data={
+        "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+        "cost_dollars": ["4.50"], "role": ["evil_role"],
+        "strength_pct": ["10"], f"active_{cid}": "on"})
+    with Session(engine) as s:
+        assert s.get(models.Chemical, cid).role == "other"
+
+
+def test_chemical_strength_non_finite_or_nonpositive_rejected(client, engine):
+    # I1 pin: strength_pct must stay a usable divisor — 0, negative, and
+    # non-finite values are rejected and the previous value is kept.
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        cid = chem.id
+    client.post("/settings/chemicals", data={
+        "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+        "cost_dollars": ["4.50"], "role": ["chlorine_liquid"],
+        "strength_pct": ["12.5"], f"active_{cid}": "on"})
+    with Session(engine) as s:
+        assert s.get(models.Chemical, cid).strength_pct == 12.5
+    for bad in ["0", "-5", "inf"]:
+        client.post("/settings/chemicals", data={
+            "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+            "cost_dollars": ["4.50"], "role": ["chlorine_liquid"],
+            "strength_pct": [bad], f"active_{cid}": "on"})
+        with Session(engine) as s:
+            assert s.get(models.Chemical, cid).strength_pct == 12.5  # rejected, kept previous
+
+
+def test_new_chemical_defaults_role_other(client, engine):
+    client.post("/settings/chemicals", data={
+        "chem_id": [""], "name": ["Mystery Goo"], "unit": ["gal"],
+        "cost_dollars": ["3"], "role": ["other"], "strength_pct": [""]})
+    with Session(engine) as s:
+        c = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Mystery Goo")).one()
+        assert c.role == "other" and c.strength_pct == 100.0
+    html = client.get("/settings").text
+    import re
+    new_row_selects = re.findall(r'<select name="role"[^>]*>(.*?)</select>', html, re.S)
+    assert any('selected' in s and '>other<' in s for s in new_row_selects)

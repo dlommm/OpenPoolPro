@@ -33,25 +33,35 @@
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals</h2>
   <form method="post" action="/settings/chemicals" class="space-y-2">
     {% for c in chems %}
-    <div class="grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-2">
+    <div class="grid grid-cols-6 items-center gap-2">
       <input type="hidden" name="chem_id" value="{{ c.id }}">
-      <input name="name" value="{{ c.name }}" class="field">
+      <input name="name" value="{{ c.name }}" class="field col-span-2">
       <select name="unit" class="field">
         {% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}
       </select>
       <input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="field font-data">
-      <input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5">
+      <select name="role" class="field">
+        {% for rv in role_values %}<option {{ "selected" if c.role == rv }}>{{ rv }}</option>{% endfor %}
+      </select>
+      <div class="flex gap-2 items-center">
+        <input inputmode="decimal" name="strength_pct" value="{{ c.strength_pct }}" class="field font-data">
+        <input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5">
+      </div>
     </div>
     {% endfor %}
-    <div class="grid grid-cols-[2fr_1fr_1fr_auto] gap-2">
+    <div class="grid grid-cols-6 gap-2">
       <input type="hidden" name="chem_id" value="">
-      <input name="name" placeholder="New chemical" class="field">
+      <input name="name" placeholder="New chemical" class="field col-span-2">
       <select name="unit" class="field">
         {% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}
       </select>
       <input inputmode="decimal" name="cost_dollars" class="field font-data">
-      <span></span>
+      <select name="role" class="field">
+        {% for rv in role_values %}<option {{ "selected" if rv == "other" }}>{{ rv }}</option>{% endfor %}
+      </select>
+      <input inputmode="decimal" name="strength_pct" placeholder="%" class="field font-data">
     </div>
+    <p class="text-xs text-mist">Set a role so dosing can use this chemical.</p>
     <button class="btn-secondary w-full">Save chemicals</button>
   </form>
 </div>
@@ -78,6 +88,19 @@
     <label class="block"><span class="field-label">Business name</span>
       <input name="business_name" value="{{ business_name }}" class="field"></label>
     <button class="btn-secondary w-full">Save</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Water targets</h2>
+  <form method="post" action="/settings/targets" class="card mb-4 space-y-2 p-3">
+    <div class="grid grid-cols-5 gap-2">
+      {% for key, label in [("target_fc","FC"),("target_ph","pH"),("target_ta","TA"),("target_cya","CYA"),("target_salt","Salt")] %}
+      <label class="block text-center"><span class="field-label">{{ label }}</span>
+        <input inputmode="decimal" name="{{ key }}" value="{{ targets[key] }}" class="field text-center font-data"></label>
+      {% endfor %}
+    </div>
+    <button class="btn-secondary w-full">Save targets</button>
   </form>
 </div>
 

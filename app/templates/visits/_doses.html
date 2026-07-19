@@ -1,0 +1,21 @@
+{% if hint %}
+<p class="text-sm text-mist">{{ hint }}</p>
+{% elif not doses %}
+<p class="text-sm text-mist">Water looks balanced — no doses needed.</p>
+{% else %}
+<div class="space-y-1">
+  {% for d in doses %}
+  <div class="flex items-center gap-2 text-sm {{ 'text-safety' if not d.applyable and d.note }}">
+    {% if d.amount %}<span class="font-data font-semibold"
+        {% if d.applyable %}data-chem-id="{{ d.chemical_id }}" data-amount="{{ d.amount }}"{% endif %}
+        >{{ d.amount }} {{ d.unit }}</span>{% endif %}
+    <span>{{ d.chemical_name }}</span>
+    {% if d.note %}<span class="tag {{ 'tag-safety' if not d.applyable }}">{{ d.note }}</span>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% if doses | selectattr("applyable") | list %}
+<button type="button" id="apply-doses"
+        class="btn-secondary mt-2 w-full">Apply suggested doses</button>
+{% endif %}
+{% endif %}
