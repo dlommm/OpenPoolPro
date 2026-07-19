@@ -240,3 +240,120 @@ def test_apply_overrides_skips_inactive(client, engine):
     with Session(engine) as s:
         assert s.get(models.Property, pid_a).rate_override_cents == 4400
         assert s.get(models.Property, pid_b).rate_override_cents == 3000
+
+
+# --- CSV export tests -----
+
+def test_income_export_golden(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "income",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["content-type"]
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "week_start,iso_week,labor,chemicals_cost,chemicals_billable,jobs,total"
+    # Find week 28 and week 31 rows
+    week28_row = None
+    week31_row = None
+    for line in lines[1:]:
+        parts = line.split(",")
+        if len(parts) >= 2 and parts[1] == "28":
+            week28_row = line
+        elif len(parts) >= 2 and parts[1] == "31":
+            week31_row = line
+    assert week28_row is not None, "Week 28 row not found in export"
+    # Week 28: labor 120.00, chemicals_cost 8.00, chemicals_billable 12.00, jobs 0.00, total 132.00
+    assert "120.00" in week28_row, f"Labor amount not found in week 28 row: {week28_row}"
+    assert "12.00" in week28_row, f"Billable amount not found in week 28 row: {week28_row}"
+    assert "132.00" in week28_row, f"Total amount not found in week 28 row: {week28_row}"
+    # Week 31: jobs 30.00
+    assert week31_row is not None, "Week 31 row not found in export"
+    parts = week31_row.split(",")
+    assert parts[5] == "30.00", f"Week 31 jobs not 30.00, got: {week31_row}"
+
+
+def test_customers_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "customers",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "customer,visits,labor,chemicals,jobs,total"
+
+
+def test_crew_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "crew",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "tech,visits,jobs,minutes,revenue,revenue_per_hour"
+    # Check that Unattributed is present
+    assert any("Unattributed" in line for line in lines[1:])
+
+
+def test_types_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "types",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "type,total"
+
+
+def test_chemicals_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "chemicals",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "chemical,quantity,unit,cost,billable,margin"
+
+
+def test_volume_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "volume",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "week_start,done,skipped,avg_minutes"
+
+
+def test_rates_export_header(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "rates",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    lines = r.text.strip().split("\n")
+    assert lines[0] == "customer,property,current,tier,delta"
+
+
+def test_export_unknown_tab_404(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "bogus"})
+    assert r.status_code == 404
+
+
+def test_export_tech_forbidden(client, engine, tech_client):
+    _fix(engine)
+    t = tech_client(name="notadmin")
+    r = t.get("/analytics/export", params={"tab": "income"})
+    assert r.status_code == 403
+
+
+def test_export_filename_correct(client, engine):
+    _fix(engine)
+    r = client.get("/analytics/export", params={"tab": "income",
+                                                  "start": RANGE[0].isoformat(),
+                                                  "end": RANGE[1].isoformat()})
+    assert r.status_code == 200
+    disposition = r.headers.get("content-disposition", "")
+    expected_filename = f"analytics-income-{RANGE[0].isoformat()}-{RANGE[1].isoformat()}.csv"
+    assert expected_filename in disposition
