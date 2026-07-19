@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit" if u else "Add" }} crew member{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Crew", u.name if u else "New member") }}
+{% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
+<form method="post" class="space-y-3">
+  <label class="block"><span class="field-label">Full name</span>
+    <input name="name" value="{{ u.name if u else '' }}" class="field"></label>
+  <label class="block"><span class="field-label">Username</span>
+    <input name="username" value="{{ u.username if u else '' }}" autocapitalize="none" class="field"></label>
+  {% if not u %}
+  <label class="block"><span class="field-label">Password (8+ characters)</span>
+    <input type="password" name="password" class="field"></label>
+  {% endif %}
+  <label class="block"><span class="field-label">Role</span>
+    <select name="role" class="field">
+      <option value="tech" {{ "selected" if not u or u.role == "tech" }}>Tech</option>
+      <option value="admin" {{ "selected" if u and u.role == "admin" }}>Admin — everything, every device</option>
+    </select></label>
+  <fieldset class="card p-3.5">
+    <legend class="field-label px-1">Tech permissions (ignored for admins)</legend>
+    {% for flag, label in [("view_money", "Can see money — rates, totals, the Money screen"),
+                           ("manage_customers", "Can add and edit customers, properties, pools"),
+                           ("can_repairs", "Can be assigned repair jobs"),
+                           ("view_all_routes", "Can see every tech's route, not just their own")] %}
+    <label class="flex min-h-11 items-center gap-2.5">
+      <input type="checkbox" name="{{ flag }}" class="h-5 w-5"
+             {{ "checked" if u and u|attr(flag) }}> <span class="text-sm">{{ label }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <button class="btn-primary">Save</button>
+</form>
+{% if u %}
+<form method="post" action="/users/{{ u.id }}/password" class="mt-4 flex gap-2">
+  <input type="password" name="password" placeholder="New password (8+)" class="field flex-1">
+  <button class="btn-secondary px-4">Reset</button>
+</form>
+{% if u.active %}
+<form method="post" action="/users/{{ u.id }}/disable" class="mt-3">
+  <button class="btn-danger">Disable account</button>
+</form>
+{% else %}
+<form method="post" action="/users/{{ u.id }}/enable" class="mt-3">
+  <button class="btn-secondary w-full">Enable account</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

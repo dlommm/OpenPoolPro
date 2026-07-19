@@ -7,7 +7,10 @@
 </div>
 {% if j.priority == "high" %}<span class="tag tag-safety mb-2 inline-flex">High priority</span>{% endif %}
 <p class="mb-1 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</p>
-<p class="mb-4 font-data text-sm text-mist">{{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %} · <span class="money">{{ j.labor_cents | dollars }}</span></p>
+<p class="mb-4 flex flex-wrap items-center gap-1.5 font-data text-sm text-mist">
+  <span class="tag">{{ j.job_type }}</span>
+  {% if j.assigned_tech %}<span class="tag">{{ j.assigned_tech.name | initials }}</span>{% endif %}
+  {{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %}{% if show_money %} · <span class="money">{{ j.labor_cents | dollars }}</span>{% endif %}</p>
 {% if j.description %}<p class="card mb-4 p-3.5 text-sm">{{ j.description }}</p>{% endif %}
 
 <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">

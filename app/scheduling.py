@@ -59,6 +59,23 @@ def stops_for_date(session: Session, d: date) -> list[Stop]:
     return stops
 
 
+def suggest_tech(session: Session, weekday: int) -> int | None:
+    from collections import Counter
+    props = session.scalars(select(models.Property).where(
+        models.Property.active, models.Property.weekday == weekday,
+        models.Property.assigned_tech_id.is_not(None))).all()
+    counts = Counter(p.assigned_tech_id for p in props)
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def visible_to(user, assigned_tech_id, active_ids: set[int]) -> bool:
+    if user.can("view_all_routes"):
+        return True
+    if assigned_tech_id in (user.id, None):
+        return True
+    return assigned_tech_id not in active_ids  # assignee disabled -> treat as unassigned
+
+
 def missed_stops(session: Session, today: date, lookback_days: int = 14) -> list[MissedStop]:
     latest_unresolved: dict[int, MissedStop] = {}
     for i in range(1, lookback_days + 1):

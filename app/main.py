@@ -9,12 +9,16 @@ from app.db import Base, make_engine
 
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["dollars"] = lambda cents: f"${(cents or 0) / 100:,.2f}"
+templates.env.filters["initials"] = lambda name: "".join(
+    w[0] for w in (name or "?").split()[:2]).upper()
 
 
 def create_app(engine=None) -> FastAPI:
     app = FastAPI(title="Coastline Pools Planner")
     app.state.engine = engine or make_engine()
     Base.metadata.create_all(app.state.engine)
+    from app import migrate
+    migrate.run(app.state.engine)
     seeds.run(app.state.engine)
 
     EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health"}
@@ -24,17 +28,36 @@ def create_app(engine=None) -> FastAPI:
     async def require_auth(request, call_next):
         path = request.url.path
         exempt = path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
-        if not exempt and not request.session.get("auth"):
-            return RedirectResponse("/login", status_code=303)
-        if request.session.get("auth"):
-            # Re-set the session value so SessionMiddleware re-issues the
-            # cookie on every authenticated request — rolling 90-day expiry
-            # instead of a hard cutoff from the original login.
-            request.session["auth"] = True
+        request.state.user = None
+        if not exempt:
+            uid = request.session.get("user_id")
+            if uid is not None:
+                from sqlalchemy.orm import Session as _S
+                with _S(app.state.engine) as s:
+                    user = s.get(models.User, uid)
+                    if user is not None and user.active:
+                        s.expunge(user)
+                        request.state.user = user
+            if request.state.user is None:
+                request.session.clear()
+                return RedirectResponse("/login", status_code=303)
+            request.session["user_id"] = request.state.user.id  # rolling cookie
         return await call_next(request)
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
                         max_age=60 * 60 * 24 * 90)
+
+    from fastapi.responses import RedirectResponse as _RR
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exc(request, exc):
+        if exc.status_code == 401:
+            return _RR("/login", status_code=303)
+        if exc.status_code == 403:
+            return templates.TemplateResponse(request, "403.html", {}, status_code=403)
+        from fastapi.exception_handlers import http_exception_handler
+        return await http_exception_handler(request, exc)
 
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -52,6 +75,9 @@ def create_app(engine=None) -> FastAPI:
 
     from app.routers import auth as auth_router
     app.include_router(auth_router.router)
+
+    from app.routers import csv_io as csv_io_router
+    app.include_router(csv_io_router.router)
 
     from app.routers import customers as customers_router
     app.include_router(customers_router.router)
@@ -79,6 +105,9 @@ def create_app(engine=None) -> FastAPI:
 
     from app.routers import settings as settings_router
     app.include_router(settings_router.router)
+
+    from app.routers import users as users_router
+    app.include_router(users_router.router)
 
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler

@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.db import get_session, get_or_404
+from app.deps import require_perm
 from app.main import templates
 from app.rates import effective_rate_cents
+from app.scheduling import suggest_tech
 
 router = APIRouter()
 
@@ -29,14 +31,15 @@ def list_customers(request: Request, q: str = "", session: Session = Depends(get
 
 
 @router.get("/customers/new")
-def new_customer_form(request: Request):
+def new_customer_form(request: Request, user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/form.html", {"c": None})
 
 
 @router.post("/customers/new")
 def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
                     phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
-                    session: Session = Depends(get_session)):
+                    session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     c = models.Customer(name=name, qb_display_name=qb_display_name.strip() or name,
                         phone=phone, email=email, notes=notes)
     session.add(c)
@@ -57,11 +60,13 @@ def customer_detail(request: Request, cid: int, session: Session = Depends(get_s
         select(models.Job).join(models.Property)
         .where(models.Property.customer_id == cid, models.Job.status != "done")).all()
     return templates.TemplateResponse(request, "customers/detail.html",
-        {"c": c, "props": props, "rates": rates, "visits": visits, "jobs": jobs})
+        {"c": c, "props": props, "rates": rates, "visits": visits, "jobs": jobs,
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/customers/{cid}/edit")
-def edit_customer_form(request: Request, cid: int, session: Session = Depends(get_session)):
+def edit_customer_form(request: Request, cid: int, session: Session = Depends(get_session),
+                       user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/form.html",
                                       {"c": get_or_404(session, models.Customer, cid)})
 
@@ -69,7 +74,8 @@ def edit_customer_form(request: Request, cid: int, session: Session = Depends(ge
 @router.post("/customers/{cid}/edit")
 def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form(""),
                   phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
-                  session: Session = Depends(get_session)):
+                  session: Session = Depends(get_session),
+                  user=Depends(require_perm("manage_customers"))):
     c = get_or_404(session, models.Customer, cid)
     c.name, c.phone, c.email, c.notes = name, phone, email, notes
     c.qb_display_name = qb_display_name.strip() or name
@@ -78,25 +84,47 @@ def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form("
 
 
 @router.post("/customers/{cid}/deactivate")
-def deactivate_customer(cid: int, session: Session = Depends(get_session)):
+def deactivate_customer(cid: int, session: Session = Depends(get_session),
+                        user=Depends(require_perm("manage_customers"))):
     get_or_404(session, models.Customer, cid).active = False
     session.commit()
     return RedirectResponse("/customers", status_code=303)
 
 
+def _parse_tech_id(assigned_tech_id: str) -> int | None:
+    if not assigned_tech_id.strip():
+        return None
+    try:
+        return int(assigned_tech_id)
+    except ValueError:
+        return None
+
+
 def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
-                    dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars):
+                    dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
+                    assigned_tech_id, allow_rate: bool = True):
     p.label, p.address, p.gate_code, p.notes = label, address, gate_code, notes
     p.dog_warning, p.dog_note = dog_warning, dog_note
     p.frequency, p.weekday = frequency, int(weekday)
     p.anchor_date = date.fromisoformat(anchor_date) if anchor_date else None
-    p.rate_override_cents = _cents(rate_override_dollars)
+    if allow_rate:
+        p.rate_override_cents = _cents(rate_override_dollars)
+    p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
+
+
+def _active_techs(session: Session):
+    return session.scalars(select(models.User).where(models.User.active)
+                           .order_by(models.User.name)).all()
 
 
 @router.get("/customers/{cid}/properties/new")
-def new_property_form(request: Request, cid: int, session: Session = Depends(get_session)):
+def new_property_form(request: Request, cid: int, session: Session = Depends(get_session),
+                      user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/property_form.html",
-        {"p": None, "customer": get_or_404(session, models.Customer, cid)})
+        {"p": None, "customer": get_or_404(session, models.Customer, cid),
+         "techs": _active_techs(session),
+         "suggested_tech": suggest_tech(session, 0),
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/customers/{cid}/properties/new")
@@ -106,38 +134,49 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     notes: str = Form(""), frequency: str = Form("weekly"),
                     weekday: int = Form(0), anchor_date: str = Form(""),
                     rate_override_dollars: str = Form(""),
-                    session: Session = Depends(get_session)):
+                    assigned_tech_id: str = Form(""),
+                    session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     p = models.Property(customer_id=cid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
-                    frequency, weekday, anchor_date, rate_override_dollars)
+                    frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
+                    allow_rate=request.state.user.can("view_money"))
     session.add(p)
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
 
 @router.get("/properties/{pid}/edit")
-def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session)):
+def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session),
+                       user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     return templates.TemplateResponse(request, "customers/property_form.html",
-                                      {"p": p, "customer": p.customer})
+        {"p": p, "customer": p.customer,
+         "techs": _active_techs(session),
+         "suggested_tech": None,
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/properties/{pid}/edit")
-def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
+def edit_property(pid: int, request: Request, label: str = Form("Home"), address: str = Form(""),
                   gate_code: str = Form(""), dog_warning: bool = Form(False),
                   dog_note: str = Form(""), notes: str = Form(""),
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
-                  session: Session = Depends(get_session)):
+                  assigned_tech_id: str = Form(""),
+                  session: Session = Depends(get_session),
+                  user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
-                    frequency, weekday, anchor_date, rate_override_dollars)
+                    frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
+                    allow_rate=request.state.user.can("view_money"))
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)
 
 
 @router.post("/properties/{pid}/deactivate")
-def deactivate_property(pid: int, session: Session = Depends(get_session)):
+def deactivate_property(pid: int, session: Session = Depends(get_session),
+                        user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     p.active = False
     session.commit()

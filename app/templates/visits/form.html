@@ -3,7 +3,7 @@
 {% block content %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Log visit", prop.customer.name) }}
-<p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }} · <span class="money">{{ rate | dollars }}</span>/visit</p>
+<p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }}{% if show_money %} · <span class="money">{{ rate | dollars }}</span>/visit{% endif %}</p>
 
 <form method="post" action="/visit/{{ v.id }}/complete" class="space-y-5">
   <div>
@@ -23,7 +23,7 @@
       {% for chem in chems %}
       <div class="card flex items-center gap-2 p-2.5">
         <input type="hidden" name="chem_id" value="{{ chem.id }}">
-        <span class="flex-1 text-sm">{{ chem.name }} <span class="text-mist">({{ chem.unit }}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }})</span></span>
+        <span class="flex-1 text-sm">{{ chem.name }} <span class="text-mist">({{ chem.unit }}{% if show_money %}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }}{% endif %})</span></span>
         <input inputmode="decimal" name="chem_amount" placeholder="0" min="0"
                value="{{ existing[chem.id].amount if chem.id in existing else '' }}"
                class="field w-20 text-center font-data">

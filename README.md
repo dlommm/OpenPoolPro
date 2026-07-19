@@ -7,7 +7,10 @@ visits with chemistry costs, jobs, monthly QuickBooks Online CSV export.
 
     cp .env.example .env   # set APP_PASSWORD and SECRET_KEY
     docker compose up -d
-    # open http://<host>:8000 — on iPhone: Share → Add to Home Screen
+    # open http://<host>:8000 — first login is owner / your APP_PASSWORD
+    # manage crew under Settings → Manage crew
+    # change APP_PASSWORD in .env + restart to reset the owner login (recovery)
+    # on iPhone: Share → Add to Home Screen
 
 All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
 folder.

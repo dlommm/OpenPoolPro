@@ -21,7 +21,7 @@ def test_get_session_dependency_injects(engine, monkeypatch, tmp_path):
         return {"ok": session.is_active}
 
     client = TestClient(app)
-    client.post("/login", data={"password": "probe-pass"})
+    client.post("/login", data={"username": "owner", "password": "probe-pass"})
     r = client.get("/session-probe")
     assert r.status_code == 200
     assert r.json() == {"ok": True}

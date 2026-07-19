@@ -7,6 +7,16 @@
   {{ ui.page_header("This week", "Week of " ~ start.strftime("%b %-d")) }}
   <a href="/week?start={{ next }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Next week">{{ ui.icon("chevron", "h-5 w-5") }}</a>
 </div>
+
+{% if techs %}
+<div class="mb-4 flex flex-wrap gap-1.5">
+  <a href="/week?start={{ start }}" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
+  {% for t in techs %}
+  <a href="/week?start={{ start }}&tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% for d in days %}
 <div class="mb-5">
   <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ d.strftime("%a %b %-d") }}

@@ -29,13 +29,23 @@
         {% endfor %}
       </select></label>
   </div>
+  <label class="block"><span class="field-label">Assigned tech</span>
+    <select name="assigned_tech_id" class="field">
+      <option value="">— Unassigned —</option>
+      {% for t in techs %}
+      <option value="{{ t.id }}" {{ "selected" if (p and p.assigned_tech_id == t.id)
+        or (not p and suggested_tech == t.id) }}>{{ t.name }} ({{ t.role }})</option>
+      {% endfor %}
+    </select></label>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Anchor date (first visit)</span>
       <input type="date" name="anchor_date" value="{{ p.anchor_date or '' if p else '' }}" class="field font-data"></label>
+    {% if show_money %}
     <label class="block"><span class="field-label">Rate override $ (blank = tier)</span>
       <input inputmode="decimal" name="rate_override_dollars"
              value="{{ '%.2f'|format(p.rate_override_cents / 100) if p and p.rate_override_cents is not none else '' }}"
              class="field font-data"></label>
+    {% endif %}
   </div>
   <label class="block"><span class="field-label">Notes</span>
     <textarea name="notes" class="field min-h-24 py-2">{{ p.notes if p else "" }}</textarea></label>

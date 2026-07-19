@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.db import get_session, get_or_404
+from app.deps import require_perm
 from app.main import templates
 from app.rates import gallons
 
@@ -25,16 +26,18 @@ def _tier_rate_for(session, g: int) -> int:
 
 @router.get("/pools/gallons-preview", response_class=HTMLResponse)
 def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str = "",
-                    avg_depth_ft: str = "", session: Session = Depends(get_session)):
+                    avg_depth_ft: str = "", session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     try:
         g = gallons(shape, float(length_ft or 0), float(width_ft or 0) or None,
                     float(avg_depth_ft or 0))
     except (ValueError, TypeError):
         return HTMLResponse("<span class='text-slate-400'>—</span>")
-    rate = _tier_rate_for(session, g)
-    return HTMLResponse(
-        f"<span class='font-semibold'>≈ {g:,} gal</span>"
-        f"<span class='text-slate-500'> — suggested rate ${rate / 100:.2f}</span>")
+    html = f"<span class='font-semibold'>≈ {g:,} gal</span>"
+    if user.can("view_money"):
+        rate = _tier_rate_for(session, g)
+        html += f"<span class='text-slate-500'> — suggested rate ${rate / 100:.2f}</span>"
+    return HTMLResponse(html)
 
 
 def _pool_form(request, session, pool, property_id):
@@ -48,13 +51,15 @@ def _pool_form(request, session, pool, property_id):
 
 
 @router.get("/properties/{pid}/pools/new")
-def new_pool(request: Request, pid: int, session: Session = Depends(get_session)):
+def new_pool(request: Request, pid: int, session: Session = Depends(get_session),
+            user=Depends(require_perm("manage_customers"))):
     get_or_404(session, models.Property, pid)
     return _pool_form(request, session, None, pid)
 
 
 @router.get("/pools/{pool_id}/edit")
-def edit_pool(request: Request, pool_id: int, session: Session = Depends(get_session)):
+def edit_pool(request: Request, pool_id: int, session: Session = Depends(get_session),
+             user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
     return _pool_form(request, session, pool, pool.property_id)
 
@@ -84,19 +89,22 @@ async def _save(request: Request, session: Session, pool: models.Pool, redirect_
 
 
 @router.post("/properties/{pid}/pools/new")
-async def create_pool(request: Request, pid: int, session: Session = Depends(get_session)):
+async def create_pool(request: Request, pid: int, session: Session = Depends(get_session),
+                      user=Depends(require_perm("manage_customers"))):
     prop = get_or_404(session, models.Property, pid)
     return await _save(request, session, models.Pool(property_id=pid), prop.customer_id)
 
 
 @router.post("/pools/{pool_id}/edit")
-async def update_pool(request: Request, pool_id: int, session: Session = Depends(get_session)):
+async def update_pool(request: Request, pool_id: int, session: Session = Depends(get_session),
+                      user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
     return await _save(request, session, pool, pool.property.customer_id)
 
 
 @router.post("/pools/{pool_id}/deactivate")
-def deactivate_pool(pool_id: int, session: Session = Depends(get_session)):
+def deactivate_pool(pool_id: int, session: Session = Depends(get_session),
+                    user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
     pool.active = False
     session.commit()
@@ -107,7 +115,8 @@ def deactivate_pool(pool_id: int, session: Session = Depends(get_session)):
 def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
                   model: str = Form(""), serial: str = Form(""),
                   install_date: str = Form(""), notes: str = Form(""),
-                  session: Session = Depends(get_session)):
+                  session: Session = Depends(get_session),
+                  user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
     session.add(models.Equipment(
         pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
@@ -117,7 +126,8 @@ def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
 
 
 @router.post("/equipment/{eid}/delete")
-def delete_equipment(eid: int, session: Session = Depends(get_session)):
+def delete_equipment(eid: int, session: Session = Depends(get_session),
+                     user=Depends(require_perm("manage_customers"))):
     eq = get_or_404(session, models.Equipment, eid)
     pool_id = eq.pool_id
     session.delete(eq)

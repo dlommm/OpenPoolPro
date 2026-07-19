@@ -25,6 +25,21 @@ def run(engine) -> None:
         if not s.scalars(select(models.RateTier)).first():
             for max_g, cents, label in TIERS:
                 s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label))
-        if not s.scalars(select(models.User)).first():
-            s.add(models.User(name="Owner", role="owner"))
+        from app import config
+        from app.auth_core import hash_password, verify_password
+
+        owner = s.scalars(select(models.User).where(models.User.username == "owner")).first()
+        if owner is None:
+            # Recovery path: APP_PASSWORD env is authoritative for the owner account.
+            # Any future in-app owner password change will be overwritten at next boot
+            # unless .env is updated in lockstep.
+            legacy = s.scalars(select(models.User).where(models.User.username.is_(None))).first()
+            if legacy is not None:
+                legacy.username, legacy.role, legacy.active = "owner", "admin", True
+                legacy.password_hash = hash_password(config.APP_PASSWORD)
+            else:
+                s.add(models.User(name="Owner", username="owner", role="admin", active=True,
+                                  password_hash=hash_password(config.APP_PASSWORD)))
+        elif not verify_password(config.APP_PASSWORD, owner.password_hash):
+            owner.password_hash = hash_password(config.APP_PASSWORD)  # env = recovery path
         s.commit()

@@ -49,7 +49,7 @@ def visit_form(request: Request, property_id: int, visit_date: date,
     return templates.TemplateResponse(request, "visits/form.html", {
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
         "photos": photos, "rate": effective_rate_cents(session, v.property),
-        "existing": existing})
+        "existing": existing, "show_money": request.state.user.can("view_money")})
 
 
 @router.post("/visit/{visit_id}/complete")
@@ -62,6 +62,7 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.notes = form.get("notes", "")
     v.status = "done"
     v.completed_at = models.utcnow()
+    v.completed_by_id = request.state.user.id
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
     # Preserve frozen history: a prior line's frozen unit cost must survive a
@@ -94,6 +95,7 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
     v.status = "skipped"
+    v.completed_by_id = request.state.user.id
     reason = form.get("reason", "").strip()
     if reason:
         v.notes = (v.notes + "\n" if v.notes else "") + f"Skipped: {reason}"
@@ -102,10 +104,11 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
 
 
 @router.post("/visit/{property_id}/{visit_date}/dismiss")
-def dismiss(property_id: int, visit_date: date, session: Session = Depends(get_session)):
+def dismiss(property_id: int, visit_date: date, request: Request, session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
     if v.status == "due":
         v.status = "skipped"
+    v.completed_by_id = request.state.user.id
     v.resolved = True
     session.commit()
     return RedirectResponse("/", status_code=303)

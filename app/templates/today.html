@@ -12,6 +12,15 @@
 </div>
 <p class="mb-5 font-data text-[11px] uppercase tracking-[0.18em] text-mist">Route level</p>
 
+{% if techs %}
+<div class="mb-4 flex flex-wrap gap-1.5">
+  <a href="/" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
+  {% for t in techs %}
+  <a href="/?tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if missed %}
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide text-safety">Missed</h2>
 <div class="rise mb-5 space-y-2">
@@ -35,7 +44,10 @@
       <a href="/visit/{{ s.property.id }}/{{ d }}"
          class="font-semibold leading-snug {{ 'text-mist line-through decoration-seam' if s.status == 'done' }}">
         {{ s.property.customer.name }} — {{ s.property.label }}
-        {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}</a>
+        {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}
+        {% if techs and s.property.assigned_tech_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
+        {% if techs and not s.property.assigned_tech_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
+        {% if techs and s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}</a>
       {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}
       {% elif s.status == "skipped" %}<span class="tag shrink-0">skipped</span>{% endif %}
     </div>

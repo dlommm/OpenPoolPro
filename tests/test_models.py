@@ -17,7 +17,7 @@ def test_seeds_idempotent(engine):
         assert tiers[-1].max_gallons is None
         tasks = s.scalars(select(models.TaskTemplate)).all()
         assert len(tasks) == 8
-        assert s.scalars(select(models.User)).one().role == "owner"
+        assert s.scalars(select(models.User)).one().role == "admin"
 
 
 def test_settings_helpers(engine):
