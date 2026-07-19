@@ -1,56 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Today{% endblock %}
 {% block content %}
-<h1 class="text-xl font-bold">{{ d.strftime("%A, %b %-d") }}</h1>
-<p class="text-slate-500 mb-2">{{ done }} of {{ total }} done</p>
-<div class="h-2 bg-slate-200 rounded-full mb-4">
-  <div class="h-2 bg-emerald-500 rounded-full" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Today's route", d.strftime("%A, %b %-d")) }}
+
+<div class="gauge mb-1" role="progressbar" aria-valuenow="{{ done }}" aria-valuemax="{{ total }}"
+     aria-label="Route progress">
+  <div class="gauge-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
+  <div class="gauge-ticks"></div>
+  <div class="gauge-label">{{ done }} of {{ total }} done</div>
 </div>
+<p class="mb-5 font-data text-[11px] uppercase tracking-[0.18em] text-mist">Route level</p>
 
 {% if missed %}
-<h2 class="font-bold text-red-700 mb-2">Missed</h2>
-<div class="space-y-2 mb-4">
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide text-safety">Missed</h2>
+<div class="rise mb-5 space-y-2">
   {% for m in missed %}
-  <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-    <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="font-semibold block">
+  <div class="stop stop-missed p-3">
+    <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="block font-semibold">
       {{ m.property.customer.name }} — {{ m.property.label }}</a>
-    <div class="text-sm text-slate-600">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+    <div class="mt-0.5 font-data text-xs text-mist">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
     <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
-      <button class="text-sm text-red-700 min-h-11">Dismiss</button>
+      <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>
     </form>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
-<div class="space-y-2">
+<div class="rise space-y-2.5">
   {% for s in stops %}
-  <div class="bg-white rounded-lg p-3 shadow-sm {{ 'opacity-60' if s.status != 'due' }}">
-    <div class="flex justify-between items-start">
-      <a href="/visit/{{ s.property.id }}/{{ d }}" class="font-semibold">
+  <div class="stop p-3.5 {{ 'stop-done' if s.status != 'due' }}">
+    <div class="flex items-start justify-between gap-2">
+      <a href="/visit/{{ s.property.id }}/{{ d }}"
+         class="font-semibold leading-snug {{ 'text-mist line-through decoration-seam' if s.status == 'done' }}">
         {{ s.property.customer.name }} — {{ s.property.label }}
-        {% if s.moved_in %}<span class="text-xs text-amber-600">(moved)</span>{% endif %}</a>
-      <span>{{ "✅" if s.status == "done" else "⏭" if s.status == "skipped" else "" }}</span>
+        {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}</a>
+      {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}
+      {% elif s.status == "skipped" %}<span class="tag shrink-0">skipped</span>{% endif %}
     </div>
     <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
-       class="text-sm text-sky-700 block min-h-11 flex items-center">📍 {{ s.property.address }}</a>
-    <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}"
-       class="text-xs text-sky-600 block">G-Maps</a>
-    <div class="text-sm text-slate-500">
-      {% if s.property.gate_code %}Gate {{ s.property.gate_code }}{% endif %}
-      {% if s.property.dog_warning %} · 🐕 {{ s.property.dog_note }}{% endif %}
+       class="mt-1 flex min-h-11 items-center gap-1.5 text-sm text-pool">
+      {{ ui.icon("pin", "h-4 w-4 shrink-0") }}{{ s.property.address }}</a>
+    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+      <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}"
+         class="tag">G-Maps</a>
+      {% if s.property.gate_code %}<span class="tag">Gate {{ s.property.gate_code }}</span>{% endif %}
+      {% if s.property.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ s.property.dog_note or "Dog" }}</span>{% endif %}
     </div>
   </div>
-  {% else %}<p class="text-slate-500">No stops today. 🏖</p>{% endfor %}
+  {% else %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No stops today</p>
+    <p class="mt-1 text-sm text-mist">Your route is clear. Add a customer or check the week ahead.</p>
+  </div>
+  {% endfor %}
 </div>
 
 {% if jobs %}
-<h2 class="font-bold mt-4 mb-2">Jobs today</h2>
-<div class="space-y-2">
+<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Jobs today</h2>
+<div class="rise space-y-2.5">
   {% for j in jobs %}
-  <a href="/jobs/{{ j.id }}" class="block bg-amber-50 rounded-lg p-3 shadow-sm">
-    <span class="font-semibold">🔧 {{ j.title }}</span>
-    <span class="text-sm text-slate-600 block">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+  <a href="/jobs/{{ j.id }}" class="card flex items-center gap-3 p-3.5">
+    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-brass") }}
+    <span class="min-w-0">
+      <span class="block truncate font-semibold">{{ j.title }}</span>
+      <span class="block truncate text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+    </span>
+    {{ ui.icon("chevron", "ml-auto h-4 w-4 shrink-0 text-mist") }}
   </a>
   {% endfor %}
 </div>

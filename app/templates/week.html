@@ -1,35 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Week{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-3">
-  <a href="/week?start={{ prev }}" class="min-h-11 px-3 flex items-center text-sky-700">‹ Prev</a>
-  <h1 class="text-lg font-bold">Week of {{ start.strftime("%b %-d") }}</h1>
-  <a href="/week?start={{ next }}" class="min-h-11 px-3 flex items-center text-sky-700">Next ›</a>
+{% import "_ui.html" as ui %}
+<div class="flex items-center justify-between gap-2">
+  <a href="/week?start={{ prev }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Previous week">{{ ui.icon("chevron", "h-5 w-5 rotate-180") }}</a>
+  {{ ui.page_header("This week", "Week of " ~ start.strftime("%b %-d")) }}
+  <a href="/week?start={{ next }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Next week">{{ ui.icon("chevron", "h-5 w-5") }}</a>
 </div>
 {% for d in days %}
-<div class="mb-3">
-  <h2 class="font-bold text-slate-700">{{ d.strftime("%a %b %-d") }}
-    <span class="text-slate-400 font-normal">· {{ day_stops[d] | length }} stops</span></h2>
-  <div class="space-y-1 mt-1">
+<div class="mb-5">
+  <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ d.strftime("%a %b %-d") }}
+    <span class="font-data text-sm font-normal normal-case tracking-normal text-mist">· {{ day_stops[d] | length }} stops</span></h2>
+  <div class="rise mt-2 space-y-2">
     {% for s in day_stops[d] %}
-    <details class="bg-white rounded-lg p-2 shadow-sm text-sm">
-      <summary class="min-h-11 flex items-center justify-between">
-        <span>{{ s.property.customer.name }} — {{ s.property.label }}
-          {{ "✅" if s.status == "done" }}{{ "(moved)" if s.moved_in }}</span>
+    <details class="card p-3 text-sm">
+      <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-2">
+        <span class="font-medium">{{ s.property.customer.name }} — {{ s.property.label }}
+          {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}</span>
+        <span class="flex shrink-0 items-center gap-1.5">
+          {% if s.status == "done" %}{{ ui.icon("check", "h-4 w-4 text-pool") }}{% endif %}
+          {{ ui.icon("chevron", "h-4 w-4 text-mist") }}</span>
       </summary>
-      <div class="pt-2 space-y-2">
-        <form method="post" action="/week/move" class="flex gap-2 items-center flex-wrap">
+      <div class="mt-2 space-y-2 border-t border-seam pt-2">
+        <form method="post" action="/week/move" class="flex flex-wrap items-center gap-2">
           <input type="hidden" name="property_id" value="{{ s.property.id }}">
           <input type="hidden" name="from_date" value="{{ d }}">
-          <input type="date" name="to_date" value="{{ d }}" class="min-h-11 rounded border border-slate-300 px-2">
-          <label class="min-h-11 flex items-center gap-1"><input type="radio" name="mode" value="once" checked> Just this week</label>
-          <label class="min-h-11 flex items-center gap-1"><input type="radio" name="mode" value="forever"> From now on</label>
-          <button class="min-h-11 px-3 rounded bg-sky-800 text-white">Move</button>
+          <input type="date" name="to_date" value="{{ d }}" class="field w-auto font-data">
+          <label class="flex min-h-11 items-center gap-1.5 text-sm"><input type="radio" name="mode" value="once" checked class="h-4 w-4"> Just this week</label>
+          <label class="flex min-h-11 items-center gap-1.5 text-sm"><input type="radio" name="mode" value="forever" class="h-4 w-4"> From now on</label>
+          <button class="btn-secondary">Move</button>
         </form>
         <form method="post" action="/week/reorder" class="flex gap-2">
           <input type="hidden" name="property_id" value="{{ s.property.id }}">
-          <button name="direction" value="up" class="min-h-11 px-3 rounded border border-slate-300">▲ Earlier</button>
-          <button name="direction" value="down" class="min-h-11 px-3 rounded border border-slate-300">▼ Later</button>
+          <button name="direction" value="up" class="btn-secondary flex-1 gap-1">{{ ui.icon("chevron", "h-3.5 w-3.5 -rotate-90") }}Earlier</button>
+          <button name="direction" value="down" class="btn-secondary flex-1 gap-1">{{ ui.icon("chevron", "h-3.5 w-3.5 rotate-90") }}Later</button>
         </form>
       </div>
     </details>

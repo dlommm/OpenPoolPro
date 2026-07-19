@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 class="text-xl font-bold mb-3">{{ "Edit" if c else "New" }} customer</h1>
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Customer file", "Edit customer" if c else "New customer") }}
 <form method="post" class="space-y-3">
   {% for name, label, type in [("name","Name","text"),("qb_display_name","QuickBooks name (blank = same)","text"),
      ("phone","Phone","tel"),("email","Email","email")] %}
-  <label class="block"><span class="text-sm text-slate-600">{{ label }}</span>
-    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}"
-           class="w-full min-h-11 rounded-lg border border-slate-300 px-3"></label>
+  <label class="block"><span class="field-label">{{ label }}</span>
+    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}" class="field"></label>
   {% endfor %}
-  <label class="block"><span class="text-sm text-slate-600">Notes</span>
-    <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ c.notes if c else "" }}</textarea></label>
-  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white font-semibold">Save</button>
+  <label class="block"><span class="field-label">Notes</span>
+    <textarea name="notes" class="field min-h-24 py-2">{{ c.notes if c else "" }}</textarea></label>
+  <button class="btn-primary">Save</button>
 </form>
 
 {% if c %}
 <form method="post" action="/customers/{{ c.id }}/deactivate" class="mt-3">
-  <button class="w-full min-h-11 rounded-lg border border-red-300 text-red-600">Deactivate customer</button>
+  <button class="btn-danger">Deactivate customer</button>
 </form>
 {% endif %}
 {% endblock %}

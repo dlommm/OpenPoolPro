@@ -1,41 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Visit{% endblock %}
 {% block content %}
-<h1 class="text-xl font-bold">{{ prop.customer.name }} — {{ prop.label }}</h1>
-<p class="text-slate-500 mb-3">{{ v.date }} · {{ rate | dollars }}/visit</p>
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Log visit", prop.customer.name) }}
+<p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }} · <span class="money">{{ rate | dollars }}</span>/visit</p>
 
-<form method="post" action="/visit/{{ v.id }}/complete" class="space-y-4">
+<form method="post" action="/visit/{{ v.id }}/complete" class="space-y-5">
   <div>
-    <h2 class="font-bold mb-1">Readings</h2>
+    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Readings</h2>
     <div class="grid grid-cols-5 gap-2">
       {% for name, label in [("fc","FC"),("ph","pH"),("ta","TA"),("cya","CYA"),("salt","Salt")] %}
-      <label class="block text-center"><span class="text-xs text-slate-600">{{ label }}</span>
+      <label class="block text-center"><span class="field-label font-data">{{ label }}</span>
         <input inputmode="decimal" name="{{ name }}" value="{{ v|attr(name) if v|attr(name) is not none else '' }}"
-               class="w-full min-h-11 rounded-lg border border-slate-300 text-center"></label>
+               class="field text-center font-data text-lg"></label>
       {% endfor %}
     </div>
   </div>
 
   <div>
-    <h2 class="font-bold mb-1">Chemicals added</h2>
+    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals added</h2>
     <div class="space-y-2">
       {% for chem in chems %}
-      <div class="flex items-center gap-2 bg-white rounded-lg p-2 shadow-sm">
+      <div class="card flex items-center gap-2 p-2.5">
         <input type="hidden" name="chem_id" value="{{ chem.id }}">
-        <span class="flex-1 text-sm">{{ chem.name }} <span class="text-slate-400">({{ chem.unit }}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }})</span></span>
+        <span class="flex-1 text-sm">{{ chem.name }} <span class="text-mist">({{ chem.unit }}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }})</span></span>
         <input inputmode="decimal" name="chem_amount" placeholder="0" min="0"
                value="{{ existing[chem.id].amount if chem.id in existing else '' }}"
-               class="w-20 min-h-11 rounded-lg border border-slate-300 text-center">
+               class="field w-20 text-center font-data">
       </div>
       {% endfor %}
     </div>
   </div>
 
   <div>
-    <h2 class="font-bold mb-1">Tasks</h2>
+    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Tasks</h2>
     <div class="flex flex-wrap gap-2">
       {% for t in task_templates %}
-      <label class="min-h-11 px-3 rounded-full border border-slate-300 flex items-center has-[:checked]:bg-emerald-100 has-[:checked]:border-emerald-500">
+      <label class="flex min-h-11 items-center rounded-full border border-seam px-3 has-[:checked]:border-pool has-[:checked]:bg-shallow has-[:checked]:text-ink">
         <input type="checkbox" name="tasks" value="{{ t.label }}" class="sr-only"
                {{ "checked" if t.label in v.tasks_done }}>{{ t.label }}
       </label>
@@ -44,25 +45,24 @@
   </div>
 
   <div>
-    <h2 class="font-bold mb-1">Photos</h2>
-    <div id="photo-strip" class="flex gap-2 flex-wrap mb-2">
-      {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="w-20 h-20 object-cover rounded-lg">{% endfor %}
+    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
+    <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
+      {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">{% endfor %}
     </div>
     <input type="file" accept="image/*" capture="environment" multiple name="files"
            hx-post="/photos/visit/{{ v.id }}" hx-encoding="multipart/form-data"
            hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change"
-           class="w-full min-h-11">
+           class="field">
   </div>
 
-  <label class="block"><span class="font-bold">Notes</span>
-    <textarea name="notes" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ v.notes }}</textarea></label>
+  <label class="block"><span class="field-label">Notes</span>
+    <textarea name="notes" class="field min-h-24 py-2">{{ v.notes }}</textarea></label>
 
-  <button class="w-full min-h-12 rounded-xl bg-emerald-600 text-white text-lg font-bold">✅ Done</button>
+  <button class="btn-primary">Mark done</button>
 </form>
 
 <form method="post" action="/visit/{{ v.id }}/skip" class="mt-3 flex gap-2">
-  <input name="reason" placeholder="Skip reason (optional)"
-         class="flex-1 min-h-11 rounded-lg border border-slate-300 px-3">
-  <button class="min-h-11 px-4 rounded-lg border border-slate-400 text-slate-600">Skip</button>
+  <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">
+  <button class="btn-secondary">Skip</button>
 </form>
 {% endblock %}

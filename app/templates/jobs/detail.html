@@ -1,32 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="flex justify-between items-center mb-1">
-  <h1 class="text-xl font-bold">{{ "🔴 " if j.priority == "high" }}{{ j.title }}</h1>
-  <a href="/jobs/{{ j.id }}/edit" class="text-sky-700 min-h-11 flex items-center px-2">Edit</a>
+{% import "_ui.html" as ui %}
+<div class="flex items-start justify-between gap-2">
+  {{ ui.page_header("Job ticket", j.title) }}
+  <a href="/jobs/{{ j.id }}/edit" class="btn-secondary mt-2 shrink-0">Edit</a>
 </div>
-<p class="text-sm text-slate-600 mb-1">{{ j.property.customer.name }} — {{ j.property.label }}</p>
-<p class="text-sm text-slate-500 mb-3">{{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %} · {{ j.labor_cents | dollars }}</p>
-{% if j.description %}<p class="bg-white rounded-lg p-3 shadow-sm mb-3">{{ j.description }}</p>{% endif %}
+{% if j.priority == "high" %}<span class="tag tag-safety mb-2 inline-flex">High priority</span>{% endif %}
+<p class="mb-1 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</p>
+<p class="mb-4 font-data text-sm text-mist">{{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date }}{% endif %} · <span class="money">{{ j.labor_cents | dollars }}</span></p>
+{% if j.description %}<p class="card mb-4 p-3.5 text-sm">{{ j.description }}</p>{% endif %}
 
-<div id="photo-strip" class="flex gap-2 flex-wrap mb-2">
-  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="w-20 h-20 object-cover rounded-lg">{% endfor %}
+<div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
+  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">{% endfor %}
 </div>
 <input type="file" accept="image/*" capture="environment" multiple name="files"
        hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
-       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="w-full min-h-11 mb-3">
+       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="field mb-4">
 
 {% if j.status != "done" %}
-<form method="post" action="/jobs/{{ j.id }}/schedule" class="flex gap-2 mb-2">
-  <input type="date" name="scheduled_date" required class="flex-1 min-h-11 rounded-lg border border-slate-300 px-3">
-  <button class="min-h-11 px-4 rounded-lg border border-sky-700 text-sky-700">Schedule</button>
+<form method="post" action="/jobs/{{ j.id }}/schedule" class="mb-2 flex gap-2">
+  <input type="date" name="scheduled_date" required class="field flex-1 font-data">
+  <button class="btn-secondary">Schedule</button>
 </form>
 <form method="post" action="/jobs/{{ j.id }}/complete">
-  <button class="w-full min-h-12 rounded-xl bg-emerald-600 text-white text-lg font-bold">✅ Complete</button>
+  <button class="btn-primary">Mark complete</button>
 </form>
 {% endif %}
 {% if j.status == "done" %}
 <form method="post" action="/jobs/{{ j.id }}/reopen">
-  <button class="w-full min-h-11 rounded-lg border border-slate-400 text-slate-600">↩ Reopen</button>
+  <button class="btn-secondary w-full">Reopen</button>
 </form>
 {% endif %}
 {% endblock %}

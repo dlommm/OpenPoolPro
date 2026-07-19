@@ -1,81 +1,92 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
 {% block content %}
-<h1 class="text-xl font-bold mb-3">Settings</h1>
-{% if backup_error %}<p class="bg-red-100 text-red-700 rounded-lg p-3 mb-3">Backup failed: {{ backup_error }}</p>{% endif %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Business settings", "Settings") }}
+{% if backup_error %}<p class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
 
-<h2 class="font-bold mb-1">Rate tiers</h2>
-<form method="post" action="/settings/tiers" class="bg-white rounded-lg p-3 shadow-sm mb-4 space-y-2">
-  <div class="grid grid-cols-[1fr_1fr_1fr] gap-2 text-xs text-slate-500"><span>Max gallons (blank=∞)</span><span>Rate $</span><span>Label</span></div>
-  {% for t in tiers %}
-  <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-    <input type="hidden" name="tier_id" value="{{ t.id }}">
-    <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" class="min-h-11 rounded border border-slate-300 px-2">
-    <input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="min-h-11 rounded border border-slate-300 px-2">
-    <input name="label" value="{{ t.label }}" class="min-h-11 rounded border border-slate-300 px-2">
-  </div>
-  {% endfor %}
-  <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-    <input type="hidden" name="tier_id" value="">
-    <input inputmode="numeric" name="max_gallons" placeholder="New tier" class="min-h-11 rounded border border-slate-300 px-2">
-    <input inputmode="decimal" name="rate_dollars" class="min-h-11 rounded border border-slate-300 px-2">
-    <input name="label" class="min-h-11 rounded border border-slate-300 px-2">
-  </div>
-  <p class="text-xs text-slate-500">Blank a rate to delete a tier.</p>
-  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white">Save tiers</button>
-</form>
-
-<h2 class="font-bold mb-1">Chemicals</h2>
-<form method="post" action="/settings/chemicals" class="bg-white rounded-lg p-3 shadow-sm mb-4 space-y-2">
-  {% for c in chems %}
-  <div class="grid grid-cols-[2fr_1fr_1fr_auto] gap-2 items-center">
-    <input type="hidden" name="chem_id" value="{{ c.id }}">
-    <input name="name" value="{{ c.name }}" class="min-h-11 rounded border border-slate-300 px-2">
-    <select name="unit" class="min-h-11 rounded border border-slate-300 px-1">
-      {% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}
-    </select>
-    <input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="min-h-11 rounded border border-slate-300 px-2">
-    <input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="w-5 h-5">
-  </div>
-  {% endfor %}
-  <div class="grid grid-cols-[2fr_1fr_1fr_auto] gap-2">
-    <input type="hidden" name="chem_id" value="">
-    <input name="name" placeholder="New chemical" class="min-h-11 rounded border border-slate-300 px-2">
-    <select name="unit" class="min-h-11 rounded border border-slate-300 px-1">
-      {% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}
-    </select>
-    <input inputmode="decimal" name="cost_dollars" class="min-h-11 rounded border border-slate-300 px-2">
-    <span></span>
-  </div>
-  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white">Save chemicals</button>
-</form>
-
-<h2 class="font-bold mb-1">Visit tasks</h2>
-<form method="post" action="/settings/tasks" class="bg-white rounded-lg p-3 shadow-sm mb-4 space-y-2">
-  {% for t in tasks %}{% if t.active %}
-  <div><input type="hidden" name="task_id" value="{{ t.id }}">
-    <input name="label" value="{{ t.label }}" class="w-full min-h-11 rounded border border-slate-300 px-2"></div>
-  {% endif %}{% endfor %}
-  <div><input type="hidden" name="task_id" value="">
-    <input name="label" placeholder="New task" class="w-full min-h-11 rounded border border-slate-300 px-2"></div>
-  <p class="text-xs text-slate-500">Blank a task to remove it.</p>
-  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white">Save tasks</button>
-</form>
-
-<h2 class="font-bold mb-1">General</h2>
-<form method="post" action="/settings/general" class="bg-white rounded-lg p-3 shadow-sm mb-4 space-y-2">
-  <label class="block"><span class="text-sm text-slate-600">Chemical markup %</span>
-    <input inputmode="decimal" name="chem_markup_percent" value="{{ markup }}" class="w-full min-h-11 rounded border border-slate-300 px-2"></label>
-  <label class="block"><span class="text-sm text-slate-600">Business name</span>
-    <input name="business_name" value="{{ business_name }}" class="w-full min-h-11 rounded border border-slate-300 px-2"></label>
-  <button class="w-full min-h-11 rounded-lg bg-sky-800 text-white">Save</button>
-</form>
-
-<h2 class="font-bold mb-1">Backups</h2>
-<div class="bg-white rounded-lg p-3 shadow-sm space-y-1 mb-4">
-  {% for b in backups %}<a href="/settings/backups/{{ b }}" class="block text-sky-700 min-h-11 flex items-center">{{ b }}</a>
-  {% else %}<p class="text-slate-500 text-sm">No backups yet (nightly).</p>{% endfor %}
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Rate tiers</h2>
+  <form method="post" action="/settings/tiers" class="space-y-2">
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2 text-xs text-mist"><span>Max gallons (blank=∞)</span><span>Rate $</span><span>Label</span></div>
+    {% for t in tiers %}
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <input type="hidden" name="tier_id" value="{{ t.id }}">
+      <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" class="field font-data">
+      <input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="field font-data">
+      <input name="label" value="{{ t.label }}" class="field">
+    </div>
+    {% endfor %}
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <input type="hidden" name="tier_id" value="">
+      <input inputmode="numeric" name="max_gallons" placeholder="New tier" class="field font-data">
+      <input inputmode="decimal" name="rate_dollars" class="field font-data">
+      <input name="label" class="field">
+    </div>
+    <p class="text-xs text-mist">Blank a rate to delete a tier.</p>
+    <button class="btn-secondary w-full">Save tiers</button>
+  </form>
 </div>
 
-<form method="post" action="/logout"><button class="w-full min-h-11 rounded-lg border border-slate-400 text-slate-600">Sign out</button></form>
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals</h2>
+  <form method="post" action="/settings/chemicals" class="space-y-2">
+    {% for c in chems %}
+    <div class="grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-2">
+      <input type="hidden" name="chem_id" value="{{ c.id }}">
+      <input name="name" value="{{ c.name }}" class="field">
+      <select name="unit" class="field">
+        {% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}
+      </select>
+      <input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="field font-data">
+      <input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5">
+    </div>
+    {% endfor %}
+    <div class="grid grid-cols-[2fr_1fr_1fr_auto] gap-2">
+      <input type="hidden" name="chem_id" value="">
+      <input name="name" placeholder="New chemical" class="field">
+      <select name="unit" class="field">
+        {% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}
+      </select>
+      <input inputmode="decimal" name="cost_dollars" class="field font-data">
+      <span></span>
+    </div>
+    <button class="btn-secondary w-full">Save chemicals</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Visit tasks</h2>
+  <form method="post" action="/settings/tasks" class="space-y-2">
+    {% for t in tasks %}{% if t.active %}
+    <div><input type="hidden" name="task_id" value="{{ t.id }}">
+      <input name="label" value="{{ t.label }}" class="field"></div>
+    {% endif %}{% endfor %}
+    <div><input type="hidden" name="task_id" value="">
+      <input name="label" placeholder="New task" class="field"></div>
+    <p class="text-xs text-mist">Blank a task to remove it.</p>
+    <button class="btn-secondary w-full">Save tasks</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">General</h2>
+  <form method="post" action="/settings/general" class="space-y-2">
+    <label class="block"><span class="field-label">Chemical markup %</span>
+      <input inputmode="decimal" name="chem_markup_percent" value="{{ markup }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Business name</span>
+      <input name="business_name" value="{{ business_name }}" class="field"></label>
+    <button class="btn-secondary w-full">Save</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Backups</h2>
+  <div class="space-y-1">
+    {% for b in backups %}<a href="/settings/backups/{{ b }}" class="flex min-h-11 items-center font-data text-sm text-pool">{{ b }}</a>
+    {% else %}<p class="text-sm text-mist">No backups yet (nightly).</p>{% endfor %}
+  </div>
+</div>
+
+<form method="post" action="/logout"><button class="btn-secondary w-full">Sign out</button></form>
 {% endblock %}

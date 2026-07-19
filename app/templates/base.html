@@ -5,22 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0B2A33">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="preload" href="/static/fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
   <title>{% block title %}Coastline Pools{% endblock %}</title>
 </head>
-<body class="bg-slate-100 text-slate-900 pb-24" style="padding-top: env(safe-area-inset-top)">
-  <main class="max-w-lg mx-auto px-3 pt-3">{% block content %}{% endblock %}</main>
-  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200"
-       style="padding-bottom: env(safe-area-inset-bottom)">
-    <div class="max-w-lg mx-auto grid grid-cols-6 text-center text-[11px]">
-      {% for href, label, icon in [("/", "Today", "☀️"), ("/week", "Week", "📅"),
-        ("/customers", "Customers", "👤"), ("/jobs", "Jobs", "🔧"),
-        ("/money", "Money", "💵"), ("/settings", "Settings", "⚙️")] %}
-      <a href="{{ href }}" class="min-h-11 py-2 flex flex-col items-center justify-center">
-        <span class="text-lg leading-none">{{ icon }}</span><span>{{ label }}</span>
+<body class="pb-28" style="padding-top: env(safe-area-inset-top)">
+  {% import "_ui.html" as ui %}
+  <main class="mx-auto max-w-lg px-4 pt-3">{% block content %}{% endblock %}</main>
+
+  <nav class="fixed inset-x-0 bottom-0 border-t border-seam bg-white/95 backdrop-blur"
+       style="padding-bottom: env(safe-area-inset-bottom)" aria-label="Main">
+    <div class="mx-auto grid max-w-lg grid-cols-6 gap-1 px-2 py-1.5">
+      {% set path = request.url.path if request else "/" %}
+      {% for href, label, name in [("/", "Today", "route"), ("/week", "Week", "week"),
+        ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs"),
+        ("/money", "Money", "money"), ("/settings", "Settings", "settings")] %}
+      {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
+      <a href="{{ href }}" class="tab {{ 'tab-active' if active }}"
+         {% if active %}aria-current="page"{% endif %}>
+        {{ ui.icon(name) }}<span>{{ label }}</span>
       </a>
       {% endfor %}
     </div>
