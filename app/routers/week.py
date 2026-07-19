@@ -8,22 +8,35 @@ from sqlalchemy.orm import Session
 from app import config, models
 from app.db import get_session, get_or_404
 from app.main import templates
-from app.scheduling import stops_for_date
+from app.scheduling import stops_for_date, visible_to
 
 router = APIRouter()
 
 
 @router.get("/week")
-def week_page(request: Request, start: date | None = None,
+def week_page(request: Request, start: date | None = None, tech: int | None = None,
               session: Session = Depends(get_session)):
+    user = request.state.user
     if start is None:
         today = datetime.now(config.tz()).date()
         start = today - timedelta(days=today.weekday())
     days = [(start + timedelta(days=i)) for i in range(7)]
-    day_stops = {d: stops_for_date(session, d) for d in days}
+    active_ids = {u.id for u in session.scalars(
+        select(models.User).where(models.User.active)).all()}
+    day_stops = {}
+    for d in days:
+        stops = stops_for_date(session, d)
+        if not user.can("view_all_routes"):
+            stops = [s for s in stops if visible_to(user, s.property.assigned_tech_id, active_ids)]
+        elif tech is not None:
+            stops = [s for s in stops if s.property.assigned_tech_id == tech]
+        day_stops[d] = stops
+    techs = session.scalars(select(models.User).where(
+        models.User.active).order_by(models.User.name)).all() if user.can("view_all_routes") else []
     return templates.TemplateResponse(request, "week.html", {
         "start": start, "days": days, "day_stops": day_stops,
-        "prev": start - timedelta(days=7), "next": start + timedelta(days=7)})
+        "prev": start - timedelta(days=7), "next": start + timedelta(days=7),
+        "techs": techs, "tech_filter": tech})
 
 
 @router.post("/week/move")

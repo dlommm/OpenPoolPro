@@ -1,0 +1,87 @@
+from datetime import date, timedelta
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
+from app.scheduling import suggest_tech
+
+
+def _tech(engine, name):
+    from app.auth_core import hash_password
+    with Session(engine) as s:
+        u = models.User(name=name.title(), username=name, role="tech", active=True,
+                        password_hash=hash_password("techpass-1"))
+        s.add(u)
+        s.commit()
+        return u.id
+
+
+def _prop(engine, name, weekday, tech_id=None):
+    with Session(engine) as s:
+        c = models.Customer(name=name)
+        p = models.Property(customer=c, frequency="weekly", weekday=weekday,
+                            anchor_date=date(2026, 1, 5), assigned_tech_id=tech_id)
+        s.add(p)
+        s.commit()
+        return p.id
+
+
+def test_suggest_tech_majority(client, engine):
+    sam = _tech(engine, "sam")
+    lee = _tech(engine, "lee")
+    _prop(engine, "A", 0, sam)
+    _prop(engine, "B", 0, sam)
+    _prop(engine, "C", 0, lee)
+    with Session(engine) as s:
+        assert suggest_tech(s, 0) == sam
+        assert suggest_tech(s, 3) is None
+
+
+def test_tech_sees_own_and_unassigned_only(client, engine, tech_client):
+    sam = _tech(engine, "sam")
+    today = date.today()
+    wd = today.weekday()
+    _prop(engine, "Mine", wd, sam)
+    _prop(engine, "Unassigned", wd, None)
+    with Session(engine) as s:
+        other = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    _prop(engine, "SomeoneElses", wd, other)
+    t = tech_client(name="sam2")  # separate login user
+    # sam2 has no assignments: sees only Unassigned
+    html = t.get("/").text
+    assert "Unassigned" in html and "SomeoneElses" not in html and "Mine" not in html
+    # admin sees everything
+    admin_html = client.get("/").text
+    for n in ["Mine", "Unassigned", "SomeoneElses"]:
+        assert n in admin_html
+
+
+def test_admin_tech_filter_param(client, engine):
+    sam = _tech(engine, "sam")
+    wd = date.today().weekday()
+    _prop(engine, "SamStop", wd, sam)
+    _prop(engine, "FreeStop", wd, None)
+    html = client.get(f"/?tech={sam}").text
+    assert "SamStop" in html and "FreeStop" not in html
+
+
+def test_property_form_smart_default(client, engine):
+    sam = _tech(engine, "sam")
+    _prop(engine, "A", 2, sam)
+    _prop(engine, "B", 2, sam)
+    client.post("/customers/new", data={"name": "NewGuy", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(
+            models.Customer.name == "NewGuy")).one().id
+    html = client.get(f"/customers/{cid}/properties/new").text
+    assert 'name="assigned_tech_id"' in html
+    r = client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "2", "anchor_date": "",
+        "rate_override_dollars": "", "assigned_tech_id": str(sam)})
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).join(models.Customer).where(
+            models.Customer.name == "NewGuy")).one()
+        assert p.assigned_tech_id == sam

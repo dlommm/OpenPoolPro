@@ -29,6 +29,14 @@
         {% endfor %}
       </select></label>
   </div>
+  <label class="block"><span class="field-label">Assigned tech</span>
+    <select name="assigned_tech_id" class="field">
+      <option value="">— Unassigned —</option>
+      {% for t in techs %}
+      <option value="{{ t.id }}" {{ "selected" if (p and p.assigned_tech_id == t.id)
+        or (not p and suggested_tech == t.id) }}>{{ t.name }} ({{ t.role }})</option>
+      {% endfor %}
+    </select></label>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Anchor date (first visit)</span>
       <input type="date" name="anchor_date" value="{{ p.anchor_date or '' if p else '' }}" class="field font-data"></label>

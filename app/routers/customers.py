@@ -10,6 +10,7 @@ from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
 from app.rates import effective_rate_cents
+from app.scheduling import suggest_tech
 
 router = APIRouter()
 
@@ -90,20 +91,38 @@ def deactivate_customer(cid: int, session: Session = Depends(get_session),
     return RedirectResponse("/customers", status_code=303)
 
 
+def _parse_tech_id(assigned_tech_id: str) -> int | None:
+    if not assigned_tech_id.strip():
+        return None
+    try:
+        return int(assigned_tech_id)
+    except ValueError:
+        return None
+
+
 def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
-                    dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars):
+                    dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
+                    assigned_tech_id):
     p.label, p.address, p.gate_code, p.notes = label, address, gate_code, notes
     p.dog_warning, p.dog_note = dog_warning, dog_note
     p.frequency, p.weekday = frequency, int(weekday)
     p.anchor_date = date.fromisoformat(anchor_date) if anchor_date else None
     p.rate_override_cents = _cents(rate_override_dollars)
+    p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
+
+
+def _active_techs(session: Session):
+    return session.scalars(select(models.User).where(models.User.active)
+                           .order_by(models.User.name)).all()
 
 
 @router.get("/customers/{cid}/properties/new")
 def new_property_form(request: Request, cid: int, session: Session = Depends(get_session),
                       user=Depends(require_perm("manage_customers"))):
     return templates.TemplateResponse(request, "customers/property_form.html",
-        {"p": None, "customer": get_or_404(session, models.Customer, cid)})
+        {"p": None, "customer": get_or_404(session, models.Customer, cid),
+         "techs": _active_techs(session),
+         "suggested_tech": suggest_tech(session, 0)})
 
 
 @router.post("/customers/{cid}/properties/new")
@@ -113,11 +132,12 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     notes: str = Form(""), frequency: str = Form("weekly"),
                     weekday: int = Form(0), anchor_date: str = Form(""),
                     rate_override_dollars: str = Form(""),
+                    assigned_tech_id: str = Form(""),
                     session: Session = Depends(get_session),
                     user=Depends(require_perm("manage_customers"))):
     p = models.Property(customer_id=cid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
-                    frequency, weekday, anchor_date, rate_override_dollars)
+                    frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id)
     session.add(p)
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
@@ -128,7 +148,9 @@ def edit_property_form(request: Request, pid: int, session: Session = Depends(ge
                        user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     return templates.TemplateResponse(request, "customers/property_form.html",
-                                      {"p": p, "customer": p.customer})
+        {"p": p, "customer": p.customer,
+         "techs": _active_techs(session),
+         "suggested_tech": None})
 
 
 @router.post("/properties/{pid}/edit")
@@ -137,11 +159,12 @@ def edit_property(pid: int, label: str = Form("Home"), address: str = Form(""),
                   dog_note: str = Form(""), notes: str = Form(""),
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
+                  assigned_tech_id: str = Form(""),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
-                    frequency, weekday, anchor_date, rate_override_dollars)
+                    frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id)
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)
 

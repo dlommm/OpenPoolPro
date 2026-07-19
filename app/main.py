@@ -9,6 +9,8 @@ from app.db import Base, make_engine
 
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["dollars"] = lambda cents: f"${(cents or 0) / 100:,.2f}"
+templates.env.filters["initials"] = lambda name: "".join(
+    w[0] for w in (name or "?").split()[:2]).upper()
 
 
 def create_app(engine=None) -> FastAPI:
