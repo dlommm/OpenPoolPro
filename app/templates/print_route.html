@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Print Route{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+<style>
+  @media print {
+    #sidebar, #tabbar, .no-print {
+      display: none !important;
+    }
+  }
+</style>
+
+{{ ui.page_header("Route sheet", d.strftime("%A, %b %-d")) }}
+
+<button onclick="window.print()" class="no-print btn-secondary mb-3">Print route sheet</button>
+
+<div class="rise space-y-2.5">
+  {% for s in stops %}
+  <div class="card p-3.5">
+    <div class="font-semibold">{{ s.property.customer.name }} — {{ s.property.label }}</div>
+    <div class="mt-1 text-sm text-mist">{{ s.property.address }}</div>
+    {% if s.property.gate_code %}<div class="mt-1 text-sm">Gate {{ s.property.gate_code }}</div>{% endif %}
+    <div class="mt-2 min-h-12 border-t border-seam pt-2 font-data text-sm text-mist">Notes:</div>
+  </div>
+  {% endfor %}
+  {% if jobs %}
+  {% for j in jobs %}
+  <div class="card p-3.5">
+    <div class="font-semibold">{{ j.title }}</div>
+    <div class="mt-1 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</div>
+    <div class="mt-2 min-h-12 border-t border-seam pt-2 font-data text-sm text-mist">Notes:</div>
+  </div>
+  {% endfor %}
+  {% endif %}
+  {% if not stops and not jobs %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No stops today</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

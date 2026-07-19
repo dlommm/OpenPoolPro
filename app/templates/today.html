@@ -4,6 +4,8 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Today's route", d.strftime("%A, %b %-d")) }}
 
+<a href="/today/print" class="btn-secondary hidden lg:flex no-print mb-3">Print route sheet</a>
+
 <div class="gauge mb-1" role="progressbar" aria-valuenow="{{ done }}" aria-valuemax="{{ total }}"
      aria-label="Route progress" style="--ticks: {{ total if total else 1 }}">
   <div class="gauge-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></div>

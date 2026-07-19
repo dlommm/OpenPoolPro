@@ -116,6 +116,9 @@ def create_app(engine=None) -> FastAPI:
     app.include_router(company_router.router)
     app.include_router(company_router.serve_router)
 
+    from app.routers import console as console_router
+    app.include_router(console_router.router)
+
     from app.routers import users as users_router
     app.include_router(users_router.router)
 

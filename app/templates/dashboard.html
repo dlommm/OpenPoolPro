@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Dashboard", d.strftime("%A, %b %-d")) }}
+
+<p class="mb-4 font-data text-3xl font-semibold text-brass"><span class="money">{{ revenue_mtd_cents | dollars }}</span> <span class="font-body text-sm font-normal normal-case text-mist">MTD revenue</span></p>
+
+<div class="rise mb-5 space-y-2">
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between">
+      <span class="font-semibold">Route today</span>
+      <span class="font-data text-sm">{{ stops_done }} of {{ stops_total }}</span>
+    </div>
+  </div>
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between">
+      <span class="font-semibold">Missed stops</span>
+      <span class="font-data text-sm">{{ missed_count }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="rise mb-5 space-y-2">
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between">
+      <span class="font-semibold">Open jobs</span>
+      <span class="font-data text-sm">{{ open_jobs }}</span>
+    </div>
+  </div>
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between">
+      <span class="font-semibold">High priority</span>
+      <span class="font-data text-sm">{{ high_jobs }}</span>
+    </div>
+  </div>
+</div>
+
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Crew</h2>
+<div class="rise space-y-2">
+  {% for t, count in crew %}
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between">
+      <span class="font-semibold">{{ t.name }}</span>
+      <span class="font-data text-sm">{{ count }} stop{{ "s" if count != 1 else "" }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No crew assigned</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
