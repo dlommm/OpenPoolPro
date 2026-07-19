@@ -8,13 +8,14 @@ rollup for that customer/period. Never recompute frozen billing values —
 `Visit.rate_cents`, `VisitChemical.total_cost_cents`, and `Job.labor_cents`
 are read as-stored.
 """
+import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, qbo
+from app import config, models, qbo
 from app.timefmt import to_local_hhmm
 
 
@@ -148,3 +149,56 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
         jobs=jobs,
         total_cents=total_cents,
     )
+
+
+def _invoices_dir() -> str:
+    """PDF storage dir — mirrors the branding dir pattern in routers/company.py."""
+    d = os.path.join(config.DATA_DIR, "invoices")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def generate_month(session: Session, year: int, month: int, user_id: int | None) -> tuple[int, int]:
+    """Generate one invoice per billable customer for a period.
+
+    For each app.qbo.month_rollup row: skip if a non-void invoice already
+    exists for (customer, period) — idempotent re-runs and a voided invoice
+    both fall out of this check naturally (void doesn't count as existing,
+    so re-running after a void creates a fresh invoice with a new number).
+    Otherwise allocate the next number, render + write the PDF, and insert
+    the Invoice row in the same commit as the number allocation so numbers
+    are never reserved across a partial failure.
+
+    Returns (created, skipped).
+    """
+    from app import invoice_pdf
+
+    created = 0
+    skipped = 0
+    for row in qbo.month_rollup(session, year, month):
+        existing = session.scalars(select(models.Invoice).where(
+            models.Invoice.customer_id == row.customer.id,
+            models.Invoice.period_year == year,
+            models.Invoice.period_month == month,
+            models.Invoice.status != "void")).first()
+        if existing is not None:
+            skipped += 1
+            continue
+
+        data = invoice_data(session, row.customer, year, month)
+        number = next_number(session, year)
+        data.number = number
+        pdf_bytes = invoice_pdf.render_invoice(data)
+        filename = f"{number}.pdf"
+        with open(os.path.join(_invoices_dir(), filename), "wb") as f:
+            f.write(pdf_bytes)
+
+        session.add(models.Invoice(
+            number=number, customer_id=row.customer.id,
+            period_year=year, period_month=month,
+            total_cents=row.total_cents, status="draft",
+            pdf_filename=filename))
+        session.commit()
+        created += 1
+
+    return created, skipped
