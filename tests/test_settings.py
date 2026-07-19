@@ -135,3 +135,46 @@ def test_mixed_batch_legit_rows_survive(client, engine):
     with Session(engine) as s:
         names = {c.name for c in s.scalars(select(models.Chemical)).all()}
         assert "Borax" in names and "Ghost" not in names
+
+
+def test_targets_save_and_tolerant(client, engine):
+    r = client.post("/settings/targets", data={
+        "target_fc": "5.0", "target_ph": "7.4", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"
+        assert models.get_setting(s, "target_ph", "7.5") == "7.4"
+    client.post("/settings/targets", data={
+        "target_fc": "abc", "target_ph": "7.6", "target_ta": "100",
+        "target_cya": "60", "target_salt": "3400"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "target_fc", "4.0") == "5.0"  # kept previous
+        assert models.get_setting(s, "target_ph", "7.5") == "7.6"
+
+
+def test_targets_admin_only(client, tech_client):
+    t = tech_client(name="targetless")
+    assert t.post("/settings/targets", data={"target_fc": "9"},
+                  follow_redirects=False).status_code == 403
+
+
+def test_chemical_role_strength_editable(client, engine):
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        cid = chem.id
+    client.post("/settings/chemicals", data={
+        "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+        "cost_dollars": ["4.50"], "role": ["chlorine_granular"],
+        "strength_pct": ["10"], f"active_{cid}": "on"})
+    with Session(engine) as s:
+        c = s.get(models.Chemical, cid)
+        assert c.role == "chlorine_granular" and c.strength_pct == 10.0
+    # unknown role value coerced to other; garbage strength keeps previous row values
+    client.post("/settings/chemicals", data={
+        "chem_id": [str(cid)], "name": ["Liquid chlorine"], "unit": ["gal"],
+        "cost_dollars": ["4.50"], "role": ["evil_role"],
+        "strength_pct": ["10"], f"active_{cid}": "on"})
+    with Session(engine) as s:
+        assert s.get(models.Chemical, cid).role == "other"
