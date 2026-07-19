@@ -6,6 +6,29 @@
 <a href="/users" class="btn-secondary mb-4 w-full">Manage crew</a>
 {% if backup_error %}<p class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
 
+<h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Company</h2>
+<form method="post" action="/settings/company" class="card mb-3 space-y-2 p-3">
+  {% for key, label in [("business_name","Business name"),("company_address","Address"),
+                        ("company_phone","Phone"),("company_email","Email"),
+                        ("company_license","License #")] %}
+  <label class="block"><span class="field-label">{{ label }}</span>
+    <input name="{{ key }}" value="{{ company[key] }}" class="field"></label>
+  {% endfor %}
+  <button class="btn-secondary w-full">Save company</button>
+</form>
+<div class="card mb-4 space-y-2 p-3">
+  {% if company.has_logo %}
+  <img src="/branding/logo" alt="Company logo" class="max-h-24">
+  <form method="post" action="/settings/company/logo/remove">
+    <button class="btn-danger">Remove logo</button>
+  </form>
+  {% else %}<p class="text-sm text-mist">No logo yet.</p>{% endif %}
+  <form method="post" action="/settings/company/logo" enctype="multipart/form-data" class="flex gap-2">
+    <input type="file" name="file" accept="image/png,image/jpeg" required class="field flex-1 pt-2">
+    <button class="btn-secondary px-4">Upload</button>
+  </form>
+</div>
+
 <div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Rate tiers</h2>
   <form method="post" action="/settings/tiers" class="space-y-2">
