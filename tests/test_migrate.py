@@ -26,7 +26,7 @@ def test_migrate_adds_columns_to_legacy_db(engine):
     assert "assigned_tech_id" in _cols(engine, "properties")
     assert {"assigned_tech_id", "job_type", "completed_by_id", "started_at"} <= _cols(engine, "jobs")
     assert {"completed_by_id", "started_at"} <= _cols(engine, "visits")
-    assert {"role", "strength_pct"} <= _cols(engine, "chemicals")
+    assert {"role", "strength_pct", "stock_qty", "reorder_point", "reorder_qty"} <= _cols(engine, "chemicals")
 
 
 def test_user_can_matrix(engine):
