@@ -78,6 +78,31 @@ with sync_playwright() as p:
     if probs:
         failures.append(("/ (tech)", probs))
     tctx.close()
+
+    # Desktop pass: sidebar visible, tab bar hidden at lg: viewport.
+    dctx = browser.new_context(viewport={"width": 1280, "height": 900})
+    dpage = dctx.new_page()
+    dpage.goto(f"{BASE}/login")
+    dpage.fill("input[name=username]", "owner")
+    dpage.fill("input[name=password]", PASSWORD)
+    dpage.click("button")
+    dpage.wait_for_load_state("networkidle")
+    dpage.goto(f"{BASE}/")
+    dpage.wait_for_timeout(600)
+    desktop_probs = dpage.evaluate("""
+() => {
+  const probs = [];
+  const sidebar = document.querySelector("#sidebar");
+  const tabbar = document.querySelector("#tabbar");
+  if (!sidebar || getComputedStyle(sidebar).display === "none") probs.push("sidebar hidden at desktop viewport");
+  if (!tabbar || getComputedStyle(tabbar).display !== "none") probs.push("tabbar visible at desktop viewport");
+  return probs;
+}
+""")
+    if desktop_probs:
+        failures.append(("/ (desktop)", desktop_probs))
+    dctx.close()
+
     browser.close()
 
 if failures:

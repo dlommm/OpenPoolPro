@@ -14,19 +14,39 @@
   <script src="/static/htmx.min.js" defer></script>
   <title>{% block title %}Coastline Pools{% endblock %}</title>
 </head>
-<body class="pb-28" style="padding-top: env(safe-area-inset-top)">
+<body class="pb-28 lg:pb-8" style="padding-top: env(safe-area-inset-top)">
   {% import "_ui.html" as ui %}
-  <main class="mx-auto max-w-lg px-4 pt-3">{% block content %}{% endblock %}</main>
-
   {% block nav %}
-  <nav class="fixed inset-x-0 bottom-0 border-t border-seam bg-white/95 backdrop-blur"
+  {% set path = request.url.path if request else "/" %}
+  {% set u = request.state.user if request is not none and request.state is defined else None %}
+  {% set items = [] %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/dashboard", "Dashboard", "money")] %}{% endif %}
+  {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
+    ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
+  {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
+  <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-white p-4">
+    <a href="/" class="mb-6 block">
+      {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
+      {% else %}<span class="font-display text-2xl font-bold uppercase tracking-wide">Coastline</span>{% endif %}
+    </a>
+    <form method="get" action="/search" class="mb-4">
+      <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
+    </form>
+    <div class="flex flex-col gap-1">
+      {% for href, label, name in items %}
+      {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
+      <a href="{{ href }}" class="flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
+         {{ 'bg-shallow text-pool' if active else 'text-mist' }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="mt-auto pt-4 text-sm text-mist">
+      {% if u %}{{ u.name }}{% endif %}
+      <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
+    </div>
+  </aside>
+  <nav id="tabbar" class="lg:hidden fixed inset-x-0 bottom-0 border-t border-seam bg-white/95 backdrop-blur"
        style="padding-bottom: env(safe-area-inset-bottom)" aria-label="Main">
-    {% set path = request.url.path if request else "/" %}
-    {% set u = request.state.user if request is not none and request.state is defined else None %}
-    {% set items = [("/", "Today", "route"), ("/week", "Week", "week"),
-      ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
-    {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
-    {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
     <div class="mx-auto grid max-w-lg gap-1 px-2 py-1.5"
          style="grid-template-columns: repeat({{ items | length }}, minmax(0, 1fr))">
       {% for href, label, name in items %}
@@ -39,6 +59,7 @@
     </div>
   </nav>
   {% endblock %}
+  <main class="mx-auto max-w-lg px-4 pt-3 lg:ml-56 lg:max-w-5xl lg:px-8">{% block content %}{% endblock %}</main>
   <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>
