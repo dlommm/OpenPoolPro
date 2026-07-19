@@ -104,10 +104,11 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
 
 
 @router.post("/visit/{property_id}/{visit_date}/dismiss")
-def dismiss(property_id: int, visit_date: date, session: Session = Depends(get_session)):
+def dismiss(property_id: int, visit_date: date, request: Request, session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
     if v.status == "due":
         v.status = "skipped"
+    v.completed_by_id = request.state.user.id
     v.resolved = True
     session.commit()
     return RedirectResponse("/", status_code=303)

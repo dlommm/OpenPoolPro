@@ -37,6 +37,11 @@ def test_visit_complete_and_skip_stamp_user(client, engine):
     client.post(f"/visit/{vid2}/skip", data={"reason": "rain"})
     with Session(engine) as s:
         assert s.get(models.Visit, vid2).completed_by_id == owner_id
+    client.post(f"/visit/{pid}/2026-07-27/dismiss")
+    with Session(engine) as s:
+        v3 = s.scalars(select(models.Visit).where(
+            models.Visit.date == date(2026, 7, 27))).one()
+        assert v3.status == "skipped" and v3.completed_by_id == owner_id
     html = client.get(f"/customers/{cid}").text
     assert "O" in html  # owner initials tag in history (loose check, refined below)
 
