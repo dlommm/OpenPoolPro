@@ -204,3 +204,39 @@ def test_rate_ops_tech_forbidden(client, engine, tech_client):
                   data={"percent": "10", "scope_tiers": "on"}).status_code == 403
     assert t.post("/analytics/rates/apply",
                   data={"percent": "10", "scope_tiers": "on"}).status_code == 403
+
+
+def test_apply_midway_failure_rolls_back(client, engine, monkeypatch):
+    _fix(engine)
+    from app import models as m
+
+    class Boom(Exception):
+        pass
+
+    def explode(*a, **k):
+        raise Boom("mid-apply")
+
+    monkeypatch.setattr("app.routers.analytics.models.RateChange", explode)
+    with pytest.raises(Boom):
+        client.post("/analytics/rates/apply",
+                    data={"percent": "10", "scope_tiers": "on"})
+    with Session(engine) as s:
+        tiers = sorted(t.rate_cents for t in s.scalars(select(m.RateTier)).all())
+        assert tiers == [4500, 5500, 7000]  # nothing committed
+
+
+def test_apply_overrides_skips_inactive(client, engine):
+    _fix(engine)
+    with Session(engine) as s:
+        a = models.Customer(name="ActiveOv")
+        b = models.Customer(name="InactiveOv")
+        pa = models.Property(customer=a, rate_override_cents=4000)
+        pb = models.Property(customer=b, rate_override_cents=3000, active=False)
+        s.add_all([pa, pb])
+        s.commit()
+        pid_a, pid_b = pa.id, pb.id
+    client.post("/analytics/rates/apply",
+                data={"percent": "10", "scope_overrides": "on"})
+    with Session(engine) as s:
+        assert s.get(models.Property, pid_a).rate_override_cents == 4400
+        assert s.get(models.Property, pid_b).rate_override_cents == 3000
