@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Crew{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Business settings", "Crew") }}
+<a href="/users/new" class="btn-secondary mb-4 w-full">Add crew member</a>
+<div class="rise space-y-2.5">
+  {% for u in users %}
+  <div class="card p-3.5 {{ 'opacity-50' if not u.active }}">
+    <div class="flex items-center justify-between">
+      <a href="/users/{{ u.id }}/edit" class="font-semibold">{{ u.name }}
+        <span class="ml-1 font-data text-xs text-mist">@{{ u.username }}</span></a>
+      <span class="tag">{{ u.role }}</span>
+    </div>
+    <div class="mt-1.5 flex flex-wrap gap-1.5">
+      {% if not u.active %}<span class="tag tag-safety">disabled</span>{% endif %}
+      {% if u.role == "tech" %}
+        {% for flag, label in [("view_money", "money"), ("manage_customers", "customers"),
+                               ("can_repairs", "repairs"), ("view_all_routes", "all routes")] %}
+          {% if u|attr(flag) %}<span class="tag">{{ label }}</span>{% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

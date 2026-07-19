@@ -3,6 +3,7 @@
 {% block content %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Business settings", "Settings") }}
+<a href="/users" class="btn-secondary mb-4 w-full">Manage crew</a>
 {% if backup_error %}<p class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
 
 <div class="card mb-4 p-4">
