@@ -73,3 +73,46 @@ def test_garbage_labor_dollars_defaults_zero(client, engine):
     with Session(engine) as s:
         assert s.scalars(select(models.Job).where(
             models.Job.title == "G")).one().labor_cents == 0
+
+
+def test_job_start_and_times(client, engine):
+    from datetime import date
+    pid = prop(engine)
+    client.post("/jobs/new", data={"property_id": str(pid), "title": "Timed",
+                                   "description": "", "priority": "normal",
+                                   "labor_dollars": "", "scheduled_date": str(date.today()),
+                                   "job_type": "service", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job).where(models.Job.title == "Timed")).one().id
+    client.post(f"/jobs/{jid}/start")
+    with Session(engine) as s:
+        assert s.get(models.Job, jid).started_at is not None
+    client.post(f"/jobs/{jid}/complete")
+    client.post(f"/jobs/{jid}/times", data={"started_hhmm": "10:00", "ended_hhmm": "11:05"})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.duration_minutes == 65
+    client.post(f"/jobs/{jid}/times", data={"started_hhmm": "xx", "ended_hhmm": ""})
+    with Session(engine) as s:
+        assert s.get(models.Job, jid).duration_minutes == 65  # tolerant
+    client.post(f"/jobs/{jid}/reopen")
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.started_at is not None and j.completed_at is None  # start kept
+
+
+def test_job_detail_shows_start_button_then_duration(client, engine):
+    from datetime import date
+    pid = prop(engine)
+    client.post("/jobs/new", data={"property_id": str(pid), "title": "BtnJob",
+                                   "description": "", "priority": "normal",
+                                   "labor_dollars": "", "scheduled_date": str(date.today()),
+                                   "job_type": "service", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job).where(models.Job.title == "BtnJob")).one().id
+    assert "Start job" in client.get(f"/jobs/{jid}").text
+    client.post(f"/jobs/{jid}/start")
+    client.post(f"/jobs/{jid}/complete")
+    client.post(f"/jobs/{jid}/times", data={"started_hhmm": "10:00", "ended_hhmm": "11:05"})
+    html = client.get(f"/jobs/{jid}").text
+    assert "1 h 05" in html and "Start job" not in html
