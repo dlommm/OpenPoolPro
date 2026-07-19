@@ -57,7 +57,7 @@
       </select>
       <input inputmode="decimal" name="cost_dollars" class="field font-data">
       <select name="role" class="field">
-        {% for rv in role_values %}<option>{{ rv }}</option>{% endfor %}
+        {% for rv in role_values %}<option {{ "selected" if rv == "other" }}>{{ rv }}</option>{% endfor %}
       </select>
       <input inputmode="decimal" name="strength_pct" placeholder="%" class="field font-data">
     </div>

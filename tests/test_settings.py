@@ -178,3 +178,17 @@ def test_chemical_role_strength_editable(client, engine):
         "strength_pct": ["10"], f"active_{cid}": "on"})
     with Session(engine) as s:
         assert s.get(models.Chemical, cid).role == "other"
+
+
+def test_new_chemical_defaults_role_other(client, engine):
+    client.post("/settings/chemicals", data={
+        "chem_id": [""], "name": ["Mystery Goo"], "unit": ["gal"],
+        "cost_dollars": ["3"], "role": ["other"], "strength_pct": [""]})
+    with Session(engine) as s:
+        c = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Mystery Goo")).one()
+        assert c.role == "other" and c.strength_pct == 100.0
+    html = client.get("/settings").text
+    import re
+    new_row_selects = re.findall(r'<select name="role"[^>]*>(.*?)</select>', html, re.S)
+    assert any('selected' in s and '>other<' in s for s in new_row_selects)
