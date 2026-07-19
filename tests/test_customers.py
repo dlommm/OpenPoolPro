@@ -107,3 +107,24 @@ def test_missing_records_return_404(client):
         "label": "H", "address": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "",
         "rate_override_dollars": ""}).status_code == 404
+
+
+def test_history_shows_duration(client, engine):
+    from datetime import datetime as dt
+    client.post("/customers/new", data={"name": "DurCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(
+            models.Customer.name == "DurCo")).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "",
+        "rate_override_dollars": "", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).join(models.Customer).where(
+            models.Customer.name == "DurCo")).one()
+        s.add(models.Visit(property_id=p.id, date=dt(2026, 7, 13).date(), status="done",
+                           started_at=dt(2026, 7, 13, 13, 0),
+                           completed_at=dt(2026, 7, 13, 13, 42)))
+        s.commit()
+    assert "42 min" in client.get(f"/customers/{cid}").text

@@ -56,7 +56,10 @@
   {% for v in visits %}
   <div class="card p-3.5 text-sm">
     <div class="flex items-center justify-between">
-      <a href="/visit/{{ v.property_id }}/{{ v.date }}" class="font-data font-semibold text-pool">{{ v.date }}</a>
+      <div class="flex items-center gap-2">
+        <a href="/visit/{{ v.property_id }}/{{ v.date }}" class="font-data font-semibold text-pool">{{ v.date }}</a>
+        {% if v.duration_minutes is not none %}<span class="tag font-data">{{ v.duration_minutes | minutes_display }}</span>{% endif %}
+      </div>
       <span class="flex items-center gap-1.5">
         {% if v.completed_by %}<span class="tag">{{ v.completed_by.name | initials }}</span>{% endif %}
         {{ ui.icon("check", "inline h-4 w-4 text-pool") if v.status == "done" else "" }}
