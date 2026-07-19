@@ -5,7 +5,7 @@
 {{ ui.page_header("Today's route", d.strftime("%A, %b %-d")) }}
 
 <div class="gauge mb-1" role="progressbar" aria-valuenow="{{ done }}" aria-valuemax="{{ total }}"
-     aria-label="Route progress">
+     aria-label="Route progress" style="--ticks: {{ total if total else 1 }}">
   <div class="gauge-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
   <div class="gauge-ticks"></div>
   <div class="gauge-label">{{ done }} of {{ total }} done</div>
@@ -62,7 +62,7 @@
 <div class="rise space-y-2.5">
   {% for j in jobs %}
   <a href="/jobs/{{ j.id }}" class="card flex items-center gap-3 p-3.5">
-    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-brass") }}
+    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-mist") }}
     <span class="min-w-0">
       <span class="block truncate font-semibold">{{ j.title }}</span>
       <span class="block truncate text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>

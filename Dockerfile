@@ -1,7 +1,7 @@
 FROM python:3.12-slim AS css
 WORKDIR /build
 RUN pip install --no-cache-dir pytailwindcss && tailwindcss --help >/dev/null 2>&1 || true
-COPY tailwind.css tailwind.config.js ./
+COPY tailwind.css ./
 COPY app/templates ./app/templates
 RUN tailwindcss -i tailwind.css -o app.css --minify
 
