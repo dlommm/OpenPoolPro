@@ -76,6 +76,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import auth as auth_router
     app.include_router(auth_router.router)
 
+    from app.routers import csv_io as csv_io_router
+    app.include_router(csv_io_router.router)
+
     from app.routers import customers as customers_router
     app.include_router(customers_router.router)
 

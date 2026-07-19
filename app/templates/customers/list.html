@@ -10,6 +10,12 @@
        hx-get="/customers" hx-trigger="input changed delay:300ms" hx-target="#results"
        hx-select="#results" hx-swap="outerHTML"
        class="field mb-4">
+{% if request is not none and request.state.user and request.state.user.role == "admin" %}
+<div class="mb-3 flex gap-2">
+  <a href="/customers/import" class="btn-secondary flex-1">Import CSV</a>
+  <a href="/customers/export" class="btn-secondary flex-1">Export CSV</a>
+</div>
+{% endif %}
 <div id="results" class="rise space-y-2">
   {% for c in customers %}
   <a href="/customers/{{ c.id }}" class="card block min-h-11 p-3.5">
