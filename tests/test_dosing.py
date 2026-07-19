@@ -114,6 +114,24 @@ def test_unconvertible_unit_not_applyable():
     catalog = [Chem(1, "Chlorine pucks", "tab", "chlorine_liquid", 12.5)]
     doses = rec({"fc": 2.0}, catalog=catalog)
     assert len(doses) == 1 and not doses[0].applyable
+    assert "dose manually" in doses[0].note
+
+
+@pytest.mark.parametrize("readings,role_word", [
+    ({"ph": 8.0}, "ph_down"),
+    ({"ph": 7.0}, "ph_up"),
+    ({"ta": 70.0}, "alkalinity_up"),
+    ({"cya": 30.0}, "stabilizer"),
+])
+def test_missing_role_advisories(readings, role_word):
+    doses = recommend(readings, 16875, "chlorine", [], TARGETS)
+    assert len(doses) == 1 and doses[0].chemical_id is None
+    assert role_word in doses[0].note
+
+
+def test_missing_salt_role_advisory():
+    doses = recommend({"salt": 2800.0}, 15000, "salt", [], TARGETS)
+    assert len(doses) == 1 and "salt" in doses[0].note
 
 
 def test_no_readings_no_doses():

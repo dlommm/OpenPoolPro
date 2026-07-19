@@ -51,7 +51,8 @@ def _emit(out, chem, computed_amount, computed_unit, note=""):
         amount = _round_amount(computed_amount, computed_unit)
         if amount > 0:
             out.append(Dose(chem.id, chem.name, amount, computed_unit,
-                            note=note, applyable=False))
+                            note=note or f"can't convert to {chem.unit} — dose manually",
+                            applyable=False))
         return
     amount = _round_amount(computed_amount * factor, chem.unit)
     if amount > 0:
