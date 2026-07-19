@@ -185,3 +185,19 @@ def test_complete_with_edited_times(client, engine):
         "started_hhmm": "9:99", "ended_hhmm": "abc"})
     with Session(engine) as s:
         assert s.get(models.Visit, vid).duration_minutes == 42
+
+
+def test_late_completion_keeps_real_duration(client, engine):
+    from app.timefmt import local_date, to_local_hhmm
+    pid, _ = seed(engine)
+    client.get(f"/visit/{pid}/2026-07-13")  # past due date -> autostamp = real now
+    with Session(engine) as s:
+        v = s.scalars(select(models.Visit)).one()
+        vid, prefill = v.id, to_local_hhmm(v.started_at)
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "started_hhmm": prefill, "ended_hhmm": ""})
+    with Session(engine) as s:
+        v = s.get(models.Visit, vid)
+        assert v.duration_minutes is not None and v.duration_minutes < 60
+        assert local_date(v.started_at) == local_date(v.completed_at)

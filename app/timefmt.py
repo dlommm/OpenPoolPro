@@ -24,3 +24,7 @@ def from_local_hhmm(d: date, hhmm: str | None) -> datetime | None:
     local = datetime(d.year, d.month, d.day, int(m.group(1)), int(m.group(2)),
                      tzinfo=config.tz())
     return local.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def local_date(dt: datetime) -> date:
+    return to_local(dt).date()

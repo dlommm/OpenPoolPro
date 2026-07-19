@@ -161,17 +161,19 @@ def start_job(jid: int, session: Session = Depends(get_session)):
 
 @router.post("/jobs/{jid}/times")
 async def job_times(jid: int, request: Request, session: Session = Depends(get_session)):
-    from app.timefmt import from_local_hhmm
+    from app.timefmt import from_local_hhmm, local_date
     from app.routers.today import business_today
     j = get_or_404(session, models.Job, jid)
     form = await request.form()
-    base = j.scheduled_date or (j.completed_at.date() if j.completed_at else business_today())
-    started = from_local_hhmm(base, form.get("started_hhmm"))
+    start_anchor = (local_date(j.started_at) if j.started_at
+                    else (j.scheduled_date or business_today()))
+    started = from_local_hhmm(start_anchor, form.get("started_hhmm"))
     if started is not None:
         j.started_at = started
-    ended = from_local_hhmm(base, form.get("ended_hhmm"))
-    if ended is not None and j.completed_at is not None:
-        j.completed_at = ended
+    if j.completed_at is not None:
+        ended = from_local_hhmm(local_date(j.completed_at), form.get("ended_hhmm"))
+        if ended is not None:
+            j.completed_at = ended
     session.commit()
     return RedirectResponse(f"/jobs/{jid}", status_code=303)
 
