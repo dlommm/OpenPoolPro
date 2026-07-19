@@ -36,9 +36,12 @@ async def create_user(request: Request, session: Session = Depends(get_session))
     form = await request.form()
     username = (form.get("username") or "").strip().lower()
     password = form.get("password") or ""
-    if not username or len(password) < 8:
+    if not username:
         return templates.TemplateResponse(request, "users/form.html",
-            {"u": None, "error": "Username and a password of 8+ characters are required"})
+            {"u": None, "error": "Username is required"})
+    if len(password) < 8:
+        return templates.TemplateResponse(request, "users/form.html",
+            {"u": None, "error": "Password must be 8+ characters"})
     if session.scalars(select(models.User).where(models.User.username == username)).first():
         return templates.TemplateResponse(request, "users/form.html",
             {"u": None, "error": f'Username "{username}" is already taken'})
@@ -68,7 +71,18 @@ async def edit_user(request: Request, uid: int, session: Session = Depends(get_s
                 {"u": u, "error": f'Username "{username}" is already taken'})
         u.username = username
     u.name = form.get("name") or u.name
-    u.role = "admin" if form.get("role") == "admin" else "tech"
+    new_role = "admin" if form.get("role") == "admin" else "tech"
+    if u.role == "admin" and new_role == "tech":
+        if u.id == request.state.user.id:
+            return templates.TemplateResponse(request, "users/form.html",
+                {"u": u, "error": "You can't demote yourself"})
+        others = session.scalars(select(models.User).where(
+            models.User.role == "admin", models.User.active,
+            models.User.id != u.id)).first()
+        if others is None:
+            return templates.TemplateResponse(request, "users/form.html",
+                {"u": u, "error": "Can't demote the last active admin"})
+    u.role = new_role
     _apply_flags(u, form)
     session.commit()
     return RedirectResponse("/users", status_code=303)

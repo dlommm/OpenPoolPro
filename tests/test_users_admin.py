@@ -63,3 +63,31 @@ def test_users_admin_only(client, tech_client):
     assert t.post("/users/new", data={"name": "X", "username": "x",
                                       "password": "12345678", "role": "admin"},
                   follow_redirects=False).status_code == 403
+
+
+def test_role_demotion_guards(client, engine):
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(
+            models.User.username == "owner")).one().id
+    # sole admin demoting self: blocked
+    r = client.post(f"/users/{owner_id}/edit", data={
+        "name": "Owner", "username": "owner", "role": "tech"})
+    assert "yourself" in r.text or "last active admin" in r.text
+    with Session(engine) as s:
+        assert s.get(models.User, owner_id).role == "admin"
+    # add a second admin; demoting THAT one is fine while owner remains
+    client.post("/users/new", data={"name": "Second", "username": "second",
+                                    "password": "adminpass1", "role": "admin"})
+    with Session(engine) as s:
+        sid = s.scalars(select(models.User).where(
+            models.User.username == "second")).one().id
+    client.post(f"/users/{sid}/edit", data={"name": "Second", "username": "second",
+                                            "role": "tech"})
+    with Session(engine) as s:
+        assert s.get(models.User, sid).role == "tech"
+
+
+def test_short_password_inline_error(client):
+    r = client.post("/users/new", data={"name": "X", "username": "shorty",
+                                        "password": "short", "role": "tech"})
+    assert r.status_code == 200 and "8+ characters" in r.text
