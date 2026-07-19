@@ -28,3 +28,14 @@ def test_sidebar_and_tabbar_coexist(client):
     assert 'id="sidebar"' in html and "hidden lg:flex" in html
     assert 'id="tabbar"' in html and "lg:hidden" in html
     assert 'action="/search"' in html
+
+
+def test_login_page_has_no_sidebar_offset(client, engine, monkeypatch):
+    import app.config as config
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    monkeypatch.setattr(config, "APP_PASSWORD", "x-unused-1")
+    c = TestClient(create_app(engine=engine))
+    html = c.get("/login").text
+    assert "lg:ml-56" not in html
+    assert "lg:ml-56" in client.get("/").text

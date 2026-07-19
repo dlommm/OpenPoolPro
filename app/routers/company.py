@@ -51,7 +51,11 @@ async def upload_logo(request: Request, file: UploadFile,
         return templates.TemplateResponse(request, "settings/_logo_error.html",
                                           {"message": "Logo must be under 2 MB"})
     try:
-        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img = Image.open(io.BytesIO(data))
+        if img.format not in ("PNG", "JPEG"):
+            return templates.TemplateResponse(request, "settings/_logo_error.html",
+                                              {"message": "Logo must be a PNG or JPEG"})
+        img = img.convert("RGBA") if img.mode in ("RGBA", "LA", "P") else img.convert("RGB")
     except Exception:
         return templates.TemplateResponse(request, "settings/_logo_error.html",
                                           {"message": "That file isn't a readable logo image (PNG/JPEG)"})

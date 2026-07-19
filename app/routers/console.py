@@ -1,10 +1,8 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, models, qbo
+from app import models, qbo
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
@@ -22,7 +20,7 @@ def dashboard(request: Request, session: Session = Depends(get_session),
     stops = stops_for_date(session, d)
     missed = missed_stops(session, d)
     open_jobs = session.scalars(select(models.Job).where(
-        models.Job.status.in_(("open", "scheduled")))).all()
+        models.Job.status == "open")).all()
     techs = session.scalars(select(models.User).where(
         models.User.active, models.User.role == "tech")).all()
     crew = []

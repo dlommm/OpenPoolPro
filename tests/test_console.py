@@ -12,7 +12,8 @@ def _seed(client, engine):
         from sqlalchemy import select
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Marina", "address": "9 Console Way", "gate_code": "11", "dog_note": "",
+        "label": "Marina", "address": "9 Console Way", "gate_code": "11",
+        "dog_warning": "on", "dog_note": "Big dog",
         "notes": "", "frequency": "weekly", "weekday": str(date.today().weekday()),
         "anchor_date": "", "rate_override_dollars": "", "assigned_tech_id": ""})
     return cid
@@ -35,10 +36,26 @@ def test_dashboard_admin_only_and_cards(client, engine, tech_client):
     assert t.get("/dashboard", follow_redirects=False).status_code == 403
 
 
+def test_dashboard_open_jobs_matches_jobs_screen(client, engine):
+    _seed(client, engine)
+    from sqlalchemy import select
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property)).one()
+        s.add(models.Job(property_id=p.id, title="SchedJob", status="scheduled",
+                         scheduled_date=date.today(), labor_cents=0))
+        s.add(models.Job(property_id=p.id, title="OpenOnly", status="open", labor_cents=0))
+        s.commit()
+    html = client.get("/dashboard").text
+    import re
+    m = re.search(r'data-card="open-jobs"[^>]*>(\d+)<', html)
+    assert m and m.group(1) == "1"
+
+
 def test_route_sheet_prints_stops(client, engine):
     _seed(client, engine)
     html = client.get("/today/print").text
     assert "Console Co" in html and "9 Console Way" in html and "Gate 11" in html
+    assert "555-7777" in html and "Big dog" in html
     assert "media print" in html
 
 

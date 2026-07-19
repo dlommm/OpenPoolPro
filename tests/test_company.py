@@ -66,3 +66,23 @@ def test_company_admin_only(client, tech_client):
     assert t.post("/settings/company", data={"business_name": "X"},
                   follow_redirects=False).status_code == 403
     assert t.get("/branding/logo", follow_redirects=False).status_code in (200, 404)  # serve is open
+
+
+def test_logo_preserves_transparency(client, engine):
+    import os
+    buf = io.BytesIO()
+    Image.new("RGBA", (100, 100), (255, 0, 0, 0)).save(buf, format="PNG")
+    client.post("/settings/company/logo",
+                files={"file": ("t.png", buf.getvalue(), "image/png")})
+    img = Image.open(os.path.join(config.DATA_DIR, "branding", "logo.png"))
+    assert img.mode == "RGBA" and img.getpixel((0, 0))[3] == 0
+
+
+def test_logo_rejects_spoofed_content_type(client, engine):
+    import os
+    buf = io.BytesIO()
+    Image.new("RGB", (50, 50), "red").save(buf, format="GIF")
+    r = client.post("/settings/company/logo",
+                    files={"file": ("fake.png", buf.getvalue(), "image/png")})
+    assert r.status_code == 200 and "PNG or JPEG" in r.text
+    assert not os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
