@@ -15,8 +15,12 @@ COLUMNS = {
         ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
         ("job_type", "VARCHAR(10) DEFAULT 'service'"),
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
+        ("started_at", "DATETIME"),
     ],
-    "visits": [("completed_by_id", "INTEGER REFERENCES users(id)")],
+    "visits": [
+        ("completed_by_id", "INTEGER REFERENCES users(id)"),
+        ("started_at", "DATETIME"),
+    ],
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),
         ("strength_pct", "FLOAT DEFAULT 100"),
