@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import dosing, models
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -33,6 +33,36 @@ def _f(val: str) -> float | None:
     except ValueError:
         return None
     return f if math.isfinite(f) else None
+
+
+@router.get("/visit/{visit_id}/doses")
+def visit_doses(request: Request, visit_id: int,
+                fc: str = "", ph: str = "", ta: str = "", cya: str = "", salt: str = "",
+                session: Session = Depends(get_session)):
+    v = get_or_404(session, models.Visit, visit_id)
+    pools = [p for p in v.property.pools if p.active]
+    pool = max(pools, key=lambda p: p.gallons, default=None)
+    if pool is None or not pool.gallons:
+        return templates.TemplateResponse(request, "visits/_doses.html",
+                                          {"doses": None, "hint": "Add a pool with dimensions to get dose suggestions"})
+    readings = {"fc": _f(fc), "ph": _f(ph), "ta": _f(ta), "cya": _f(cya), "salt": _f(salt)}
+    if all(val is None for val in readings.values()):
+        return templates.TemplateResponse(request, "visits/_doses.html",
+                                          {"doses": None, "hint": "Enter readings to get dose suggestions"})
+    try:
+        targets = {
+            "fc": float(models.get_setting(session, "target_fc", "4.0")),
+            "ph": float(models.get_setting(session, "target_ph", "7.5")),
+            "ta": float(models.get_setting(session, "target_ta", "90")),
+            "cya": float(models.get_setting(session, "target_cya", "50")),
+            "salt": float(models.get_setting(session, "target_salt", "3200")),
+        }
+    except ValueError:
+        targets = {"fc": 4.0, "ph": 7.5, "ta": 90.0, "cya": 50.0, "salt": 3200.0}
+    chems = session.scalars(select(models.Chemical).where(models.Chemical.active)).all()
+    doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets)
+    return templates.TemplateResponse(request, "visits/_doses.html",
+                                      {"doses": doses, "hint": None})
 
 
 @router.get("/visit/{property_id}/{visit_date}")
