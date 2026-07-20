@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Security", "Audit log") }}
+
+<form method="get" action="/audit" class="mb-4 flex flex-wrap items-end gap-2">
+  <div>
+    <label class="field-label" for="action">Action</label>
+    <input class="field font-data" type="text" id="action" name="action" value="{{ action }}"
+           placeholder="e.g. auth.">
+  </div>
+  <div>
+    <label class="field-label" for="user_id">User</label>
+    <select class="field" id="user_id" name="user_id">
+      <option value="">All users</option>
+      {% for u in users %}
+      <option value="{{ u.id }}" {{ "selected" if user_id == u.id }}>{{ u.username or u.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn-primary">Filter</button>
+  {% if action or user_id %}<a href="/audit" class="ml-1 text-sm text-mist">Clear</a>{% endif %}
+</form>
+
+{% if rows %}
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-seam text-left text-mist">
+      <th class="py-1.5 pr-3 font-medium">Time</th>
+      <th class="py-1.5 pr-3 font-medium">User</th>
+      <th class="py-1.5 pr-3 font-medium">Action</th>
+      <th class="py-1.5 font-medium">Detail</th>
+    </tr>
+  </thead>
+  <tbody class="font-data">
+    {% for r in rows %}
+    <tr class="border-b border-seam/60">
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.at | localdt }}</td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ users_by_id.get(r.user_id, "—") }}</td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.action }}</td>
+      <td class="py-1.5 break-all text-mist">{{ r.detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-mist">
+  <span>Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
+  <div class="flex gap-2">
+    {% if page > 1 %}
+    <a class="btn-secondary" href="/audit?action={{ action }}&user_id={{ user_id or '' }}&page={{ page - 1 }}">Prev</a>
+    {% endif %}
+    {% if has_next %}
+    <a class="btn-secondary" href="/audit?action={{ action }}&user_id={{ user_id or '' }}&page={{ page + 1 }}">Next</a>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="card p-6 text-center">
+  <p class="font-display text-xl font-bold uppercase tracking-wide">No audit entries</p>
+  <p class="mt-1 text-sm text-mist">Nothing matches these filters yet.</p>
+</div>
+{% endif %}
+{% endblock %}

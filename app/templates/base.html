@@ -45,6 +45,10 @@
       {% if u %}
       <a href="/account" class="mb-2 flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
          {{ 'bg-shallow text-pool' if path == '/account' else 'text-mist' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
+      {% if u.role == "admin" %}
+      <a href="/audit" class="mb-2 flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
+         {{ 'bg-shallow text-pool' if path == '/audit' else 'text-mist' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
+      {% endif %}
       {{ u.name }}
       {% endif %}
       <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
