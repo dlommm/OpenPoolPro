@@ -91,3 +91,53 @@ def test_short_password_inline_error(client):
     r = client.post("/users/new", data={"name": "X", "username": "shorty",
                                         "password": "short", "role": "tech"})
     assert r.status_code == 200 and "8+ characters" in r.text
+
+
+def test_create_user_writes_user_created_audit_row(client, engine):
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.post("/users/new", data={"name": "Audit Me", "username": "auditme",
+                                    "password": "field-pass", "role": "tech"})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "user.created")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+        assert "auditme" in rows[0].detail
+
+
+def test_disable_user_writes_user_disabled_audit_row(client, engine):
+    client.post("/users/new", data={"name": "T", "username": "t3",
+                                    "password": "pass-1234", "role": "tech"})
+    with Session(engine) as s:
+        uid = s.scalars(select(models.User).where(models.User.username == "t3")).one().id
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.post(f"/users/{uid}/disable")
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "user.disabled")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+    # Re-enabling isn't a "disabled" event -- no second row.
+    client.post(f"/users/{uid}/enable")
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "user.disabled")).all()
+        assert len(rows) == 1
+
+
+def test_edit_flags_writes_user_permissions_audit_row(client, engine):
+    client.post("/users/new", data={"name": "T", "username": "t4",
+                                    "password": "old-pass-1", "role": "tech"})
+    with Session(engine) as s:
+        uid = s.scalars(select(models.User).where(models.User.username == "t4")).one().id
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.post(f"/users/{uid}/edit", data={"name": "T", "username": "t4",
+                                            "role": "tech", "manage_customers": "on"})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "user.permissions")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+    # Saving again with the exact same flags/role is a no-op -- no second row.
+    client.post(f"/users/{uid}/edit", data={"name": "T", "username": "t4",
+                                            "role": "tech", "manage_customers": "on"})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "user.permissions")).all()
+        assert len(rows) == 1

@@ -314,3 +314,58 @@ def test_nav_item_admin_gated(client, tech_client):
     assert 'href="/invoices"' not in tech_html
     admin_html = client.get("/customers").text
     assert 'href="/invoices"' in admin_html
+
+
+# ---------------------------------------------------------------------------
+# Audit wiring
+# ---------------------------------------------------------------------------
+
+def test_generate_audits_invoice_generated_with_created_count(client, engine):
+    _fix(engine)
+    _generate(client)
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(
+            models.AuditLog.action == "invoice.generated")).all()
+        assert len(rows) == 1
+        assert rows[0].detail == f"{YM} created=2"
+
+
+def test_generate_on_empty_month_still_audits_zero_created(client, engine):
+    r = _generate(client, ym="2030-01")
+    assert r.status_code == 303
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(
+            models.AuditLog.action == "invoice.generated")).all()
+        assert len(rows) == 1
+        assert rows[0].detail == "2030-01 created=0"
+
+
+def test_status_change_audits_invoice_status(client, engine):
+    _fix(engine)
+    _generate(client)
+    with Session(engine) as s:
+        inv = s.scalars(select(models.Invoice)).first()
+        iid, number = inv.id, inv.number
+
+    client.post(f"/invoices/{iid}/status", data={"action": "sent"})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(
+            models.AuditLog.action == "invoice.status")).all()
+        assert len(rows) == 1
+        assert rows[0].detail == f"{number} -> sent"
+
+
+def test_regenerate_audits_as_invoice_generated(client, engine):
+    _fix(engine)
+    _generate(client)
+    with Session(engine) as s:
+        inv = s.scalars(select(models.Invoice)).first()
+        iid, number = inv.id, inv.number
+
+    client.post(f"/invoices/{iid}/regenerate")
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(
+            models.AuditLog.action == "invoice.generated").order_by(models.AuditLog.id)).all()
+        # One from the original generate call, one from regenerate.
+        assert len(rows) == 2
+        assert rows[-1].detail == f"regenerate {number}"

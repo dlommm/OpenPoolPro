@@ -16,8 +16,18 @@ def business_today() -> date:
     return datetime.now(config.tz()).date()
 
 
+def _parse_backup_remaining(s: str | None) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None  # non-int: ignore banner rather than 500 or render garbage
+
+
 @router.get("/")
 def today_page(request: Request, tech: int | None = None,
+               backup_remaining: str | None = None,
                session: Session = Depends(get_session)):
     user = request.state.user
     d = business_today()
@@ -41,4 +51,5 @@ def today_page(request: Request, tech: int | None = None,
         models.User.active).order_by(models.User.name)).all() if user.can("view_all_routes") else []
     return templates.TemplateResponse(request, "today.html", {
         "d": d, "stops": stops, "missed": missed, "jobs": jobs,
-        "done": done, "total": len(stops), "techs": techs, "tech_filter": tech})
+        "done": done, "total": len(stops), "techs": techs, "tech_filter": tech,
+        "backup_remaining": _parse_backup_remaining(backup_remaining)})

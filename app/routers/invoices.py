@@ -43,7 +43,10 @@ def invoices_page(request: Request, ym: str | None = None, status: str | None = 
 def invoices_generate(request: Request, ym: str = Form(""),
                        session: Session = Depends(get_session)):
     year, month = parse_ym(ym)
-    invoicing.generate_month(session, year, month, request.state.user.id)
+    created, skipped = invoicing.generate_month(session, year, month, request.state.user.id)
+    models.audit(session, request.state.user.id, "invoice.generated",
+                 detail=f"{year}-{month:02d} created={created}")
+    session.commit()
     return RedirectResponse(f"/invoices?ym={year}-{month:02d}", status_code=303)
 
 
@@ -74,7 +77,7 @@ def invoice_pdf_route(iid: int, session: Session = Depends(get_session)):
 
 
 @router.post("/invoices/{iid}/status")
-def invoice_set_status(iid: int, action: str = Form(...),
+def invoice_set_status(request: Request, iid: int, action: str = Form(...),
                         session: Session = Depends(get_session)):
     inv = get_or_404(session, models.Invoice, iid)
     if action not in ("sent", "void"):
@@ -84,12 +87,14 @@ def invoice_set_status(iid: int, action: str = Form(...),
     if action == "sent" and inv.status != "draft":
         raise HTTPException(status_code=400)  # only draft -> sent
     inv.status = action
+    models.audit(session, request.state.user.id, "invoice.status",
+                 detail=f"{inv.number} -> {action}")
     session.commit()
     return RedirectResponse(f"/invoices?ym={inv.period_year}-{inv.period_month:02d}", status_code=303)
 
 
 @router.post("/invoices/{iid}/regenerate")
-def invoice_regenerate(iid: int, session: Session = Depends(get_session)):
+def invoice_regenerate(request: Request, iid: int, session: Session = Depends(get_session)):
     inv = get_or_404(session, models.Invoice, iid)
     if inv.status == "void":
         raise HTTPException(status_code=400)
@@ -103,6 +108,8 @@ def invoice_regenerate(iid: int, session: Session = Depends(get_session)):
     data.generated = inv.generated_at  # PDF date must match the committed row
     pdf_bytes = invoice_pdf.render_invoice(data)
     inv.total_cents = data.total_cents
+    models.audit(session, request.state.user.id, "invoice.generated",
+                 detail=f"regenerate {inv.number}")
     session.commit()
     # File write comes after the commit: if the write fails, the DB still
     # reflects the fresh total/generated_at and the register's "pdf missing"

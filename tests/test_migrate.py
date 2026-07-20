@@ -22,11 +22,46 @@ def test_migrate_adds_columns_to_legacy_db(engine):
     migrate.run(engine)
     migrate.run(engine)  # idempotent
     assert {"username", "active", "view_money", "manage_customers", "can_repairs",
-            "view_all_routes"} <= _cols(engine, "users")
+            "view_all_routes", "totp_secret", "totp_enabled", "session_epoch"} <= _cols(engine, "users")
     assert "assigned_tech_id" in _cols(engine, "properties")
     assert {"assigned_tech_id", "job_type", "completed_by_id", "started_at"} <= _cols(engine, "jobs")
     assert {"completed_by_id", "started_at"} <= _cols(engine, "visits")
     assert {"role", "strength_pct"} <= _cols(engine, "chemicals")
+
+
+def test_migrate_adds_2fa_columns_with_defaults(engine):
+    with engine.connect() as c:
+        c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(80), "
+                       "role VARCHAR(12), password_hash VARCHAR(200))"))
+        c.commit()
+    migrate.run(engine)
+    with engine.connect() as c:
+        c.execute(text("INSERT INTO users (id, name, role) VALUES (1, 'A', 'admin')"))
+        c.commit()
+        row = c.execute(text("SELECT totp_secret, totp_enabled, session_epoch FROM users "
+                             "WHERE id = 1")).fetchone()
+    assert row[0] is None
+    assert row[1] == 0
+    assert row[2] == 0
+
+
+def test_migrate_preserves_preexisting_row_with_2fa_defaults(engine):
+    # A row inserted into the legacy (pre-2FA) schema BEFORE migrate.run()
+    # must still read back sane 2FA defaults afterward.
+    with engine.connect() as c:
+        c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(80), "
+                       "role VARCHAR(12), password_hash VARCHAR(200))"))
+        c.execute(text("INSERT INTO users (id, name, role) VALUES (1, 'Legacy', 'admin')"))
+        c.commit()
+
+    migrate.run(engine)
+
+    with Session(engine) as s:
+        u = s.get(models.User, 1)
+        assert u is not None
+        assert u.totp_secret is None
+        assert not u.totp_enabled
+        assert u.session_epoch == 0
 
 
 def test_user_can_matrix(engine):

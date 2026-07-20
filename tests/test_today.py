@@ -45,3 +45,27 @@ def test_today_progress_counts_done(client, engine):
         s.add(models.Visit(property_id=pid, date=today, status="done", rate_cents=4500))
         s.commit()
     assert "1 of 1 done" in client.get("/").text
+
+
+# ---------------------------------------------------------------------------
+# One-time "backup code used" banner (?backup_remaining=N), mirroring the
+# analytics "applied" banner pattern: tolerant int parse, no banner on junk.
+# ---------------------------------------------------------------------------
+
+def test_backup_remaining_banner_shows_with_valid_int(client):
+    r = client.get("/?backup_remaining=3")
+    assert r.status_code == 200
+    assert "Backup code used" in r.text
+    assert "3 remaining" in r.text
+
+
+def test_backup_remaining_banner_absent_with_garbage_param(client):
+    r = client.get("/?backup_remaining=garbage")
+    assert r.status_code == 200
+    assert "Backup code used" not in r.text
+
+
+def test_backup_remaining_banner_absent_without_param(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Backup code used" not in r.text

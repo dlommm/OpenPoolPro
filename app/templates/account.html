@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Account{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Your account", user.name) }}
+
+{% if banner %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">{{ banner }}</div>
+{% endif %}
+{% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
+
+{% if new_backup_codes %}
+<style>
+  @media print {
+    #sidebar, #tabbar, .no-print { display: none !important; }
+  }
+</style>
+<div class="card mb-4 p-4">
+  <h2 class="mb-1 font-display text-lg font-bold uppercase tracking-wide">Your backup codes</h2>
+  <p class="mb-3 text-sm text-mist">Save these somewhere safe — each one works once, and this is
+    the only time they'll be shown. Print this page or write them down now.</p>
+  <div class="grid grid-cols-2 gap-2">
+    {% for c in new_backup_codes %}
+    <div class="rounded border border-seam bg-tile px-2 py-1 text-center font-data text-sm">{{ c }}</div>
+    {% endfor %}
+  </div>
+  <button onclick="window.print()" class="no-print btn-secondary mt-3">Print backup codes</button>
+</div>
+{% endif %}
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Password</h2>
+  <form method="post" action="/account/password" class="space-y-2">
+    <label class="block"><span class="field-label">Current password</span>
+      <input type="password" name="current_password" autocomplete="current-password" class="field"></label>
+    <label class="block"><span class="field-label">New password (8+ characters)</span>
+      <input type="password" name="new_password" autocomplete="new-password" class="field"></label>
+    <label class="block"><span class="field-label">Confirm new password</span>
+      <input type="password" name="new_password_confirm" autocomplete="new-password" class="field"></label>
+    <button class="btn-primary">Change password</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Two-factor authentication</h2>
+
+  {% if user.totp_enabled %}
+  <p class="mb-3 text-sm text-mist">Enabled — {{ backup_count }} backup codes remaining.</p>
+  <form method="post" action="/account/2fa/regenerate" class="mb-3 flex gap-2">
+    <input name="code" placeholder="Current code" autocomplete="one-time-code" class="field flex-1">
+    <button class="btn-secondary px-4">Regenerate backup codes</button>
+  </form>
+  <form method="post" action="/account/2fa/disable" class="flex gap-2">
+    <input name="code" placeholder="Current code" autocomplete="one-time-code" class="field flex-1">
+    <button class="btn-danger">Disable</button>
+  </form>
+
+  {% elif enroll %}
+  <p class="mb-3 text-sm text-mist">Scan this with your authenticator app, or enter the code
+    below manually. Then confirm with the 6-digit code it shows you.</p>
+  <img src="{{ enroll.qr }}" alt="2FA QR code" class="mb-3 h-40 w-40">
+  <p class="mb-3 break-all font-data text-sm">{{ enroll.secret }}</p>
+  <form method="post" action="/account/2fa/confirm" class="flex gap-2">
+    <input name="code" placeholder="6-digit code" autofocus autocomplete="one-time-code" class="field flex-1">
+    <button class="btn-primary px-4">Confirm &amp; enable</button>
+  </form>
+
+  {% else %}
+  <p class="mb-3 text-sm text-mist">Not enabled. Add an authenticator app for extra security at
+    sign-in.</p>
+  <form method="post" action="/account/2fa/enable">
+    <button class="btn-primary">Enable two-factor authentication</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Sessions</h2>
+  <p class="mb-3 text-sm text-mist">Ends every other session signed in as you. This device stays
+    signed in.</p>
+  <form method="post" action="/account/logout-everywhere">
+    <button class="btn-danger">Log out everywhere</button>
+  </form>
+</div>
+{% endblock %}

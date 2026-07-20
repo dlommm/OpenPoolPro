@@ -131,7 +131,7 @@ def _format_cents(cents: int | None) -> str:
 
 
 @router.get("/analytics/export")
-def analytics_export(tab: str = "income",
+def analytics_export(request: Request, tab: str = "income",
                      start: str | None = None, end: str | None = None,
                      session: Session = Depends(get_session)):
     """Export analytics tab data as CSV."""
@@ -242,6 +242,9 @@ def analytics_export(tab: str = "income",
             ])
 
     csv_content = output.getvalue()
+    models.audit(session, request.state.user.id, "export.analytics",
+                 detail=f"{tab} {start_d.isoformat()}..{end_d.isoformat()}")
+    session.commit()
     filename = f"analytics-{tab}-{start_d.isoformat()}-{end_d.isoformat()}.csv"
     return StreamingResponse(
         iter([csv_content]),
@@ -358,5 +361,7 @@ def rates_apply(request: Request, percent: str = Form(""),
     scope = "both" if scope_tiers and scope_overrides else ("tiers" if scope_tiers else "overrides")
     session.add(models.RateChange(percent=pct, scope=scope, affected_count=affected,
                                    user_id=request.state.user.id))
+    models.audit(session, request.state.user.id, "rates.bulk_raise",
+                 detail=f"{pct}% {scope} ({affected} affected)")
     session.commit()
     return RedirectResponse(f"/analytics?tab=rates&applied={affected}", status_code=303)
