@@ -10,14 +10,14 @@
       {% endfor %}
     </select></label>
   <label class="block"><span class="field-label">Title</span>
-    <input name="title" value="{{ j.title if j else '' }}" required class="field"></label>
+    <input name="title" value="{{ j.title if j else (template.title if template else '') }}" required class="field"></label>
   <label class="block"><span class="field-label">Description</span>
-    <textarea name="description" class="field min-h-24 py-2">{{ j.description if j else "" }}</textarea></label>
+    <textarea name="description" class="field min-h-24 py-2">{{ j.description if j else (template.description if template else "") }}</textarea></label>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Type</span>
       <select name="job_type" class="field">
-        <option value="service" {{ "selected" if not j or j.job_type == "service" }}>Service</option>
-        <option value="repair" {{ "selected" if j and j.job_type == "repair" }}>Repair</option>
+        <option value="service" {{ "selected" if (j and j.job_type == "service") or (not j and (not template or template.job_type == "service")) }}>Service</option>
+        <option value="repair" {{ "selected" if (j and j.job_type == "repair") or (not j and template and template.job_type == "repair") }}>Repair</option>
       </select></label>
     <label class="block"><span class="field-label">Assigned to</span>
       <select name="assigned_tech_id" class="field">
@@ -35,7 +35,7 @@
     {% if show_money %}
     <label class="block"><span class="field-label">Labor $</span>
       <input inputmode="decimal" name="labor_dollars"
-             value="{{ '%.2f'|format(j.labor_cents / 100) if j else '' }}"
+             value="{{ '%.2f'|format(j.labor_cents / 100) if j else ('%.2f'|format(template.labor_cents / 100) if template else '') }}"
              class="field font-data"></label>
     {% endif %}
     <label class="block"><span class="field-label">Date</span>

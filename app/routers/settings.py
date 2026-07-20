@@ -34,13 +34,16 @@ def settings_page(request: Request, rules_created: str | None = None,
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     tasks = session.scalars(select(models.TaskTemplate)
                             .order_by(models.TaskTemplate.sort_order)).all()
+    job_templates = session.scalars(select(models.JobTemplate)
+                                    .order_by(models.JobTemplate.title)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
     targets = {k: models.get_setting(session, k, d) for k, d in [
         ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
         ("target_cya", "50"), ("target_salt", "3200")]}
     return templates.TemplateResponse(request, "settings/index.html", {
-        "tiers": tiers, "chems": chems, "tasks": tasks, "backups": backups,
+        "tiers": tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
+        "backups": backups,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "business_name": models.get_setting(session, "business_name", ""),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -181,6 +184,48 @@ async def save_tasks(request: Request, session: Session = Depends(get_session)):
                 t.label, t.sort_order = label, i
         elif label.strip():
             session.add(models.TaskTemplate(label=label, sort_order=i))
+    session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/job_templates")
+async def save_job_templates(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    ids = form.getlist("template_id")
+    titles = form.getlist("title")
+    descriptions = form.getlist("description")
+    job_types = form.getlist("job_type")
+    labors = form.getlist("labor_dollars")
+
+    for i, (tid, title) in enumerate(zip(ids, titles)):
+        description = descriptions[i] if i < len(descriptions) else ""
+        job_type = job_types[i] if i < len(job_types) else "service"
+        job_type = job_type if job_type in ("service", "repair") else "service"
+        labor = labors[i] if i < len(labors) else ""
+
+        if tid:
+            try:
+                t = session.get(models.JobTemplate, int(tid))
+            except ValueError:
+                continue
+            if t is None:
+                continue
+            if not title.strip():
+                session.delete(t)  # blank title deletes -- JobTemplate has no active flag
+                continue
+            try:
+                labor_cents = round(float(labor or 0) * 100)
+            except ValueError:
+                continue
+            t.title, t.description, t.job_type = title, description, job_type
+            t.labor_cents = labor_cents
+        elif title.strip():
+            try:
+                labor_cents = round(float(labor or 0) * 100)
+            except ValueError:
+                continue
+            session.add(models.JobTemplate(title=title, description=description,
+                                           job_type=job_type, labor_cents=labor_cents))
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

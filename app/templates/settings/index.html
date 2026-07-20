@@ -107,6 +107,37 @@
 </div>
 
 <div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Job templates</h2>
+  <form method="post" action="/settings/job_templates" class="space-y-2">
+    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2 text-xs text-mist"><span>Title</span><span>Description</span><span>Type</span><span>Labor $</span></div>
+    {% for t in job_templates %}
+    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2">
+      <input type="hidden" name="template_id" value="{{ t.id }}">
+      <input name="title" value="{{ t.title }}" class="field">
+      <input name="description" value="{{ t.description }}" class="field">
+      <select name="job_type" class="field">
+        <option value="service" {{ "selected" if t.job_type == "service" }}>Service</option>
+        <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option>
+      </select>
+      <input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field font-data">
+    </div>
+    {% endfor %}
+    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2">
+      <input type="hidden" name="template_id" value="">
+      <input name="title" placeholder="New template" class="field">
+      <input name="description" placeholder="Description" class="field">
+      <select name="job_type" class="field">
+        <option value="service">Service</option>
+        <option value="repair">Repair</option>
+      </select>
+      <input inputmode="decimal" name="labor_dollars" class="field font-data">
+    </div>
+    <p class="text-xs text-mist">Blank a template's title to delete it.</p>
+    <button class="btn-secondary w-full">Save templates</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">General</h2>
   <form method="post" action="/settings/general" class="space-y-2">
     <label class="block"><span class="field-label">Chemical markup %</span>

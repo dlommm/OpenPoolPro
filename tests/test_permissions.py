@@ -6,6 +6,7 @@ ADMIN_ONLY = [
     ("post", "/settings/chemicals"),
     ("post", "/settings/tasks"),
     ("post", "/settings/general"),
+    ("post", "/settings/job_templates"),
 ]
 NEEDS_MANAGE = [
     ("get", "/customers/new"),
@@ -30,6 +31,15 @@ NEEDS_MANAGE = [
     ("get", "/properties/1/pools/new"),
     ("get", "/pools/1/edit"),
     ("post", "/pools/1/deactivate"),
+    ("get", "/quotes"),
+    ("get", "/quotes/new"),
+    ("post", "/quotes/new"),
+    ("get", "/quotes/1"),
+    ("post", "/quotes/1/edit"),
+    ("post", "/quotes/1/status"),
+    ("post", "/quotes/1/convert"),
+    ("post", "/quotes/1/duplicate"),
+    ("post", "/quotes/1/lines/from-template"),
 ]
 NEEDS_MONEY = [("get", "/money"), ("get", "/money/export")]
 

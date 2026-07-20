@@ -24,6 +24,7 @@
   {% if u is none or u.role == "admin" %}{% set items = items + [("/analytics", "Analytics", "week")] %}{% endif %}
   {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
     ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
+  {% if u is none or u.can("manage_customers") %}{% set items = items + [("/quotes", "Quotes", "money")] %}{% endif %}
   {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
   <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-white p-4">
