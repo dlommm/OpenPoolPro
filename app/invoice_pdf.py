@@ -25,6 +25,7 @@ from reportlab.platypus import (
 )
 
 from app import invoicing
+from app.timefmt import to_local_date
 
 _STYLES = getSampleStyleSheet()
 
@@ -102,8 +103,10 @@ def _header_table(data: invoicing.InvoiceData) -> Table:
 
 def _meta_table(data: invoicing.InvoiceData) -> Table:
     lines = [f"<b>Invoice #:</b> {escape(data.number or '')}",
-             f"<b>Period:</b> {escape(data.period or '')}",
-             f"<b>Bill to:</b> {escape(data.customer_name or '')}"]
+             f"<b>Period:</b> {escape(data.period or '')}"]
+    if data.generated:
+        lines.append(f"<b>Date:</b> {escape(to_local_date(data.generated))}")
+    lines.append(f"<b>Bill to:</b> {escape(data.customer_name or '')}")
     if data.qb_name and data.qb_name != data.customer_name:
         lines.append(f"<b>QuickBooks name:</b> {escape(data.qb_name)}")
     if data.address:

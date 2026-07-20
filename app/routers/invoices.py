@@ -99,13 +99,19 @@ def invoice_regenerate(iid: int, session: Session = Depends(get_session)):
     customer = get_or_404(session, models.Customer, inv.customer_id)
     data = invoicing.invoice_data(session, customer, inv.period_year, inv.period_month)
     data.number = inv.number
+    inv.generated_at = models.utcnow()
+    data.generated = inv.generated_at  # PDF date must match the committed row
     pdf_bytes = invoice_pdf.render_invoice(data)
     inv.total_cents = data.total_cents
-    inv.generated_at = models.utcnow()
     session.commit()
-    # File write comes after the commit: if this fails, the DB reflects the
-    # fresh total and the register's "pdf missing" tag flags it for a retry,
-    # rather than leaving a fresh PDF paired with a stale DB row.
-    with open(_pdf_path(inv), "wb") as f:
+    # File write comes after the commit: if the write fails, the DB still
+    # reflects the fresh total/generated_at and the register's "pdf missing"
+    # tag flags it for a retry, rather than leaving a fresh PDF paired with
+    # a stale DB row. The write itself is atomic (tmp file + os.replace), so
+    # a crash mid-write can never leave a truncated PDF at the final path.
+    path = _pdf_path(inv)
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "wb") as f:
         f.write(pdf_bytes)
+    os.replace(tmp_path, path)
     return RedirectResponse(f"/invoices?ym={inv.period_year}-{inv.period_month:02d}", status_code=303)

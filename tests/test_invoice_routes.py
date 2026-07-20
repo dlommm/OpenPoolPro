@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import config, invoicing, models, qbo
+from app.timefmt import to_local_date
 from tests.test_analytics import _fix
 
 YM = "2026-07"
@@ -30,6 +31,9 @@ def test_generate_creates_rows_and_files_matching_rollup(client, engine):
             assert inv.pdf_filename == f"{inv.number}.pdf"
             path = os.path.join(config.DATA_DIR, "invoices", inv.pdf_filename)
             assert os.path.isfile(path)
+        # Atomic tmp+replace write must never leave a stray .tmp behind.
+        invoices_dir = os.path.join(config.DATA_DIR, "invoices")
+        assert not any(fn.endswith(".tmp") for fn in os.listdir(invoices_dir))
 
 
 def test_generate_is_idempotent(client, engine):
@@ -159,6 +163,9 @@ def test_regenerate_rerenders_same_number_and_updates_total(client, engine):
         assert os.path.isfile(path)
         after_bytes = open(path, "rb").read()
     assert after_bytes != before_bytes
+    # Atomic tmp+replace write must never leave a stray .tmp behind.
+    invoices_dir = os.path.join(config.DATA_DIR, "invoices")
+    assert not any(fn.endswith(".tmp") for fn in os.listdir(invoices_dir))
 
 
 def test_pdf_serve_200_and_404_missing(client, engine):
@@ -235,6 +242,48 @@ def test_register_shows_pdf_missing_tag_after_file_deleted(client, engine):
     r = client.get(f"/invoices?ym={YM}")
     assert r.status_code == 200
     assert "pdf missing" in r.text
+
+
+def test_register_shows_generated_column(client, engine):
+    _fix(engine)
+    _generate(client)
+    with Session(engine) as s:
+        inv = s.scalars(select(models.Invoice)).first()
+        expected = to_local_date(inv.generated_at)
+
+    r = client.get(f"/invoices?ym={YM}")
+    assert r.status_code == 200
+    assert "Generated" in r.text  # column header
+    assert expected in r.text
+
+
+def test_generate_month_skips_row_on_integrity_error(client, engine, monkeypatch):
+    """Simulates a concurrent-generate race: two callers can compute the
+    same next_number() before either commits, colliding on the Invoice.number
+    unique constraint. generate_month must catch that per-row IntegrityError,
+    roll back, and count it as skipped rather than crashing the whole batch."""
+    _fix(engine)
+    with Session(engine) as s:
+        other = models.Customer(name="Zulu")
+        s.add(other)
+        s.commit()
+        # Pre-seed the number generate_month would allocate for Alpha/Beta,
+        # under an unrelated customer/period so the existing-invoice check
+        # doesn't skip Alpha/Beta outright — the collision must surface as
+        # an IntegrityError on the real insert instead.
+        s.add(models.Invoice(number="INV-2026-0001", customer_id=other.id,
+                              period_year=1999, period_month=1, total_cents=0,
+                              status="draft", pdf_filename="x.pdf"))
+        s.commit()
+
+    monkeypatch.setattr(invoicing, "next_number", lambda session, year: "INV-2026-0001")
+
+    with Session(engine) as s:
+        created, skipped = invoicing.generate_month(s, 2026, 7, 1)
+    assert (created, skipped) == (0, 2)
+    with Session(engine) as s:
+        # Only the pre-seeded row remains; failed rows left nothing behind.
+        assert len(s.scalars(select(models.Invoice)).all()) == 1
 
 
 def test_register_tolerant_bad_ym_and_status(client, engine):

@@ -15,6 +15,10 @@ def to_local_hhmm(dt: datetime | None) -> str:
     return to_local(dt).strftime("%H:%M") if dt else ""
 
 
+def to_local_date(dt: datetime | None) -> str:
+    return to_local(dt).strftime("%Y-%m-%d") if dt else ""
+
+
 def from_local_hhmm(d: date, hhmm: str | None) -> datetime | None:
     if not hhmm:
         return None
@@ -34,14 +38,14 @@ def parse_ym(raw: str | None, default: tuple[int, int] | None = None) -> tuple[i
     """Tolerant "YYYY-M" -> (year, month) parser.
 
     Falls back to `default` if given, otherwise to business-today's
-    (year, month), whenever `raw` is missing, malformed, or has an
-    out-of-range month.
+    (year, month), whenever `raw` is missing, malformed, has an
+    out-of-range month, or has a year outside 2000..2100.
     """
     if raw:
         try:
             y, m = raw.split("-")
             y, m = int(y), int(m)
-            if 1 <= m <= 12:
+            if 1 <= m <= 12 and 2000 <= y <= 2100:
                 return y, m
         except ValueError:
             pass

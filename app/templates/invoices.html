@@ -39,6 +39,7 @@
       <th class="py-1.5 pr-3 font-medium">Period</th>
       <th class="py-1.5 pr-3 font-medium">Total</th>
       <th class="py-1.5 pr-3 font-medium">Status</th>
+      <th class="py-1.5 pr-3 font-medium">Generated</th>
       <th class="py-1.5 font-medium">&nbsp;</th>
     </tr>
   </thead>
@@ -54,6 +55,7 @@
       <td class="py-1.5 pr-3 whitespace-nowrap">{{ "%04d-%02d" | format(inv.period_year, inv.period_month) }}</td>
       <td class="py-1.5 pr-3 money">{{ inv.total_cents | dollars }}</td>
       <td class="py-1.5 pr-3"><span class="tag {{ 'tag-safety' if inv.status == 'void' }}">{{ inv.status }}</span></td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ inv.generated_at | local_date }}</td>
       <td class="py-1.5">
         <div class="flex flex-wrap items-center gap-1.5">
           <a href="/invoices/{{ inv.id }}/pdf" class="btn-secondary">PDF</a>
@@ -76,7 +78,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
+    <tr><td colspan="7" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
     {% endfor %}
   </tbody>
 </table>

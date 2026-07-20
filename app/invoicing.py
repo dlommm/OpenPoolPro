@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import config, models, qbo
@@ -55,6 +56,7 @@ class InvoiceData:
     chems: list[ChemLine] = field(default_factory=list)
     jobs: list[JobLine] = field(default_factory=list)
     total_cents: int = 0
+    generated: datetime | None = None
 
 
 def next_number(session: Session, year: int) -> str:
@@ -148,6 +150,7 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
         chems=chems,
         jobs=jobs,
         total_cents=total_cents,
+        generated=models.utcnow(),
     )
 
 
@@ -167,7 +170,14 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
     so re-running after a void creates a fresh invoice with a new number).
     Otherwise allocate the next number, render + write the PDF, and insert
     the Invoice row in the same commit as the number allocation so numbers
-    are never reserved across a partial failure.
+    are never reserved across a partial failure. The PDF is written to a
+    `.tmp` sibling then atomically moved into place (`os.replace`) so a
+    crash mid-write never leaves a truncated file at the final path.
+
+    A concurrent generate call (e.g. two admins clicking "Generate" at
+    once) can race on `next_number()` and collide on the Invoice.number
+    unique constraint; that per-row commit failure is caught, rolled back,
+    and counted as skipped rather than aborting the whole batch.
 
     Returns (created, skipped).
     """
@@ -190,15 +200,23 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
         data.number = number
         pdf_bytes = invoice_pdf.render_invoice(data)
         filename = f"{number}.pdf"
-        with open(os.path.join(_invoices_dir(), filename), "wb") as f:
+        path = os.path.join(_invoices_dir(), filename)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "wb") as f:
             f.write(pdf_bytes)
+        os.replace(tmp_path, path)
 
         session.add(models.Invoice(
             number=number, customer_id=row.customer.id,
             period_year=year, period_month=month,
             total_cents=row.total_cents, status="draft",
             pdf_filename=filename))
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            skipped += 1
+            continue
         created += 1
 
     return created, skipped
