@@ -33,6 +33,12 @@ def _parse_user_id(raw: str | None) -> int | None:
         return None
 
 
+def _escape_like(raw: str) -> str:
+    """Escape LIKE metacharacters in user-supplied text so a prefix filter
+    containing a literal % or _ can't turn into an unintended wildcard."""
+    return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/audit")
 def audit_page(request: Request, action: str = "", user_id: str | None = None,
                page: str | None = None, session: Session = Depends(get_session)):
@@ -42,7 +48,7 @@ def audit_page(request: Request, action: str = "", user_id: str | None = None,
 
     filters = []
     if action:
-        filters.append(models.AuditLog.action.like(f"{action}%"))
+        filters.append(models.AuditLog.action.like(f"{_escape_like(action)}%", escape="\\"))
     if uid is not None:
         filters.append(models.AuditLog.user_id == uid)
 

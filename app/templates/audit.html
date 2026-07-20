@@ -51,10 +51,10 @@
   <span>Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
   <div class="flex gap-2">
     {% if page > 1 %}
-    <a class="btn-secondary" href="/audit?action={{ action }}&user_id={{ user_id or '' }}&page={{ page - 1 }}">Prev</a>
+    <a class="btn-secondary" href="/audit?action={{ action|urlencode }}&user_id={{ (user_id or '')|urlencode }}&page={{ page - 1 }}">Prev</a>
     {% endif %}
     {% if has_next %}
-    <a class="btn-secondary" href="/audit?action={{ action }}&user_id={{ user_id or '' }}&page={{ page + 1 }}">Next</a>
+    <a class="btn-secondary" href="/audit?action={{ action|urlencode }}&user_id={{ (user_id or '')|urlencode }}&page={{ page + 1 }}">Next</a>
     {% endif %}
   </div>
 </div>

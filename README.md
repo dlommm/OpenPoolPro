@@ -59,6 +59,10 @@ folder.
 - **Response headers:** every response carries `X-Content-Type-Options:
   nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, and a
   restrictive `Content-Security-Policy`.
+- **Upgrading a live instance:** this release changes the pending-2FA
+  cookie's purpose check, so any in-flight 2FA login started just before
+  the upgrade will have its pending cookie rejected; the 5-minute pending
+  TTL self-heals, and affected users just restart the login.
 
 ## Visual smoke check
 

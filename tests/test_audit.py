@@ -134,6 +134,21 @@ def test_audit_user_filter(client, engine):
     assert "filterme" in r.text  # dropdown includes the user
 
 
+def test_audit_action_prefix_filter_escapes_wildcards(client, engine):
+    """A literal '%' or '_' in the filter box must be treated as a literal
+    character, not a SQL LIKE wildcard that would match every row."""
+    _seed_rows(engine, 1, action="auth.login")
+    _seed_rows(engine, 1, action="x")
+
+    r = client.get("/audit", params={"action": "%"})
+    assert r.status_code == 200
+    assert "no audit" in r.text.lower() or "nothing" in r.text.lower()
+
+    r2 = client.get("/audit", params={"action": "auth."})
+    assert r2.status_code == 200
+    assert "auth.login" in r2.text
+
+
 def test_audit_none_user_shows_dash(client, engine):
     _seed_rows(engine, 1, action="test.system_row", user_id=None)
     r = client.get("/audit")

@@ -19,6 +19,16 @@ def _apply_flags(u: models.User, form) -> None:
         setattr(u, f, form.get(f) == "on")
 
 
+def _bump_epoch(request: Request, u: models.User) -> None:
+    """Invalidate every session already issued to u by bumping its epoch.
+    If the acting admin is targeting their own account, refresh this
+    request's own session cookie in the same response so they aren't
+    logged out by their own action."""
+    u.session_epoch += 1
+    if u.id == request.state.user.id:
+        request.session["epoch"] = u.session_epoch
+
+
 @router.get("/users")
 def list_users(request: Request, session: Session = Depends(get_session)):
     users = session.scalars(select(models.User).order_by(
@@ -152,9 +162,7 @@ def reset_2fa(request: Request, uid: int, session: Session = Depends(get_session
     for bc in session.scalars(select(models.BackupCode).where(
             models.BackupCode.user_id == u.id)).all():
         session.delete(bc)
-    u.session_epoch += 1
-    if u.id == request.state.user.id:
-        request.session["epoch"] = u.session_epoch
+    _bump_epoch(request, u)
     models.audit(session, request.state.user.id, "auth.2fa_reset",
                  detail=f"{u.username!r} (id={u.id})")
     session.commit()
@@ -168,9 +176,7 @@ def logout_sessions(request: Request, uid: int, session: Session = Depends(get_s
     (editing themselves from this same screen), refresh this request's own
     session so they aren't logged out by their own action."""
     u = get_or_404(session, models.User, uid)
-    u.session_epoch += 1
-    if u.id == request.state.user.id:
-        request.session["epoch"] = u.session_epoch
+    _bump_epoch(request, u)
     models.audit(session, request.state.user.id, "auth.logout_everywhere",
                  detail=f"{u.username!r} (id={u.id})")
     session.commit()
