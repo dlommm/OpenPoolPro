@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import config, models, security
 from app.auth_core import hash_password, verify_password
 from app.db import get_session
 from app.main import templates
@@ -12,7 +12,60 @@ from app.main import templates
 # the same bcrypt cost (no timing-based username enumeration).
 _DUMMY_HASH = hash_password("timing-equalizer")
 
+# Locked / bad-credential / unknown-user all render this exact same page +
+# message so a client can't tell the three apart.
+GENERIC_LOGIN_ERROR = "Wrong username or password"
+GENERIC_2FA_ERROR = "Invalid code"
+
+PENDING_2FA_COOKIE = "cpp_2fa"
+# Seconds a pending-2FA cookie stays valid for. Module-level so tests can
+# monkeypatch it down (e.g. to 0) to deterministically simulate expiry
+# without needing to fake real time.
+PENDING_2FA_MAX_AGE = 300
+
+# Module-level, process-lifetime rate limiter shared by the password stage
+# and the 2FA stage. Namespaced single-key store: "user:"+username and
+# "ip:"+client_ip. Tests must call ``limiter.reset_all()`` in setup —
+# because this object is a module singleton, lock state would otherwise
+# leak from one test to the next.
+limiter = security.RateLimiter()
+
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _cookie_flags(max_age: int) -> dict:
+    """HttpOnly + SameSite=Lax always; Secure iff COOKIE_SECURE=1."""
+    return dict(httponly=True, samesite="lax", secure=config.COOKIE_SECURE,
+                max_age=max_age, path="/")
+
+
+def _establish_session(request: Request, user: models.User) -> None:
+    request.session.clear()
+    request.session["user_id"] = user.id
+    request.session["epoch"] = user.session_epoch
+
+
+def _pending_user(request: Request, session: Session) -> models.User | None:
+    """Resolve + validate the signed cpp_2fa cookie. None if missing,
+    tampered with, expired, or the user is no longer eligible for it."""
+    token = request.cookies.get(PENDING_2FA_COOKIE)
+    payload = security.unsign_pending(config.SECRET_KEY, token, max_age=PENDING_2FA_MAX_AGE)
+    if not payload:
+        return None
+    user = session.get(models.User, payload.get("user_id"))
+    if user is None or not user.active or not user.totp_enabled:
+        return None
+    return user
+
+
+def _clear_pending_redirect(target: str, status_code: int = 303) -> RedirectResponse:
+    resp = RedirectResponse(target, status_code=status_code)
+    resp.delete_cookie(PENDING_2FA_COOKIE, path="/")
+    return resp
 
 
 @router.get("/login")
@@ -23,16 +76,108 @@ def login_page(request: Request):
 @router.post("/login")
 def login(request: Request, username: str = Form(""), password: str = Form(""),
           session: Session = Depends(get_session)):
+    uname = username.strip().lower()
+    ip = _client_ip(request)
+    user_key, ip_key = "user:" + uname, "ip:" + ip
+
+    # Rate-limit check BEFORE password verify, for both keys.
+    if limiter.locked(user_key) or limiter.locked(ip_key):
+        return templates.TemplateResponse(request, "login.html", {"error": GENERIC_LOGIN_ERROR})
+
     user = session.scalars(select(models.User).where(
-        models.User.username == username.strip().lower(),
+        models.User.username == uname,
         models.User.active)).first()
     ok = verify_password(password, user.password_hash if user else _DUMMY_HASH)
     if user is None or not ok:
-        return templates.TemplateResponse(request, "login.html",
-                                          {"error": "Wrong username or password"})
-    request.session.clear()
-    request.session["user_id"] = user.id
+        limiter.fail(user_key)
+        limiter.fail(ip_key)
+        models.audit(session, user.id if user else None, "auth.fail",
+                     detail=f"login for {uname!r}")
+        session.commit()
+        if limiter.locked(user_key):
+            models.audit(session, user.id if user else None, "auth.lockout", detail=user_key)
+            session.commit()
+        if limiter.locked(ip_key):
+            models.audit(session, user.id if user else None, "auth.lockout", detail=ip_key)
+            session.commit()
+        return templates.TemplateResponse(request, "login.html", {"error": GENERIC_LOGIN_ERROR})
+
+    if user.totp_enabled:
+        token = security.sign_pending(config.SECRET_KEY, {"user_id": user.id})
+        resp = RedirectResponse("/login/2fa", status_code=303)
+        resp.set_cookie(PENDING_2FA_COOKIE, token, **_cookie_flags(PENDING_2FA_MAX_AGE))
+        return resp
+
+    limiter.reset(user_key)
+    limiter.reset(ip_key)
+    _establish_session(request, user)
+    models.audit(session, user.id, "auth.login", detail="password")
+    session.commit()
     return RedirectResponse("/", status_code=303)
+
+
+@router.get("/login/2fa")
+def login_2fa_page(request: Request, session: Session = Depends(get_session)):
+    if _pending_user(request, session) is None:
+        return _clear_pending_redirect("/login")
+    return templates.TemplateResponse(request, "login_2fa.html", {"error": None})
+
+
+@router.post("/login/2fa")
+def login_2fa(request: Request, code: str = Form(""), session: Session = Depends(get_session)):
+    user = _pending_user(request, session)
+    if user is None:
+        return _clear_pending_redirect("/login")
+
+    ip = _client_ip(request)
+    user_key, ip_key = "user:" + user.username, "ip:" + ip
+
+    if limiter.locked(user_key) or limiter.locked(ip_key):
+        return templates.TemplateResponse(request, "login_2fa.html", {"error": GENERIC_2FA_ERROR})
+
+    ok = security.totp_verify(user.totp_secret, code)
+    used_backup_code = None
+    if not ok:
+        unused = session.scalars(select(models.BackupCode).where(
+            models.BackupCode.user_id == user.id,
+            models.BackupCode.used_at.is_(None))).all()
+        for bc in unused:
+            if security.verify_code(code, bc.code_hash):
+                ok = True
+                used_backup_code = bc
+                break
+
+    if not ok:
+        limiter.fail(user_key)
+        limiter.fail(ip_key)
+        models.audit(session, user.id, "auth.fail", detail="2fa")
+        session.commit()
+        if limiter.locked(user_key):
+            models.audit(session, user.id, "auth.lockout", detail=user_key)
+            session.commit()
+        if limiter.locked(ip_key):
+            models.audit(session, user.id, "auth.lockout", detail=ip_key)
+            session.commit()
+        return templates.TemplateResponse(request, "login_2fa.html", {"error": GENERIC_2FA_ERROR})
+
+    if used_backup_code is not None:
+        used_backup_code.used_at = models.utcnow()
+        remaining = session.scalars(select(models.BackupCode).where(
+            models.BackupCode.user_id == user.id,
+            models.BackupCode.used_at.is_(None))).all()
+        models.audit(session, user.id, "auth.backup_code_used",
+                     detail=f"{len(remaining)} remaining")
+        session.commit()
+
+    limiter.reset(user_key)
+    limiter.reset(ip_key)
+    _establish_session(request, user)
+    models.audit(session, user.id, "auth.login", detail="password+2fa")
+    session.commit()
+
+    resp = RedirectResponse("/", status_code=303)
+    resp.delete_cookie(PENDING_2FA_COOKIE, path="/")
+    return resp
 
 
 @router.post("/logout")

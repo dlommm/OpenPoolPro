@@ -5,15 +5,18 @@ handling and models.audit().
 """
 import base64
 import io
+import json
 import secrets
 import time
 
+import itsdangerous
 import pyotp
 import segno
 
 from app.auth_core import pwd_context
 
 ISSUER = "Coastline Pools"
+_PENDING_2FA_SALT = "cpp-2fa-pending"
 
 
 def new_totp_secret() -> str:
@@ -84,6 +87,42 @@ def verify_code(code: str | None, code_hash: str | None) -> bool:
         return False
 
 
+def sign_pending(secret_key: str, payload: dict) -> str:
+    """Sign a small JSON payload for a short-lived pre-auth cookie (e.g. the
+    2FA-pending stage), the same way the app's session cookie is signed:
+    base64-encoded JSON, timestamped and HMAC-signed via itsdangerous.
+
+    The embedded timestamp (not a hand-rolled "issued_at" field) is what
+    ``unsign_pending`` checks against ``max_age`` on the way back in.
+
+    Uses URL-safe base64 with padding stripped (like itsdangerous's own
+    internal encoding) rather than standard base64: a raw "=" or "/" in a
+    cookie value falls outside Python's http.cookies "legal" charset and
+    gets silently double-quoted on the way out, which then fails to
+    round-trip back through the Cookie header on the next request.
+    """
+    signer = itsdangerous.TimestampSigner(str(secret_key), salt=_PENDING_2FA_SALT)
+    data = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).rstrip(b"=")
+    return signer.sign(data).decode("utf-8")
+
+
+def unsign_pending(secret_key: str, token: str | None, max_age: int = 300) -> dict | None:
+    """Verify + decode a token from ``sign_pending``.
+
+    Returns None if the token is missing, malformed, tampered with, or older
+    than ``max_age`` seconds — never raises.
+    """
+    if not token:
+        return None
+    signer = itsdangerous.TimestampSigner(str(secret_key), salt=_PENDING_2FA_SALT)
+    try:
+        data = signer.unsign(token.encode("utf-8"), max_age=max_age)
+        padded = data + b"=" * (-len(data) % 4)
+        return json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+    except Exception:
+        return None
+
+
 class RateLimiter:
     """In-process, per-key login rate limiter.
 
@@ -149,3 +188,10 @@ class RateLimiter:
     def reset(self, key: str) -> None:
         self._fails.pop(key, None)
         self._locked_until.pop(key, None)
+
+    def reset_all(self) -> None:
+        """Clear every tracked key. Not used on the request path — a
+        test-friendly escape hatch so a module-level (process-lifetime)
+        limiter's lock state can't leak from one test into the next."""
+        self._fails.clear()
+        self._locked_until.clear()

@@ -27,7 +27,7 @@ def create_app(engine=None) -> FastAPI:
     migrate.run(app.state.engine)
     seeds.run(app.state.engine)
 
-    EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
+    EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
     EXEMPT_PREFIX = ("/static",)
 
     @app.middleware("http")
@@ -37,21 +37,26 @@ def create_app(engine=None) -> FastAPI:
         request.state.user = None
         if not exempt:
             uid = request.session.get("user_id")
+            # Missing "epoch" (cookie issued before this field existed) is
+            # treated as epoch 0 — the default for every pre-existing user —
+            # so already-logged-in clients aren't kicked out by this change.
+            epoch = request.session.get("epoch", 0)
             if uid is not None:
                 from sqlalchemy.orm import Session as _S
                 with _S(app.state.engine) as s:
                     user = s.get(models.User, uid)
-                    if user is not None and user.active:
+                    if user is not None and user.active and epoch == user.session_epoch:
                         s.expunge(user)
                         request.state.user = user
             if request.state.user is None:
                 request.session.clear()
                 return RedirectResponse("/login", status_code=303)
             request.session["user_id"] = request.state.user.id  # rolling cookie
+            request.session["epoch"] = request.state.user.session_epoch
         return await call_next(request)
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
-                        max_age=60 * 60 * 24 * 90)
+                        max_age=60 * 60 * 24 * 90, https_only=config.COOKIE_SECURE)
 
     from fastapi.responses import RedirectResponse as _RR
     from starlette.exceptions import HTTPException as StarletteHTTPException
