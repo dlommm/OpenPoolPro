@@ -19,12 +19,19 @@ def run_maintenance_rules(session: Session, today: date) -> int:
     the rule is no longer due, so a single run never floods more than one
     job per rule regardless of how far in the past next_due had drifted.
 
+    Rules with a non-positive interval_weeks (no DB constraint prevents this)
+    are treated as misconfigured and skipped entirely -- no job is created
+    and next_due is left untouched -- since the catch-up loop above can
+    never advance next_due into the future otherwise.
+
     Returns the number of jobs created.
     """
     created = 0
     rules = session.scalars(select(models.MaintenanceRule).where(
         models.MaintenanceRule.active)).all()
     for rule in rules:
+        if rule.interval_weeks <= 0:
+            continue  # misconfigured (no DB constraint) -- skip rather than infinite-loop
         prop = session.get(models.Property, rule.property_id)
         if prop is None or not prop.active:
             continue

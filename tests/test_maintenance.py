@@ -1,11 +1,34 @@
+import signal
 from datetime import date, timedelta
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
 from app.db import Base
 from app.maintenance import run_maintenance_rules, run_nightly, warranty_alerts
+
+
+class _HangGuard:
+    """Fails fast instead of hanging the whole suite if a regression brings
+    back the infinite catch-up loop for a non-positive interval_weeks rule."""
+
+    def __init__(self, seconds=5):
+        self.seconds = seconds
+
+    def __enter__(self):
+        def _on_alarm(signum, frame):
+            raise TimeoutError(
+                "run_maintenance_rules did not return in time -- "
+                "likely the interval_weeks<=0 catch-up loop regressed to an infinite loop")
+        self._old = signal.signal(signal.SIGALRM, _on_alarm)
+        signal.alarm(self.seconds)
+        return self
+
+    def __exit__(self, *exc):
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, self._old)
 
 
 def _customer_property(s, active=True, cust_active=True):
@@ -136,6 +159,34 @@ def test_inactive_property_skipped(engine):
         created = run_maintenance_rules(s, today)
         assert created == 0
         assert s.scalars(select(models.Job)).first() is None
+
+
+@pytest.mark.parametrize("interval_weeks", [0, -1, -4])
+def test_nonpositive_interval_skipped_no_hang(engine, interval_weeks):
+    # Nothing in the schema stops interval_weeks from being <= 0 (and a
+    # later task adds free-form form input for it), so a misconfigured rule
+    # must be skipped outright rather than spinning the catch-up loop
+    # forever -- that would hang the nightly scheduler thread or the
+    # run-now HTTP request. Guarded with an alarm so a regression fails
+    # fast instead of hanging the whole test run.
+    Base.metadata.create_all(engine)
+    today = date(2026, 7, 15)
+    with Session(engine) as s:
+        p = _customer_property(s)
+        rule = models.MaintenanceRule(property_id=p.id, title="Broken rule",
+                                      next_due=today - timedelta(weeks=10),
+                                      lead_days=7, interval_weeks=interval_weeks)
+        s.add(rule)
+        s.commit()
+        rule_id = rule.id
+        original_next_due = rule.next_due
+
+        with _HangGuard(seconds=5):
+            created = run_maintenance_rules(s, today)
+
+        assert created == 0
+        assert s.scalars(select(models.Job)).first() is None
+        assert s.get(models.MaintenanceRule, rule_id).next_due == original_next_due
 
 
 # --- warranty alerts -----------------------------------------------------------
