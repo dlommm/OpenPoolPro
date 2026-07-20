@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Quote{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Estimate", q.title if q else "New quote") }}
+
+{% if q %}
+<div class="mb-4 flex flex-wrap items-center gap-2">
+  <span class="tag {{ 'tag-safety' if q.status == 'declined' }}">{{ q.status }}</span>
+  <span class="font-data text-sm text-mist">{{ q.created_at | local_date }}</span>
+</div>
+
+{% if q.status == "sent" %}
+<div class="mb-4 flex gap-2">
+  <form method="post" action="/quotes/{{ q.id }}/status" class="flex-1">
+    <input type="hidden" name="to" value="accepted">
+    <button class="btn-primary">Accept</button>
+  </form>
+  <form method="post" action="/quotes/{{ q.id }}/status" class="flex-1">
+    <input type="hidden" name="to" value="declined">
+    <button class="btn-danger">Decline</button>
+  </form>
+</div>
+{% endif %}
+
+{% if q.status == "accepted" %}
+<form method="post" action="/quotes/{{ q.id }}/convert" class="mb-4">
+  <button class="btn-primary">Convert to job</button>
+</form>
+{% endif %}
+
+{% if q.status == "converted" and q.job_id %}
+<a href="/jobs/{{ q.job_id }}" class="btn-secondary mb-4 w-full">View job</a>
+{% endif %}
+
+<form method="post" action="/quotes/{{ q.id }}/duplicate" class="mb-4">
+  <button class="btn-secondary w-full">Duplicate</button>
+</form>
+{% endif %}
+
+{% if not q or q.status == "draft" %}
+<form method="post" action="{{ ('/quotes/%d/edit'|format(q.id)) if q else '/quotes/new' }}" class="space-y-3">
+  <label class="block"><span class="field-label">Customer</span>
+    <select name="customer_id" class="field">
+      {% for c in customers %}
+      <option value="{{ c.id }}" {{ "selected" if selected_customer == c.id }}>{{ c.name }}</option>
+      {% endfor %}
+    </select></label>
+  <label class="block"><span class="field-label">Property (optional)</span>
+    <select name="property_id" class="field">
+      <option value="">— No specific property —</option>
+      {% for p in properties %}
+      <option value="{{ p.id }}" {{ "selected" if q and q.property_id == p.id }}>{{ p.customer.name }} — {{ p.label }}</option>
+      {% endfor %}
+    </select></label>
+  <label class="block"><span class="field-label">Title</span>
+    <input name="title" value="{{ q.title if q else '' }}" required class="field"></label>
+  <label class="block"><span class="field-label">Notes</span>
+    <textarea name="notes" class="field min-h-20 py-2">{{ q.notes if q else "" }}</textarea></label>
+
+  <div>
+    <span class="field-label">Line items</span>
+    <div class="space-y-2">
+      {% for line in (q.lines if q else []) %}
+      <div class="grid grid-cols-[1fr_7rem] gap-2">
+        <input name="line_description" value="{{ line.description }}" class="field">
+        <input inputmode="decimal" name="line_amount_dollars"
+               value="{{ '%.2f'|format(line.amount_cents / 100) }}" class="field font-data">
+      </div>
+      {% endfor %}
+      <div class="grid grid-cols-[1fr_7rem] gap-2">
+        <input name="line_description" placeholder="New line" class="field">
+        <input inputmode="decimal" name="line_amount_dollars" placeholder="$" class="field font-data">
+      </div>
+    </div>
+    <p class="mt-1 text-xs text-mist">Blank a line's amount to remove it.</p>
+  </div>
+
+  <div class="flex items-center justify-between font-data text-lg font-semibold">
+    <span>Total</span><span class="money">{{ total_cents | dollars }}</span>
+  </div>
+  <button class="btn-primary">Save</button>
+</form>
+
+{% if q and job_templates %}
+<div class="card mt-4 p-3">
+  <span class="field-label">Insert template as line</span>
+  <form method="post" action="/quotes/{{ q.id }}/lines/from-template" class="mt-1 flex gap-2">
+    <select name="template_id" class="field flex-1">
+      {% for t in job_templates %}
+      <option value="{{ t.id }}">{{ t.title }} — {{ t.labor_cents | dollars }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-secondary px-4">Insert</button>
+  </form>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card space-y-2 p-4">
+  <p><span class="text-mist">Customer:</span> {{ customer.name if customer else "" }}</p>
+  {% if prop %}<p><span class="text-mist">Property:</span> {{ prop.label }}</p>{% endif %}
+  {% if q.notes %}<p class="text-sm text-mist">{{ q.notes }}</p>{% endif %}
+  <div class="space-y-1 border-t border-seam pt-2">
+    {% for line in q.lines %}
+    <div class="flex justify-between text-sm"><span>{{ line.description }}</span><span class="money">{{ line.amount_cents | dollars }}</span></div>
+    {% endfor %}
+  </div>
+  <div class="flex justify-between border-t border-seam pt-2 font-data text-lg font-semibold">
+    <span>Total</span><span class="money">{{ total_cents | dollars }}</span>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -19,6 +19,7 @@ templates.env.filters["localdt"] = lambda dt: (
 templates.env.filters["local_date"] = timefmt.to_local_date
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
+templates.env.filters["local_date"] = timefmt.local_date
 templates.env.globals["has_logo_check"] = lambda: os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
 
 
@@ -131,6 +132,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import jobs as jobs_router
     app.include_router(jobs_router.router)
 
+    from app.routers import quotes as quotes_router
+    app.include_router(quotes_router.router)
+
     from app.routers import money as money_router
     app.include_router(money_router.router)
 
@@ -161,6 +165,9 @@ def create_app(engine=None) -> FastAPI:
 
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
+        from app.maintenance import run_nightly
         app.state.scheduler = start_scheduler(app.state.engine)
+        app.state.scheduler.add_job(run_nightly, "cron", hour=1, minute=15,
+                                    args=[app.state.engine])
 
     return app

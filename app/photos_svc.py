@@ -17,7 +17,7 @@ def _dir(entity_type: str, entity_id: int) -> str:
 
 
 def save_photo(session, entity_type: str, entity_id: int,
-               file_bytes: bytes, caption: str = "") -> models.Photo:
+               file_bytes: bytes, caption: str = "", tag: str = "") -> models.Photo:
     # Isolation scope: only undecodable input is caught per-file (ValueError);
     # disk/DB failures after decode intentionally propagate.
     try:
@@ -37,7 +37,7 @@ def save_photo(session, entity_type: str, entity_id: int,
     thumb.save(os.path.join(d, thumb_filename), "JPEG", quality=80)
 
     ph = models.Photo(entity_type=entity_type, entity_id=entity_id,
-                      filename=filename, thumb_filename=thumb_filename, caption=caption)
+                      filename=filename, thumb_filename=thumb_filename, caption=caption, tag=tag)
     session.add(ph)
     return ph
 

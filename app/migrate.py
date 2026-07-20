@@ -19,6 +19,7 @@ COLUMNS = {
         ("job_type", "VARCHAR(10) DEFAULT 'service'"),
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
         ("started_at", "DATETIME"),
+        ("rule_id", "INTEGER REFERENCES maintenance_rules(id)"),
     ],
     "visits": [
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
@@ -28,6 +29,9 @@ COLUMNS = {
         ("role", "VARCHAR(20) DEFAULT 'other'"),
         ("strength_pct", "FLOAT DEFAULT 100"),
     ],
+    "customers": [("tags", "TEXT DEFAULT '[]'")],
+    "equipment": [("warranty_end", "DATE")],
+    "photos": [("tag", "VARCHAR(10) DEFAULT ''")],
 }
 
 

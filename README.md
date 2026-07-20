@@ -2,8 +2,12 @@
 
 Self-hosted pool-route app. Phase 0: customers, properties, pools, routes,
 visits with chemistry costs and dose suggestions, jobs, analytics with income breakdowns and rate management, admin console with
-dashboard and global search, company branding, branded PDF invoices with month generation and batch zip, monthly QuickBooks
-Online CSV export.
+dashboard and global search, company branding, branded PDF invoices with
+month generation and batch zip, monthly QuickBooks Online CSV export, a
+customer-360 timeline (visits, jobs, photos, comm log, quotes) with tags and
+reactivation, seasonal service holds, per-property checklists, recurring
+maintenance rules with an auto-job engine, equipment warranty alerts,
+before/after/issue photo tags, and quotes that convert to jobs.
 
 ## Run
 

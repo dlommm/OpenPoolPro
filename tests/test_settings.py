@@ -298,3 +298,29 @@ def test_new_chemical_defaults_role_other(client, engine):
     import re
     new_row_selects = re.findall(r'<select name="role"[^>]*>(.*?)</select>', html, re.S)
     assert any('selected' in s and '>other<' in s for s in new_row_selects)
+
+
+def test_run_now_admin_creates_job_and_shows_banner(client, engine):
+    from app.routers.today import business_today
+    today = business_today()
+    with Session(engine) as s:
+        c = models.Customer(name="RunNow Cust", active=True)
+        p = models.Property(customer=c, active=True)
+        s.add(p)
+        s.commit()
+        s.add(models.MaintenanceRule(property_id=p.id, title="Run now rule",
+                                     next_due=today, lead_days=0, interval_weeks=4))
+        s.commit()
+
+    r = client.post("/settings/maintenance/run-now", follow_redirects=False)
+    assert r.status_code == 303
+    assert "rules_created=1" in r.headers["location"]
+
+    html = client.get(r.headers["location"]).text
+    assert "Created 1 maintenance job" in html
+
+
+def test_run_now_tech_forbidden(client, tech_client):
+    t = tech_client(name="runnowtech")
+    assert t.post("/settings/maintenance/run-now",
+                  follow_redirects=False).status_code == 403

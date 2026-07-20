@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import models, qbo
 from app.db import get_session
 from app.deps import require_admin
+from app.maintenance import warranty_alerts
 from app.main import templates
 from app.routers.today import business_today
 from app.scheduling import missed_stops, stops_for_date, visible_to
@@ -28,13 +29,14 @@ def dashboard(request: Request, session: Session = Depends(get_session),
         count = sum(1 for s_ in stops if s_.property.assigned_tech_id == t.id)
         if count:
             crew.append((t, count))
+    warranty_items = warranty_alerts(session, d)
     return templates.TemplateResponse(request, "dashboard.html", {
         "revenue_mtd_cents": sum(r.total_cents for r in rows),
         "stops_done": sum(1 for s_ in stops if s_.status == "done"),
         "stops_total": len(stops), "missed_count": len(missed),
         "open_jobs": len(open_jobs),
         "high_jobs": sum(1 for j in open_jobs if j.priority == "high"),
-        "crew": crew, "d": d})
+        "crew": crew, "warranty_items": warranty_items, "d": d})
 
 
 @router.get("/today/print")

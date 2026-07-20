@@ -51,18 +51,37 @@
 
 {% if pool %}
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Reference photos</h2>
-<div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
-  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">{% endfor %}
+<div class="mb-2 flex flex-wrap gap-2 text-sm">
+  <a href="/pools/{{ pool.id }}/edit" class="tag {{ 'tag-safety' if not ptag }}">All</a>
+  {% for pt in ["before", "after", "issue"] %}
+  <a href="/pools/{{ pool.id }}/edit?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
+  {% endfor %}
 </div>
+<div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
+  {% for ph in photos %}
+  <div class="relative h-20 w-20">
+    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+<select id="pool-photo-tag" name="tag" class="field mb-2">
+  <option value="">No tag</option>
+  <option value="before">Before</option>
+  <option value="after">After</option>
+  <option value="issue">Issue</option>
+</select>
 <input type="file" accept="image/*" capture="environment" multiple name="files"
        hx-post="/photos/pool/{{ pool.id }}" hx-encoding="multipart/form-data"
+       hx-include="#pool-photo-tag"
        hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="field mb-4">
 
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Equipment</h2>
 <div class="mb-3 space-y-2">
   {% for e in pool.equipment %}
   <div class="card flex items-center justify-between p-3 text-sm">
-    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}</span>
+    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}
+      {%- if e.warranty_end %} &middot; Warranty until {{ e.warranty_end.strftime("%Y-%m-%d") }}{% endif %}</span>
     <form method="post" action="/equipment/{{ e.id }}/delete"><button class="min-h-11 text-sm font-medium text-safety">Remove</button></form>
   </div>
   {% endfor %}
@@ -75,7 +94,8 @@
     <input name="brand" placeholder="Brand" class="field">
     <input name="model" placeholder="Model" class="field">
     <input name="serial" placeholder="Serial" class="field">
-    <input type="date" name="install_date" class="field font-data">
+    <input type="date" name="install_date" title="Install date" class="field font-data">
+    <input type="date" name="warranty_end" title="Warranty end date" class="field font-data">
     <input name="notes" placeholder="Notes" class="field">
   </div>
   <button class="btn-secondary w-full">Add equipment</button>

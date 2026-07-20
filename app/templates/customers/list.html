@@ -16,16 +16,36 @@
   <a href="/customers/export" class="btn-secondary flex-1">Export CSV</a>
 </div>
 {% endif %}
+<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+  <a href="/customers?show={{ 'active' if show_inactive else 'inactive' }}{% if q %}&q={{ q | urlencode }}{% endif %}{% if tag %}&tag={{ tag | urlencode }}{% endif %}"
+     class="tag">{{ "Show active" if show_inactive else "Show inactive" }}</a>
+  {% if tag %}
+  <span class="tag tag-safety">Tag: {{ tag }}</span>
+  <a href="/customers?{% if show_inactive %}show=inactive{% endif %}" class="text-pool">Clear tag</a>
+  {% endif %}
+</div>
 <div id="results" class="rise space-y-2">
   {% for c in customers %}
-  <a href="/customers/{{ c.id }}" class="card block min-h-11 p-3.5">
-    <div class="font-semibold">{{ c.name }}</div>
-    <div class="font-data text-sm text-mist">{{ c.phone }}</div>
-  </a>
+  <div class="card p-3.5">
+    <a href="/customers/{{ c.id }}" class="block min-h-11">
+      <div class="font-semibold">{{ c.name }}</div>
+      <div class="font-data text-sm text-mist">{{ c.phone }}</div>
+    </a>
+    {% if c.tags %}
+    <div class="mt-1.5 flex flex-wrap gap-1">
+      {% for t in c.tags %}<a href="/customers?tag={{ t | urlencode }}{% if show_inactive %}&show=inactive{% endif %}" class="tag">{{ t }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    {% if show_inactive and can_manage %}
+    <form method="post" action="/customers/{{ c.id }}/reactivate" class="mt-2">
+      <button class="btn-secondary w-full">Reactivate</button>
+    </form>
+    {% endif %}
+  </div>
   {% else %}
   <div class="card p-6 text-center">
     <p class="font-display text-xl font-bold uppercase tracking-wide">No customers</p>
-    <p class="mt-1 text-sm text-mist">Add your first customer to get started.</p>
+    <p class="mt-1 text-sm text-mist">{{ "No inactive customers." if show_inactive else "Add your first customer to get started." }}</p>
   </div>
   {% endfor %}
 </div>

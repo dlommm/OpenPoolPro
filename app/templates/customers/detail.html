@@ -9,15 +9,49 @@
 <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
   {% if c.phone %}<a href="tel:{{ c.phone }}" class="flex min-h-11 items-center gap-1.5 text-pool">{{ ui.icon("phone", "h-4 w-4") }}{{ c.phone }}</a>{% endif %}
   {% if c.email %}<a href="mailto:{{ c.email }}" class="flex min-h-11 items-center text-pool">{{ c.email }}</a>{% endif %}
+  {% if show_money and lifetime_cents is not none %}<span class="tag">Lifetime <span class="money">{{ lifetime_cents | dollars }}</span></span>{% endif %}
 </p>
+{% if not c.active %}
+<div class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+  <span>This customer is inactive.</span>
+  {% if can_manage %}
+  <form method="post" action="/customers/{{ c.id }}/reactivate" class="mt-2">
+    <button class="btn-secondary w-full">Reactivate customer</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
 {% if c.notes %}<p class="card mb-4 bg-shallow/50 p-3 text-sm">{{ c.notes }}</p>{% endif %}
+
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Tags</h2>
+<div class="card mb-5 p-3">
+  <div class="mb-2 flex flex-wrap gap-1.5">
+    {% for t in c.tags %}
+    <span class="tag">
+      {{ t }}
+      {% if can_manage %}
+      <form method="post" action="/customers/{{ c.id }}/tags/remove" class="inline">
+        <input type="hidden" name="tag" value="{{ t }}">
+        <button class="text-safety" aria-label="Remove tag {{ t }}">×</button>
+      </form>
+      {% endif %}
+    </span>
+    {% else %}<span class="text-sm text-mist">No tags yet.</span>{% endfor %}
+  </div>
+  {% if can_manage %}
+  <form method="post" action="/customers/{{ c.id }}/tags/add" class="flex gap-2">
+    <input name="tags" placeholder="Add tag (comma-separated)" class="field flex-1">
+    <button class="btn-secondary">Add</button>
+  </form>
+  {% endif %}
+</div>
 
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
 <div class="rise mb-5 space-y-2">
   {% for p in props %}
-  <div class="card p-3.5">
+  <div class="card p-3.5 {{ 'opacity-60' if not p.active }}">
     <div class="flex justify-between gap-2">
-      <div class="font-semibold">{{ p.label }}</div>
+      <div class="font-semibold">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
       <a href="/properties/{{ p.id }}/edit" class="min-h-11 text-sm text-pool">Edit</a>
     </div>
     <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
@@ -27,7 +61,13 @@
       {% if show_money %}· <span class="money">{{ rates[p.id] | dollars }}</span>/visit{{ " (override)" if p.rate_override_cents is not none }}{% endif %}
       {% if p.gate_code %}<span class="tag">Gate {{ p.gate_code }}</span>{% endif %}
       {% if p.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ p.dog_note }}</span>{% endif %}
+      {% if p.id in active_holds %}<span class="tag">On hold until {{ active_holds[p.id].resume_date or "further notice" }}</span>{% endif %}
     </div>
+    {% if not p.active and can_manage %}
+    <form method="post" action="/properties/{{ p.id }}/reactivate" class="mt-2">
+      <button class="btn-secondary w-full">Reactivate property</button>
+    </form>
+    {% else %}
     <div class="mt-2 space-y-1">
       {% for pool in p.pools if pool.active %}
       <a href="/pools/{{ pool.id }}/edit" class="flex min-h-11 items-center justify-between gap-2 text-sm">
@@ -37,6 +77,7 @@
       {% endfor %}
       <a href="/properties/{{ p.id }}/pools/new" class="flex min-h-11 items-center gap-1 text-sm text-pool">{{ ui.icon("plus", "h-3.5 w-3.5") }}Add pool</a>
     </div>
+    {% endif %}
   </div>
   {% endfor %}
   <a href="/customers/{{ c.id }}/properties/new"
@@ -51,29 +92,55 @@
 </div>
 {% endif %}
 
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Visit history</h2>
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Communication log</h2>
+{% if can_manage %}
+<form method="post" action="/customers/{{ c.id }}/comm/add" class="card mb-3 flex flex-wrap gap-2 p-3">
+  <select name="kind" class="field w-28 flex-none">
+    {% for k in ["call","email","text","note"] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+  </select>
+  <input name="note" placeholder="Note" class="field min-w-0 flex-1">
+  <button class="btn-secondary">Log</button>
+</form>
+{% endif %}
+
+{% if photos or ptag %}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
+<div class="mb-2 flex flex-wrap gap-2 text-sm">
+  <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
+  {% for pt in ["before", "after", "issue"] %}
+  <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
+  {% endfor %}
+</div>
+<div class="mb-5 flex flex-wrap gap-2">
+  {% for ph, prop in photos %}
+  <div class="relative h-20 w-20">
+    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+  </div>
+  {% else %}
+  <p class="text-sm text-mist">No photos yet.</p>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
 <div class="space-y-2">
-  {% for v in visits %}
-  <div class="card p-3.5 text-sm">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <a href="/visit/{{ v.property_id }}/{{ v.date }}" class="font-data font-semibold text-pool">{{ v.date }}</a>
-        {% if v.duration_minutes is not none %}<span class="tag font-data">{{ v.duration_minutes | minutes_display }}</span>{% endif %}
+  {% for e in timeline %}
+  <div class="card flex items-start gap-2.5 p-3.5 text-sm">
+    {{ ui.icon(e.icon, "h-4 w-4 shrink-0 mt-0.5 text-pool") }}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-semibold">{{ e.title }}</span>
+        {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
       </div>
-      <span class="flex items-center gap-1.5">
-        {% if v.completed_by %}<span class="tag">{{ v.completed_by.name | initials }}</span>{% endif %}
-        {{ ui.icon("check", "inline h-4 w-4 text-pool") if v.status == "done" else "" }}
-        {% if show_money and v.rate_cents %}<span class="money">{{ v.rate_cents | dollars }}</span>{% endif %}</span>
+      {% if e.detail %}<div class="mt-0.5 text-mist">{{ e.detail }}</div>{% endif %}
+      <div class="mt-0.5 font-data text-xs text-mist">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
     </div>
-    {% if v.fc is not none or v.ph is not none %}
-    <div class="mt-0.5 font-data text-xs text-mist">FC {{ v.fc }} · pH {{ v.ph }} · TA {{ v.ta }}{% if v.cya is not none %} · CYA {{ v.cya }}{% endif %}{% if v.salt is not none %} · Salt {{ v.salt }}{% endif %}</div>
-    {% endif %}
-    {% if v.notes %}<div class="mt-1">{{ v.notes }}</div>{% endif %}
   </div>
   {% else %}
   <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No visits yet</p>
-    <p class="mt-1 text-sm text-mist">Visit history will appear here once service begins.</p>
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No activity yet</p>
+    <p class="mt-1 text-sm text-mist">Visits, jobs, photos and notes will appear here once service begins.</p>
   </div>
   {% endfor %}
 </div>
