@@ -12,7 +12,7 @@
   {% if error %}<p class="mt-6 text-center font-medium text-safety">{{ error }}</p>{% endif %}
   <form method="post" action="/login/2fa" class="mt-8 space-y-3">
     <input name="code" placeholder="Code" autofocus autocapitalize="none"
-           autocomplete="one-time-code" inputmode="numeric" class="field text-center">
+           autocomplete="one-time-code" class="field text-center">
     <button class="btn-primary">Verify</button>
   </form>
 </div>

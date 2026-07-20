@@ -1,5 +1,8 @@
+import base64
+import json
 import time
 
+import itsdangerous
 import pyotp
 from sqlalchemy.orm import Session
 
@@ -104,6 +107,56 @@ def test_verify_code_tolerant_of_bad_input():
     assert security.verify_code("ABCD1234EF", None) is False
     assert security.verify_code("ABCD1234EF", "") is False
     assert security.verify_code("ABCD1234EF", "not-a-valid-bcrypt-hash") is False
+
+
+# ---------------------------------------------------------------------------
+# sign_pending / unsign_pending
+# ---------------------------------------------------------------------------
+
+def test_unsign_pending_round_trips_payload():
+    token = security.sign_pending("supersecret", {"user_id": 7})
+    assert security.unsign_pending("supersecret", token) == {"user_id": 7}
+
+
+def test_unsign_pending_rejects_tampered_token():
+    token = security.sign_pending("supersecret", {"user_id": 7})
+    # Flip one character (the raw token is Base64/HMAC ASCII, never digit-only
+    # padding) so the signature check fails rather than silently no-opping.
+    last = token[-1]
+    flipped = "a" if last != "a" else "b"
+    tampered = token[:-1] + flipped
+    assert tampered != token
+    assert security.unsign_pending("supersecret", tampered) is None
+
+
+def test_unsign_pending_rejects_session_cookie_from_other_direction():
+    """Cross-use, direction 1: a cookie signed the way Starlette's
+    SessionMiddleware signs the real session cookie (same secret key,
+    itsdangerous.TimestampSigner, but no salt and standard b64 encoding)
+    must NOT be accepted by unsign_pending -- the distinct
+    ``cpp-2fa-pending`` salt has to keep the two cookie namespaces from
+    being forgeable into one another."""
+    secret = "supersecret"
+    signer = itsdangerous.TimestampSigner(secret)  # what SessionMiddleware uses
+    data = base64.b64encode(json.dumps({"user_id": 7, "epoch": 0}).encode("utf-8"))
+    session_cookie = signer.sign(data).decode("utf-8")
+    assert security.unsign_pending(secret, session_cookie) is None
+
+
+def test_sign_pending_token_rejected_by_session_signer_other_direction():
+    """Cross-use, direction 2: a token minted by sign_pending must NOT
+    verify against the real session cookie's signer (same secret key, no
+    salt) -- a stolen/leaked pending-2FA cookie can't be replayed as a
+    real session cookie either."""
+    secret = "supersecret"
+    pending_token = security.sign_pending(secret, {"user_id": 7})
+    session_signer = itsdangerous.TimestampSigner(secret)
+    try:
+        session_signer.unsign(pending_token.encode("utf-8"), max_age=300)
+        raised = False
+    except itsdangerous.BadSignature:
+        raised = True
+    assert raised
 
 
 # ---------------------------------------------------------------------------

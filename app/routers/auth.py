@@ -68,6 +68,29 @@ def _clear_pending_redirect(target: str, status_code: int = 303) -> RedirectResp
     return resp
 
 
+def _record_failure(session: Session, user_id: int | None, user_key: str, ip_key: str,
+                     detail: str) -> None:
+    """Shared fail/audit path for both the password stage and the 2FA stage.
+
+    Fails both rate-limit keys, audits ``auth.fail`` with ``detail``, then
+    audits ``auth.lockout`` once per key that is locked *after* this call.
+    Callers only reach here once they've already confirmed neither key was
+    locked on entry, so a ``locked()`` reading True here can only mean this
+    failure just crossed the threshold -- "first lock only" semantics for
+    free, no extra bookkeeping needed.
+    """
+    limiter.fail(user_key)
+    limiter.fail(ip_key)
+    models.audit(session, user_id, "auth.fail", detail=detail)
+    session.commit()
+    if limiter.locked(user_key):
+        models.audit(session, user_id, "auth.lockout", detail=user_key)
+        session.commit()
+    if limiter.locked(ip_key):
+        models.audit(session, user_id, "auth.lockout", detail=ip_key)
+        session.commit()
+
+
 @router.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": None})
@@ -89,17 +112,8 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
         models.User.active)).first()
     ok = verify_password(password, user.password_hash if user else _DUMMY_HASH)
     if user is None or not ok:
-        limiter.fail(user_key)
-        limiter.fail(ip_key)
-        models.audit(session, user.id if user else None, "auth.fail",
-                     detail=f"login for {uname!r}")
-        session.commit()
-        if limiter.locked(user_key):
-            models.audit(session, user.id if user else None, "auth.lockout", detail=user_key)
-            session.commit()
-        if limiter.locked(ip_key):
-            models.audit(session, user.id if user else None, "auth.lockout", detail=ip_key)
-            session.commit()
+        _record_failure(session, user.id if user else None, user_key, ip_key,
+                         detail=f"login for {uname!r}")
         return templates.TemplateResponse(request, "login.html", {"error": GENERIC_LOGIN_ERROR})
 
     if user.totp_enabled:
@@ -148,26 +162,17 @@ def login_2fa(request: Request, code: str = Form(""), session: Session = Depends
                 break
 
     if not ok:
-        limiter.fail(user_key)
-        limiter.fail(ip_key)
-        models.audit(session, user.id, "auth.fail", detail="2fa")
-        session.commit()
-        if limiter.locked(user_key):
-            models.audit(session, user.id, "auth.lockout", detail=user_key)
-            session.commit()
-        if limiter.locked(ip_key):
-            models.audit(session, user.id, "auth.lockout", detail=ip_key)
-            session.commit()
+        _record_failure(session, user.id, user_key, ip_key, detail="2fa")
         return templates.TemplateResponse(request, "login_2fa.html", {"error": GENERIC_2FA_ERROR})
 
+    backup_remaining = None
     if used_backup_code is not None:
         used_backup_code.used_at = models.utcnow()
-        remaining = session.scalars(select(models.BackupCode).where(
+        backup_remaining = len(session.scalars(select(models.BackupCode).where(
             models.BackupCode.user_id == user.id,
-            models.BackupCode.used_at.is_(None))).all()
+            models.BackupCode.used_at.is_(None))).all())
         models.audit(session, user.id, "auth.backup_code_used",
-                     detail=f"{len(remaining)} remaining")
-        session.commit()
+                     detail=f"{backup_remaining} remaining")
 
     limiter.reset(user_key)
     limiter.reset(ip_key)
@@ -175,7 +180,8 @@ def login_2fa(request: Request, code: str = Form(""), session: Session = Depends
     models.audit(session, user.id, "auth.login", detail="password+2fa")
     session.commit()
 
-    resp = RedirectResponse("/", status_code=303)
+    target = "/" if backup_remaining is None else f"/?backup_remaining={backup_remaining}"
+    resp = RedirectResponse(target, status_code=303)
     resp.delete_cookie(PENDING_2FA_COOKIE, path="/")
     return resp
 

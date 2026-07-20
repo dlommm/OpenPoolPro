@@ -95,6 +95,27 @@ def test_wrong_totp_rejected_and_counts_toward_rate_limit(engine, monkeypatch):
     assert _audit_count(engine, "auth.fail") == 1
 
 
+def test_locked_key_blocks_correct_totp_code_at_2fa_stage(engine, monkeypatch):
+    """Once the shared rate-limit key is locked (5 wrong /login/2fa codes),
+    even a CORRECT TOTP code must still be rejected -- the
+    ``limiter.locked(...)`` short-circuit at the top of ``login_2fa`` (before
+    ``totp_verify`` is ever called) has to win over a valid code."""
+    c = make_client(engine, monkeypatch)
+    secret = _enable_totp(engine)
+    c.post("/login", data={"username": "owner", "password": "testpass"})
+
+    for _ in range(5):
+        r = c.post("/login/2fa", data={"code": "000000"}, follow_redirects=False)
+        assert r.status_code == 200
+    assert _audit_count(engine, "auth.lockout") >= 1
+
+    code = pyotp.TOTP(secret).now()
+    r_locked = c.post("/login/2fa", data={"code": code}, follow_redirects=False)
+    assert r_locked.status_code == 200
+    assert "Invalid code" in r_locked.text
+    assert c.get("/", follow_redirects=False).status_code == 303  # never authenticated
+
+
 def test_2fa_failures_count_toward_shared_rate_limit_keys(engine, monkeypatch):
     c = make_client(engine, monkeypatch)
     _enable_totp(engine)
@@ -151,7 +172,7 @@ def test_backup_code_works_once_then_fails(engine, monkeypatch):
 
     c.post("/login", data={"username": "owner", "password": "testpass"})
     r = c.post("/login/2fa", data={"code": plain}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert r.status_code == 303 and r.headers["location"] == "/?backup_remaining=0"
     assert c.get("/", follow_redirects=False).status_code == 200
     assert _audit_count(engine, "auth.backup_code_used") == 1
 
@@ -166,6 +187,33 @@ def test_backup_code_works_once_then_fails(engine, monkeypatch):
     r2 = c.post("/login/2fa", data={"code": plain}, follow_redirects=False)
     assert r2.status_code == 200 and "Invalid code" in r2.text
     assert _audit_count(engine, "auth.backup_code_used") == 1  # unchanged
+
+
+def test_backup_code_login_redirect_carries_remaining_count(engine, monkeypatch):
+    c = make_client(engine, monkeypatch)
+    _enable_totp(engine)
+    uid = _user_id(engine)
+    with Session(engine) as s:
+        s.add(models.BackupCode(user_id=uid, code_hash=security.hash_code("abcd1234ef")))
+        s.add(models.BackupCode(user_id=uid, code_hash=security.hash_code("ffff000011")))
+        s.commit()
+
+    c.post("/login", data={"username": "owner", "password": "testpass"})
+    r = c.post("/login/2fa", data={"code": "abcd1234ef"}, follow_redirects=False)
+    assert r.status_code == 303
+    # One of two codes used -> one left.
+    assert r.headers["location"] == "/?backup_remaining=1"
+
+
+def test_totp_login_redirect_has_no_backup_remaining_param(engine, monkeypatch):
+    """Only a backup-code login carries the remaining-count param; a plain
+    TOTP-code login redirects to a bare "/"."""
+    c = make_client(engine, monkeypatch)
+    secret = _enable_totp(engine)
+    c.post("/login", data={"username": "owner", "password": "testpass"})
+    code = pyotp.TOTP(secret).now()
+    r = c.post("/login/2fa", data={"code": code}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
 
 
 # ---------------------------------------------------------------------------
