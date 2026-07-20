@@ -413,3 +413,24 @@ def test_customer_photos_section_ptag_filter(client, engine):
     # tolerant: unknown ptag value -> all photos shown, not an error
     tolerant = client.get(f"/customers/{cid}?ptag=nonsense").text
     assert tolerant.count("/photos/file/") >= 2
+
+
+def test_notify_email_toggle_persists(client, engine):
+    r = client.post("/customers/new", data={
+        "name": "Notify Co", "qb_display_name": "", "phone": "", "email": "n@x.com",
+        "notes": "", "notify_email": "on"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        c = s.scalars(select(models.Customer).where(models.Customer.name == "Notify Co")).one()
+        assert c.notify_email is True
+        cid = c.id
+
+    edit_html = client.get(f"/customers/{cid}/edit").text
+    assert "checked" in edit_html.split('name="notify_email"')[1].split(">")[0]
+
+    # unchecking (omitting the field) turns it back off
+    client.post(f"/customers/{cid}/edit", data={
+        "name": "Notify Co", "qb_display_name": "", "phone": "", "email": "n@x.com",
+        "notes": ""})
+    with Session(engine) as s:
+        assert s.get(models.Customer, cid).notify_email is False

@@ -46,6 +46,7 @@ class Customer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 
@@ -397,3 +398,17 @@ def audit(session, user_id: int | None, action: str, detail: str = "") -> AuditL
     session.add(row)
     session.flush()
     return row
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True)
+    to_addr: Mapped[str] = mapped_column(String(120))
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(8), default="pending")  # pending|sent|failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

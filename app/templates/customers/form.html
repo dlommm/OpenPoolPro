@@ -10,6 +10,8 @@
   {% endfor %}
   <label class="block"><span class="field-label">Notes</span>
     <textarea name="notes" class="field min-h-24 py-2">{{ c.notes if c else "" }}</textarea></label>
+  <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="notify_email"
+         {{ "checked" if c and c.notify_email }} class="h-5 w-5 rounded border-seam text-pool"> Email visit notifications</label>
   <button class="btn-primary">Save</button>
 </form>
 

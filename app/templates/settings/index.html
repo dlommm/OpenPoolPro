@@ -162,6 +162,59 @@
 </div>
 
 <div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Email</h2>
+  {% if smtp_configured %}
+  <span class="tag border-pool bg-shallow mb-2 inline-block">Configured — {{ smtp_host }}</span>
+  {% else %}
+  <span class="tag tag-safety mb-2 inline-block">Not configured</span>
+  {% endif %}
+
+  {% if mail_error %}
+  <p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>
+  {% endif %}
+  {% if mail_result is not none %}
+  <div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>
+  {% endif %}
+
+  <form method="post" action="/settings/mail/test" class="mb-2 flex gap-2">
+    <input type="email" name="to_addr" placeholder="Send test email to…" class="field flex-1">
+    <button class="btn-secondary px-4">Send test email</button>
+  </form>
+  <form method="post" action="/settings/mail/flush" class="mb-3">
+    <button class="btn-secondary w-full">Flush now</button>
+  </form>
+
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="py-1.5 pr-3 font-medium">Created</th>
+        <th class="py-1.5 pr-3 font-medium">To</th>
+        <th class="py-1.5 pr-3 font-medium">Subject</th>
+        <th class="py-1.5 pr-3 font-medium">Status</th>
+        <th class="py-1.5 pr-3 font-medium">Attempts</th>
+        <th class="py-1.5 font-medium">Last error</th>
+      </tr>
+    </thead>
+    <tbody class="font-data">
+      {% for row in outbox %}
+      <tr class="border-b border-seam/60">
+        <td class="py-1.5 pr-3 whitespace-nowrap">{{ row.created_at | localdt }}</td>
+        <td class="py-1.5 pr-3 font-body">{{ row.to_addr }}</td>
+        <td class="py-1.5 pr-3 font-body">{{ row.subject }}</td>
+        <td class="py-1.5 pr-3"><span class="tag {{ 'tag-safety' if row.status == 'failed' }}">{{ row.status }}</span></td>
+        <td class="py-1.5 pr-3">{{ row.attempts }}</td>
+        <td class="py-1.5 text-xs text-mist">{{ (row.last_error or "")[:80] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="py-6 text-center text-mist">No outbox activity yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Maintenance rules</h2>
   <p class="mb-2 text-xs text-mist">Runs nightly; use this to create due jobs right now.</p>
   <form method="post" action="/settings/maintenance/run-now">

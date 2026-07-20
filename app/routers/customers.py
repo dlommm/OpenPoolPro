@@ -229,10 +229,11 @@ def new_customer_form(request: Request, user=Depends(require_perm("manage_custom
 @router.post("/customers/new")
 def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
                     phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
+                    notify_email: bool = Form(False),
                     session: Session = Depends(get_session),
                     user=Depends(require_perm("manage_customers"))):
     c = models.Customer(name=name, qb_display_name=qb_display_name.strip() or name,
-                        phone=phone, email=email, notes=notes)
+                        phone=phone, email=email, notes=notes, notify_email=notify_email)
     session.add(c)
     session.commit()
     return RedirectResponse(f"/customers/{c.id}", status_code=303)
@@ -289,11 +290,13 @@ def edit_customer_form(request: Request, cid: int, session: Session = Depends(ge
 @router.post("/customers/{cid}/edit")
 def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form(""),
                   phone: str = Form(""), email: str = Form(""), notes: str = Form(""),
+                  notify_email: bool = Form(False),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     c = get_or_404(session, models.Customer, cid)
     c.name, c.phone, c.email, c.notes = name, phone, email, notes
     c.qb_display_name = qb_display_name.strip() or name
+    c.notify_email = notify_email
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 

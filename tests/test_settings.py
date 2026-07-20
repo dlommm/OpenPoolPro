@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import config, mailer, models
 
 
 def test_update_chemical_cost(client, engine):
@@ -323,4 +323,82 @@ def test_run_now_admin_creates_job_and_shows_banner(client, engine):
 def test_run_now_tech_forbidden(client, tech_client):
     t = tech_client(name="runnowtech")
     assert t.post("/settings/maintenance/run-now",
+                  follow_redirects=False).status_code == 403
+
+
+# --- Email section -------------------------------------------------------------
+
+def test_settings_shows_unconfigured_badge_by_default(client, engine):
+    html = client.get("/settings").text
+    assert "Not configured" in html
+
+
+def test_settings_shows_configured_badge_with_host_only(client, engine, monkeypatch):
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(config, "SMTP_USER", "user@example.com")
+    monkeypatch.setattr(config, "SMTP_PASS", "supersecret")
+    html = client.get("/settings").text
+    assert "Configured" in html and "smtp.example.com" in html
+    assert "supersecret" not in html  # credentials never render
+
+
+def test_settings_outbox_lists_recent_rows(client, engine):
+    with Session(engine) as s:
+        mailer.queue(s, "cust@x.com", "Reminder", "Body text")
+        s.commit()
+    html = client.get("/settings").text
+    assert "cust@x.com" in html and "Reminder" in html and "pending" in html
+
+
+def test_send_test_email_blank_address_errors_and_queues_nothing(client, engine):
+    r = client.post("/settings/mail/test", data={"to_addr": ""}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "mail_error" in r.headers["location"]
+    html = client.get(r.headers["location"]).text
+    assert "valid email address" in html
+    with Session(engine) as s:
+        assert s.scalars(select(models.EmailOutbox)).all() == []
+
+
+def test_send_test_email_no_at_sign_errors_and_queues_nothing(client, engine):
+    r = client.post("/settings/mail/test", data={"to_addr": "not-an-email"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    assert "mail_error" in r.headers["location"]
+    with Session(engine) as s:
+        assert s.scalars(select(models.EmailOutbox)).all() == []
+
+
+def test_send_test_email_queues_and_flushes(client, engine, monkeypatch):
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(mailer, "send_message", lambda *a: None)
+    r = client.post("/settings/mail/test", data={"to_addr": "dest@example.com"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    assert "mail_sent=1" in r.headers["location"] and "mail_failed=0" in r.headers["location"]
+    with Session(engine) as s:
+        row = s.scalars(select(models.EmailOutbox)).one()
+        assert row.to_addr == "dest@example.com" and row.status == "sent"
+    html = client.get(r.headers["location"]).text
+    assert "1 sent" in html and "0 failed" in html
+
+
+def test_flush_now_shows_banner(client, engine, monkeypatch):
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(mailer, "send_message", lambda *a: None)
+    with Session(engine) as s:
+        mailer.queue(s, "a@x.com", "s", "b")
+        mailer.queue(s, "b@x.com", "s", "b")
+        s.commit()
+    r = client.post("/settings/mail/flush", follow_redirects=False)
+    assert r.status_code == 303
+    html = client.get(r.headers["location"]).text
+    assert "2 sent" in html and "0 failed" in html
+
+
+def test_settings_email_section_admin_only(tech_client):
+    t = tech_client(name="mailtech")
+    assert t.get("/settings").status_code == 403
+    assert t.post("/settings/mail/flush", follow_redirects=False).status_code == 403
+    assert t.post("/settings/mail/test", data={"to_addr": "x@x.com"},
                   follow_redirects=False).status_code == 403
