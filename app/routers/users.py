@@ -140,13 +140,21 @@ def enable_user(request: Request, uid: int, session: Session = Depends(get_sessi
 def reset_2fa(request: Request, uid: int, session: Session = Depends(get_session)):
     """Admin recovery path: clear a user's 2FA entirely (secret, enabled
     flag, and every backup code) -- for when they've lost their device and
-    can't confirm a self-service disable."""
+    can't confirm a self-service disable. Also bumps the target's session
+    epoch (mirroring logout_sessions below) so any session cookie already
+    issued to them -- which was minted under the now-defunct 2FA state --
+    is invalidated too; if the admin targets their own account, refresh
+    this request's own session so they aren't logged out by their own
+    action."""
     u = get_or_404(session, models.User, uid)
     u.totp_secret = None
     u.totp_enabled = False
     for bc in session.scalars(select(models.BackupCode).where(
             models.BackupCode.user_id == u.id)).all():
         session.delete(bc)
+    u.session_epoch += 1
+    if u.id == request.state.user.id:
+        request.session["epoch"] = u.session_epoch
     models.audit(session, request.state.user.id, "auth.2fa_reset",
                  detail=f"{u.username!r} (id={u.id})")
     session.commit()

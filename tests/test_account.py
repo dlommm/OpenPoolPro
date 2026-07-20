@@ -128,6 +128,20 @@ def test_enroll_start_shows_qr_and_manual_secret(client):
     assert 'data:image/svg+xml;base64,' in html
 
 
+def test_login_pending_token_replayed_as_enroll_cookie_rejected(client, engine):
+    """Reverse direction of the cross-cookie replay fix: a stolen cpp_2fa
+    (login-pending) token must not be usable as the cpp_2fa_enroll cookie.
+    It carries purpose "login_2fa" (not "2fa_enroll") and no embedded
+    secret, so _enroll_payload must reject it rather than surfacing a QR
+    code / enroll secret that was never actually issued."""
+    owner_id = _owner_id(engine)
+    login_token = security.sign_pending(config.SECRET_KEY,
+                                        {"user_id": owner_id, "purpose": "login_2fa"})
+    client.cookies.set("cpp_2fa_enroll", login_token)
+    html = client.get("/account").text
+    assert "data:image/svg+xml;base64," not in html
+
+
 def test_enroll_confirm_wrong_code_not_enabled(client, engine):
     _start_enroll(client)
     r = client.post("/account/2fa/confirm", data={"code": "000000"})
@@ -198,6 +212,27 @@ def test_regenerate_invalidates_old_codes(client, engine):
         assert len(new_rows) == 10
         new_hashes = {bc.code_hash for bc in new_rows}
     assert new_hashes.isdisjoint(old_hashes)
+    assert len(_audit_rows(engine, "auth.backup_codes_regenerated")) == 1
+
+
+def test_regenerate_accepts_backup_code_instead_of_totp(client, engine):
+    owner_id = _owner_id(engine)
+    _enable_2fa(client)
+    # Swap in one known-plaintext backup code so the confirm step can be
+    # driven by a backup code instead of a TOTP code -- mirrors
+    # test_disable_accepts_backup_code_instead_of_totp below.
+    with Session(engine) as s:
+        for bc in s.scalars(select(models.BackupCode).where(
+                models.BackupCode.user_id == owner_id)).all():
+            s.delete(bc)
+        s.add(models.BackupCode(user_id=owner_id, code_hash=security.hash_code("beefcafe01")))
+        s.commit()
+    r = client.post("/account/2fa/regenerate", data={"code": "beefcafe01"})
+    assert r.status_code == 200
+    with Session(engine) as s:
+        rows = s.scalars(select(models.BackupCode).where(
+            models.BackupCode.user_id == owner_id)).all()
+        assert len(rows) == 10
     assert len(_audit_rows(engine, "auth.backup_codes_regenerated")) == 1
 
 
@@ -305,6 +340,7 @@ def _make_tech_with_2fa(client, engine, name="fieldtech", password="techpass"):
 def test_admin_reset_2fa_clears_and_audits(client, engine):
     uid, tech, secret = _make_tech_with_2fa(client, engine)
     owner_id = _owner_id(engine)
+    assert tech.get("/", follow_redirects=False).status_code == 200
 
     r = client.post(f"/users/{uid}/2fa/reset", follow_redirects=False)
     assert r.status_code == 303
@@ -318,10 +354,36 @@ def test_admin_reset_2fa_clears_and_audits(client, engine):
     rows = _audit_rows(engine, "auth.2fa_reset")
     assert len(rows) == 1 and rows[0].user_id == owner_id
 
+    # An admin-triggered 2FA reset must bump the target's session epoch too --
+    # otherwise the target's still-live cookie stays valid even though their
+    # 2FA has just been ripped out from under them.
+    assert tech.get("/", follow_redirects=False).status_code == 303
+
 
 def test_admin_reset_2fa_tech_forbidden(client, engine, tech_client):
     t = tech_client(name="notallowed")
     assert t.post("/users/1/2fa/reset", follow_redirects=False).status_code == 403
+
+
+def test_admin_reset_own_2fa_stays_logged_in(client, engine):
+    """Mirrors the logout-sessions self-target guard: an admin resetting
+    their OWN 2FA must get a fresh epoch in their own session so the very
+    request that triggered the reset doesn't log them out."""
+    owner_id = _owner_id(engine)
+    _enable_2fa(client)
+
+    r = client.post(f"/users/{owner_id}/2fa/reset", follow_redirects=False)
+    assert r.status_code == 303
+    assert client.get("/account", follow_redirects=False).status_code == 200
+
+    with Session(engine) as s:
+        u = s.get(models.User, owner_id)
+        assert not u.totp_enabled and u.totp_secret is None
+
+
+def test_admin_logout_sessions_tech_forbidden(client, engine, tech_client):
+    t = tech_client(name="notallowed2")
+    assert t.post("/users/1/logout-sessions", follow_redirects=False).status_code == 403
 
 
 def test_admin_logout_their_sessions_invalidates_target(client, engine):

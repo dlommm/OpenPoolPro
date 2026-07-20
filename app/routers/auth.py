@@ -37,12 +37,6 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _cookie_flags(max_age: int) -> dict:
-    """HttpOnly + SameSite=Lax always; Secure iff COOKIE_SECURE=1."""
-    return dict(httponly=True, samesite="lax", secure=config.COOKIE_SECURE,
-                max_age=max_age, path="/")
-
-
 def _establish_session(request: Request, user: models.User) -> None:
     request.session.clear()
     request.session["user_id"] = user.id
@@ -51,10 +45,18 @@ def _establish_session(request: Request, user: models.User) -> None:
 
 def _pending_user(request: Request, session: Session) -> models.User | None:
     """Resolve + validate the signed cpp_2fa cookie. None if missing,
-    tampered with, expired, or the user is no longer eligible for it."""
+    tampered with, expired, wrong purpose, or the user is no longer
+    eligible for it.
+
+    The purpose check stops a stolen/leaked cpp_2fa_enroll token (purpose
+    "2fa_enroll", see app/routers/account.py) from being replayed here as a
+    cpp_2fa cookie: both cookies are signed with the same itsdangerous
+    salt, so without this check a captured enroll token would resolve to a
+    valid user and land straight on the 2FA code-entry form, skipping the
+    password stage entirely."""
     token = request.cookies.get(PENDING_2FA_COOKIE)
     payload = security.unsign_pending(config.SECRET_KEY, token, max_age=PENDING_2FA_MAX_AGE)
-    if not payload:
+    if not payload or payload.get("purpose") != "login_2fa":
         return None
     user = session.get(models.User, payload.get("user_id"))
     if user is None or not user.active or not user.totp_enabled:
@@ -117,9 +119,10 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
         return templates.TemplateResponse(request, "login.html", {"error": GENERIC_LOGIN_ERROR})
 
     if user.totp_enabled:
-        token = security.sign_pending(config.SECRET_KEY, {"user_id": user.id})
+        token = security.sign_pending(config.SECRET_KEY,
+                                       {"user_id": user.id, "purpose": "login_2fa"})
         resp = RedirectResponse("/login/2fa", status_code=303)
-        resp.set_cookie(PENDING_2FA_COOKIE, token, **_cookie_flags(PENDING_2FA_MAX_AGE))
+        resp.set_cookie(PENDING_2FA_COOKIE, token, **security.cookie_flags(PENDING_2FA_MAX_AGE))
         return resp
 
     limiter.reset(user_key)

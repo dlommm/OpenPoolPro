@@ -52,16 +52,33 @@ def test_tier_save_with_no_actual_change_skips_audit(client, engine):
     with Session(engine) as s:
         tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
         ids = [str(t.id) for t in tiers]
-        rates = [f"{t.rate_cents / 100:.2f}" for t in tiers]
+        rate_cents = [t.rate_cents for t in tiers]
         maxg = [str(t.max_gallons) if t.max_gallons is not None else "" for t in tiers]
         labels = [t.label for t in tiers]
-    # No blank rate, no new row -- this still counts as "changed" under the
-    # current (simple) tracking since every submitted row is re-saved, so
-    # instead assert the no-op "all rows blank" case skips the audit.
+    rates = [f"{c / 100:.2f}" for c in rate_cents]
+
+    # Submitting nothing at all is a no-op.
     client.post("/settings/tiers", data={"tier_id": [], "max_gallons": [], "rate_dollars": [], "label": []})
     with Session(engine) as s:
         rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
         assert len(rows) == 0
+
+    # Resubmitting the exact same values for every existing row must ALSO be
+    # a no-op -- every row is "touched" by the form post, but nothing about
+    # any of them actually changed, so no rates.change row should appear.
+    client.post("/settings/tiers", data={
+        "tier_id": ids, "max_gallons": maxg, "rate_dollars": rates, "label": labels})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 0
+
+    # A real change on top of that resubmission produces exactly one row.
+    rates[0] = f"{(rate_cents[0] + 500) / 100:.2f}"
+    client.post("/settings/tiers", data={
+        "tier_id": ids, "max_gallons": maxg, "rate_dollars": rates, "label": labels})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 1
 
 
 def test_markup_setting(client, engine):

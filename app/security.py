@@ -13,10 +13,23 @@ import itsdangerous
 import pyotp
 import segno
 
+from app import config
 from app.auth_core import pwd_context
 
 ISSUER = "Coastline Pools"
 _PENDING_2FA_SALT = "cpp-2fa-pending"
+
+
+def cookie_flags(max_age: int) -> dict:
+    """HttpOnly + SameSite=Lax always; Secure iff COOKIE_SECURE=1.
+
+    Shared by every router that sets a short-lived pre-auth cookie (the
+    login-time pending-2FA cookie in app/routers/auth.py, the 2FA-enroll
+    cookie in app/routers/account.py) so the flags can't drift out of sync
+    between them.
+    """
+    return dict(httponly=True, samesite="lax", secure=config.COOKIE_SECURE,
+                max_age=max_age, path="/")
 
 
 def new_totp_secret() -> str:

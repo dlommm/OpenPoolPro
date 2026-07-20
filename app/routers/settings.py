@@ -81,12 +81,18 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
             max_gallons = int(max_g) if max_g.strip() else None
         except ValueError:
             continue
-        t = tier if tier is not None else models.RateTier(rate_cents=0)
+        if tier is not None:
+            before = (tier.max_gallons, tier.rate_cents, tier.label)
+            if (max_gallons, rate_cents, label) != before:
+                changed += 1
+            t = tier
+        else:
+            t = models.RateTier(rate_cents=0)
+            changed += 1
         t.max_gallons = max_gallons
         t.rate_cents = rate_cents
         t.label = label
         session.add(t)
-        changed += 1
     if changed:
         models.audit(session, request.state.user.id, "rates.change",
                      detail=f"{changed} rate tier(s) changed")

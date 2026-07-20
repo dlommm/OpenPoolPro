@@ -158,6 +158,30 @@ def test_2fa_page_without_pending_cookie_redirects_to_login(engine, monkeypatch)
 
 
 # ---------------------------------------------------------------------------
+# Pending-cookie purpose isolation
+# ---------------------------------------------------------------------------
+
+def test_enroll_token_replayed_as_login_pending_cookie_rejected(engine, monkeypatch):
+    """A stolen/leaked cpp_2fa_enroll token (purpose "2fa_enroll") must not
+    be usable as the cpp_2fa login-pending cookie -- otherwise an attacker
+    who captured an enroll token could skip the password stage entirely and
+    land straight on the 2FA code-entry form for a user who never even
+    attempted to log in."""
+    c = make_client(engine, monkeypatch)
+    _enable_totp(engine)
+    uid = _user_id(engine)
+    enroll_token = security.sign_pending(
+        config.SECRET_KEY, {"purpose": "2fa_enroll", "user_id": uid, "secret": "AAAAAAAAAAAAAAAA"})
+    c.cookies.set(auth.PENDING_2FA_COOKIE, enroll_token)
+
+    r = c.get("/login/2fa", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+
+    r2 = c.post("/login/2fa", data={"code": "123456"}, follow_redirects=False)
+    assert r2.status_code == 303 and r2.headers["location"] == "/login"
+
+
+# ---------------------------------------------------------------------------
 # Backup codes
 # ---------------------------------------------------------------------------
 

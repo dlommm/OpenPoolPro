@@ -23,11 +23,6 @@ BANNERS = {
 }
 
 
-def _cookie_flags(max_age: int) -> dict:
-    return dict(httponly=True, samesite="lax", secure=config.COOKIE_SECURE,
-                max_age=max_age, path="/")
-
-
 def _bump_epoch(request: Request, user: models.User) -> None:
     """Invalidate every other session for this user, but keep the current
     request's own client logged in by handing it a fresh cookie in the
@@ -144,7 +139,7 @@ def start_enroll(request: Request, session: Session = Depends(get_session)):
     token = security.sign_pending(config.SECRET_KEY,
                                    {"purpose": "2fa_enroll", "user_id": user.id, "secret": secret})
     resp = RedirectResponse("/account", status_code=303)
-    resp.set_cookie(ENROLL_COOKIE, token, **_cookie_flags(ENROLL_MAX_AGE))
+    resp.set_cookie(ENROLL_COOKIE, token, **security.cookie_flags(ENROLL_MAX_AGE))
     return resp
 
 
