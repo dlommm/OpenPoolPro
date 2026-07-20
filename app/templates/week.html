@@ -17,6 +17,7 @@
 </div>
 {% endif %}
 
+<div class="md:grid md:grid-cols-2 md:items-start md:gap-x-6">
 {% for d in days %}
 <div class="mb-5">
   <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ d.strftime("%a %b %-d") }}
@@ -51,4 +52,5 @@
   </div>
 </div>
 {% endfor %}
+</div>
 {% endblock %}
