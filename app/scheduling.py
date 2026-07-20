@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -113,6 +114,81 @@ def suggest_tech(session: Session, weekday: int) -> int | None:
         models.Property.assigned_tech_id.is_not(None))).all()
     counts = Counter(p.assigned_tech_id for p in props)
     return counts.most_common(1)[0][0] if counts else None
+
+
+def weekday_load(session: Session) -> dict[int, dict[int | None, list[models.Property]]]:
+    """Every scheduled property (frequency != 'none', active property AND
+    active customer -- the same filter stops_for_date applies), grouped by
+    weekday and then by assigned_tech_id (None key = unassigned). Day-agnostic:
+    a property counts once regardless of is_due's biweekly/every4weeks math,
+    since balancing is about route headcount, not a specific date's stops."""
+    props = session.scalars(select(models.Property).where(
+        models.Property.active, models.Property.frequency != "none")).all()
+    props = [p for p in props if p.customer.active]
+    load: dict[int, dict[int | None, list[models.Property]]] = {}
+    for p in props:
+        load.setdefault(p.weekday, {}).setdefault(p.assigned_tech_id, []).append(p)
+    return load
+
+
+def balance_moves(load_for_weekday: dict[int | None, list[models.Property]],
+                   tech_ids: list[int]) -> list[tuple[models.Property, int]]:
+    """Pure, deterministic greedy rebalance for one weekday's load.
+
+    Only entries whose key is in tech_ids or is None (unassigned) count
+    towards the target -- properties assigned to a tech NOT in tech_ids
+    (e.g. an admin/owner who was assigned by hand, or a disabled tech) are
+    left untouched and out of the headcount, so balancing never disturbs a
+    manual override.
+
+    target = ceil(count / len(tech_ids)) where count is that headcount.
+
+    Phase 1 -- unassigned properties (in ascending route_order, then id, for
+    determinism) are each handed to whichever tech currently has the lowest
+    count, ties broken by ascending tech id.
+
+    Phase 2 -- for every tech left over target (processed highest-count
+    first, ties by ascending tech id), its highest-route_order properties
+    (ties by descending id) are moved one at a time to the currently
+    lowest-count under-target tech (ties by ascending tech id) until it is
+    back at target.
+
+    Returns only the moves needed: (property, new_tech_id) pairs. Preview
+    and Apply both call this function on a fresh weekday_load(session), so
+    two calls against an unchanged database always agree.
+    """
+    if not tech_ids:
+        return []
+
+    counts = {t: len(load_for_weekday.get(t, [])) for t in tech_ids}
+    total = sum(counts.values()) + len(load_for_weekday.get(None, []))
+    target = math.ceil(total / len(tech_ids))
+
+    moves: list[tuple[models.Property, int]] = []
+
+    unassigned = sorted(load_for_weekday.get(None, []), key=lambda p: (p.route_order, p.id))
+    for p in unassigned:
+        dest = min(tech_ids, key=lambda t: (counts[t], t))
+        moves.append((p, dest))
+        counts[dest] += 1
+
+    pools = {t: sorted(load_for_weekday.get(t, []), key=lambda p: (-p.route_order, -p.id))
+             for t in tech_ids}
+    over_order = sorted((t for t in tech_ids if counts[t] > target), key=lambda t: (-counts[t], t))
+    for t in over_order:
+        pool = pools[t]
+        idx = 0
+        while counts[t] > target and idx < len(pool):
+            under = [u for u in tech_ids if counts[u] < target]
+            if not under:
+                break
+            dest = min(under, key=lambda u: (counts[u], u))
+            moves.append((pool[idx], dest))
+            counts[t] -= 1
+            counts[dest] += 1
+            idx += 1
+
+    return moves
 
 
 def visible_to(user, assigned_tech_id, active_ids: set[int]) -> bool:

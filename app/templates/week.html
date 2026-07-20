@@ -9,6 +9,9 @@
 </div>
 
 {% if techs %}
+<div class="mb-2">
+  <a href="/routes/balance" class="btn-secondary">Balance routes</a>
+</div>
 <div class="mb-4 flex flex-wrap gap-1.5">
   <a href="/week?start={{ start }}" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
   {% for t in techs %}
