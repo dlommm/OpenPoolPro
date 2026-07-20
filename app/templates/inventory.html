@@ -35,10 +35,19 @@
             {% else %}—{% endif %}
           </td>
           <td class="py-1.5">
-            <form method="post" action="/inventory/adjust/{{ c.id }}" class="flex flex-wrap gap-1">
+            <form method="post" action="/inventory/adjust/{{ c.id }}" class="mb-1 flex flex-wrap gap-1">
               <input inputmode="decimal" name="target" placeholder="{{ '%.2f'|format(c.stock_qty) }}" class="field w-20 px-2 text-xs">
               <input name="note" placeholder="note" class="field w-24 px-2 text-xs">
               <button class="btn-secondary px-2 text-xs">Set</button>
+            </form>
+            <form method="post" action="/inventory/reorder/{{ c.id }}" class="flex flex-wrap items-center gap-1">
+              <input inputmode="decimal" name="reorder_point"
+                     value="{{ '%.2f'|format(c.reorder_point) if c.reorder_point is not none else '' }}"
+                     placeholder="reorder pt" class="field font-data w-16 px-2 text-xs">
+              <input inputmode="decimal" name="reorder_qty"
+                     value="{{ '%.2f'|format(c.reorder_qty) if c.reorder_qty is not none else '' }}"
+                     placeholder="reorder qty" class="field font-data w-16 px-2 text-xs">
+              <button class="btn-secondary px-2 text-xs">Reorder</button>
             </form>
           </td>
         </tr>

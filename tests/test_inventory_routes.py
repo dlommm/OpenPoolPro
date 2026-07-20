@@ -137,6 +137,8 @@ def test_inventory_admin_only_sweep(client, tech_client, engine):
         follow_redirects=False).status_code == 403
     assert t.post(f"/inventory/adjust/{chem_id}", data={"target": "1"},
                   follow_redirects=False).status_code == 403
+    assert t.post(f"/inventory/reorder/{chem_id}", data={"reorder_point": "1"},
+                  follow_redirects=False).status_code == 403
 
 
 def test_purchase_tolerant_bad_float_no_mutation(client, engine):
@@ -216,3 +218,89 @@ def test_inventory_history_and_negative_stock_styling(client, engine):
     html = client.get("/inventory").text
     assert "text-safety" in html  # negative on-hand rendered with warning styling
     assert "shrinkage" in html
+
+
+# --- reorder point/qty editor -------------------------------------------
+
+def test_reorder_post_stores_values_and_triggers_low_stock_highlight(client, engine):
+    chem_id = seed_chem(engine, stock_qty=3.0)
+    r = client.post(f"/inventory/reorder/{chem_id}", data={
+        "reorder_point": "5", "reorder_qty": "10"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        c = s.get(models.Chemical, chem_id)
+        assert c.reorder_point == 5.0
+        assert c.reorder_qty == 10.0
+    html = client.get("/inventory").text
+    assert "bg-safety/5" in html  # stock 3 <= reorder point 5 -> low-stock highlight
+
+
+def test_reorder_blank_clears_to_none(client, engine):
+    chem_id = seed_chem(engine, stock_qty=3.0, reorder_point=5.0)
+    with Session(engine) as s:
+        s.get(models.Chemical, chem_id).reorder_qty = 10.0
+        s.commit()
+    r = client.post(f"/inventory/reorder/{chem_id}", data={
+        "reorder_point": "", "reorder_qty": ""}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        c = s.get(models.Chemical, chem_id)
+        assert c.reorder_point is None  # alerting off
+        assert c.reorder_qty is None
+
+
+def test_reorder_garbage_input_no_mutation(client, engine):
+    chem_id = seed_chem(engine, stock_qty=3.0, reorder_point=5.0)
+    r = client.post(f"/inventory/reorder/{chem_id}", data={
+        "reorder_point": "abc", "reorder_qty": "10"})
+    assert r.status_code == 200
+    with Session(engine) as s:
+        c = s.get(models.Chemical, chem_id)
+        assert c.reorder_point == 5.0  # unchanged
+        assert c.reorder_qty is None  # unchanged
+
+
+def test_reorder_nonfinite_input_no_mutation(client, engine):
+    chem_id = seed_chem(engine, stock_qty=3.0, reorder_point=5.0)
+    r = client.post(f"/inventory/reorder/{chem_id}", data={
+        "reorder_point": "nan", "reorder_qty": ""})
+    assert r.status_code == 200
+    with Session(engine) as s:
+        assert s.get(models.Chemical, chem_id).reorder_point == 5.0  # unchanged
+
+
+# --- last-purchase column excludes recount adjustments -------------------
+
+def test_last_purchase_excludes_adjustment_rows(client, engine):
+    chem_id = seed_chem(engine, stock_qty=5.0)
+    client.post("/inventory/purchase", data={
+        "chemical_id": str(chem_id), "quantity": "3", "cost_dollars": "9.00",
+        "update_cost": "on", "note": "restock"})
+    client.post(f"/inventory/adjust/{chem_id}", data={"target": "100", "note": "recount"})
+    html = client.get("/inventory").text
+    # the recount adjustment (note "adjust: recount", $0.00/unit) must not
+    # displace the real purchase's $3.00/unit in the last-purchase column
+    assert '<span class="money">$3.00</span>/gal' in html
+
+
+# --- badge guard exception branch ----------------------------------------
+
+def test_badge_guard_swallows_exception_and_page_still_renders(client, engine, monkeypatch):
+    def boom(session):
+        raise RuntimeError("boom")
+    monkeypatch.setattr("app.inventory.low_stock", boom)
+    r = client.get("/customers")
+    assert r.status_code == 200
+    assert "tag tag-safety ml-auto" not in r.text
+
+
+# --- zero-delta set-on-hand writes no noise row ---------------------------
+
+def test_adjust_zero_delta_no_purchase_row(client, engine):
+    chem_id = seed_chem(engine, stock_qty=5.0)
+    r = client.post(f"/inventory/adjust/{chem_id}", data={"target": "5.0", "note": "recount"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert s.get(models.Chemical, chem_id).stock_qty == 5.0
+        assert s.scalars(select(models.Purchase)).all() == []

@@ -156,6 +156,16 @@ def test_set_on_hand_rejects_non_finite_target(engine):
         assert s.scalars(select(models.Purchase)).all() == []
 
 
+def test_set_on_hand_zero_delta_short_circuits_no_purchase_row(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c = _chem(s, stock_qty=5.0)
+        result = inventory.set_on_hand(s, c, 5.0, "recount", None)
+        assert result is not None  # a no-op recount still reports success
+        assert c.stock_qty == 5.0
+        assert s.scalars(select(models.Purchase)).all() == []
+
+
 # --- low_stock --------------------------------------------------------
 
 def test_low_stock_boundary_equal_is_included(engine):

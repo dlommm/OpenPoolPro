@@ -25,6 +25,23 @@ def _f(val) -> float | None:
     return f if math.isfinite(f) else None
 
 
+def _reorder_field(val) -> tuple[bool, float | None]:
+    """Tolerant parse for reorder point/qty inputs. Unlike `_f`, blank is a
+    deliberate, valid value here (alerting off for that chemical), so it
+    must be distinguishable from garbage/non-finite/negative input, which is
+    an error. Returns (ok, value)."""
+    val = (val or "").strip()
+    if not val:
+        return True, None
+    try:
+        f = float(val)
+    except ValueError:
+        return False, None
+    if not math.isfinite(f) or f < 0:
+        return False, None
+    return True, f
+
+
 def _context(session: Session, error: str | None = None) -> dict:
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     active_chems = [c for c in chems if c.active]
@@ -32,8 +49,13 @@ def _context(session: Session, error: str | None = None) -> dict:
     last_purchase = {}
     last_purchase_unit_cost = {}
     for c in chems:
+        # Exclude recount-adjustment rows (note "adjust: ...", $0.00/unit) —
+        # they're not a real purchase and would otherwise mask the actual
+        # last purchase's cost in this column.
         p = session.scalars(
-            select(models.Purchase).where(models.Purchase.chemical_id == c.id)
+            select(models.Purchase).where(
+                models.Purchase.chemical_id == c.id,
+                ~models.Purchase.note.startswith("adjust: "))
             .order_by(models.Purchase.at.desc())).first()
         last_purchase[c.id] = p
         last_purchase_unit_cost[c.id] = round(p.total_cost_cents / p.quantity) if p and p.quantity else None
@@ -104,5 +126,25 @@ async def adjust(chem_id: int, request: Request, session: Session = Depends(get_
     result = inventory.set_on_hand(session, chem, target, note, request.state.user.id)
     if result is None:
         return _error("Invalid on-hand amount")
+    session.commit()
+    return RedirectResponse("/inventory", status_code=303)
+
+
+@router.post("/inventory/reorder/{chem_id}")
+async def reorder(chem_id: int, request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    chem = get_or_404(session, models.Chemical, chem_id)
+
+    def _error(message: str):
+        return templates.TemplateResponse(request, "inventory.html",
+            _context(session, error=message), status_code=200)
+
+    ok_point, reorder_point = _reorder_field(form.get("reorder_point"))
+    ok_qty, reorder_qty = _reorder_field(form.get("reorder_qty"))
+    if not ok_point or not ok_qty:
+        return _error("Enter a valid reorder point and quantity (or leave blank to turn off alerting)")
+
+    chem.reorder_point = reorder_point
+    chem.reorder_qty = reorder_qty
     session.commit()
     return RedirectResponse("/inventory", status_code=303)

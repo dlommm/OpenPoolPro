@@ -69,10 +69,15 @@ def record_purchase(session: Session, chemical: models.Chemical, quantity: float
 
 
 def set_on_hand(session: Session, chemical: models.Chemical, target: float,
-                note: str, user_id: int | None) -> models.Purchase | None:
+                note: str, user_id: int | None) -> models.Purchase | models.Chemical | None:
     """Set stock_qty to an exact recounted value, logging the signed delta
     (target - current) as a zero-cost adjustment purchase row whose note is
     prefixed "adjust: ". Non-finite target returns None and mutates nothing.
+
+    When target already equals stock_qty there is nothing to adjust, so this
+    short-circuits: no zero-cost Purchase noise row is written. The chemical
+    is returned (instead of None) so callers can still tell this apart from
+    an invalid target and report success.
     """
     try:
         if not math.isfinite(target):
@@ -80,6 +85,8 @@ def set_on_hand(session: Session, chemical: models.Chemical, target: float,
     except TypeError:
         return None
     delta = target - chemical.stock_qty
+    if delta == 0:
+        return chemical
     purchase = models.Purchase(chemical_id=chemical.id, quantity=delta, total_cost_cents=0,
                                note=f"adjust: {note or ''}", user_id=user_id)
     session.add(purchase)
