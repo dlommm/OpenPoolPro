@@ -70,6 +70,61 @@ folder.
   the upgrade will have its pending cookie rejected; the 5-minute pending
   TTL self-heals, and affected users just restart the login.
 
+## Email notifications
+
+Customers who opt in (a per-customer "Email visit notifications" checkbox
+on the customer form) get a plain-text email when their visit is marked
+done — business name, property, date, completed task labels, technician
+name. Never a dollar amount or chemical amount. Sending goes through a
+durable outbox: every notification is written as a row in the database
+first, then a background job flushes it via SMTP every 5 minutes (or
+immediately from Settings → Email → "Flush now" / "Send test email"). A
+temporary SMTP outage just delays delivery — failed sends retry
+automatically up to 5 attempts, and the last error is visible per-row in
+Settings.
+
+Configure via environment variables. Leaving `SMTP_HOST` unset disables the
+feature entirely (outbox rows are still written, but nothing ever gets
+flushed/sent):
+
+| Variable        | Default              | Notes                                    |
+|------------------|----------------------|-------------------------------------------|
+| `SMTP_HOST`     | *(empty)*            | Empty = sending disabled.                 |
+| `SMTP_PORT`     | `587`                |                                            |
+| `SMTP_USER`     | *(empty)*            | Login step is skipped when empty.         |
+| `SMTP_PASS`     | *(empty)*            |                                            |
+| `SMTP_FROM`     | value of `SMTP_USER` | From address on outgoing mail.            |
+| `SMTP_STARTTLS` | `1`                  | Set to `0` to send without STARTTLS.      |
+
+Settings → Email shows the configured host only (credentials never render
+anywhere), the last 50 outbox rows with status/attempts/last error, and
+buttons to send a test email or flush the outbox on demand.
+
+## Offline (PWA)
+
+Installed to the Home Screen, the app keeps working with a weak or absent
+signal:
+
+- Every page you've already opened is cached on the device. The service
+  worker is network-first — a fresh copy always wins the moment you have
+  signal, so the cache is purely an offline fallback, never stale-serves
+  over a live connection. Opening a page you've never visited while
+  offline lands on a small self-contained "You're offline" page instead of
+  a browser error.
+- Completing or skipping a visit while offline is queued on the device,
+  not lost: the app shows "Saved offline — will sync when back online" and
+  a small waiting-count badge next to the menu (and in the desktop
+  sidebar). The queue is replayed automatically, oldest first, as soon as
+  the device reconnects or the app is reopened/foregrounded — including
+  the completion email that visit queues once it actually reaches the
+  server.
+- Photo uploads are **not** queued offline — those still need a live
+  connection at the time.
+- iOS Safari has no Background Sync API, so the queue is flushed on
+  reconnect (`online` event) and on every app open, not silently in the
+  background while the app is closed — reopen the app once you're back on
+  signal to sync.
+
 ## Visual smoke check
 
 Proves every screen renders with the design system applied (catches stale
