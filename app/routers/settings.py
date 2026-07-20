@@ -60,6 +60,7 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     rows = zip(form.getlist("tier_id"), form.getlist("max_gallons"),
                form.getlist("rate_dollars"), form.getlist("label"))
+    changed = 0
     for tid, max_g, rate, label in rows:
         if tid:
             try:
@@ -73,6 +74,7 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
         if not rate.strip():
             if tier is not None:
                 session.delete(tier)
+                changed += 1
             continue
         try:
             rate_cents = round(float(rate) * 100)
@@ -84,6 +86,10 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
         t.rate_cents = rate_cents
         t.label = label
         session.add(t)
+        changed += 1
+    if changed:
+        models.audit(session, request.state.user.id, "rates.change",
+                     detail=f"{changed} rate tier(s) changed")
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

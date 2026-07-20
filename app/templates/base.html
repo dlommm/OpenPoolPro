@@ -42,7 +42,11 @@
       {% endfor %}
     </div>
     <div class="mt-auto pt-4 text-sm text-mist">
-      {% if u %}{{ u.name }}{% endif %}
+      {% if u %}
+      <a href="/account" class="mb-2 flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
+         {{ 'bg-shallow text-pool' if path == '/account' else 'text-mist' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
+      {{ u.name }}
+      {% endif %}
       <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
     </div>
   </aside>

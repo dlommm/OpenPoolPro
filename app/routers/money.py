@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
-from app import config
+from app import config, models
 from app.db import get_session
 from app.deps import require_perm
 from app.main import templates
@@ -40,8 +40,10 @@ def money_page(request: Request, ym: str | None = None,
 
 
 @router.get("/money/export")
-def money_export(ym: str | None = None, session: Session = Depends(get_session)):
+def money_export(request: Request, ym: str | None = None, session: Session = Depends(get_session)):
     year, month = _parse_ym(ym)
     csv_text = export_csv(session, year, month)
+    models.audit(session, request.state.user.id, "export.qbo", detail=f"{year}-{month:02d}")
+    session.commit()
     return PlainTextResponse(csv_text, media_type="text/csv", headers={
         "Content-Disposition": f"attachment; filename=qbo-{year}-{month:02d}.csv"})

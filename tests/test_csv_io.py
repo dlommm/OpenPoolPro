@@ -42,6 +42,17 @@ def test_export_admin_only(client, tech_client):
     assert t.get("/customers/export", follow_redirects=False).status_code == 403
 
 
+def test_export_writes_export_customers_audit_row(client, engine):
+    _seed_full(client, engine)
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.get("/customers/export")
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "export.customers")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+
+
 import io as _io
 
 
@@ -85,6 +96,34 @@ def test_import_full_flow(client, engine):
         beta = s.scalars(select(models.Customer).where(
             models.Customer.name == "Beta Home")).one()
         assert beta.properties[0].pools == []
+
+
+def test_import_commit_writes_import_commit_audit_row(client, engine):
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    r = _upload(client, CSV_GOOD)
+    token = _mapping_data(r.text)
+    mapping = {"map_customer_name": "name", "map_phone": "phone", "map_address": "addr",
+               "map_weekday": "day", "map_pool_shape": "shape", "map_length_ft": "len",
+               "map_width_ft": "wid", "map_avg_depth_ft": "depth"}
+    client.post(f"/customers/import/{token}/preview", data=mapping)
+    client.post(f"/customers/import/{token}/commit", data=mapping)
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "import.commit")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+        assert "created=2" in rows[0].detail
+
+
+def test_import_error_row_aborts_writes_no_audit_row(client, engine):
+    bad = "name,day\nGood One,1\nBad Day,9\n"
+    r = _upload(client, bad)
+    token = _mapping_data(r.text)
+    mapping = {"map_customer_name": "name", "map_weekday": "day"}
+    client.post(f"/customers/import/{token}/commit", data=mapping)
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "import.commit")).all()
+        assert len(rows) == 0
 
 
 def test_import_duplicate_skipped(client, engine):
