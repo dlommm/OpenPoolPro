@@ -174,6 +174,32 @@ def test_quotes_register_lists_and_filters_by_status(client, engine):
     assert "Draft quote" in client.get("/quotes?status=bogus").text  # tolerant: shows all
 
 
+def test_new_quote_with_mismatched_property_saves_with_no_property(client, engine):
+    cid, pid = _customer_with_property(engine, name="QuoteCo")
+    other_cid, other_pid = _customer_with_property(engine, name="OtherCo")
+    r = client.post("/quotes/new", data={
+        "customer_id": str(cid), "property_id": str(other_pid), "title": "Mismatch", "notes": "",
+        "line_description": ["Labor"], "line_amount_dollars": ["50.00"]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        q = s.scalars(select(models.Quote)).one()
+        assert q.customer_id == cid
+        assert q.property_id is None  # other customer's property -> tolerant None, not saved
+
+
+def test_quote_totals_visible_to_manage_customers_without_view_money(client, tech_client, engine):
+    # Quotes are pre-billing documents: manage_customers is the gate for /quotes,
+    # and totals must show regardless of view_money (unlike jobs/customers money views).
+    cid, pid = _customer_with_property(engine)
+    client.post("/quotes/new", data={"customer_id": str(cid), "property_id": str(pid),
+                                     "title": "Resurface", "notes": "",
+                                     "line_description": ["Labor", "Materials"],
+                                     "line_amount_dollars": ["25.00", "75.00"]})
+    t = tech_client(name="moneyless", manage_customers=True)  # no view_money
+    html = t.get("/quotes").text
+    assert "$100.00" in html
+
+
 def test_insert_job_template_as_quote_line(client, engine):
     with Session(engine) as s:
         t = models.JobTemplate(title="Pump swap", labor_cents=15000)

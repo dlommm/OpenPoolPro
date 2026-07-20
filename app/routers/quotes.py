@@ -60,6 +60,15 @@ def _apply_lines(form, quote: "models.Quote", session: Session) -> None:
                                      amount_cents=cents, sort_order=i))
 
 
+def _validated_property_id(session: Session, property_id: int | None, customer_id: int) -> int | None:
+    """Tolerant property ownership check: property_id must exist (404 if not)
+    and belong to customer_id, or it's treated as if no property was selected."""
+    if property_id is None:
+        return None
+    prop = get_or_404(session, models.Property, property_id)
+    return property_id if prop.customer_id == customer_id else None
+
+
 def _form_context(session: Session) -> dict:
     customers = session.scalars(select(models.Customer).where(models.Customer.active)
                                 .order_by(models.Customer.name)).all()
@@ -103,7 +112,8 @@ async def create_quote(request: Request, session: Session = Depends(get_session)
     if customer_id is None:
         raise HTTPException(status_code=400, detail="A customer is required")
     get_or_404(session, models.Customer, customer_id)
-    q = models.Quote(customer_id=customer_id, property_id=_parse_int_tolerant(form.get("property_id")),
+    property_id = _validated_property_id(session, _parse_int_tolerant(form.get("property_id")), customer_id)
+    q = models.Quote(customer_id=customer_id, property_id=property_id,
                      title=(form.get("title") or "").strip(), notes=form.get("notes", ""),
                      user_id=user.id)
     session.add(q)
@@ -137,7 +147,7 @@ async def edit_quote(qid: int, request: Request, session: Session = Depends(get_
     if customer_id is not None:
         get_or_404(session, models.Customer, customer_id)
         q.customer_id = customer_id
-    q.property_id = _parse_int_tolerant(form.get("property_id"))
+    q.property_id = _validated_property_id(session, _parse_int_tolerant(form.get("property_id")), q.customer_id)
     title = (form.get("title") or "").strip()
     if title:
         q.title = title
