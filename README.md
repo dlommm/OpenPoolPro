@@ -112,9 +112,10 @@ signal:
   offline lands on a small self-contained "You're offline" page instead of
   a browser error.
 - Completing or skipping a visit while offline is queued on the device,
-  not lost: the app shows "Saved offline — will sync when back online" and
-  a small waiting-count badge next to the menu (and in the desktop
-  sidebar). The queue is replayed automatically, oldest first, as soon as
+  not lost: you land back on your cached Today page and a waiting-count
+  badge appears next to the menu (and in the desktop sidebar) — that badge
+  is the offline confirmation. (The "Saved offline — will sync" banner is
+  server-rendered, so it appears only when the save happens with signal.) The queue is replayed automatically, oldest first, as soon as
   the device reconnects or the app is reopened/foregrounded — including
   the completion email that visit queues once it actually reaches the
   server.
