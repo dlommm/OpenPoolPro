@@ -150,6 +150,40 @@ def test_ptag_filter_on_pool_gallery_returns_only_tagged(client, engine):
     assert f"/photos/file/{after_id}" not in filtered
 
 
+def test_job_photo_tag_chip_renders_on_reload(client, engine):
+    with Session(engine) as s:
+        c = models.Customer(name="JobCo")
+        p = models.Property(customer=c, label="Home")
+        s.add(p)
+        s.commit()
+        pid = p.id
+    client.post("/jobs/new", data={
+        "property_id": str(pid), "title": "Filter clean", "description": "",
+        "priority": "normal", "labor_dollars": "50", "scheduled_date": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    client.post(f"/photos/job/{jid}", data={"tag": "before"},
+               files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    reloaded = client.get(f"/jobs/{jid}").text
+    assert "<span class=\"tag absolute bottom-1 left-1\">before</span>" in reloaded
+
+
+def test_visit_photo_tag_chip_renders_on_reload(client, engine):
+    with Session(engine) as s:
+        c = models.Customer(name="V")
+        p = models.Property(customer=c, frequency="weekly", weekday=0)
+        s.add(p)
+        s.commit()
+        pid = p.id
+    client.get(f"/visit/{pid}/2026-07-13")
+    with Session(engine) as s:
+        vid = s.scalars(select(models.Visit)).one().id
+    client.post(f"/photos/visit/{vid}", data={"tag": "issue"},
+               files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    reloaded = client.get(f"/visit/{pid}/2026-07-13").text
+    assert "<span class=\"tag absolute bottom-1 left-1\">issue</span>" in reloaded
+
+
 def test_ptag_filter_tolerant_invalid_value_shows_all(client, engine):
     pool_id = _pool_id(client, engine)
     client.post(f"/photos/pool/{pool_id}", data={"tag": "before"},
