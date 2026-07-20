@@ -17,7 +17,7 @@
 </div>
 {% endif %}
 <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
-  <a href="/customers?show={{ 'active' if show_inactive else 'inactive' }}{% if q %}&q={{ q }}{% endif %}{% if tag %}&tag={{ tag }}{% endif %}"
+  <a href="/customers?show={{ 'active' if show_inactive else 'inactive' }}{% if q %}&q={{ q | urlencode }}{% endif %}{% if tag %}&tag={{ tag | urlencode }}{% endif %}"
      class="tag">{{ "Show active" if show_inactive else "Show inactive" }}</a>
   {% if tag %}
   <span class="tag tag-safety">Tag: {{ tag }}</span>
@@ -33,7 +33,7 @@
     </a>
     {% if c.tags %}
     <div class="mt-1.5 flex flex-wrap gap-1">
-      {% for t in c.tags %}<a href="/customers?tag={{ t }}{% if show_inactive %}&show=inactive{% endif %}" class="tag">{{ t }}</a>{% endfor %}
+      {% for t in c.tags %}<a href="/customers?tag={{ t | urlencode }}{% if show_inactive %}&show=inactive{% endif %}" class="tag">{{ t }}</a>{% endfor %}
     </div>
     {% endif %}
     {% if show_inactive and can_manage %}

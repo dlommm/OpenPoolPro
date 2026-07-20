@@ -180,6 +180,20 @@ def test_tag_add_remove_and_list_filter(client, engine):
         assert s.get(models.Customer, cid).tags == ["pool club"]
 
 
+def test_tag_with_ampersand_is_urlencoded_in_list_links(client, engine):
+    client.post("/customers/new", data={"name": "Rowdy Co", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/tags/add", data={"tags": "R&R x"})
+    with Session(engine) as s:
+        assert s.get(models.Customer, cid).tags == ["r&r x"]
+    body = client.get("/customers").text
+    assert "tag=r%26r" in body  # ampersand urlencoded; raw '&' would corrupt the query string
+    assert "tag=r&r x" not in body
+    assert "Rowdy Co" in client.get("/customers?tag=r%26r+x").text
+
+
 def test_comm_log_quick_add_stamps_user_and_shows_in_timeline(client, engine):
     client.post("/customers/new", data={"name": "Comm Co", "qb_display_name": "",
                                         "phone": "", "email": "", "notes": ""})
