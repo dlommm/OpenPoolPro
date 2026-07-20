@@ -23,11 +23,13 @@ def test_base_template_blocks_and_nav(client):
         assert f'href="{href}"' in html
 
 
-def test_sidebar_and_tabbar_coexist(client):
+def test_sidebar_and_topbar_coexist(client):
     html = client.get("/").text
     assert 'id="sidebar"' in html and "hidden lg:flex" in html
-    assert 'id="tabbar"' in html and "lg:hidden" in html
-    assert 'action="/search"' in html
+    assert 'id="topbar"' in html and "lg:hidden" in html
+    assert "<details" in html and "<summary" in html  # hamburger menu is a native disclosure
+    assert html.count('action="/search"') == 2  # sidebar + hamburger menu
+    assert 'action="/logout"' in html
 
 
 def test_login_page_has_no_sidebar_offset(client, engine, monkeypatch):
