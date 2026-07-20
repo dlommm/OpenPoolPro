@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, models
+from app import dosing, inventory, mailer, models
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -157,6 +157,15 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
             total_cost_cents=round(amount * frozen)))
         new_stock[chem.id] = new_stock.get(chem.id, 0.0) + amount
     inventory.apply_visit_delta(session, v.id, prior_stock, new_stock)
+    customer = v.property.customer
+    if customer.email and customer.notify_email:
+        business = models.get_setting(session, "business_name", "Coastline Pools")
+        lines = [business, v.property.label, v.date.strftime("%B %-d, %Y")]
+        if v.tasks_done:
+            lines.extend(v.tasks_done)
+        lines.append(f"Technician: {request.state.user.name}")
+        mailer.queue(session, customer.email, f"{business} — service visit completed",
+                    "\n".join(lines), customer_id=customer.id)
     session.commit()
     return RedirectResponse("/", status_code=303)
 
