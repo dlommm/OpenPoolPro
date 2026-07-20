@@ -406,3 +406,28 @@ def test_admin_logout_own_sessions_keeps_fresh_cookie(client, engine):
     # Bumping your OWN epoch from the admin screen must not log you out of
     # the very request that triggered it.
     assert client.get("/account", follow_redirects=False).status_code == 200
+
+
+def test_admin_reset_password_invalidates_target_and_audits(client, engine):
+    """An admin-triggered password reset must bump the target's session
+    epoch (mirroring logout-sessions/2fa-reset above) so an attacker
+    holding the target's OLD session cookie is kicked out too, and must
+    leave an audit trail like every other credential-affecting admin
+    action."""
+    owner_id = _owner_id(engine)
+    uid, tech, secret = _make_tech_with_2fa(client, engine)
+    assert tech.get("/", follow_redirects=False).status_code == 200
+
+    r = client.post(f"/users/{uid}/password", data={"password": "new-pass-99"},
+                     follow_redirects=False)
+    assert r.status_code == 303
+
+    # The target's existing session cookie is rejected after the reset.
+    assert tech.get("/", follow_redirects=False).status_code == 303  # kicked to /login
+    # The admin who clicked the button is unaffected.
+    assert client.get("/account", follow_redirects=False).status_code == 200
+
+    rows = _audit_rows(engine, "auth.password_changed")
+    assert len(rows) == 1
+    assert rows[0].user_id == owner_id
+    assert "admin reset" in rows[0].detail and "fieldtech" in rows[0].detail

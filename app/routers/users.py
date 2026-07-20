@@ -108,12 +108,15 @@ async def edit_user(request: Request, uid: int, session: Session = Depends(get_s
 
 
 @router.post("/users/{uid}/password")
-def reset_password(uid: int, password: str = Form(...),
+def reset_password(request: Request, uid: int, password: str = Form(...),
                    session: Session = Depends(get_session)):
     u = get_or_404(session, models.User, uid)
     if len(password) < 8:
         return HTMLResponse("Password must be 8+ characters", status_code=400)
     u.password_hash = hash_password(password)
+    _bump_epoch(request, u)
+    models.audit(session, request.state.user.id, "auth.password_changed",
+                 detail=f"admin reset for {u.username!r}")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 
