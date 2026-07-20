@@ -364,3 +364,28 @@ def test_export_filename_correct(client, engine):
     disposition = r.headers.get("content-disposition", "")
     expected_filename = f"analytics-income-{RANGE[0].isoformat()}-{RANGE[1].isoformat()}.csv"
     assert expected_filename in disposition
+
+
+def test_export_writes_export_analytics_audit_row(client, engine):
+    _fix(engine)
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.get("/analytics/export", params={"tab": "income",
+                                             "start": RANGE[0].isoformat(),
+                                             "end": RANGE[1].isoformat()})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "export.analytics")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+        assert "income" in rows[0].detail
+
+
+def test_apply_writes_rates_bulk_raise_audit_row(client, engine):
+    _fix(engine)
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.post("/analytics/rates/apply", data={"percent": "10", "scope_tiers": "on"})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.bulk_raise")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id

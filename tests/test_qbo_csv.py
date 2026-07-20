@@ -1,5 +1,7 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import models
 from app.qbo import export_csv
 from tests.test_money import seed_month
 
@@ -27,3 +29,15 @@ def test_export_route_downloads(client, engine):
     assert r.status_code == 200
     assert "attachment" in r.headers["content-disposition"]
     assert "Bill Me LLC" in r.text
+
+
+def test_export_route_writes_export_qbo_audit_row(client, engine):
+    seed_month(engine)
+    with Session(engine) as s:
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.get("/money/export?ym=2026-07")
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "export.qbo")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+        assert "2026-07" in rows[0].detail

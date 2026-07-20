@@ -302,6 +302,9 @@ class User(Base):
     manage_customers: Mapped[bool] = mapped_column(Boolean, default=False)
     can_repairs: Mapped[bool] = mapped_column(Boolean, default=False)
     view_all_routes: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_secret: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    session_epoch: Mapped[int] = mapped_column(Integer, default=0)
 
     PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes")
 
@@ -323,6 +326,20 @@ class RateChange(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
+class Invoice(Base):
+    __tablename__ = "invoices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[str] = mapped_column(String(20), unique=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    period_year: Mapped[int] = mapped_column(Integer)
+    period_month: Mapped[int] = mapped_column(Integer)
+    total_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(8), default="draft")  # draft|sent|void
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    pdf_filename: Mapped[str] = mapped_column(String(200))
+    customer: Mapped[Customer] = relationship()
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)
@@ -340,3 +357,28 @@ def set_setting(session, key: str, value: str) -> None:
         row.value = value
     else:
         session.add(Setting(key=key, value=value))
+
+
+class BackupCode(Base):
+    __tablename__ = "backup_codes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    code_hash: Mapped[str] = mapped_column(String(64))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(60))
+    detail: Mapped[str] = mapped_column(Text, default="")
+
+
+def audit(session, user_id: int | None, action: str, detail: str = "") -> AuditLog:
+    """Record a sensitive-action audit row. Caller commits."""
+    row = AuditLog(user_id=user_id, action=action, detail=detail, at=utcnow())
+    session.add(row)
+    session.flush()
+    return row
