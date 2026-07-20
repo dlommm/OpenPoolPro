@@ -17,7 +17,7 @@ BASE = os.environ.get("APP_URL", "http://localhost:8000")
 PASSWORD = os.environ.get("APP_PASSWORD", "coastline-demo")
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
-SCREENS = ["/", "/week", "/customers", "/jobs", "/money", "/settings"]
+SCREENS = ["/", "/week", "/customers", "/jobs", "/money", "/settings", "/inventory"]
 
 # Computed-style assertions: proves app.css APPLIED, not merely returned 200.
 CHECKS = """

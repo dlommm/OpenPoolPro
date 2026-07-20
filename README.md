@@ -3,7 +3,7 @@
 Self-hosted pool-route app. Phase 0: customers, properties, pools, routes,
 visits with chemistry costs and dose suggestions, jobs, analytics with income breakdowns and rate management, admin console with
 dashboard and global search, company branding, monthly QuickBooks
-Online CSV export.
+Online CSV export, chemical inventory with stock levels, purchase logging feeding catalog costs, auto-decrement from visit usage, and low-stock alerts.
 
 ## Run
 
