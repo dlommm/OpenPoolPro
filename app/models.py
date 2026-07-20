@@ -332,6 +332,18 @@ class User(Base):
         return bool(getattr(self, flag, False))
 
 
+class TechAbsence(Base):
+    __tablename__ = "tech_absences"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    cover_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    cover_tech: Mapped["User | None"] = relationship(foreign_keys=[cover_tech_id])
+
+
 class RateChange(Base):
     __tablename__ = "rate_changes"
     id: Mapped[int] = mapped_column(primary_key=True)

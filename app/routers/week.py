@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -23,20 +24,24 @@ def week_page(request: Request, start: date | None = None, tech: int | None = No
     days = [(start + timedelta(days=i)) for i in range(7)]
     active_ids = {u.id for u in session.scalars(
         select(models.User).where(models.User.active)).all()}
+    techs = session.scalars(select(models.User).where(
+        models.User.active).order_by(models.User.name)).all() if user.can("view_all_routes") else []
+    tech_counts = Counter()
     day_stops = {}
     for d in days:
         stops = stops_for_date(session, d)
+        if user.can("view_all_routes"):
+            tech_counts.update(s.effective_tech_id for s in stops if s.effective_tech_id is not None)
         if not user.can("view_all_routes"):
-            stops = [s for s in stops if visible_to(user, s.property.assigned_tech_id, active_ids)]
+            stops = [s for s in stops if visible_to(user, s.effective_tech_id, active_ids)]
         elif tech is not None:
-            stops = [s for s in stops if s.property.assigned_tech_id == tech]
+            stops = [s for s in stops if s.effective_tech_id == tech]
         day_stops[d] = stops
-    techs = session.scalars(select(models.User).where(
-        models.User.active).order_by(models.User.name)).all() if user.can("view_all_routes") else []
     return templates.TemplateResponse(request, "week.html", {
         "start": start, "days": days, "day_stops": day_stops,
         "prev": start - timedelta(days=7), "next": start + timedelta(days=7),
-        "techs": techs, "tech_filter": tech})
+        "techs": techs, "tech_filter": tech, "tech_counts": tech_counts,
+        "tech_by_id": {t.id: t for t in techs}})
 
 
 @router.post("/week/move")
