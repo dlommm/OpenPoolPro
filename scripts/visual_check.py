@@ -26,8 +26,9 @@ CHECKS = """
   const probs = [];
   if (!body.fontFamily.includes("IBM Plex Sans")) probs.push("body font not Plex: " + body.fontFamily);
   if (body.backgroundColor !== "rgb(246, 249, 250)") probs.push("bg not tile: " + body.backgroundColor);
-  const nav = document.querySelector("nav .tab");
-  if (!nav) probs.push("tab bar missing/unstyled");
+  const topbar = document.querySelector("#topbar");
+  if (!topbar) probs.push("topbar missing");
+  else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
   const h1 = document.querySelector("h1");
   if (h1 && !getComputedStyle(h1).fontFamily.includes("Barlow")) probs.push("h1 not display font");
   return probs;
@@ -93,9 +94,9 @@ with sync_playwright() as p:
 () => {
   const probs = [];
   const sidebar = document.querySelector("#sidebar");
-  const tabbar = document.querySelector("#tabbar");
+  const topbar = document.querySelector("#topbar");
   if (!sidebar || getComputedStyle(sidebar).display === "none") probs.push("sidebar hidden at desktop viewport");
-  if (!tabbar || getComputedStyle(tabbar).display !== "none") probs.push("tabbar visible at desktop viewport");
+  if (!topbar || getComputedStyle(topbar).display !== "none") probs.push("topbar visible at desktop viewport");
   return probs;
 }
 """)

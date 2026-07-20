@@ -147,16 +147,6 @@
     @apply bg-safety;
   }
 
-  /* Bottom tab bar */
-  .tab {
-    @apply flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-lg text-[10px] font-medium uppercase tracking-wider text-mist transition;
-  }
-  .tab svg {
-    @apply h-5 w-5;
-  }
-  .tab-active {
-    @apply bg-shallow text-pool;
-  }
 }
 
 /* ---------- Signature motion: waterline draw + card rise ---------- */
