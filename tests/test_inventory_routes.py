@@ -187,6 +187,21 @@ def test_dashboard_low_stock_card_count(client, engine):
     html = client.get("/dashboard").text
     assert "Low stock" in html
     assert "Liquid chlorine" in html
+    # exactly one chemical is low: the card's count digit must render "1",
+    # not just contain the word "Low stock" somewhere on the page.
+    assert '<span class="font-data text-sm text-safety">1</span>' in html
+
+
+def test_nav_badge_shows_low_stock_count(client, engine):
+    seed_chem(engine, stock_qty=2.0, reorder_point=5.0)
+    html = client.get("/inventory").text
+    assert '<span class="tag tag-safety ml-auto">1</span>' in html
+
+
+def test_nav_badge_absent_when_no_low_stock(client, engine):
+    seed_chem(engine, stock_qty=10.0, reorder_point=5.0)
+    html = client.get("/inventory").text
+    assert "tag tag-safety ml-auto" not in html
 
 
 def test_inventory_low_stock_row_highlight(client, engine):

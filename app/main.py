@@ -22,13 +22,20 @@ templates.env.globals["has_logo_check"] = lambda: os.path.isfile(os.path.join(co
 def _low_stock_count(request) -> int:
     """Nav-badge helper: short-lived session, mirrors has_logo_check's
     per-render global-check pattern so every page (via base.html) can show
-    the count without every router threading it through its own context."""
+    the count without every router threading it through its own context.
+
+    Any failure (e.g. a locked SQLite database) is swallowed so a bad
+    low-stock query never 500s every admin page; the badge just degrades
+    to absent (0) for that render."""
     from sqlalchemy.orm import Session
 
     from app import inventory as inventory_module
 
-    with Session(request.app.state.engine) as s:
-        return len(inventory_module.low_stock(s))
+    try:
+        with Session(request.app.state.engine) as s:
+            return len(inventory_module.low_stock(s))
+    except Exception:
+        return 0
 
 
 templates.env.globals["low_stock_count"] = _low_stock_count
