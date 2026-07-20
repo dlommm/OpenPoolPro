@@ -23,6 +23,19 @@ def test_sw_js_contains_v3_markers(client):
     assert "cpp-queue" in text
 
 
+def test_sw_js_queued_redirect_targets_root_not_today(client):
+    """Critical fix pin: the offline-queue redirect must land on `/`
+    (the Today page's real mount), not the dead `/today` path -- landing
+    on an uncached URL while still offline fell through to offline.html
+    with no banner. Also pins that handleNavigate's offline fallback tries
+    an ignoreSearch cache match (so the `?queued=1` navigation still hits
+    the cached page) before giving up to offline.html."""
+    text = client.get("/sw.js").text
+    assert '"/?queued=1"' in text
+    assert "/today?queued=1" not in text
+    assert "ignoreSearch" in text
+
+
 def test_sw_js_reachable_anonymously(engine, monkeypatch):
     """/sw.js must be exempt from auth (a logged-out/expired session still
     needs the worker registered so cached pages keep working)."""
@@ -61,9 +74,9 @@ def test_today_queued_banner_present_with_param_absent_without(client):
     assert banner not in r.text
 
 
-def test_today_alias_path_serves_same_page(client):
-    """sw.js's queued-POST redirect target is literally `/today?queued=1`;
-    `/today` is an alias onto the same today_page handler as `/`."""
+def test_today_path_not_mounted(client):
+    """The Today page has exactly one mount, `/` -- sw.js's queued-POST
+    redirect target is `/?queued=1`. `/today` was a review-flagged alias
+    that has been removed; pin that it stays gone (a 404, not the page)."""
     r = client.get("/today?queued=1")
-    assert r.status_code == 200
-    assert "Saved offline — will sync when back online" in r.text
+    assert r.status_code == 404

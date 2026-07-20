@@ -27,18 +27,16 @@ def _parse_backup_remaining(s: str | None) -> int | None:
 
 
 def _truthy_flag(s: str | None) -> bool:
-    """Tolerant boolean query flag: any value except None/empty/"0" is
+    """Tolerant boolean query flag: any non-empty value other than "0" is
     truthy. Never raises -- garbage in the query string just means the
     banner it gates doesn't show, rather than a 500."""
     return s not in (None, "", "0")
 
 
 # sw.js's offline visit-complete/skip queue redirects here after a queued
-# POST (`/today?queued=1`) so the app shell can show a "saved offline" banner
-# on next load. This page is also mounted at "/" (the actual Today route) --
-# both paths serve the same handler.
+# POST (`/?queued=1`) so the app shell can show a "saved offline" banner on
+# next load. This is the Today page's only mount.
 @router.get("/")
-@router.get("/today")
 def today_page(request: Request, tech: int | None = None,
                backup_remaining: str | None = None,
                queued: str | None = None,

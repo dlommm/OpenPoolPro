@@ -86,7 +86,7 @@ async function handleQueueablePost(req, url) {
   } catch (err) {
     const body = await bodyClone.text();
     await queueAdd(url.pathname + url.search, body);
-    return Response.redirect("/today?queued=1", 303);
+    return Response.redirect("/?queued=1", 303);
   }
 }
 
@@ -99,7 +99,13 @@ async function handleNavigate(req) {
     }
     return resp;
   } catch (err) {
-    const hit = await caches.match(req);
+    // Exact match first (the common case: reopening a page whose URL,
+    // including query string, was cached verbatim). Fall back to an
+    // ignoreSearch match so a navigation whose query string was never
+    // cached under that exact key -- e.g. the `?queued=1` redirect target
+    // above -- still hits the cached page instead of falling through to
+    // the generic offline.html.
+    const hit = await caches.match(req) || await caches.match(req, { ignoreSearch: true });
     return hit || caches.match("/static/offline.html");
   }
 }
@@ -169,7 +175,7 @@ async function replay() {
   } catch (err) {
     entries = [];
   }
-  entries.sort((a, b) => a.ts - b.ts);
+  entries.sort((a, b) => a.id - b.id);
   for (const entry of entries) {
     try {
       await fetch(entry.url, {
