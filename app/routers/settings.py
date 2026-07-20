@@ -16,8 +16,18 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
 
 
+def _parse_count(s: str | None) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None  # non-int: ignore banner rather than 500 or render garbage
+
+
 @router.get("/settings")
-def settings_page(request: Request, session: Session = Depends(get_session)):
+def settings_page(request: Request, rules_created: str | None = None,
+                  session: Session = Depends(get_session)):
     from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
@@ -36,7 +46,16 @@ def settings_page(request: Request, session: Session = Depends(get_session)):
         "backup_error": models.get_setting(session, "last_backup_error", ""),
         "role_values": models.ROLE_VALUES,
         "targets": targets,
+        "rules_created": _parse_count(rules_created),
         "company": company_info(session)})
+
+
+@router.post("/settings/maintenance/run-now")
+def run_maintenance_now(session: Session = Depends(get_session)):
+    from app.maintenance import run_maintenance_rules
+    from app.routers.today import business_today
+    created = run_maintenance_rules(session, business_today())
+    return RedirectResponse(f"/settings?rules_created={created}", status_code=303)
 
 
 @router.post("/settings/targets")

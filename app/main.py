@@ -127,6 +127,9 @@ def create_app(engine=None) -> FastAPI:
 
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
+        from app.maintenance import run_nightly
         app.state.scheduler = start_scheduler(app.state.engine)
+        app.state.scheduler.add_job(run_nightly, "cron", hour=1, minute=15,
+                                    args=[app.state.engine])
 
     return app

@@ -5,6 +5,9 @@
 {{ ui.page_header("Business settings", "Settings") }}
 <a href="/users" class="btn-secondary mb-4 w-full">Manage crew</a>
 {% if backup_error %}<p class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
+{% if rules_created is not none %}
+<div class="card mb-4 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}</div>
+{% endif %}
 
 <h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Company</h2>
 <form method="post" action="/settings/company" class="card mb-3 space-y-2 p-3">
@@ -124,6 +127,14 @@
       {% endfor %}
     </div>
     <button class="btn-secondary w-full">Save targets</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Maintenance rules</h2>
+  <p class="mb-2 text-xs text-mist">Runs nightly; use this to create due jobs right now.</p>
+  <form method="post" action="/settings/maintenance/run-now">
+    <button class="btn-secondary w-full">Run maintenance rules now</button>
   </form>
 </div>
 
