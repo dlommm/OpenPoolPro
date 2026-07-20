@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from app.timefmt import from_local_hhmm, to_local_hhmm
+from app.timefmt import from_local_hhmm, parse_ym, to_local_hhmm
 
 
 def test_roundtrip_summer():
@@ -45,3 +45,16 @@ def test_minutes_display_filter():
     assert f(42) == "42 min"
     assert f(65) == "1 h 05"
     assert f(120) == "2 h 00"
+
+
+def test_parse_ym_year_clamp_falls_back():
+    # In-range year/month parses normally.
+    assert parse_ym("2050-05") == (2050, 5)
+    # Out-of-range year falls back to default, same as malformed/missing raw.
+    assert parse_ym("1999-05", default=(2026, 7)) == (2026, 7)
+    assert parse_ym("2101-05", default=(2026, 7)) == (2026, 7)
+    # Month validation still applies alongside the new year clamp.
+    assert parse_ym("2026-13", default=(2026, 7)) == (2026, 7)
+    # Boundary years are inclusive.
+    assert parse_ym("2000-01", default=(1, 1)) == (2000, 1)
+    assert parse_ym("2100-12", default=(1, 1)) == (2100, 12)

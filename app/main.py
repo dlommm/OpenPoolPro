@@ -16,6 +16,7 @@ templates.env.filters["initials"] = lambda name: "".join(
 templates.env.filters["hhmm"] = timefmt.to_local_hhmm
 templates.env.filters["localdt"] = lambda dt: (
     timefmt.to_local(dt).strftime("%Y-%m-%d %H:%M") if dt else "")
+templates.env.filters["local_date"] = timefmt.to_local_date
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
 templates.env.globals["has_logo_check"] = lambda: os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
@@ -154,6 +155,9 @@ def create_app(engine=None) -> FastAPI:
 
     from app.routers import analytics as analytics_router
     app.include_router(analytics_router.router)
+
+    from app.routers import invoices as invoices_router
+    app.include_router(invoices_router.router)
 
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
