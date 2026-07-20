@@ -16,10 +16,22 @@
 {% if j.description %}<p class="card mb-4 p-3.5 text-sm">{{ j.description }}</p>{% endif %}
 
 <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
-  {% for ph in photos %}<img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">{% endfor %}
+  {% for ph in photos %}
+  <div class="relative h-20 w-20">
+    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+  </div>
+  {% endfor %}
 </div>
+<select id="job-photo-tag" name="tag" class="field mb-2">
+  <option value="">No tag</option>
+  <option value="before">Before</option>
+  <option value="after">After</option>
+  <option value="issue">Issue</option>
+</select>
 <input type="file" accept="image/*" capture="environment" multiple name="files"
        hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
+       hx-include="#job-photo-tag"
        hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="field mb-4">
 
 {% if not j.started_at and j.status != "done" %}

@@ -46,6 +46,29 @@
   {% endif %}
 </a>
 
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Warranties</h2>
+<div class="rise mb-5">
+  <details class="card p-3.5">
+    <summary class="flex min-h-11 cursor-pointer items-center justify-between font-semibold">
+      <span>Expiring or past due</span>
+      <span class="font-data text-sm" data-card="warranties">{{ warranty_items | length }}</span>
+    </summary>
+    {% if warranty_items %}
+    <div class="mt-2 space-y-2 border-t border-seam pt-2 font-data text-sm">
+      {% for e in warranty_items %}
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-body">{{ e.kind }}{% if e.brand %} &middot; {{ e.brand }}{% endif %} &mdash;
+          {{ e.pool.property.label }} ({{ e.pool.property.customer.name }})</span>
+        <span class="{{ 'text-safety' if e.warranty_end < d }}">{{ e.warranty_end.strftime("%b %-d, %Y") }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="mt-2 text-sm text-mist">Nothing due in the next 60 days.</p>
+    {% endif %}
+  </details>
+</div>
+
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Crew</h2>
 <div class="rise space-y-2">
   {% for t, count in crew %}

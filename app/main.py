@@ -14,8 +14,12 @@ templates.env.filters["dollars"] = lambda cents: f"${(cents or 0) / 100:,.2f}"
 templates.env.filters["initials"] = lambda name: "".join(
     w[0] for w in (name or "?").split()[:2]).upper()
 templates.env.filters["hhmm"] = timefmt.to_local_hhmm
+templates.env.filters["localdt"] = lambda dt: (
+    timefmt.to_local(dt).strftime("%Y-%m-%d %H:%M") if dt else "")
+templates.env.filters["local_date"] = timefmt.to_local_date
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
+templates.env.filters["local_date"] = timefmt.local_date
 templates.env.globals["has_logo_check"] = lambda: os.path.isfile(os.path.join(config.DATA_DIR, "branding", "logo.png"))
 
 
@@ -49,7 +53,7 @@ def create_app(engine=None) -> FastAPI:
     migrate.run(app.state.engine)
     seeds.run(app.state.engine)
 
-    EXEMPT_EXACT = {"/login", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
+    EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
     EXEMPT_PREFIX = ("/static",)
 
     @app.middleware("http")
@@ -59,21 +63,43 @@ def create_app(engine=None) -> FastAPI:
         request.state.user = None
         if not exempt:
             uid = request.session.get("user_id")
+            # Missing "epoch" (cookie issued before this field existed) is
+            # treated as epoch 0 — the default for every pre-existing user —
+            # so already-logged-in clients aren't kicked out by this change.
+            epoch = request.session.get("epoch", 0)
             if uid is not None:
                 from sqlalchemy.orm import Session as _S
                 with _S(app.state.engine) as s:
                     user = s.get(models.User, uid)
-                    if user is not None and user.active:
+                    if user is not None and user.active and epoch == user.session_epoch:
                         s.expunge(user)
                         request.state.user = user
             if request.state.user is None:
                 request.session.clear()
                 return RedirectResponse("/login", status_code=303)
             request.session["user_id"] = request.state.user.id  # rolling cookie
+            request.session["epoch"] = request.state.user.session_epoch
         return await call_next(request)
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
-                        max_age=60 * 60 * 24 * 90)
+                        max_age=60 * 60 * 24 * 90, https_only=config.COOKIE_SECURE)
+
+    # Outermost middleware (registered last -- Starlette's add_middleware/
+    # @app.middleware both prepend, so whatever is added last wraps
+    # everything else) so these headers land on EVERY response this app
+    # produces: static files, 404s, the require_auth redirect-to-/login
+    # short-circuit, /login itself, all of it -- not just templated pages.
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+        )
+        return response
 
     from fastapi.responses import RedirectResponse as _RR
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -128,6 +154,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import jobs as jobs_router
     app.include_router(jobs_router.router)
 
+    from app.routers import quotes as quotes_router
+    app.include_router(quotes_router.router)
+
     from app.routers import money as money_router
     app.include_router(money_router.router)
 
@@ -144,14 +173,26 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import users as users_router
     app.include_router(users_router.router)
 
+    from app.routers import account as account_router
+    app.include_router(account_router.router)
+
+    from app.routers import audit as audit_router
+    app.include_router(audit_router.router)
+
     from app.routers import analytics as analytics_router
     app.include_router(analytics_router.router)
 
     from app.routers import inventory as inventory_router
     app.include_router(inventory_router.router)
 
+    from app.routers import invoices as invoices_router
+    app.include_router(invoices_router.router)
+
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
+        from app.maintenance import run_nightly
         app.state.scheduler = start_scheduler(app.state.engine)
+        app.state.scheduler.add_job(run_nightly, "cron", hour=1, minute=15,
+                                    args=[app.state.engine])
 
     return app

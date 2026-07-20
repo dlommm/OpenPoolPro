@@ -32,6 +32,55 @@ def test_add_and_edit_tier(client, engine):
         assert by_label["L"].max_gallons == 40000
 
 
+def test_tier_edit_writes_rates_change_audit_row(client, engine):
+    with Session(engine) as s:
+        tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
+        ids = [str(t.id) for t in tiers]
+        owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
+    client.post("/settings/tiers", data={
+        "tier_id": ids + [""],
+        "max_gallons": ["15000", "25000", "", "40000"],
+        "rate_dollars": ["48", "58", "75", "65"],
+        "label": ["S", "M", "XL", "L"]})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == owner_id
+
+
+def test_tier_save_with_no_actual_change_skips_audit(client, engine):
+    with Session(engine) as s:
+        tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
+        ids = [str(t.id) for t in tiers]
+        rate_cents = [t.rate_cents for t in tiers]
+        maxg = [str(t.max_gallons) if t.max_gallons is not None else "" for t in tiers]
+        labels = [t.label for t in tiers]
+    rates = [f"{c / 100:.2f}" for c in rate_cents]
+
+    # Submitting nothing at all is a no-op.
+    client.post("/settings/tiers", data={"tier_id": [], "max_gallons": [], "rate_dollars": [], "label": []})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 0
+
+    # Resubmitting the exact same values for every existing row must ALSO be
+    # a no-op -- every row is "touched" by the form post, but nothing about
+    # any of them actually changed, so no rates.change row should appear.
+    client.post("/settings/tiers", data={
+        "tier_id": ids, "max_gallons": maxg, "rate_dollars": rates, "label": labels})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 0
+
+    # A real change on top of that resubmission produces exactly one row.
+    rates[0] = f"{(rate_cents[0] + 500) / 100:.2f}"
+    client.post("/settings/tiers", data={
+        "tier_id": ids, "max_gallons": maxg, "rate_dollars": rates, "label": labels})
+    with Session(engine) as s:
+        rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.change")).all()
+        assert len(rows) == 1
+
+
 def test_markup_setting(client, engine):
     client.post("/settings/general", data={"chem_markup_percent": "25",
                                            "business_name": "Coastline Pools"})
@@ -249,3 +298,29 @@ def test_new_chemical_defaults_role_other(client, engine):
     import re
     new_row_selects = re.findall(r'<select name="role"[^>]*>(.*?)</select>', html, re.S)
     assert any('selected' in s and '>other<' in s for s in new_row_selects)
+
+
+def test_run_now_admin_creates_job_and_shows_banner(client, engine):
+    from app.routers.today import business_today
+    today = business_today()
+    with Session(engine) as s:
+        c = models.Customer(name="RunNow Cust", active=True)
+        p = models.Property(customer=c, active=True)
+        s.add(p)
+        s.commit()
+        s.add(models.MaintenanceRule(property_id=p.id, title="Run now rule",
+                                     next_due=today, lead_days=0, interval_weeks=4))
+        s.commit()
+
+    r = client.post("/settings/maintenance/run-now", follow_redirects=False)
+    assert r.status_code == 303
+    assert "rules_created=1" in r.headers["location"]
+
+    html = client.get(r.headers["location"]).text
+    assert "Created 1 maintenance job" in html
+
+
+def test_run_now_tech_forbidden(client, tech_client):
+    t = tech_client(name="runnowtech")
+    assert t.post("/settings/maintenance/run-now",
+                  follow_redirects=False).status_code == 403

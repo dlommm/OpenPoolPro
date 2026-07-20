@@ -28,6 +28,16 @@ def _parse_assignee(assigned_tech_id: str) -> int | None:
         return None
 
 
+def _parse_int_tolerant(s: str) -> int | None:
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
 def _eligible_assignees(session: Session, job_type: str):
     users = session.scalars(select(models.User).where(models.User.active)
                             .order_by(models.User.name)).all()
@@ -46,16 +56,19 @@ def list_jobs(request: Request, status: str = "open",
 
 
 @router.get("/jobs/new")
-def new_job(request: Request, property_id: int | None = None,
+def new_job(request: Request, property_id: int | None = None, template: str = "",
             session: Session = Depends(get_session)):
     props = session.scalars(select(models.Property).where(models.Property.active)
                             .join(models.Customer).order_by(models.Customer.name)).all()
     assignees_all = session.scalars(select(models.User).where(models.User.active)
                                     .order_by(models.User.name)).all()
+    template_id = _parse_int_tolerant(template)  # missing/garbage template -> plain form
+    tmpl = session.get(models.JobTemplate, template_id) if template_id is not None else None
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": None, "props": props, "selected": property_id,
          "assignees_all": assignees_all,
-         "show_money": request.state.user.can("view_money")})
+         "show_money": request.state.user.can("view_money"),
+         "template": tmpl})
 
 
 @router.post("/jobs/new")

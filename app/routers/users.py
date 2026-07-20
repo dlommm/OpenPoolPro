@@ -19,6 +19,16 @@ def _apply_flags(u: models.User, form) -> None:
         setattr(u, f, form.get(f) == "on")
 
 
+def _bump_epoch(request: Request, u: models.User) -> None:
+    """Invalidate every session already issued to u by bumping its epoch.
+    If the acting admin is targeting their own account, refresh this
+    request's own session cookie in the same response so they aren't
+    logged out by their own action."""
+    u.session_epoch += 1
+    if u.id == request.state.user.id:
+        request.session["epoch"] = u.session_epoch
+
+
 @router.get("/users")
 def list_users(request: Request, session: Session = Depends(get_session)):
     users = session.scalars(select(models.User).order_by(
@@ -50,6 +60,9 @@ async def create_user(request: Request, session: Session = Depends(get_session))
                     active=True, password_hash=hash_password(password))
     _apply_flags(u, form)
     session.add(u)
+    session.flush()
+    models.audit(session, request.state.user.id, "user.created",
+                 detail=f"{u.username!r} (id={u.id}, role={u.role})")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 
@@ -64,6 +77,8 @@ def edit_user_form(request: Request, uid: int, session: Session = Depends(get_se
 async def edit_user(request: Request, uid: int, session: Session = Depends(get_session)):
     form = await request.form()
     u = get_or_404(session, models.User, uid)
+    before_role = u.role
+    before_flags = {f: getattr(u, f) for f in FLAGS}
     username = (form.get("username") or "").strip().lower()
     if username and username != u.username:
         if session.scalars(select(models.User).where(models.User.username == username)).first():
@@ -84,17 +99,24 @@ async def edit_user(request: Request, uid: int, session: Session = Depends(get_s
                 {"u": u, "error": "Can't demote the last active admin"})
     u.role = new_role
     _apply_flags(u, form)
+    after_flags = {f: getattr(u, f) for f in FLAGS}
+    if u.role != before_role or after_flags != before_flags:
+        models.audit(session, request.state.user.id, "user.permissions",
+                     detail=f"{u.username!r}: role {before_role}->{u.role}, flags {after_flags}")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 
 
 @router.post("/users/{uid}/password")
-def reset_password(uid: int, password: str = Form(...),
+def reset_password(request: Request, uid: int, password: str = Form(...),
                    session: Session = Depends(get_session)):
     u = get_or_404(session, models.User, uid)
     if len(password) < 8:
         return HTMLResponse("Password must be 8+ characters", status_code=400)
     u.password_hash = hash_password(password)
+    _bump_epoch(request, u)
+    models.audit(session, request.state.user.id, "auth.password_changed",
+                 detail=f"admin reset for {u.username!r}")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 
@@ -111,6 +133,8 @@ def _toggle_active(request, session, uid, value):
         if others is None:
             return HTMLResponse("Can't disable the last active admin", status_code=400)
     u.active = value
+    if not value:
+        models.audit(session, me.id, "user.disabled", detail=f"{u.username!r} (id={u.id})")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 
@@ -123,3 +147,40 @@ def disable_user(request: Request, uid: int, session: Session = Depends(get_sess
 @router.post("/users/{uid}/enable")
 def enable_user(request: Request, uid: int, session: Session = Depends(get_session)):
     return _toggle_active(request, session, uid, True)
+
+
+@router.post("/users/{uid}/2fa/reset")
+def reset_2fa(request: Request, uid: int, session: Session = Depends(get_session)):
+    """Admin recovery path: clear a user's 2FA entirely (secret, enabled
+    flag, and every backup code) -- for when they've lost their device and
+    can't confirm a self-service disable. Also bumps the target's session
+    epoch (mirroring logout_sessions below) so any session cookie already
+    issued to them -- which was minted under the now-defunct 2FA state --
+    is invalidated too; if the admin targets their own account, refresh
+    this request's own session so they aren't logged out by their own
+    action."""
+    u = get_or_404(session, models.User, uid)
+    u.totp_secret = None
+    u.totp_enabled = False
+    for bc in session.scalars(select(models.BackupCode).where(
+            models.BackupCode.user_id == u.id)).all():
+        session.delete(bc)
+    _bump_epoch(request, u)
+    models.audit(session, request.state.user.id, "auth.2fa_reset",
+                 detail=f"{u.username!r} (id={u.id})")
+    session.commit()
+    return RedirectResponse("/users", status_code=303)
+
+
+@router.post("/users/{uid}/logout-sessions")
+def logout_sessions(request: Request, uid: int, session: Session = Depends(get_session)):
+    """Bump the target user's session epoch, invalidating every session
+    cookie already issued to them. If the admin targets their own account
+    (editing themselves from this same screen), refresh this request's own
+    session so they aren't logged out by their own action."""
+    u = get_or_404(session, models.User, uid)
+    _bump_epoch(request, u)
+    models.audit(session, request.state.user.id, "auth.logout_everywhere",
+                 detail=f"{u.username!r} (id={u.id})")
+    session.commit()
+    return RedirectResponse("/users", status_code=303)

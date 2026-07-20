@@ -56,5 +56,111 @@
 <form method="post" action="/properties/{{ p.id }}/deactivate" class="mt-3">
   <button class="btn-danger">Deactivate property</button>
 </form>
+
+<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Seasonal holds</h2>
+<div class="mb-3 space-y-2">
+  {% for h in holds %}
+  <div class="card p-3 text-sm">
+    <div class="flex items-center justify-between gap-2">
+      <span class="font-data">{{ h.start_date }} → {{ h.resume_date or "indefinite" }}</span>
+      {% if h.resume_date is none or today < h.resume_date %}
+      <form method="post" action="/properties/{{ p.id }}/holds/{{ h.id }}/end">
+        <button class="btn-secondary">End now</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if h.reason %}<div class="mt-1 text-mist">{{ h.reason }}</div>{% endif %}
+  </div>
+  {% else %}<p class="text-sm text-mist">No holds on record.</p>{% endfor %}
+</div>
+{% if hold_error %}<p class="mb-2 text-sm text-safety">{{ hold_error }}</p>{% endif %}
+<form method="post" action="/properties/{{ p.id }}/holds/new" class="card mb-6 space-y-2 p-3">
+  <div class="grid grid-cols-2 gap-2">
+    <label class="block"><span class="field-label">Start</span>
+      <input type="date" name="start_date" value="{{ hold_start or today }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Resume (blank = indefinite)</span>
+      <input type="date" name="resume_date" value="{{ hold_resume or '' }}" class="field font-data"></label>
+  </div>
+  <label class="block"><span class="field-label">Reason</span>
+    <input name="reason" value="{{ hold_reason or '' }}" class="field"></label>
+  <button class="btn-secondary w-full">Add hold</button>
+</form>
+
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Checklist overrides</h2>
+<p class="mb-2 text-xs text-mist">When present, these replace the global visit task list for this property.</p>
+<div class="mb-3 space-y-1">
+  {% for t in tasks %}
+  <div class="card flex items-center justify-between gap-2 p-2.5 text-sm">
+    <span>{{ t.label }}</span>
+    <div class="flex items-center gap-1">
+      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move">
+        <input type="hidden" name="direction" value="up">
+        <button class="btn-secondary px-2" aria-label="Move up">↑</button>
+      </form>
+      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move">
+        <input type="hidden" name="direction" value="down">
+        <button class="btn-secondary px-2" aria-label="Move down">↓</button>
+      </form>
+      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/deactivate">
+        <button class="btn-danger px-2">Remove</button>
+      </form>
+    </div>
+  </div>
+  {% else %}<p class="text-sm text-mist">Using the global task list.</p>{% endfor %}
+</div>
+<form method="post" action="/properties/{{ p.id }}/tasks/new" class="mb-6 flex gap-2">
+  <input name="label" placeholder="New checklist item" class="field flex-1">
+  <button class="btn-secondary">Add</button>
+</form>
+
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Maintenance rules</h2>
+<div class="mb-3 space-y-2">
+  {% for r in rules %}
+  <div class="{{ 'opacity-50' if not r.active }}">
+    <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/edit" class="card space-y-2 p-3 text-sm">
+      <input name="title" value="{{ r.title }}" class="field">
+      <textarea name="description" class="field min-h-16 py-2">{{ r.description }}</textarea>
+      <div class="grid grid-cols-2 gap-2">
+        <select name="job_type" class="field">
+          <option value="service" {{ "selected" if r.job_type == "service" }}>service</option>
+          <option value="repair" {{ "selected" if r.job_type == "repair" }}>repair</option>
+        </select>
+        <input type="date" name="next_due" value="{{ r.next_due }}" class="field font-data">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="block"><span class="field-label">Interval (weeks)</span>
+          <input inputmode="numeric" name="interval_weeks" value="{{ r.interval_weeks }}" class="field font-data"></label>
+        <label class="block"><span class="field-label">Lead days</span>
+          <input inputmode="numeric" name="lead_days" value="{{ r.lead_days }}" class="field font-data"></label>
+      </div>
+      <button class="btn-secondary w-full">Save rule</button>
+    </form>
+    {% if r.active %}
+    <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/deactivate" class="mt-1">
+      <button class="btn-danger w-full">Deactivate rule</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}<p class="text-sm text-mist">No maintenance rules yet.</p>{% endfor %}
+</div>
+<form method="post" action="/properties/{{ p.id }}/rules/new" class="card mb-3 space-y-2 p-3">
+  <h3 class="text-sm font-semibold">Add rule</h3>
+  <input name="title" placeholder="Title" required class="field">
+  <textarea name="description" placeholder="Description" class="field min-h-16 py-2"></textarea>
+  <div class="grid grid-cols-2 gap-2">
+    <select name="job_type" class="field">
+      <option value="service">service</option>
+      <option value="repair">repair</option>
+    </select>
+    <input type="date" name="next_due" class="field font-data">
+  </div>
+  <div class="grid grid-cols-2 gap-2">
+    <label class="block"><span class="field-label">Interval (weeks)</span>
+      <input inputmode="numeric" name="interval_weeks" placeholder="4" class="field font-data"></label>
+    <label class="block"><span class="field-label">Lead days</span>
+      <input inputmode="numeric" name="lead_days" placeholder="7" class="field font-data"></label>
+  </div>
+  <button class="btn-secondary w-full">Add rule</button>
+</form>
 {% endif %}
 {% endblock %}

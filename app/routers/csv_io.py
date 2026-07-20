@@ -20,7 +20,7 @@ EXPORT_COLUMNS = ["customer_name", "qb_display_name", "phone", "email", "custome
 
 
 @router.get("/customers/export")
-def export_customers(session: Session = Depends(get_session)):
+def export_customers(request: Request, session: Session = Depends(get_session)):
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(EXPORT_COLUMNS)
@@ -40,6 +40,8 @@ def export_customers(session: Session = Depends(get_session)):
             (pool.width_ft if pool.width_ft is not None else "") if pool else "",
             pool.avg_depth_ft if pool else "", pool.water_type if pool else "",
         ])
+    models.audit(session, request.state.user.id, "export.customers", detail=f"{len(props)} properties")
+    session.commit()
     return PlainTextResponse(buf.getvalue(), media_type="text/csv", headers={
         "Content-Disposition": "attachment; filename=customers.csv"})
 
@@ -238,6 +240,8 @@ async def import_commit(request: Request, token: str,
                     avg_depth_ft=depth, gallons=gallons(shape, length, width, depth),
                     water_type=val(row, "water_type") or "chlorine"))
         created += 1
+    models.audit(session, request.state.user.id, "import.commit",
+                 detail=f"created={created} skipped={skipped}")
     session.commit()
     os.remove(_tmp_path(token))
     return templates.TemplateResponse(request, "csv/result.html", {

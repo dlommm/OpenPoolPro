@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -60,6 +62,43 @@ def test_equipment_crud(client, engine):
     with Session(engine) as s:
         eq = s.scalars(select(models.Equipment)).one()
         assert eq.brand == "Pentair"
+
+
+def test_add_equipment_stores_warranty_end_and_renders_it(client, engine):
+    pid = _prop(client, engine)
+    client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Main", "shape": "round", "length_ft": "20", "width_ft": "",
+        "avg_depth_ft": "4", "water_type": "chlorine", "surface": "plaster", "notes": ""})
+    with Session(engine) as s:
+        pool_id = s.scalars(select(models.Pool)).one().id
+    client.post(f"/pools/{pool_id}/equipment/new", data={
+        "kind": "pump", "brand": "Pentair", "model": "SuperFlo", "serial": "X1",
+        "install_date": "", "warranty_end": "2027-03-01", "notes": ""})
+    with Session(engine) as s:
+        eq = s.scalars(select(models.Equipment)).one()
+        assert eq.warranty_end == date(2027, 3, 1)
+    html = client.get(f"/pools/{pool_id}/edit").text
+    assert "2027-03-01" in html
+
+
+def test_add_equipment_warranty_end_tolerant_blank_and_garbage(client, engine):
+    pid = _prop(client, engine)
+    client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Main", "shape": "round", "length_ft": "20", "width_ft": "",
+        "avg_depth_ft": "4", "water_type": "chlorine", "surface": "plaster", "notes": ""})
+    with Session(engine) as s:
+        pool_id = s.scalars(select(models.Pool)).one().id
+    r1 = client.post(f"/pools/{pool_id}/equipment/new", data={
+        "kind": "pump", "brand": "A", "model": "", "serial": "",
+        "install_date": "", "warranty_end": "", "notes": ""}, follow_redirects=False)
+    r2 = client.post(f"/pools/{pool_id}/equipment/new", data={
+        "kind": "pump", "brand": "B", "model": "", "serial": "",
+        "install_date": "", "warranty_end": "not-a-date", "notes": ""}, follow_redirects=False)
+    assert r1.status_code == 303 and r2.status_code == 303  # tolerant -- never 500
+    with Session(engine) as s:
+        eqs = s.scalars(select(models.Equipment).order_by(models.Equipment.id)).all()
+        assert len(eqs) == 2
+        assert all(e.warranty_end is None for e in eqs)
 
 
 def test_missing_ids_return_404(client, engine):

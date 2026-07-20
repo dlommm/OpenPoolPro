@@ -9,6 +9,9 @@ COLUMNS = {
         ("manage_customers", "BOOLEAN DEFAULT 0"),
         ("can_repairs", "BOOLEAN DEFAULT 0"),
         ("view_all_routes", "BOOLEAN DEFAULT 0"),
+        ("totp_secret", "VARCHAR(200)"),
+        ("totp_enabled", "BOOLEAN DEFAULT 0"),
+        ("session_epoch", "INTEGER DEFAULT 0"),
     ],
     "properties": [("assigned_tech_id", "INTEGER REFERENCES users(id)")],
     "jobs": [
@@ -16,6 +19,7 @@ COLUMNS = {
         ("job_type", "VARCHAR(10) DEFAULT 'service'"),
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
         ("started_at", "DATETIME"),
+        ("rule_id", "INTEGER REFERENCES maintenance_rules(id)"),
     ],
     "visits": [
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
@@ -28,6 +32,9 @@ COLUMNS = {
         ("reorder_point", "REAL"),
         ("reorder_qty", "REAL"),
     ],
+    "customers": [("tags", "TEXT DEFAULT '[]'")],
+    "equipment": [("warranty_end", "DATE")],
+    "photos": [("tag", "VARCHAR(10) DEFAULT ''")],
 }
 
 

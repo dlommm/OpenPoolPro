@@ -16,27 +16,49 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
 
 
+def _parse_count(s: str | None) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None  # non-int: ignore banner rather than 500 or render garbage
+
+
 @router.get("/settings")
-def settings_page(request: Request, session: Session = Depends(get_session)):
+def settings_page(request: Request, rules_created: str | None = None,
+                  session: Session = Depends(get_session)):
     from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     tasks = session.scalars(select(models.TaskTemplate)
                             .order_by(models.TaskTemplate.sort_order)).all()
+    job_templates = session.scalars(select(models.JobTemplate)
+                                    .order_by(models.JobTemplate.title)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
     targets = {k: models.get_setting(session, k, d) for k, d in [
         ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
         ("target_cya", "50"), ("target_salt", "3200")]}
     return templates.TemplateResponse(request, "settings/index.html", {
-        "tiers": tiers, "chems": chems, "tasks": tasks, "backups": backups,
+        "tiers": tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
+        "backups": backups,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "business_name": models.get_setting(session, "business_name", ""),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
         "role_values": models.ROLE_VALUES,
         "targets": targets,
+        "rules_created": _parse_count(rules_created),
         "company": company_info(session)})
+
+
+@router.post("/settings/maintenance/run-now")
+def run_maintenance_now(session: Session = Depends(get_session)):
+    from app.maintenance import run_maintenance_rules
+    from app.routers.today import business_today
+    created = run_maintenance_rules(session, business_today())
+    return RedirectResponse(f"/settings?rules_created={created}", status_code=303)
 
 
 @router.post("/settings/targets")
@@ -60,6 +82,7 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     rows = zip(form.getlist("tier_id"), form.getlist("max_gallons"),
                form.getlist("rate_dollars"), form.getlist("label"))
+    changed = 0
     for tid, max_g, rate, label in rows:
         if tid:
             try:
@@ -73,17 +96,28 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
         if not rate.strip():
             if tier is not None:
                 session.delete(tier)
+                changed += 1
             continue
         try:
             rate_cents = round(float(rate) * 100)
             max_gallons = int(max_g) if max_g.strip() else None
         except ValueError:
             continue
-        t = tier if tier is not None else models.RateTier(rate_cents=0)
+        if tier is not None:
+            before = (tier.max_gallons, tier.rate_cents, tier.label)
+            if (max_gallons, rate_cents, label) != before:
+                changed += 1
+            t = tier
+        else:
+            t = models.RateTier(rate_cents=0)
+            changed += 1
         t.max_gallons = max_gallons
         t.rate_cents = rate_cents
         t.label = label
         session.add(t)
+    if changed:
+        models.audit(session, request.state.user.id, "rates.change",
+                     detail=f"{changed} rate tier(s) changed")
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 
@@ -162,6 +196,48 @@ async def save_tasks(request: Request, session: Session = Depends(get_session)):
                 t.label, t.sort_order = label, i
         elif label.strip():
             session.add(models.TaskTemplate(label=label, sort_order=i))
+    session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/job_templates")
+async def save_job_templates(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    ids = form.getlist("template_id")
+    titles = form.getlist("title")
+    descriptions = form.getlist("description")
+    job_types = form.getlist("job_type")
+    labors = form.getlist("labor_dollars")
+
+    for i, (tid, title) in enumerate(zip(ids, titles)):
+        description = descriptions[i] if i < len(descriptions) else ""
+        job_type = job_types[i] if i < len(job_types) else "service"
+        job_type = job_type if job_type in ("service", "repair") else "service"
+        labor = labors[i] if i < len(labors) else ""
+
+        if tid:
+            try:
+                t = session.get(models.JobTemplate, int(tid))
+            except ValueError:
+                continue
+            if t is None:
+                continue
+            if not title.strip():
+                session.delete(t)  # blank title deletes -- JobTemplate has no active flag
+                continue
+            try:
+                labor_cents = round(float(labor or 0) * 100)
+            except ValueError:
+                continue
+            t.title, t.description, t.job_type = title, description, job_type
+            t.labor_cents = labor_cents
+        elif title.strip():
+            try:
+                labor_cents = round(float(labor or 0) * 100)
+            except ValueError:
+                continue
+            session.add(models.JobTemplate(title=title, description=description,
+                                           job_type=job_type, labor_cents=labor_cents))
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 
