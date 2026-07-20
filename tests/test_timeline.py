@@ -153,6 +153,76 @@ def test_timeline_quote_money_is_line_total_creation_entry_only(engine):
         assert quote_entries[0]["money"] == 70000
 
 
+def test_timeline_invoice_entry_appears_with_number_in_title(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c, p = _cust_prop(s)
+        admin = models.User(name="Admin8", role="admin")
+        s.add(admin)
+        s.commit()
+        s.add(models.Invoice(number="INV-2026-0001", customer_id=c.id,
+                             period_year=2026, period_month=6, total_cents=15000,
+                             status="sent", generated_at=datetime(2026, 6, 1, 8, 0),
+                             pdf_filename="inv.pdf"))
+        s.commit()
+
+        entries = _timeline(s, c, admin)
+        invoice_entries = [e for e in entries if e["kind"] == "invoice"]
+        assert len(invoice_entries) == 1
+        e = invoice_entries[0]
+        assert e["title"] == "Invoice INV-2026-0001"
+        assert e["detail"] == "2026-06 · sent"
+        assert e["money"] == 15000
+        assert e["at"] == datetime(2026, 6, 1, 8, 0)
+
+
+def test_timeline_invoice_money_gated_without_view_money(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c, p = _cust_prop(s)
+        tech = models.User(name="Tech2", role="tech", view_money=False)
+        admin = models.User(name="Admin9", role="admin")
+        s.add(tech)
+        s.add(admin)
+        s.commit()
+        s.add(models.Invoice(number="INV-2026-0002", customer_id=c.id,
+                             period_year=2026, period_month=7, total_cents=20000,
+                             status="draft", generated_at=datetime(2026, 7, 1, 8, 0),
+                             pdf_filename="inv2.pdf"))
+        s.commit()
+
+        tech_entries = [e for e in _timeline(s, c, tech) if e["kind"] == "invoice"]
+        assert len(tech_entries) == 1
+        assert tech_entries[0]["money"] is None
+
+        admin_entries = [e for e in _timeline(s, c, admin) if e["kind"] == "invoice"]
+        assert admin_entries[0]["money"] == 20000
+
+
+def test_timeline_invoice_sorts_with_mixed_kinds_newest_first(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c, p = _cust_prop(s)
+        admin = models.User(name="Admin10", role="admin")
+        s.add(admin)
+        s.commit()
+        s.add(models.Visit(property_id=p.id, date=date(2026, 1, 1), status="done",
+                           completed_at=datetime(2026, 1, 1, 10, 0), rate_cents=5000))
+        s.add(models.CommLog(customer_id=c.id, at=datetime(2026, 2, 1, 8, 0),
+                             kind="call", note="Called"))
+        s.add(models.Invoice(number="INV-2026-0003", customer_id=c.id,
+                             period_year=2026, period_month=3, total_cents=9900,
+                             status="draft", generated_at=datetime(2026, 3, 1, 9, 0),
+                             pdf_filename="inv3.pdf"))
+        s.commit()
+
+        entries = _timeline(s, c, admin)
+        kinds = [e["kind"] for e in entries]
+        assert kinds == ["invoice", "comm", "visit"]
+        ats = [e["at"] for e in entries]
+        assert ats == sorted(ats, reverse=True)
+
+
 def test_timeline_no_invoice_entries_and_no_other_customers_data(engine):
     Base.metadata.create_all(engine)
     with Session(engine) as s:

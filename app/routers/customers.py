@@ -82,16 +82,21 @@ def _customer_photos(session: Session, customer: "models.Customer"
     return out
 
 
-def _timeline(session: Session, customer: "models.Customer", user: "models.User") -> list[dict]:
-    """Merge visits/jobs/photos/comm-log/quotes for one customer into a single
-    newest-first feed capped at 200 entries.
+def _timeline(session: Session, customer: "models.Customer", user: "models.User",
+              photos: list[tuple["models.Photo", "models.Property | None"]] | None = None
+              ) -> list[dict]:
+    """Merge visits/jobs/photos/comm-log/quotes/invoices for one customer into
+    a single newest-first feed capped at 200 entries.
 
     Each entry: {at: datetime, kind, icon, title, detail, money (cents|None)}.
     Money is computed internally for every kind then zeroed out afterward
     unless the viewing user has view_money -- keeps the per-kind assembly
-    below simple and puts the permission check in exactly one place. No
-    invoice entries: this branch predates the Invoice model (P5/P4 merge
-    wave wires that in later).
+    below simple and puts the permission check in exactly one place.
+
+    `photos` lets a caller that already gathered `_customer_photos` (e.g. the
+    customer-detail route, which also needs them for the Photos section) pass
+    the result in so it isn't computed twice per request. Defaults to None,
+    in which case this function computes it itself (used directly by tests).
     """
     props = list(customer.properties)
     prop_by_id = {p.id: p for p in props}
@@ -136,7 +141,9 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
                 "detail": detail, "money": j.labor_cents,
             })
 
-        for ph, prop in _customer_photos(session, customer):
+        if photos is None:
+            photos = _customer_photos(session, customer)
+        for ph, prop in photos:
             title = f"Photo — {ph.tag}" if ph.tag else "Photo"
             detail = ph.caption or (prop.label if prop else "")
             entries.append({
@@ -166,6 +173,16 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
         entries.append({
             "at": q.created_at, "kind": "quote", "icon": "money",
             "title": f"Quote: {q.title}", "detail": q.status, "money": total,
+        })
+
+    invoices = session.scalars(select(models.Invoice).where(
+        models.Invoice.customer_id == customer.id)).all()
+    for inv in invoices:
+        entries.append({
+            "at": inv.generated_at, "kind": "invoice", "icon": "money",
+            "title": f"Invoice {inv.number}",
+            "detail": f"{inv.period_year}-{inv.period_month:02d} · {inv.status}",
+            "money": inv.total_cents,
         })
 
     entries.sort(key=lambda e: e["at"], reverse=True)
@@ -221,10 +238,11 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     jobs = session.scalars(
         select(models.Job).join(models.Property)
         .where(models.Property.customer_id == cid, models.Job.status != "done")).all()
-    timeline = _timeline(session, c, user)
+    all_photos = _customer_photos(session, c)
+    timeline = _timeline(session, c, user, photos=all_photos)
 
     ptag = ptag if ptag in models.PHOTO_TAGS else ""  # tolerant: unknown -> all
-    photos = [(ph, p) for ph, p in _customer_photos(session, c) if not ptag or ph.tag == ptag]
+    photos = [(ph, p) for ph, p in all_photos if not ptag or ph.tag == ptag]
 
     today = business_today()
     active_holds: dict[int, models.ServiceHold] = {}
