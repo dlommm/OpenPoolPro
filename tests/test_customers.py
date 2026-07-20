@@ -128,3 +128,200 @@ def test_history_shows_duration(client, engine):
                            completed_at=dt(2026, 7, 13, 13, 42)))
         s.commit()
     assert "42 min" in client.get(f"/customers/{cid}").text
+
+
+def test_reactivate_customer(client, engine):
+    client.post("/customers/new", data={"name": "Snowbird", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/deactivate")
+    assert "Snowbird" not in client.get("/customers").text
+    assert "Snowbird" in client.get("/customers?show=inactive").text
+    r = client.post(f"/customers/{cid}/reactivate", follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert s.get(models.Customer, cid).active is True
+    assert "Snowbird" in client.get("/customers").text
+
+
+def test_reactivate_property(client, engine):
+    client.post("/customers/new", data={"name": "PropCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Cabana", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+    client.post(f"/properties/{pid}/deactivate")
+    detail = client.get(f"/customers/{cid}").text
+    assert "Inactive" in detail and "Reactivate property" in detail
+    r = client.post(f"/properties/{pid}/reactivate", follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert s.get(models.Property, pid).active is True
+
+
+def test_tag_add_remove_and_list_filter(client, engine):
+    client.post("/customers/new", data={"name": "Tagged Co", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/tags/add", data={"tags": "VIP, Pool Club"})
+    with Session(engine) as s:
+        c = s.get(models.Customer, cid)
+        assert c.tags == ["vip", "pool club"]
+    assert "Tagged Co" in client.get("/customers?tag=vip").text
+    assert "Tagged Co" not in client.get("/customers?tag=nope").text
+    client.post(f"/customers/{cid}/tags/remove", data={"tag": "vip"})
+    with Session(engine) as s:
+        assert s.get(models.Customer, cid).tags == ["pool club"]
+
+
+def test_comm_log_quick_add_stamps_user_and_shows_in_timeline(client, engine):
+    client.post("/customers/new", data={"name": "Comm Co", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/comm/add", data={"kind": "call", "note": "Discussed algae"})
+    with Session(engine) as s:
+        log = s.scalars(select(models.CommLog)).one()
+        assert log.kind == "call" and log.note == "Discussed algae"
+        assert log.user_id is not None
+    detail = client.get(f"/customers/{cid}").text
+    assert "Discussed algae" in detail and "Call" in detail
+
+
+def test_hold_create_validation_and_end_now(client, engine):
+    client.post("/customers/new", data={"name": "HoldCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+
+    # invalid: resume <= start -> rejected, form re-rendered with error, nothing created
+    r = client.post(f"/properties/{pid}/holds/new", data={
+        "start_date": "2026-07-20", "resume_date": "2026-07-10", "reason": "Vacation"})
+    assert r.status_code == 400
+    assert "Resume date must be after" in r.text
+    with Session(engine) as s:
+        assert s.scalars(select(models.ServiceHold)).all() == []
+
+    # valid
+    r = client.post(f"/properties/{pid}/holds/new", data={
+        "start_date": "2026-07-20", "resume_date": "2026-08-01", "reason": "Vacation"},
+        follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        hold = s.scalars(select(models.ServiceHold)).one()
+        assert hold.start_date == date(2026, 7, 20)
+        assert hold.resume_date == date(2026, 8, 1)
+        hid = hold.id
+    assert "2026-08-01" in client.get(f"/properties/{pid}/edit").text
+
+    # end now
+    from app.routers.today import business_today
+    client.post(f"/properties/{pid}/holds/{hid}/end")
+    with Session(engine) as s:
+        assert s.get(models.ServiceHold, hid).resume_date == business_today()
+
+
+def test_checklist_add_deactivate_reorder_and_visit_form_override(client, engine):
+    client.post("/customers/new", data={"name": "ChecklistCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "2026-07-13",
+        "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+    with Session(engine) as s:
+        s.add(models.TaskTemplate(label="Global Skim", sort_order=0))
+        s.commit()
+
+    # No override yet -> global template list is used
+    visit_html = client.get(f"/visit/{pid}/2026-07-13").text
+    assert "Global Skim" in visit_html
+
+    # Add two property-specific tasks -> they replace the global list entirely
+    client.post(f"/properties/{pid}/tasks/new", data={"label": "Brush walls"})
+    client.post(f"/properties/{pid}/tasks/new", data={"label": "Empty skimmer"})
+    visit_html2 = client.get(f"/visit/{pid}/2026-07-13").text
+    assert "Brush walls" in visit_html2 and "Empty skimmer" in visit_html2
+    assert "Global Skim" not in visit_html2
+
+    with Session(engine) as s:
+        tasks = s.scalars(select(models.PropertyTask).where(
+            models.PropertyTask.property_id == pid).order_by(models.PropertyTask.sort_order)).all()
+        assert [t.label for t in tasks] == ["Brush walls", "Empty skimmer"]
+        first_id, second_id = tasks[0].id, tasks[1].id
+
+    # Move the second one up -> order swaps
+    client.post(f"/properties/{pid}/tasks/{second_id}/move", data={"direction": "up"})
+    with Session(engine) as s:
+        tasks = s.scalars(select(models.PropertyTask).where(
+            models.PropertyTask.property_id == pid).order_by(models.PropertyTask.sort_order)).all()
+        assert [t.label for t in tasks] == ["Empty skimmer", "Brush walls"]
+
+    # Deactivate one -> only the remaining active one shows, and once none
+    # are active the global template list applies again
+    client.post(f"/properties/{pid}/tasks/{first_id}/deactivate")
+    client.post(f"/properties/{pid}/tasks/{second_id}/deactivate")
+    visit_html3 = client.get(f"/visit/{pid}/2026-07-13").text
+    assert "Global Skim" in visit_html3
+
+
+def test_rules_crud_create_edit_tolerant_parse_and_deactivate(client, engine):
+    client.post("/customers/new", data={"name": "RulesCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+
+    # create with garbage interval/lead -> tolerant fallback to sane defaults
+    client.post(f"/properties/{pid}/rules/new", data={
+        "title": "Filter clean", "description": "", "job_type": "service",
+        "interval_weeks": "not-a-number", "lead_days": "-5", "next_due": "2026-08-01"})
+    with Session(engine) as s:
+        rule = s.scalars(select(models.MaintenanceRule)).one()
+        assert rule.interval_weeks >= 1
+        assert rule.lead_days >= 0
+        assert rule.next_due == date(2026, 8, 1)
+        rid = rule.id
+
+    # edit: valid interval/lead update; invalid ones keep the previous value
+    client.post(f"/properties/{pid}/rules/{rid}/edit", data={
+        "title": "Filter clean v2", "description": "desc", "job_type": "repair",
+        "interval_weeks": "2", "lead_days": "bad", "next_due": "2026-09-01"})
+    with Session(engine) as s:
+        rule = s.get(models.MaintenanceRule, rid)
+        assert rule.title == "Filter clean v2"
+        assert rule.job_type == "repair"
+        assert rule.interval_weeks == 2
+        assert rule.lead_days >= 0  # kept previous (bad input rejected)
+        assert rule.next_due == date(2026, 9, 1)
+        prior_lead_days = rule.lead_days
+
+    # a non-positive interval on edit is rejected client-side too (kept previous)
+    client.post(f"/properties/{pid}/rules/{rid}/edit", data={
+        "title": "Filter clean v2", "description": "desc", "job_type": "repair",
+        "interval_weeks": "0", "lead_days": str(prior_lead_days), "next_due": "2026-09-01"})
+    with Session(engine) as s:
+        assert s.get(models.MaintenanceRule, rid).interval_weeks == 2  # unchanged
+
+    # deactivate
+    client.post(f"/properties/{pid}/rules/{rid}/deactivate")
+    with Session(engine) as s:
+        assert s.get(models.MaintenanceRule, rid).active is False

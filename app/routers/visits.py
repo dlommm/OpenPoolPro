@@ -78,8 +78,14 @@ def visit_form(request: Request, property_id: int, visit_date: date,
         session.commit()
     chems = session.scalars(select(models.Chemical).where(models.Chemical.active)
                             .order_by(models.Chemical.name)).all()
-    tasks = session.scalars(select(models.TaskTemplate).where(models.TaskTemplate.active)
-                            .order_by(models.TaskTemplate.sort_order)).all()
+    # A property with its own active checklist overrides replaces the global
+    # TaskTemplate list entirely for this visit's form.
+    tasks = session.scalars(select(models.PropertyTask).where(
+        models.PropertyTask.property_id == property_id, models.PropertyTask.active
+    ).order_by(models.PropertyTask.sort_order)).all()
+    if not tasks:
+        tasks = session.scalars(select(models.TaskTemplate).where(models.TaskTemplate.active)
+                                .order_by(models.TaskTemplate.sort_order)).all()
     photos = session.scalars(select(models.Photo).where(
         models.Photo.entity_type == "visit", models.Photo.entity_id == v.id)).all()
     existing = {vc.chemical_id: vc for vc in v.chemicals}
