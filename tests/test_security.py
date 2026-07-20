@@ -120,11 +120,14 @@ def test_unsign_pending_round_trips_payload():
 
 def test_unsign_pending_rejects_tampered_token():
     token = security.sign_pending("supersecret", {"user_id": 7})
-    # Flip one character (the raw token is Base64/HMAC ASCII, never digit-only
-    # padding) so the signature check fails rather than silently no-opping.
-    last = token[-1]
-    flipped = "a" if last != "a" else "b"
-    tampered = token[:-1] + flipped
+    # Flip an INTERIOR character (index 1, inside the payload segment — never
+    # the "." separators, never the final char). The signature's urlsafe-b64
+    # tail carries 2 unused padding bits, so a last-char flip (e.g. "Y" ->
+    # "a", identical top 4 bits) can decode to the very same bytes and be
+    # legitimately accepted — that made this test flake ~6% of runs.
+    ch = token[1]
+    flipped = "a" if ch != "a" else "b"
+    tampered = token[0] + flipped + token[2:]
     assert tampered != token
     assert security.unsign_pending("supersecret", tampered) is None
 
