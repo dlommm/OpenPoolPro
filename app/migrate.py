@@ -28,6 +28,9 @@ COLUMNS = {
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),
         ("strength_pct", "FLOAT DEFAULT 100"),
+        ("stock_qty", "REAL DEFAULT 0"),
+        ("reorder_point", "REAL"),
+        ("reorder_qty", "REAL"),
     ],
     "customers": [("tags", "TEXT DEFAULT '[]'")],
     "equipment": [("warranty_end", "DATE")],

@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import dosing, models
+from app import dosing, inventory, models
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -130,8 +130,16 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     # re-complete (e.g. fixing a pH typo) even if the catalog price moved on.
     # Only genuinely new lines freeze the current catalog cost.
     prior = {vc.chemical_id: vc.unit_cost_cents_frozen for vc in v.chemicals}
+    # Stock-delta inputs: sum prior amounts per chemical BEFORE the rewrite so
+    # apply_visit_delta below can compute (new - prior) and only move stock by
+    # the difference — resaves net to zero, edits move the delta, removed
+    # lines restore what they'd consumed.
+    prior_stock: dict[int, float] = {}
+    for vc in v.chemicals:
+        prior_stock[vc.chemical_id] = prior_stock.get(vc.chemical_id, 0.0) + vc.amount
     for old in list(v.chemicals):
         session.delete(old)
+    new_stock: dict[int, float] = {}
     for cid, amt in zip(form.getlist("chem_id"), form.getlist("chem_amount")):
         amount = _f(amt)
         if amount is None or amount <= 0:
@@ -147,6 +155,8 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
             visit_id=v.id, chemical_id=chem.id, amount=amount,
             unit_cost_cents_frozen=frozen,
             total_cost_cents=round(amount * frozen)))
+        new_stock[chem.id] = new_stock.get(chem.id, 0.0) + amount
+    inventory.apply_visit_delta(session, v.id, prior_stock, new_stock)
     session.commit()
     return RedirectResponse("/", status_code=303)
 

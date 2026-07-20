@@ -132,6 +132,9 @@ class Chemical(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String(20), default="other")
     strength_pct: Mapped[float] = mapped_column(Float, default=100.0)
+    stock_qty: Mapped[float] = mapped_column(Float, default=0.0)
+    reorder_point: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reorder_qty: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class Visit(Base):
@@ -174,6 +177,18 @@ class VisitChemical(Base):
     unit_cost_cents_frozen: Mapped[int] = mapped_column(Integer)
     total_cost_cents: Mapped[int] = mapped_column(Integer)
     visit: Mapped[Visit] = relationship(back_populates="chemicals")
+    chemical: Mapped[Chemical] = relationship()
+
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chemical_id: Mapped[int] = mapped_column(ForeignKey("chemicals.id"))
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    quantity: Mapped[float] = mapped_column(Float)
+    total_cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     chemical: Mapped[Chemical] = relationship()
 
 

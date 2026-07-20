@@ -36,6 +36,16 @@
   </div>
 </div>
 
+<a href="/inventory" class="card mb-5 block p-3.5 {{ 'border-safety/40 bg-safety/5' if low_chems }}">
+  <div class="flex items-center justify-between">
+    <span class="font-semibold {{ 'text-safety' if low_chems }}">Low stock</span>
+    <span class="font-data text-sm {{ 'text-safety' if low_chems }}">{{ low_chems | length }}</span>
+  </div>
+  {% if low_chems %}
+  <p class="mt-1 text-sm text-mist">{{ low_chems | map(attribute="name") | join(", ") }}</p>
+  {% endif %}
+</a>
+
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Warranties</h2>
 <div class="rise mb-5">
   <details class="card p-3.5">

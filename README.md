@@ -7,7 +7,9 @@ month generation and batch zip, monthly QuickBooks Online CSV export, a
 customer-360 timeline (visits, jobs, photos, comm log, quotes) with tags and
 reactivation, seasonal service holds, per-property checklists, recurring
 maintenance rules with an auto-job engine, equipment warranty alerts,
-before/after/issue photo tags, and quotes that convert to jobs.
+before/after/issue photo tags, quotes that convert to jobs, and chemical
+inventory with stock levels, purchase logging feeding catalog costs,
+auto-decrement from visit usage, and low-stock alerts.
 
 ## Run
 
