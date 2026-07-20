@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -11,6 +11,7 @@ from app.deps import require_perm
 from app.main import templates
 from app.rates import effective_rate_cents
 from app.scheduling import suggest_tech
+from app.timefmt import from_local_hhmm
 
 router = APIRouter()
 
@@ -108,7 +109,15 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
             models.Visit.property_id.in_(property_ids),
             models.Visit.status != "due")).all()
         for v in visits:
-            at = v.completed_at if v.completed_at is not None else datetime.combine(v.date, time.min)
+            if v.completed_at is not None:
+                at, date_only = v.completed_at, False
+            else:
+                # No real instant recorded (e.g. skipped/dismissed without
+                # ever being opened) -- fall back to the visit's calendar
+                # date, normalized to the UTC instant of its business-local
+                # midnight so sorting stays consistent with instant-backed
+                # entries. Rendered date-only (no fabricated time-of-day).
+                at, date_only = from_local_hhmm(v.date, "00:00"), True
             parts = []
             if v.chemicals:
                 n = len(v.chemicals)
@@ -118,7 +127,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
             prop = prop_by_id.get(v.property_id)
             label = prop.label if prop else "Visit"
             entries.append({
-                "at": at, "kind": "visit", "icon": "check",
+                "at": at, "date_only": date_only, "kind": "visit", "icon": "check",
                 "title": f"{label} — {'Done' if v.status == 'done' else 'Skipped'}",
                 "detail": " · ".join(parts), "money": v.rate_cents,
             })
@@ -127,18 +136,20 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
             models.Job.property_id.in_(property_ids))).all()
         for j in jobs:
             if j.completed_at is not None:
-                at = j.completed_at
+                at, date_only = j.completed_at, False
             elif j.started_at is not None:
-                at = j.started_at
+                at, date_only = j.started_at, False
             elif j.scheduled_date is not None:
-                at = datetime.combine(j.scheduled_date, time.min)
+                # Same rationale as the visit fallback above: normalize to
+                # the UTC instant of business-local midnight, date-only display.
+                at, date_only = from_local_hhmm(j.scheduled_date, "00:00"), True
             else:
                 continue  # no reliable timestamp yet (bare open job) -- omit from timeline
             prop = prop_by_id.get(j.property_id)
             detail = f"{prop.label} — {j.status}" if prop else j.status
             entries.append({
-                "at": at, "kind": "job", "icon": "jobs", "title": j.title,
-                "detail": detail, "money": j.labor_cents,
+                "at": at, "date_only": date_only, "kind": "job", "icon": "jobs",
+                "title": j.title, "detail": detail, "money": j.labor_cents,
             })
 
         if photos is None:
@@ -147,7 +158,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
             title = f"Photo — {ph.tag}" if ph.tag else "Photo"
             detail = ph.caption or (prop.label if prop else "")
             entries.append({
-                "at": ph.taken_at, "kind": "photo", "icon": "camera",
+                "at": ph.taken_at, "date_only": False, "kind": "photo", "icon": "camera",
                 "title": title, "detail": detail, "money": None,
             })
 
@@ -162,7 +173,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
         who = comm_users.get(c.user_id)
         detail = f"{c.note} — {who.name}" if who else c.note
         entries.append({
-            "at": c.at, "kind": "comm", "icon": "phone",
+            "at": c.at, "date_only": False, "kind": "comm", "icon": "phone",
             "title": c.kind.title(), "detail": detail, "money": None,
         })
 
@@ -171,7 +182,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
     for q in quotes:
         total = sum(line.amount_cents for line in q.lines)
         entries.append({
-            "at": q.created_at, "kind": "quote", "icon": "money",
+            "at": q.created_at, "date_only": False, "kind": "quote", "icon": "money",
             "title": f"Quote: {q.title}", "detail": q.status, "money": total,
         })
 
@@ -179,7 +190,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
         models.Invoice.customer_id == customer.id)).all()
     for inv in invoices:
         entries.append({
-            "at": inv.generated_at, "kind": "invoice", "icon": "money",
+            "at": inv.generated_at, "date_only": False, "kind": "invoice", "icon": "money",
             "title": f"Invoice {inv.number}",
             "detail": f"{inv.period_year}-{inv.period_month:02d} · {inv.status}",
             "money": inv.total_cents,

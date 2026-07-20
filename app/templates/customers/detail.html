@@ -134,7 +134,7 @@
         {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
       </div>
       {% if e.detail %}<div class="mt-0.5 text-mist">{{ e.detail }}</div>{% endif %}
-      <div class="mt-0.5 font-data text-xs text-mist">{{ e.at.strftime("%Y-%m-%d %H:%M") }}</div>
+      <div class="mt-0.5 font-data text-xs text-mist">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
     </div>
   </div>
   {% else %}

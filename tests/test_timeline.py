@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.db import Base
 from app.routers.customers import _timeline
+from app.timefmt import from_local_hhmm
 
 
 def _cust_prop(s, prop_label="Home"):
@@ -221,6 +222,54 @@ def test_timeline_invoice_sorts_with_mixed_kinds_newest_first(engine):
         assert kinds == ["invoice", "comm", "visit"]
         ats = [e["at"] for e in entries]
         assert ats == sorted(ats, reverse=True)
+
+
+def test_timeline_date_only_flag_for_date_backed_fallbacks(engine):
+    # Visit/job entries with no real instant (completed_at/started_at) fall
+    # back to their calendar date -- those must be flagged date_only=True
+    # and their sort instant normalized to the UTC equivalent of business-
+    # local midnight (not the naive-UTC datetime.combine value), so ordering
+    # around midnight lines up with true-instant entries.
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c, p = _cust_prop(s)
+        admin = models.User(name="Admin11", role="admin")
+        s.add(admin)
+        s.commit()
+        # winter date (EST, UTC-5): local midnight Jan 15 == 05:00 UTC
+        s.add(models.Visit(property_id=p.id, date=date(2026, 1, 15), status="skipped"))
+        # summer date (EDT, UTC-4): local midnight Jul 20 == 04:00 UTC
+        s.add(models.Job(property_id=p.id, title="Someday fix", status="scheduled",
+                         scheduled_date=date(2026, 7, 20)))
+        s.commit()
+
+        entries = _timeline(s, c, admin)
+        visit_entry = next(e for e in entries if e["kind"] == "visit")
+        job_entry = next(e for e in entries if e["kind"] == "job")
+        assert visit_entry["date_only"] is True
+        assert visit_entry["at"] == from_local_hhmm(date(2026, 1, 15), "00:00")
+        assert job_entry["date_only"] is True
+        assert job_entry["at"] == from_local_hhmm(date(2026, 7, 20), "00:00")
+
+
+def test_timeline_date_only_false_for_instant_backed_entries(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c, p = _cust_prop(s)
+        admin = models.User(name="Admin12", role="admin")
+        s.add(admin)
+        s.commit()
+        s.add(models.Visit(property_id=p.id, date=date(2026, 1, 1), status="done",
+                           completed_at=datetime(2026, 1, 1, 10, 0)))
+        s.add(models.Job(property_id=p.id, title="Repair", status="done",
+                         completed_at=datetime(2026, 2, 1, 9, 0)))
+        s.add(models.CommLog(customer_id=c.id, at=datetime(2026, 3, 1, 8, 0),
+                             kind="call", note="Called"))
+        s.commit()
+
+        entries = _timeline(s, c, admin)
+        assert entries
+        assert all(e["date_only"] is False for e in entries)
 
 
 def test_timeline_no_invoice_entries_and_no_other_customers_data(engine):

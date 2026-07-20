@@ -130,6 +130,34 @@ def test_history_shows_duration(client, engine):
     assert "42 min" in client.get(f"/customers/{cid}").text
 
 
+def test_timeline_renders_date_only_and_localized_instant_times(client, engine):
+    from datetime import datetime as dt
+    client.post("/customers/new", data={"name": "TZCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == "TZCo")).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "",
+        "rate_override_dollars": "", "assigned_tech_id": ""})
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).join(models.Customer).where(
+            models.Customer.name == "TZCo")).one()
+        # Skipped without ever being opened -- no completed_at recorded, so
+        # the timeline falls back to the visit's calendar date only.
+        s.add(models.Visit(property_id=p.id, date=date(2026, 1, 15), status="skipped"))
+        # A real instant: 13:30 UTC on 2026-07-20 is 09:30 America/New_York (EDT).
+        s.add(models.CommLog(customer_id=cid, kind="call", note="Instant entry",
+                             at=dt(2026, 7, 20, 13, 30)))
+        s.commit()
+
+    detail = client.get(f"/customers/{cid}").text
+    assert "2026-01-15" in detail
+    assert "2026-01-15 00:00" not in detail  # date-only: no fabricated midnight
+    assert "2026-07-20 09:30" in detail      # localized, not raw UTC
+    assert "2026-07-20 13:30" not in detail  # raw naive-UTC must not leak through
+
+
 def test_reactivate_customer(client, engine):
     client.post("/customers/new", data={"name": "Snowbird", "qb_display_name": "",
                                         "phone": "", "email": "", "notes": ""})

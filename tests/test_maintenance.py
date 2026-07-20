@@ -161,6 +161,22 @@ def test_inactive_property_skipped(engine):
         assert s.scalars(select(models.Job)).first() is None
 
 
+def test_inactive_customer_property_skipped(engine):
+    # Property itself is still active, but its owning customer was
+    # deactivated (deactivate_customer doesn't cascade to properties) --
+    # the rules engine must skip it anyway, consistent with stops_for_date
+    # and warranty_alerts, which both filter on Customer.active.
+    Base.metadata.create_all(engine)
+    today = date(2026, 7, 15)
+    with Session(engine) as s:
+        p = _customer_property(s, active=True, cust_active=False)
+        s.add(models.MaintenanceRule(property_id=p.id, title="X", next_due=today, lead_days=7))
+        s.commit()
+        created = run_maintenance_rules(s, today)
+        assert created == 0
+        assert s.scalars(select(models.Job)).first() is None
+
+
 @pytest.mark.parametrize("interval_weeks", [0, -1, -4])
 def test_nonpositive_interval_skipped_no_hang(engine, interval_weeks):
     # Nothing in the schema stops interval_weeks from being <= 0 (and a

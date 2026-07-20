@@ -80,7 +80,8 @@
 <div class="mb-3 space-y-2">
   {% for e in pool.equipment %}
   <div class="card flex items-center justify-between p-3 text-sm">
-    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}</span>
+    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}
+      {%- if e.warranty_end %} &middot; Warranty until {{ e.warranty_end.strftime("%Y-%m-%d") }}{% endif %}</span>
     <form method="post" action="/equipment/{{ e.id }}/delete"><button class="min-h-11 text-sm font-medium text-safety">Remove</button></form>
   </div>
   {% endfor %}
@@ -93,7 +94,8 @@
     <input name="brand" placeholder="Brand" class="field">
     <input name="model" placeholder="Model" class="field">
     <input name="serial" placeholder="Serial" class="field">
-    <input type="date" name="install_date" class="field font-data">
+    <input type="date" name="install_date" title="Install date" class="field font-data">
+    <input type="date" name="warranty_end" title="Warranty end date" class="field font-data">
     <input name="notes" placeholder="Notes" class="field">
   </div>
   <button class="btn-secondary w-full">Add equipment</button>

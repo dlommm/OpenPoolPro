@@ -36,6 +36,29 @@ def test_dashboard_admin_only_and_cards(client, engine, tech_client):
     assert t.get("/dashboard", follow_redirects=False).status_code == 403
 
 
+def test_dashboard_shows_equipment_warranty_added_via_form(client, engine):
+    # End-to-end: warranty_end entered on the equipment add form must reach
+    # the dashboard's warranty card through the real write path (not just
+    # the warranty_alerts() function in isolation).
+    from sqlalchemy import select
+    cid = _seed(client, engine)
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+    client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Main", "shape": "round", "length_ft": "20", "width_ft": "",
+        "avg_depth_ft": "4", "water_type": "chlorine", "surface": "plaster", "notes": ""})
+    with Session(engine) as s:
+        pool_id = s.scalars(select(models.Pool)).one().id
+    warranty_end = date.today() + timedelta(days=10)  # inside the 60d dashboard window
+    client.post(f"/pools/{pool_id}/equipment/new", data={
+        "kind": "heater", "brand": "Hayward", "model": "H150", "serial": "",
+        "install_date": "", "warranty_end": warranty_end.isoformat(), "notes": ""})
+
+    html = client.get("/dashboard").text
+    assert "Hayward" in html
+    assert 'data-card="warranties">1<' in html
+
+
 def test_dashboard_open_jobs_matches_jobs_screen(client, engine):
     _seed(client, engine)
     from sqlalchemy import select

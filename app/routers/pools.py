@@ -116,16 +116,25 @@ def deactivate_pool(pool_id: int, session: Session = Depends(get_session),
     return RedirectResponse(f"/customers/{pool.property.customer_id}", status_code=303)
 
 
+def _parse_date_tolerant(s: str) -> date | None:
+    try:
+        return date.fromisoformat(s) if s else None
+    except ValueError:
+        return None
+
+
 @router.post("/pools/{pool_id}/equipment/new")
 def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
                   model: str = Form(""), serial: str = Form(""),
-                  install_date: str = Form(""), notes: str = Form(""),
+                  install_date: str = Form(""), warranty_end: str = Form(""),
+                  notes: str = Form(""),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
     session.add(models.Equipment(
         pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
-        install_date=date.fromisoformat(install_date) if install_date else None, notes=notes))
+        install_date=_parse_date_tolerant(install_date),
+        warranty_end=_parse_date_tolerant(warranty_end), notes=notes))
     session.commit()
     return RedirectResponse(f"/pools/{pool_id}/edit", status_code=303)
 

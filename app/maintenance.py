@@ -11,13 +11,15 @@ OPEN_STATUSES = ("open", "scheduled")
 def run_maintenance_rules(session: Session, today: date) -> int:
     """Create at most one Job per active MaintenanceRule per run.
 
-    For each active rule (on an active property) whose next_due is within
-    lead_days of today: if no open/scheduled Job already exists for this
-    rule, create one (scheduled_date=next_due, rule_id set, job_type from
-    rule, unassigned). Either way, catch next_due up — advancing it by
-    interval_weeks repeatedly — until it sits far enough in the future that
-    the rule is no longer due, so a single run never floods more than one
-    job per rule regardless of how far in the past next_due had drifted.
+    For each active rule (on an active property whose owning customer is
+    also active) whose next_due is within lead_days of today: if no
+    open/scheduled Job already exists for this rule, create one
+    (scheduled_date=next_due, rule_id set, job_type from rule, unassigned)
+    and catch next_due up — advancing it by interval_weeks repeatedly —
+    until it sits far enough in the future that the rule is no longer due,
+    so a single run never floods more than one job per rule regardless of
+    how far in the past next_due had drifted. If a blocking open/scheduled
+    Job already exists, next_due is left untouched until that job clears.
 
     Rules with a non-positive interval_weeks (no DB constraint prevents this)
     are treated as misconfigured and skipped entirely -- no job is created
@@ -33,7 +35,7 @@ def run_maintenance_rules(session: Session, today: date) -> int:
         if rule.interval_weeks <= 0:
             continue  # misconfigured (no DB constraint) -- skip rather than infinite-loop
         prop = session.get(models.Property, rule.property_id)
-        if prop is None or not prop.active:
+        if prop is None or not prop.active or not prop.customer.active:
             continue
         if rule.next_due - timedelta(days=rule.lead_days) > today:
             continue  # not due yet
