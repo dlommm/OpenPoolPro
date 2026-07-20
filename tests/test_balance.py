@@ -92,6 +92,52 @@ def test_balance_moves_pure_and_empty_when_no_techs():
     assert balance_moves({}, []) == []
 
 
+def test_balance_single_tech_absorbs_all_unassigned(client, engine):
+    sam = _tech(engine, "samsingle")
+    for i in range(3):
+        _prop(engine, f"U{i}", 0, None, route_order=i)
+    with Session(engine) as s:
+        load = weekday_load(s)
+        moves = balance_moves(load[0], [sam])
+    assert len(moves) == 3
+    assert all(dest == sam for _, dest in moves)
+
+
+def test_balance_all_unassigned_even_split_ascending_id_ties(client, engine):
+    sam = _tech(engine, "samsplit")
+    lee = _tech(engine, "leesplit")
+    lo, hi = sorted([sam, lee])
+    for i in range(4):
+        _prop(engine, f"V{i}", 1, None, route_order=i)
+    with Session(engine) as s:
+        load = weekday_load(s)
+        moves = balance_moves(load[1], sorted([sam, lee]))
+    assert len(moves) == 4
+    counts = {sam: 0, lee: 0}
+    for _, dest in moves:
+        counts[dest] += 1
+    assert counts[sam] == 2 and counts[lee] == 2
+    # zero pre-load: every tie is broken by ascending tech id
+    by_route = sorted(moves, key=lambda m: m[0].route_order)
+    assert by_route[0][1] == lo   # tie 0-0 -> lo
+    assert by_route[1][1] == hi   # lo=1, hi=0 -> hi
+    assert by_route[2][1] == lo   # tie 1-1 -> lo
+    assert by_route[3][1] == hi   # lo=2, hi=1 -> hi
+
+
+def test_balance_already_balanced_three_three_zero_moves(client, engine):
+    sam = _tech(engine, "sambal")
+    lee = _tech(engine, "leebal")
+    for i in range(3):
+        _prop(engine, f"S{i}", 2, sam, route_order=i)
+    for i in range(3):
+        _prop(engine, f"L{i}", 2, lee, route_order=i)
+    with Session(engine) as s:
+        load = weekday_load(s)
+        moves = balance_moves(load[2], sorted([sam, lee]))
+    assert moves == []
+
+
 def test_preview_deterministic_and_apply_matches(client, engine):
     sam = _tech(engine, "sam2")
     lee = _tech(engine, "lee2")

@@ -103,3 +103,30 @@ def test_search_tech_accessible_no_money(client, engine, tech_client):
     t = tech_client(name="searchtech")
     html = t.get("/search", params={"q": "console"}).text
     assert "Console Co" in html and "$" not in html
+
+
+def test_dashboard_crew_counts_use_effective_tech(client, engine):
+    # Absence with cover today: the dashboard crew line must attribute the
+    # stop to the cover tech (effective_tech_id), not the raw
+    # property.assigned_tech_id — matches today/week semantics.
+    from app.auth_core import hash_password
+    with Session(engine) as s:
+        sam = models.User(name="Samdash", username="samdash", role="tech", active=True,
+                          password_hash=hash_password("techpass-1"))
+        lee = models.User(name="Leedash", username="leedash", role="tech", active=True,
+                          password_hash=hash_password("techpass-1"))
+        s.add_all([sam, lee])
+        s.commit()
+        sam_id, lee_id = sam.id, lee.id
+        c = models.Customer(name="DashCrewCo")
+        p = models.Property(customer=c, frequency="weekly", weekday=date.today().weekday(),
+                            anchor_date=date.today(), assigned_tech_id=sam_id)
+        s.add(p)
+        s.add(models.TechAbsence(user_id=sam_id, start_date=date.today(),
+                                 end_date=date.today(), cover_tech_id=lee_id))
+        s.commit()
+    html = client.get("/dashboard").text
+    import re
+    m = re.search(r'Leedash</span>\s*<span class="font-data text-sm">(\d+) stop', html, re.S)
+    assert m and m.group(1) == "1"
+    assert "Samdash" not in html  # sam's effective count is 0 -> filtered from crew

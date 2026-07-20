@@ -402,3 +402,11 @@ def test_settings_email_section_admin_only(tech_client):
     assert t.post("/settings/mail/flush", follow_redirects=False).status_code == 403
     assert t.post("/settings/mail/test", data={"to_addr": "x@x.com"},
                   follow_redirects=False).status_code == 403
+
+
+def test_mail_result_banner_requires_both_counts(client, engine):
+    # mail_sent set but mail_failed absent (half-set pair) must not render
+    # a "Flushed" banner at all — both counts must parse for it to show.
+    html = client.get("/settings?mail_sent=3").text
+    assert "Flushed" not in html
+    assert "None" not in html

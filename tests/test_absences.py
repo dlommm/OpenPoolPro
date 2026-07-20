@@ -69,6 +69,36 @@ def test_absence_map_boundary_days(client, engine):
         assert sam not in absence_map(s, start - timedelta(days=1))
 
 
+def test_absence_map_overlapping_last_created_wins(client, engine):
+    # Two overlapping absences for the same user, different covers: the
+    # later-created row (higher id) must win deterministically.
+    sam = _tech(engine, "samord")
+    lee = _tech(engine, "leeord")
+    pat = _tech(engine, "patord")
+    d = date(2026, 7, 15)
+    _absence(engine, sam, d, d, cover_id=lee)
+    _absence(engine, sam, d, d, cover_id=pat)  # created later -> higher id
+    with Session(engine) as s:
+        m = absence_map(s, d)
+    assert m[sam] == pat
+
+
+def test_disabled_cover_tech_resolves_to_unassigned(client, engine):
+    # absence_map must only return an active user as a cover; a cover that
+    # is later disabled resolves to None (unassigned), matching visible_to's
+    # disabled-tech-as-unassigned philosophy — not a dangling id.
+    sam = _tech(engine, "samdisc")
+    lee = _tech(engine, "leedisc")
+    d = date(2026, 7, 16)
+    _absence(engine, sam, d, d, cover_id=lee)
+    with Session(engine) as s:
+        s.get(models.User, lee).active = False
+        s.commit()
+    with Session(engine) as s:
+        m = absence_map(s, d)
+    assert m[sam] is None
+
+
 # ---- stops_for_date effective_tech_id --------------------------------------
 
 def test_stops_for_date_resolves_cover(client, engine):
@@ -212,6 +242,36 @@ def test_week_chip_renders_covering(client, engine):
     _absence(engine, sam, today, today, cover_id=lee)
     html = client.get(f"/week?start={start}").text
     assert 'title="covering"' in html
+
+
+def test_week_chip_renders_plain_tech_initials(client, engine):
+    # No absence involved: the plain assigned-tech initials chip branch
+    # (tag ml-1, no tag-safety, no title="covering").
+    today = date.today()
+    start = today - timedelta(days=today.weekday())
+    sam = _tech(engine, "samplain")
+    _prop(engine, "PlainChipStop", today.weekday(), sam)
+    html = client.get(f"/week?start={start}").text
+    assert '<span class="tag ml-1">S</span>' in html
+    assert 'title="covering"' not in html
+
+
+def test_disabled_cover_tech_renders_unassigned_not_question_chip(client, engine):
+    # today.html/week.html chips look up tech_by_id (active techs only): a
+    # cover tech disabled after the absence was created must render the
+    # unassigned chip, not a bare "?" initials chip still titled "covering".
+    wd = date.today().weekday()
+    sam = _tech(engine, "samdisq")
+    lee = _tech(engine, "leedisq")
+    _prop(engine, "DisabledCoverStop", wd, sam)
+    _absence(engine, sam, date.today(), date.today(), cover_id=lee)
+    with Session(engine) as s:
+        s.get(models.User, lee).active = False
+        s.commit()
+    html = client.get("/").text
+    assert "DisabledCoverStop" in html
+    assert 'title="covering"' not in html
+    assert 'tag tag-safety">unassigned' in html
 
 
 def test_today_filter_bar_shows_counts(client, engine):

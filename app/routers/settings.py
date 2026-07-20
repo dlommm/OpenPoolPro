@@ -61,7 +61,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "smtp_host": config.SMTP_HOST,
         "outbox": outbox,
         "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
-                       or mail_failed_n is not None else None,
+                       and mail_failed_n is not None else None,
         "mail_error": mail_error})
 
 

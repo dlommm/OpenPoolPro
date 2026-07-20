@@ -26,7 +26,7 @@ def dashboard(request: Request, session: Session = Depends(get_session),
         models.User.active, models.User.role == "tech")).all()
     crew = []
     for t in techs:
-        count = sum(1 for s_ in stops if s_.property.assigned_tech_id == t.id)
+        count = sum(1 for s_ in stops if s_.effective_tech_id == t.id)
         if count:
             crew.append((t, count))
     low_chems = inventory.low_stock(session)

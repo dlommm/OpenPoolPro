@@ -66,10 +66,24 @@ def _visits_on(session: Session, d: date) -> list[models.Visit]:
 def absence_map(session: Session, d: date) -> dict[int, int | None]:
     """Prefetch absent user_id -> cover_tech_id (or None) for date d.
 
-    Absence active on d iff start_date <= d <= end_date."""
+    Absence active on d iff start_date <= d <= end_date. Ordered by id so
+    that, when overlapping absences exist for the same user, the
+    later-created row deterministically wins (last write in the dict
+    comprehension). A cover is only returned if that cover is an active
+    user -- a disabled cover resolves to None (unassigned), matching
+    visible_to's disabled-tech-as-unassigned philosophy."""
     absences = session.scalars(select(models.TechAbsence).where(
-        models.TechAbsence.start_date <= d, models.TechAbsence.end_date >= d)).all()
-    return {a.user_id: a.cover_tech_id for a in absences}
+        models.TechAbsence.start_date <= d, models.TechAbsence.end_date >= d)
+        .order_by(models.TechAbsence.id)).all()
+    active_ids = {u.id for u in session.scalars(
+        select(models.User).where(models.User.active)).all()}
+    result: dict[int, int | None] = {}
+    for a in absences:
+        cover = a.cover_tech_id
+        if cover is not None and cover not in active_ids:
+            cover = None
+        result[a.user_id] = cover
+    return result
 
 
 def effective_tech_id(assigned_id: int | None, absences: dict[int, int | None]) -> int | None:
