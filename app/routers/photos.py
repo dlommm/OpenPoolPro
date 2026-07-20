@@ -1,6 +1,6 @@
 import html
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Form, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -30,17 +30,21 @@ def delete(photo_id: int, session: Session = Depends(get_session)):
 
 @router.post("/photos/{entity_type}/{entity_id}", response_class=HTMLResponse)
 async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
-                 session: Session = Depends(get_session)):
+                 tag: str = Form(""), session: Session = Depends(get_session)):
     if entity_type not in ALLOWED:
         return HTMLResponse("bad entity", status_code=400)
+    tag = tag if tag in models.PHOTO_TAGS else ""  # tolerant: unknown/blank -> no tag
     frags = []
     for f in files:
         data = await f.read()
         try:
-            ph = photos_svc.save_photo(session, entity_type, entity_id, data)
+            ph = photos_svc.save_photo(session, entity_type, entity_id, data, tag=tag)
             session.commit()
+            chip = f"<span class='tag absolute bottom-1 left-1'>{tag}</span>" if tag else ""
             frags.append(
-                f"<img src='/photos/file/{ph.id}?thumb=1' class='w-20 h-20 object-cover rounded-lg'>")
+                f"<div class='relative h-20 w-20'>"
+                f"<img src='/photos/file/{ph.id}?thumb=1' class='h-20 w-20 rounded-lg object-cover'>"
+                f"{chip}</div>")
         except ValueError:
             session.rollback()
             frags.append(

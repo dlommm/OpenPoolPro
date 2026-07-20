@@ -40,14 +40,18 @@ def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str
     return HTMLResponse(html)
 
 
-def _pool_form(request, session, pool, property_id):
+def _pool_form(request, session, pool, property_id, ptag: str = ""):
     photos = []
+    ptag = ptag if ptag in models.PHOTO_TAGS else ""  # tolerant: unknown -> all
     if pool is not None:
-        photos = session.scalars(select(models.Photo).where(
+        stmt = select(models.Photo).where(
             models.Photo.entity_type == "pool",
-            models.Photo.entity_id == pool.id)).all()
+            models.Photo.entity_id == pool.id)
+        if ptag:
+            stmt = stmt.where(models.Photo.tag == ptag)
+        photos = session.scalars(stmt.order_by(models.Photo.taken_at.desc())).all()
     return templates.TemplateResponse(request, "pools/form.html",
-        {"pool": pool, "property_id": property_id, "photos": photos})
+        {"pool": pool, "property_id": property_id, "photos": photos, "ptag": ptag})
 
 
 @router.get("/properties/{pid}/pools/new")
@@ -58,10 +62,11 @@ def new_pool(request: Request, pid: int, session: Session = Depends(get_session)
 
 
 @router.get("/pools/{pool_id}/edit")
-def edit_pool(request: Request, pool_id: int, session: Session = Depends(get_session),
+def edit_pool(request: Request, pool_id: int, ptag: str = "",
+             session: Session = Depends(get_session),
              user=Depends(require_perm("manage_customers"))):
     pool = get_or_404(session, models.Pool, pool_id)
-    return _pool_form(request, session, pool, pool.property_id)
+    return _pool_form(request, session, pool, pool.property_id, ptag)
 
 
 def _apply(pool: models.Pool, form) -> None:

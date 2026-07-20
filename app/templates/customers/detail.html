@@ -103,6 +103,26 @@
 </form>
 {% endif %}
 
+{% if photos or ptag %}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
+<div class="mb-2 flex flex-wrap gap-2 text-sm">
+  <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
+  {% for pt in ["before", "after", "issue"] %}
+  <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
+  {% endfor %}
+</div>
+<div class="mb-5 flex flex-wrap gap-2">
+  {% for ph, prop in photos %}
+  <div class="relative h-20 w-20">
+    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+  </div>
+  {% else %}
+  <p class="text-sm text-mist">No photos yet.</p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
 <div class="space-y-2">
   {% for e in timeline %}

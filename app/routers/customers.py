@@ -39,6 +39,49 @@ def _parse_int_tolerant(s: str) -> int | None:
         return None
 
 
+def _customer_photos(session: Session, customer: "models.Customer"
+                     ) -> list[tuple["models.Photo", "models.Property | None"]]:
+    """All photos reachable from a customer's properties (via visit/pool/job),
+    newest first, paired with the property they belong to (None if unresolved).
+
+    Shared by `_timeline` (folds into the merged feed) and the customer-detail
+    Photos section (filterable by tag via `?ptag=`).
+    """
+    props = list(customer.properties)
+    prop_by_id = {p.id: p for p in props}
+    property_ids = list(prop_by_id.keys())
+    if not property_ids:
+        return []
+
+    visit_prop_of = dict(session.execute(select(
+        models.Visit.id, models.Visit.property_id
+    ).where(models.Visit.property_id.in_(property_ids))).all())
+    pool_prop_of = dict(session.execute(select(
+        models.Pool.id, models.Pool.property_id
+    ).where(models.Pool.property_id.in_(property_ids))).all())
+    job_prop_of = dict(session.execute(select(
+        models.Job.id, models.Job.property_id
+    ).where(models.Job.property_id.in_(property_ids))).all())
+
+    photos = session.scalars(select(models.Photo).where(or_(
+        and_(models.Photo.entity_type == "visit", models.Photo.entity_id.in_(visit_prop_of.keys())),
+        and_(models.Photo.entity_type == "pool", models.Photo.entity_id.in_(pool_prop_of.keys())),
+        and_(models.Photo.entity_type == "job", models.Photo.entity_id.in_(job_prop_of.keys())),
+    ))).all()
+
+    out = []
+    for ph in photos:
+        if ph.entity_type == "visit":
+            prop_id = visit_prop_of.get(ph.entity_id)
+        elif ph.entity_type == "pool":
+            prop_id = pool_prop_of.get(ph.entity_id)
+        else:
+            prop_id = job_prop_of.get(ph.entity_id)
+        out.append((ph, prop_by_id.get(prop_id)))
+    out.sort(key=lambda pair: pair[0].taken_at, reverse=True)
+    return out
+
+
 def _timeline(session: Session, customer: "models.Customer", user: "models.User") -> list[dict]:
     """Merge visits/jobs/photos/comm-log/quotes for one customer into a single
     newest-first feed capped at 200 entries.
@@ -77,9 +120,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
 
         jobs = session.scalars(select(models.Job).where(
             models.Job.property_id.in_(property_ids))).all()
-        job_prop_of: dict[int, int] = {}
         for j in jobs:
-            job_prop_of[j.id] = j.property_id
             if j.completed_at is not None:
                 at = j.completed_at
             elif j.started_at is not None:
@@ -95,26 +136,7 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
                 "detail": detail, "money": j.labor_cents,
             })
 
-        visit_prop_of = dict(session.execute(select(
-            models.Visit.id, models.Visit.property_id
-        ).where(models.Visit.property_id.in_(property_ids))).all())
-        pool_prop_of = dict(session.execute(select(
-            models.Pool.id, models.Pool.property_id
-        ).where(models.Pool.property_id.in_(property_ids))).all())
-
-        photos = session.scalars(select(models.Photo).where(or_(
-            and_(models.Photo.entity_type == "visit", models.Photo.entity_id.in_(visit_prop_of.keys())),
-            and_(models.Photo.entity_type == "pool", models.Photo.entity_id.in_(pool_prop_of.keys())),
-            and_(models.Photo.entity_type == "job", models.Photo.entity_id.in_(job_prop_of.keys())),
-        ))).all()
-        for ph in photos:
-            if ph.entity_type == "visit":
-                prop_id = visit_prop_of.get(ph.entity_id)
-            elif ph.entity_type == "pool":
-                prop_id = pool_prop_of.get(ph.entity_id)
-            else:
-                prop_id = job_prop_of.get(ph.entity_id)
-            prop = prop_by_id.get(prop_id)
+        for ph, prop in _customer_photos(session, customer):
             title = f"Photo — {ph.tag}" if ph.tag else "Photo"
             detail = ph.caption or (prop.label if prop else "")
             entries.append({
@@ -189,7 +211,8 @@ def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
 
 
 @router.get("/customers/{cid}")
-def customer_detail(request: Request, cid: int, session: Session = Depends(get_session)):
+def customer_detail(request: Request, cid: int, ptag: str = "",
+                    session: Session = Depends(get_session)):
     from app.routers.today import business_today
     c = get_or_404(session, models.Customer, cid)
     user = request.state.user
@@ -199,6 +222,9 @@ def customer_detail(request: Request, cid: int, session: Session = Depends(get_s
         select(models.Job).join(models.Property)
         .where(models.Property.customer_id == cid, models.Job.status != "done")).all()
     timeline = _timeline(session, c, user)
+
+    ptag = ptag if ptag in models.PHOTO_TAGS else ""  # tolerant: unknown -> all
+    photos = [(ph, p) for ph, p in _customer_photos(session, c) if not ptag or ph.tag == ptag]
 
     today = business_today()
     active_holds: dict[int, models.ServiceHold] = {}
@@ -219,6 +245,7 @@ def customer_detail(request: Request, cid: int, session: Session = Depends(get_s
     return templates.TemplateResponse(request, "customers/detail.html",
         {"c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,
          "active_holds": active_holds, "lifetime_cents": lifetime_cents,
+         "photos": photos, "ptag": ptag,
          "show_money": user.can("view_money"),
          "can_manage": user.can("manage_customers")})
 

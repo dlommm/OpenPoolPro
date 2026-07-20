@@ -90,3 +90,76 @@ def test_exif_orientation_applied(client, engine):
             models.Photo.entity_type == "pool", models.Photo.entity_id == 2)).one()
     img = Image.open(io.BytesIO(client.get(f"/photos/file/{ph.id}").content))
     assert img.size == (600, 800)
+
+
+def test_upload_with_tag_is_stored(client, engine):
+    r = client.post("/photos/pool/1", data={"tag": "before"},
+                    files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    assert r.status_code == 200
+    with Session(engine) as s:
+        ph = s.scalars(select(models.Photo)).one()
+        assert ph.tag == "before"
+    assert "before" in r.text  # tag chip on the returned fragment
+
+
+def test_upload_with_no_tag_defaults_to_empty(client, engine):
+    client.post("/photos/pool/1", files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    with Session(engine) as s:
+        ph = s.scalars(select(models.Photo)).one()
+        assert ph.tag == ""
+
+
+def test_invalid_tag_is_coerced_to_empty(client, engine):
+    r = client.post("/photos/pool/1", data={"tag": "bogus"},
+                    files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    assert r.status_code == 200
+    with Session(engine) as s:
+        ph = s.scalars(select(models.Photo)).one()
+        assert ph.tag == ""
+
+
+def _pool_id(client, engine):
+    client.post("/customers/new", data={"name": "Filt", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+    client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Main", "shape": "rectangle", "length_ft": "20", "width_ft": "10",
+        "avg_depth_ft": "5", "water_type": "chlorine", "surface": "plaster", "notes": ""})
+    with Session(engine) as s:
+        return s.scalars(select(models.Pool)).one().id
+
+
+def test_ptag_filter_on_pool_gallery_returns_only_tagged(client, engine):
+    pool_id = _pool_id(client, engine)
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "before"},
+               files=[("files", ("b.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "after"},
+               files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    with Session(engine) as s:
+        before_id = s.scalars(select(models.Photo).where(models.Photo.tag == "before")).one().id
+        after_id = s.scalars(select(models.Photo).where(models.Photo.tag == "after")).one().id
+
+    filtered = client.get(f"/pools/{pool_id}/edit?ptag=before").text
+    assert f"/photos/file/{before_id}" in filtered
+    assert f"/photos/file/{after_id}" not in filtered
+
+
+def test_ptag_filter_tolerant_invalid_value_shows_all(client, engine):
+    pool_id = _pool_id(client, engine)
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "before"},
+               files=[("files", ("b.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "after"},
+               files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    with Session(engine) as s:
+        before_id = s.scalars(select(models.Photo).where(models.Photo.tag == "before")).one().id
+        after_id = s.scalars(select(models.Photo).where(models.Photo.tag == "after")).one().id
+
+    shown = client.get(f"/pools/{pool_id}/edit?ptag=bogus").text
+    assert f"/photos/file/{before_id}" in shown
+    assert f"/photos/file/{after_id}" in shown

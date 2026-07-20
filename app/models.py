@@ -9,6 +9,8 @@ from app.db import Base
 ROLE_VALUES = ("chlorine_liquid", "chlorine_granular", "chlorine_tab", "ph_up",
                "ph_down", "alkalinity_up", "stabilizer", "salt", "other")
 
+PHOTO_TAGS = ("before", "after", "issue")
+
 
 def utcnow() -> datetime:
 	"""Naive UTC now — replacement for deprecated datetime.utcnow()."""

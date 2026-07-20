@@ -339,3 +339,49 @@ def test_rules_crud_create_edit_tolerant_parse_and_deactivate(client, engine):
     client.post(f"/properties/{pid}/rules/{rid}/deactivate")
     with Session(engine) as s:
         assert s.get(models.MaintenanceRule, rid).active is False
+
+
+def test_customer_photos_section_ptag_filter(client, engine):
+    import io
+
+    from PIL import Image
+
+    def jpeg_bytes():
+        buf = io.BytesIO()
+        Image.new("RGB", (40, 40), "blue").save(buf, format="JPEG")
+        return buf.getvalue()
+
+    client.post("/customers/new", data={"name": "PhotoCo", "qb_display_name": "",
+                                        "phone": "", "email": "", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property)).one().id
+    client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Main", "shape": "rectangle", "length_ft": "20", "width_ft": "10",
+        "avg_depth_ft": "5", "water_type": "chlorine", "surface": "plaster", "notes": ""})
+    with Session(engine) as s:
+        pool_id = s.scalars(select(models.Pool)).one().id
+
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "before"},
+               files=[("files", ("b.jpg", jpeg_bytes(), "image/jpeg"))])
+    client.post(f"/photos/pool/{pool_id}", data={"tag": "issue"},
+               files=[("files", ("i.jpg", jpeg_bytes(), "image/jpeg"))])
+    with Session(engine) as s:
+        before_id = s.scalars(select(models.Photo).where(models.Photo.tag == "before")).one().id
+        issue_id = s.scalars(select(models.Photo).where(models.Photo.tag == "issue")).one().id
+
+    all_photos = client.get(f"/customers/{cid}").text
+    assert f"/photos/file/{before_id}" in all_photos
+    assert f"/photos/file/{issue_id}" in all_photos
+
+    only_issue = client.get(f"/customers/{cid}?ptag=issue").text
+    assert f"/photos/file/{issue_id}" in only_issue
+    assert f"/photos/file/{before_id}" not in only_issue
+
+    # tolerant: unknown ptag value -> all photos shown, not an error
+    tolerant = client.get(f"/customers/{cid}?ptag=nonsense").text
+    assert tolerant.count("/photos/file/") >= 2
