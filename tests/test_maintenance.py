@@ -239,6 +239,7 @@ def test_warranty_alerts_excludes_inactive_customer(engine):
 
 def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_path):
     import app.config as config
+    from app import mailer
     from app.backup import run_backup
     from app.main import create_app
 
@@ -248,9 +249,14 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     app = create_app(engine=engine)
     try:
         jobs = app.state.scheduler.get_jobs()
-        assert len(jobs) == 2
+        assert len(jobs) == 3
         funcs = {j.func for j in jobs}
         assert run_backup in funcs
         assert run_nightly in funcs
+        assert mailer.flush_job in funcs
+
+        mail_job = next(j for j in jobs if j.func is mailer.flush_job)
+        assert tuple(mail_job.args) == (engine,)
+        assert "interval" in str(mail_job.trigger) or "0:05:00" in str(mail_job.trigger)
     finally:
         app.state.scheduler.shutdown(wait=False)

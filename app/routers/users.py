@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Form, Request
+from datetime import date
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,37 @@ FLAGS = models.User.PERMISSION_FLAGS
 def _apply_flags(u: models.User, form) -> None:
     for f in FLAGS:
         setattr(u, f, form.get(f) == "on")
+
+
+def _parse_date_tolerant(s: str) -> date | None:
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _parse_int_tolerant(s: str) -> int | None:
+    try:
+        return int((s or "").strip())
+    except ValueError:
+        return None
+
+
+def _user_form_context(u: models.User | None, session: Session | None = None,
+                       error: str | None = None, **extra) -> dict:
+    ctx = {"u": u, "error": error, "absences": [], "cover_choices": []}
+    if u is not None and session is not None:
+        ctx["absences"] = session.scalars(select(models.TechAbsence).where(
+            models.TechAbsence.user_id == u.id
+        ).order_by(models.TechAbsence.start_date.desc())).all()
+        ctx["cover_choices"] = session.scalars(select(models.User).where(
+            models.User.active, models.User.id != u.id
+        ).order_by(models.User.name)).all()
+    ctx.update(extra)
+    return ctx
 
 
 def _bump_epoch(request: Request, u: models.User) -> None:
@@ -38,7 +71,7 @@ def list_users(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/users/new")
 def new_user_form(request: Request):
-    return templates.TemplateResponse(request, "users/form.html", {"u": None, "error": None})
+    return templates.TemplateResponse(request, "users/form.html", _user_form_context(None))
 
 
 @router.post("/users/new")
@@ -48,13 +81,13 @@ async def create_user(request: Request, session: Session = Depends(get_session))
     password = form.get("password") or ""
     if not username:
         return templates.TemplateResponse(request, "users/form.html",
-            {"u": None, "error": "Username is required"})
+            _user_form_context(None, error="Username is required"))
     if len(password) < 8:
         return templates.TemplateResponse(request, "users/form.html",
-            {"u": None, "error": "Password must be 8+ characters"})
+            _user_form_context(None, error="Password must be 8+ characters"))
     if session.scalars(select(models.User).where(models.User.username == username)).first():
         return templates.TemplateResponse(request, "users/form.html",
-            {"u": None, "error": f'Username "{username}" is already taken'})
+            _user_form_context(None, error=f'Username "{username}" is already taken'))
     u = models.User(name=form.get("name") or username, username=username,
                     role="admin" if form.get("role") == "admin" else "tech",
                     active=True, password_hash=hash_password(password))
@@ -70,7 +103,7 @@ async def create_user(request: Request, session: Session = Depends(get_session))
 @router.get("/users/{uid}/edit")
 def edit_user_form(request: Request, uid: int, session: Session = Depends(get_session)):
     u = get_or_404(session, models.User, uid)
-    return templates.TemplateResponse(request, "users/form.html", {"u": u, "error": None})
+    return templates.TemplateResponse(request, "users/form.html", _user_form_context(u, session))
 
 
 @router.post("/users/{uid}/edit")
@@ -83,20 +116,20 @@ async def edit_user(request: Request, uid: int, session: Session = Depends(get_s
     if username and username != u.username:
         if session.scalars(select(models.User).where(models.User.username == username)).first():
             return templates.TemplateResponse(request, "users/form.html",
-                {"u": u, "error": f'Username "{username}" is already taken'})
+                _user_form_context(u, session, error=f'Username "{username}" is already taken'))
         u.username = username
     u.name = form.get("name") or u.name
     new_role = "admin" if form.get("role") == "admin" else "tech"
     if u.role == "admin" and new_role == "tech":
         if u.id == request.state.user.id:
             return templates.TemplateResponse(request, "users/form.html",
-                {"u": u, "error": "You can't demote yourself"})
+                _user_form_context(u, session, error="You can't demote yourself"))
         others = session.scalars(select(models.User).where(
             models.User.role == "admin", models.User.active,
             models.User.id != u.id)).first()
         if others is None:
             return templates.TemplateResponse(request, "users/form.html",
-                {"u": u, "error": "Can't demote the last active admin"})
+                _user_form_context(u, session, error="Can't demote the last active admin"))
     u.role = new_role
     _apply_flags(u, form)
     after_flags = {f: getattr(u, f) for f in FLAGS}
@@ -184,3 +217,46 @@ def logout_sessions(request: Request, uid: int, session: Session = Depends(get_s
                  detail=f"{u.username!r} (id={u.id})")
     session.commit()
     return RedirectResponse("/users", status_code=303)
+
+
+# --- Time off (absences with cover) ------------------------------------------
+
+@router.post("/users/{uid}/absences/new")
+async def create_absence(request: Request, uid: int, session: Session = Depends(get_session)):
+    form = await request.form()
+    u = get_or_404(session, models.User, uid)
+    start_raw = form.get("start_date") or ""
+    end_raw = form.get("end_date") or ""
+    cover_raw = form.get("cover_tech_id") or ""
+    note = form.get("note") or ""
+    start = _parse_date_tolerant(start_raw)
+    end = _parse_date_tolerant(end_raw)
+    error = None
+    if start is None or end is None:
+        error = "Enter valid start and end dates."
+    elif end < start:
+        error = "End date must be on or after the start date."
+    if error:
+        return templates.TemplateResponse(request, "users/form.html",
+            _user_form_context(u, session, absence_error=error, absence_start=start_raw,
+                               absence_end=end_raw, absence_cover=cover_raw, absence_note=note),
+            status_code=400)
+    cover_id = _parse_int_tolerant(cover_raw)
+    if cover_id is not None:
+        cover_user = session.get(models.User, cover_id)
+        if cover_user is None or cover_user.id == uid or not cover_user.active:
+            cover_id = None  # bad/self/disabled cover -> treat as no cover rather than 500
+    session.add(models.TechAbsence(user_id=uid, start_date=start, end_date=end,
+                                   cover_tech_id=cover_id, note=note.strip()))
+    session.commit()
+    return RedirectResponse(f"/users/{uid}/edit", status_code=303)
+
+
+@router.post("/users/{uid}/absences/{aid}/delete")
+def delete_absence(uid: int, aid: int, session: Session = Depends(get_session)):
+    a = get_or_404(session, models.TechAbsence, aid)
+    if a.user_id != uid:
+        raise HTTPException(status_code=404)
+    session.delete(a)
+    session.commit()
+    return RedirectResponse(f"/users/{uid}/edit", status_code=303)

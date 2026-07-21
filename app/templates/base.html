@@ -56,6 +56,7 @@
          {{ 'bg-shallow text-pool' if path == '/audit' else 'text-mist' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
       {% endif %}
       {{ u.name }}
+      <span id="sync-badge-desktop" class="tag tag-safety ml-1" hidden>0 waiting</span>
       {% endif %}
       <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
     </div>
@@ -68,10 +69,13 @@
           {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
           {% else %}<span class="font-display text-xl font-bold uppercase tracking-wide">Coastline</span>{% endif %}
         </span>
-        <span class="relative flex h-11 w-11 items-center justify-center rounded-lg" aria-label="Menu">
-          <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
-          <span class="hidden group-open:block">{{ ui.icon("plus", "h-6 w-6 rotate-45") }}</span>
-          {% if low_count > 0 %}<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-safety group-open:hidden"></span>{% endif %}
+        <span class="flex items-center gap-2">
+          <span id="sync-badge" class="tag tag-safety" hidden>0 waiting</span>
+          <span class="relative flex h-11 w-11 items-center justify-center rounded-lg" aria-label="Menu">
+            <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
+            <span class="hidden group-open:block">{{ ui.icon("plus", "h-6 w-6 rotate-45") }}</span>
+            {% if low_count > 0 %}<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-safety group-open:hidden"></span>{% endif %}
+          </span>
         </span>
       </summary>
       <div class="absolute inset-x-0 top-full max-h-[calc(100vh-5rem)] overflow-y-auto border-b border-seam bg-white shadow-lg">
@@ -106,6 +110,32 @@
   </header>
   {% endblock %}
   <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-5xl lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
-  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+    var syncBadges = function () {
+      return [document.getElementById("sync-badge"), document.getElementById("sync-badge-desktop")]
+        .filter(Boolean);
+    };
+    var setSyncCount = function (count) {
+      syncBadges().forEach(function (badge) {
+        badge.textContent = count + " waiting";
+        badge.hidden = count <= 0;
+      });
+    };
+    navigator.serviceWorker.addEventListener("message", function (e) {
+      if (e.data && e.data.type === "queue-count") setSyncCount(e.data.count);
+    });
+    var flushQueue = function () {
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg.active) reg.active.postMessage({type: "flush-queue"});
+      });
+    };
+    // iOS Safari has no Background Sync API -- reconnecting (`online`) and
+    // every page load are the real replay triggers on that platform.
+    window.addEventListener("online", flushQueue);
+    flushQueue();
+  }
+  </script>
 </body>
 </html>

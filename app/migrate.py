@@ -32,7 +32,7 @@ COLUMNS = {
         ("reorder_point", "REAL"),
         ("reorder_qty", "REAL"),
     ],
-    "customers": [("tags", "TEXT DEFAULT '[]'")],
+    "customers": [("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0")],
     "equipment": [("warranty_end", "DATE")],
     "photos": [("tag", "VARCHAR(10) DEFAULT ''")],
 }

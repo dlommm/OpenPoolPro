@@ -188,11 +188,17 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import invoices as invoices_router
     app.include_router(invoices_router.router)
 
+    from app.routers import routes as routes_router
+    app.include_router(routes_router.router)
+
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
         from app.maintenance import run_nightly
+        from app import mailer
         app.state.scheduler = start_scheduler(app.state.engine)
         app.state.scheduler.add_job(run_nightly, "cron", hour=1, minute=15,
+                                    args=[app.state.engine])
+        app.state.scheduler.add_job(mailer.flush_job, "interval", minutes=5,
                                     args=[app.state.engine])
 
     return app

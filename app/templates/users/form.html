@@ -36,6 +36,41 @@
   <input type="password" name="password" placeholder="New password (8+)" class="field flex-1">
   <button class="btn-secondary px-4">Reset</button>
 </form>
+<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Time off</h2>
+<div class="mb-3 space-y-2">
+  {% for a in absences %}
+  <div class="card p-3 text-sm">
+    <div class="flex items-center justify-between gap-2">
+      <span class="font-data">{{ a.start_date }} → {{ a.end_date }}</span>
+      <form method="post" action="/users/{{ u.id }}/absences/{{ a.id }}/delete">
+        <button class="btn-secondary">Delete</button>
+      </form>
+    </div>
+    <div class="mt-1 text-mist">Cover: {{ (a.cover_tech.name | initials) if a.cover_tech else "none — unassigned" }}</div>
+    {% if a.note %}<div class="mt-1 text-mist">{{ a.note }}</div>{% endif %}
+  </div>
+  {% else %}<p class="text-sm text-mist">No time off on record.</p>{% endfor %}
+</div>
+{% if absence_error %}<p class="mb-2 text-sm text-safety">{{ absence_error }}</p>{% endif %}
+<form method="post" action="/users/{{ u.id }}/absences/new" class="card mb-6 space-y-2 p-3">
+  <div class="grid grid-cols-2 gap-2">
+    <label class="block"><span class="field-label">Start</span>
+      <input type="date" name="start_date" value="{{ absence_start or '' }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">End</span>
+      <input type="date" name="end_date" value="{{ absence_end or '' }}" class="field font-data"></label>
+  </div>
+  <label class="block"><span class="field-label">Cover</span>
+    <select name="cover_tech_id" class="field">
+      <option value="">No cover — mark unassigned</option>
+      {% for c in cover_choices %}
+      <option value="{{ c.id }}" {{ "selected" if absence_cover == c.id|string }}>{{ c.name }}</option>
+      {% endfor %}
+    </select></label>
+  <label class="block"><span class="field-label">Note</span>
+    <input name="note" value="{{ absence_note or '' }}" class="field"></label>
+  <button class="btn-secondary w-full">Add time off</button>
+</form>
+
 <div class="card mt-4 space-y-2 p-3.5">
   <p class="field-label">Security</p>
   {% if u.totp_enabled %}

@@ -168,6 +168,65 @@ def test_visit_autostamp_on_due_day_only(client, engine):
         assert vf.started_at is None  # future open -> no stamp
 
 
+def test_double_complete_identical_form_pins_stock_cost_and_email(client, engine):
+    # P9 Task 5 idempotency pin: sw.js's offline queue replays a queued
+    # visit-complete POST by re-sending the IDENTICAL urlencoded body. This
+    # pins the full triple that replay must not corrupt: frozen chem costs
+    # unchanged, exactly one VisitChemical row (not a duplicate), and stock
+    # decremented net ONCE (the P7 delta logic makes an unchanged resend a
+    # no-op on stock). The notification queue is NOT idempotent by design --
+    # each POST re-runs the whole complete flow and queues its own email row
+    # (see tests/test_notifications.py's
+    # test_double_post_identical_form_queues_one_row_per_post_without_error)
+    # -- pinned again here explicitly, alongside the invariants it's coupled
+    # to under the same replay, per the P9 plan's execution notes.
+    pid, chem_id = seed(engine)
+    with Session(engine) as s:
+        c = s.get(models.Property, pid).customer
+        c.email, c.notify_email = "cust@example.com", True
+        chem = s.get(models.Chemical, chem_id)
+        chem.stock_qty = 100.0
+        s.commit()
+    client.get(f"/visit/{pid}/2026-07-13")
+    with Session(engine) as s:
+        vid = s.scalars(select(models.Visit)).one().id
+    data = {"fc": "3.5", "ph": "7.6", "ta": "", "cya": "", "salt": "",
+            "tasks": ["Skim surface"], "notes": "all good",
+            "chem_id": [str(chem_id)], "chem_amount": ["2.5"]}
+
+    r1 = client.post(f"/visit/{vid}/complete", data=data, follow_redirects=False)
+    assert r1.status_code == 303
+    with Session(engine) as s:
+        vc = s.scalars(select(models.VisitChemical)).one()
+        assert vc.unit_cost_cents_frozen == 450
+        assert vc.total_cost_cents == 1125  # 2.5 * 450
+        stock_after_first = s.get(models.Chemical, chem_id).stock_qty
+        assert stock_after_first == 97.5  # 100 - 2.5
+        assert len(s.scalars(select(models.EmailOutbox)).all()) == 1
+
+    # Catalog price bumps between the two (identical) POSTs -- must not leak
+    # into the already-frozen line on replay.
+    with Session(engine) as s:
+        s.get(models.Chemical, chem_id).cost_per_unit_cents = 999
+        s.commit()
+
+    # Replay: the exact same urlencoded body, posted again.
+    r2 = client.post(f"/visit/{vid}/complete", data=data, follow_redirects=False)
+    assert r2.status_code == 303
+    with Session(engine) as s:
+        vcs = s.scalars(select(models.VisitChemical)).all()
+        assert len(vcs) == 1  # exactly one VisitChemical row set, not two
+        assert vcs[0].unit_cost_cents_frozen == 450  # frozen cost unchanged
+        assert vcs[0].total_cost_cents == 1125
+        stock_after_second = s.get(models.Chemical, chem_id).stock_qty
+        # delta logic: identical prior/new amounts net to zero on the resend
+        # -- stock was decremented net ONCE overall, not twice.
+        assert stock_after_second == stock_after_first == 97.5
+        # Accepted spec behavior (not idempotency): the second POST queues
+        # its OWN notification row.
+        assert len(s.scalars(select(models.EmailOutbox)).all()) == 2
+
+
 def test_complete_with_edited_times(client, engine):
     pid, _ = seed(engine)
     client.get(f"/visit/{pid}/2026-07-13")

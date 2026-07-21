@@ -4,6 +4,10 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Today's route", d.strftime("%A, %b %-d")) }}
 
+{% if queued %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium text-safety">Saved offline — will sync when back online</div>
+{% endif %}
+
 {% if backup_remaining is not none %}
 <div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Backup code used — {{ backup_remaining }} remaining. Generate new codes from your Account page.</div>
 {% endif %}
@@ -22,7 +26,7 @@
 <div class="mb-4 flex flex-wrap gap-1.5">
   <a href="/" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
   {% for t in techs %}
-  <a href="/?tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }}</a>
+  <a href="/?tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
   {% endfor %}
 </div>
 {% endif %}
@@ -51,9 +55,16 @@
          class="font-semibold leading-snug {{ 'text-mist line-through decoration-seam' if s.status == 'done' }}">
         {{ s.property.customer.name }} — {{ s.property.label }}
         {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}
-        {% if techs and s.property.assigned_tech_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
-        {% if techs and not s.property.assigned_tech_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
-        {% if techs and s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}</a>
+        {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
+        {% if s.effective_tech_id == assigned_id %}
+        {% if assigned_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
+        {% if not assigned_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
+        {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}
+        {% elif s.effective_tech_id %}
+        <span class="tag tag-safety ml-1" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
+        {% else %}
+        <span class="tag tag-safety">unassigned</span>
+        {% endif %}{% endif %}</a>
       <div class="flex items-center gap-1.5">
         {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}{% endif %}
         {% if s.visit and s.visit.duration_minutes is not none %}<span class="tag font-data">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}

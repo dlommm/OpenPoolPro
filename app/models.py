@@ -46,6 +46,7 @@ class Customer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 
@@ -331,6 +332,18 @@ class User(Base):
         return bool(getattr(self, flag, False))
 
 
+class TechAbsence(Base):
+    __tablename__ = "tech_absences"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    cover_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    cover_tech: Mapped["User | None"] = relationship(foreign_keys=[cover_tech_id])
+
+
 class RateChange(Base):
     __tablename__ = "rate_changes"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -397,3 +410,17 @@ def audit(session, user_id: int | None, action: str, detail: str = "") -> AuditL
     session.add(row)
     session.flush()
     return row
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True)
+    to_addr: Mapped[str] = mapped_column(String(120))
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(8), default="pending")  # pending|sent|failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

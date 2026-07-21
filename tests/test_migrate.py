@@ -31,7 +31,7 @@ def test_migrate_adds_columns_to_legacy_db(engine):
             "rule_id"} <= _cols(engine, "jobs")
     assert {"completed_by_id", "started_at"} <= _cols(engine, "visits")
     assert {"role", "strength_pct", "stock_qty", "reorder_point", "reorder_qty"} <= _cols(engine, "chemicals")
-    assert "tags" in _cols(engine, "customers")
+    assert {"tags", "notify_email"} <= _cols(engine, "customers")
     assert "warranty_end" in _cols(engine, "equipment")
     assert "tag" in _cols(engine, "photos")
 
@@ -51,6 +51,7 @@ def test_migrate_new_column_defaults_on_legacy_rows(engine):
     migrate.run(engine)
     with engine.connect() as c:
         assert c.execute(text("SELECT tags FROM customers WHERE id=1")).scalar() == "[]"
+        assert c.execute(text("SELECT notify_email FROM customers WHERE id=1")).scalar() == 0
         assert c.execute(text("SELECT warranty_end FROM equipment WHERE id=1")).scalar() is None
         assert c.execute(text("SELECT tag FROM photos WHERE id=1")).scalar() == ""
         assert c.execute(text("SELECT rule_id FROM jobs WHERE id=1")).scalar() is None

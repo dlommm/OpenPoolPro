@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Route balance{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Field power", "Route balance") }}
+<p class="mb-4 text-sm text-mist">Balances across techs — properties assigned to an admin/owner or a disabled tech are left as-is.</p>
+
+{% if banner %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">{{ banner }}</div>
+{% endif %}
+
+<div class="card mb-4 overflow-x-auto p-4">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="py-1.5 pr-3 font-medium">Weekday</th>
+        {% for t in techs %}<th class="py-1.5 pr-3 font-medium">{{ t.name | initials }}</th>{% endfor %}
+        <th class="py-1.5 font-medium">Unassigned</th>
+      </tr>
+    </thead>
+    <tbody class="font-data">
+      {% for wd in range(7) %}
+      <tr class="border-b border-seam/60">
+        <td class="py-1.5 pr-3 font-body">{{ weekday_names[wd] }}</td>
+        {% for t in techs %}<td class="py-1.5 pr-3">{{ matrix[wd].get(t.id, 0) }}</td>{% endfor %}
+        <td class="py-1.5 {{ 'text-safety' if matrix[wd].get(None, 0) else '' }}">{{ matrix[wd].get(None, 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% for wd in range(7) %}
+{% if unassigned_by_weekday.get(wd) %}
+<div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">{{ weekday_names[wd] }} — unassigned</h2>
+  <div class="space-y-2">
+    {% for p in unassigned_by_weekday[wd] %}
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-seam/60 py-1.5 text-sm">
+      <span>{{ p.customer.name }} — {{ p.label }}</span>
+      {% if suggested_by_weekday.get(wd) %}
+      <form method="post" action="/routes/assign">
+        <input type="hidden" name="property_id" value="{{ p.id }}">
+        <input type="hidden" name="tech_id" value="{{ suggested_by_weekday[wd] }}">
+        <button class="btn-secondary px-2 text-xs">Assign to {{ tech_by_id[suggested_by_weekday[wd]].name | initials }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if techs %}
+<div class="card mb-4 p-4">
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="/routes/balance?preview=1" class="btn-secondary">Preview balance</a>
+    {% if preview %}
+    <form method="post" action="/routes/apply"><button class="btn-primary">Apply balance</button></form>
+    {% endif %}
+  </div>
+
+  {% if preview %}
+  <div class="mt-3 overflow-x-auto">
+    {% if moves %}
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-seam text-left text-mist">
+          <th class="py-1.5 pr-3 font-medium">Weekday</th>
+          <th class="py-1.5 pr-3 font-medium">Property</th>
+          <th class="py-1.5 pr-3 font-medium">From</th>
+          <th class="py-1.5 font-medium">To</th>
+        </tr>
+      </thead>
+      <tbody class="font-data">
+        {% for wd, p, from_id, to_id in moves %}
+        <tr class="border-b border-seam/60">
+          <td class="py-1.5 pr-3 font-body">{{ weekday_names[wd] }}</td>
+          <td class="py-1.5 pr-3 font-body">{{ p.customer.name }} — {{ p.label }}</td>
+          <td class="py-1.5 pr-3">{{ tech_by_id[from_id].name | initials if from_id in tech_by_id else "Unassigned" }}</td>
+          <td class="py-1.5">{{ tech_by_id[to_id].name | initials }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-mist">Already balanced — no moves needed.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

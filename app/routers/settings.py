@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, models
+from app import config, mailer, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
@@ -27,6 +27,8 @@ def _parse_count(s: str | None) -> int | None:
 
 @router.get("/settings")
 def settings_page(request: Request, rules_created: str | None = None,
+                  mail_sent: str | None = None, mail_failed: str | None = None,
+                  mail_error: str | None = None,
                   session: Session = Depends(get_session)):
     from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).order_by(
@@ -41,6 +43,10 @@ def settings_page(request: Request, rules_created: str | None = None,
     targets = {k: models.get_setting(session, k, d) for k, d in [
         ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
         ("target_cya", "50"), ("target_salt", "3200")]}
+    outbox = session.scalars(select(models.EmailOutbox)
+                             .order_by(models.EmailOutbox.created_at.desc())
+                             .limit(50)).all()
+    mail_sent_n, mail_failed_n = _parse_count(mail_sent), _parse_count(mail_failed)
     return templates.TemplateResponse(request, "settings/index.html", {
         "tiers": tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
@@ -50,7 +56,13 @@ def settings_page(request: Request, rules_created: str | None = None,
         "role_values": models.ROLE_VALUES,
         "targets": targets,
         "rules_created": _parse_count(rules_created),
-        "company": company_info(session)})
+        "company": company_info(session),
+        "smtp_configured": mailer.smtp_configured(),
+        "smtp_host": config.SMTP_HOST,
+        "outbox": outbox,
+        "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
+                       and mail_failed_n is not None else None,
+        "mail_error": mail_error})
 
 
 @router.post("/settings/maintenance/run-now")
@@ -271,3 +283,24 @@ def download_backup(filename: str):
     if not os.path.isfile(path):
         return HTMLResponse("not found", status_code=404)
     return FileResponse(path, filename=filename)
+
+
+@router.post("/settings/mail/test")
+async def send_test_email(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    to_addr = (form.get("to_addr") or "").strip()
+    if not to_addr or "@" not in to_addr:
+        return RedirectResponse("/settings?mail_error=1", status_code=303)
+    mailer.queue(session, to_addr, "Coastline Pools test email",
+                "This is a test email from Coastline Pools Planner.")
+    session.commit()
+    sent, failed = mailer.flush_outbox(session)
+    session.commit()
+    return RedirectResponse(f"/settings?mail_sent={sent}&mail_failed={failed}", status_code=303)
+
+
+@router.post("/settings/mail/flush")
+def flush_mail_now(session: Session = Depends(get_session)):
+    sent, failed = mailer.flush_outbox(session)
+    session.commit()
+    return RedirectResponse(f"/settings?mail_sent={sent}&mail_failed={failed}", status_code=303)
