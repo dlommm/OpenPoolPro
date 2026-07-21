@@ -80,6 +80,12 @@
 
 <div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals</h2>
+  <form method="post" action="/settings/chemicals/add-from-library" class="mb-2 flex gap-2">
+    <select name="preset_name" class="field">
+      {% for c in chem_presets %}<option value="{{ c.name }}">{{ c.name }} ({{ c.role }})</option>{% endfor %}
+    </select>
+    <button class="btn-secondary">Add from library</button>
+  </form>
   <form method="post" action="/settings/chemicals" class="space-y-2">
     {% for c in chems %}
     <div class="grid grid-cols-6 items-center gap-2">

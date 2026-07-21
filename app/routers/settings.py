@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, mailer, models
+from app import chem_presets, config, mailer, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -63,6 +63,7 @@ def settings_page(request: Request, rules_created: str | None = None,
     return templates.TemplateResponse(request, "settings/index.html", {
         "tiers": tiers, "spa_tiers": spa_tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
+        "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
         "business_name": models.get_setting(session, "business_name", ""),
@@ -208,6 +209,21 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
                                         cost_per_unit_cents=cost_cents,
                                         role=chem_role, strength_pct=strength_pct))
     session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/chemicals/add-from-library")
+async def add_chemical_from_library(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    preset = chem_presets.by_name.get((form.get("preset_name") or "").strip())
+    if preset is not None:
+        exists = session.scalars(select(models.Chemical).where(
+            models.Chemical.name == preset["name"])).first()
+        if exists is None:
+            session.add(models.Chemical(
+                name=preset["name"], unit=preset["unit"], cost_per_unit_cents=0,
+                role=preset["role"], strength_pct=preset["strength_pct"]))
+            session.commit()
     return RedirectResponse("/settings", status_code=303)
 
 
