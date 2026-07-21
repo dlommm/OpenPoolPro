@@ -117,7 +117,8 @@ def _week_key(d: date) -> tuple[int, int]:
 def _tier_for_gallons(session, gallons: int) -> int:
     """Mirrors the tier ordering in app.rates.effective_rate_cents (max_gallons NULLs last)."""
     tiers = session.scalars(
-        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
+        select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
+            models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
     ).all()
     for t in tiers:
         if t.max_gallons is None or gallons <= t.max_gallons:

@@ -96,7 +96,7 @@ def test_preview_shows_old_new_math_without_mutating(client, engine):
     r = client.post("/analytics/rates/preview", data={"percent": "10", "scope_tiers": "on"})
     assert r.status_code == 200
     assert "$49.50" in r.text  # 4500 tier + 10% = 4950 cents
-    assert _tier_cents(engine) == [4500, 5500, 7000]  # untouched
+    assert _tier_cents(engine) == [2000, 3000, 4500, 5500, 7000]  # untouched
 
 
 def test_preview_overrides_scope(client, engine):
@@ -126,19 +126,19 @@ def test_apply_both_scopes_updates_and_logs(client, engine):
                     data={"percent": "10", "scope_tiers": "on", "scope_overrides": "on"},
                     follow_redirects=False)
     assert r.status_code == 303
-    assert "tab=rates&applied=4" in r.headers["location"]
+    assert "tab=rates&applied=6" in r.headers["location"]
 
-    assert _tier_cents(engine) == [4950, 6050, 7700]
+    assert _tier_cents(engine) == [2200, 3300, 4950, 6050, 7700]
     with Session(engine) as s:
         prop = s.get(models.Property, pa_id)
         assert prop.rate_override_cents == 4400
         rc = s.scalars(select(models.RateChange)).one()
-        assert rc.percent == 10 and rc.scope == "both" and rc.affected_count == 4
+        assert rc.percent == 10 and rc.scope == "both" and rc.affected_count == 6
         assert rc.user_id == owner_id
 
     follow = client.get(r.headers["location"])
     assert follow.status_code == 200
-    assert "Applied to 4 rates" in follow.text
+    assert "Applied to 6 rates" in follow.text
 
 
 def test_apply_tiers_only_leaves_overrides_untouched(client, engine):
@@ -152,13 +152,13 @@ def test_apply_tiers_only_leaves_overrides_untouched(client, engine):
     r = client.post("/analytics/rates/apply", data={"percent": "10", "scope_tiers": "on"},
                     follow_redirects=False)
     assert r.status_code == 303
-    assert "tab=rates&applied=3" in r.headers["location"]
-    assert _tier_cents(engine) == [4950, 6050, 7700]
+    assert "tab=rates&applied=5" in r.headers["location"]
+    assert _tier_cents(engine) == [2200, 3300, 4950, 6050, 7700]
     with Session(engine) as s:
         prop = s.get(models.Property, pa_id)
         assert prop.rate_override_cents == 4000
         rc = s.scalars(select(models.RateChange)).one()
-        assert rc.scope == "tiers" and rc.affected_count == 3
+        assert rc.scope == "tiers" and rc.affected_count == 5
 
 
 @pytest.mark.parametrize("bad", ["abc", "0", "150", "", "-5"])
@@ -167,7 +167,7 @@ def test_apply_rejects_bad_percent(client, engine, bad):
     r = client.post("/analytics/rates/apply", data={"percent": bad, "scope_tiers": "on"})
     assert r.status_code == 200
     assert "Percent must be between 0 and 100" in r.text
-    assert _tier_cents(engine) == [4500, 5500, 7000]
+    assert _tier_cents(engine) == [2000, 3000, 4500, 5500, 7000]
     with Session(engine) as s:
         assert s.scalars(select(models.RateChange)).first() is None
 
@@ -177,7 +177,7 @@ def test_preview_rejects_bad_percent(client, engine):
     r = client.post("/analytics/rates/preview", data={"percent": "abc", "scope_tiers": "on"})
     assert r.status_code == 200
     assert "Percent must be between 0 and 100" in r.text
-    assert _tier_cents(engine) == [4500, 5500, 7000]
+    assert _tier_cents(engine) == [2000, 3000, 4500, 5500, 7000]
 
 
 def test_apply_rejects_no_scope(client, engine):
@@ -185,7 +185,7 @@ def test_apply_rejects_no_scope(client, engine):
     r = client.post("/analytics/rates/apply", data={"percent": "10"})
     assert r.status_code == 200
     assert "Pick at least one scope" in r.text
-    assert _tier_cents(engine) == [4500, 5500, 7000]
+    assert _tier_cents(engine) == [2000, 3000, 4500, 5500, 7000]
     with Session(engine) as s:
         assert s.scalars(select(models.RateChange)).first() is None
 
@@ -229,7 +229,7 @@ def test_apply_midway_failure_rolls_back(client, engine, monkeypatch):
                     data={"percent": "10", "scope_tiers": "on"})
     with Session(engine) as s:
         tiers = sorted(t.rate_cents for t in s.scalars(select(m.RateTier)).all())
-        assert tiers == [4500, 5500, 7000]  # nothing committed
+        assert tiers == [2000, 3000, 4500, 5500, 7000]  # nothing committed
 
 
 def test_apply_overrides_skips_inactive(client, engine):

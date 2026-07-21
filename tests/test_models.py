@@ -13,8 +13,12 @@ def test_seeds_idempotent(engine):
         chems = s.scalars(select(models.Chemical)).all()
         assert len(chems) == 8
         tiers = s.scalars(select(models.RateTier)).all()
-        assert len(tiers) == 3
-        assert tiers[-1].max_gallons is None
+        assert len(tiers) == 5
+        pool_tiers = [t for t in tiers if t.kind == "pool"]
+        spa_tiers = [t for t in tiers if t.kind == "spa"]
+        assert len(pool_tiers) == 3
+        assert len(spa_tiers) == 2
+        assert pool_tiers[-1].max_gallons is None
         tasks = s.scalars(select(models.TaskTemplate)).all()
         assert len(tasks) == 8
         assert s.scalars(select(models.User)).one().role == "admin"

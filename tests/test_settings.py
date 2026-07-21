@@ -16,8 +16,11 @@ def test_update_chemical_cost(client, engine):
 
 
 def test_add_and_edit_tier(client, engine):
+    # /settings/tiers manages POOL tiers only; spa tiers must be untouched.
     with Session(engine) as s:
-        tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
+        tiers = s.scalars(
+            select(models.RateTier).where(models.RateTier.kind == "pool").order_by(models.RateTier.id)
+        ).all()
         ids = [str(t.id) for t in tiers]
     client.post("/settings/tiers", data={
         "tier_id": ids + [""],
@@ -25,9 +28,9 @@ def test_add_and_edit_tier(client, engine):
         "rate_dollars": ["48", "58", "75", "65"],
         "label": ["S", "M", "XL", "L"]})
     with Session(engine) as s:
-        tiers = s.scalars(select(models.RateTier)).all()
-        assert len(tiers) == 4
-        by_label = {t.label: t for t in tiers}
+        pool_tiers = s.scalars(select(models.RateTier).where(models.RateTier.kind == "pool")).all()
+        assert len(pool_tiers) == 4
+        by_label = {t.label: t for t in pool_tiers}
         assert by_label["S"].rate_cents == 4800
         assert by_label["L"].max_gallons == 40000
 

@@ -290,8 +290,7 @@ def _validate_rate_form(percent: str | None, scope_tiers: bool,
 
 def _tier_rows(session: Session) -> list["models.RateTier"]:
     return session.scalars(
-        select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
-            models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
+        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
     ).all()
 
 
