@@ -145,8 +145,8 @@ def test_send_message_builds_email_and_calls_smtp(monkeypatch):
     events = []
 
     class FakeSMTP:
-        def __init__(self, host, port):
-            events.append(("connect", host, port))
+        def __init__(self, host, port, timeout=None):
+            events.append(("connect", host, port, timeout))
 
         def __enter__(self):
             return self
@@ -168,7 +168,7 @@ def test_send_message_builds_email_and_calls_smtp(monkeypatch):
 
     mailer.send_message("dest@x.com", "Hello", "World")
     assert events == [
-        ("connect", "smtp.example.com", 587),
+        ("connect", "smtp.example.com", 587, 15),
         ("starttls",),
         ("login", "user@example.com", "secret"),
         ("send", "user@example.com", "dest@x.com", "Hello"),
@@ -186,8 +186,8 @@ def test_send_message_skips_login_when_no_user(monkeypatch):
     events = []
 
     class FakeSMTP:
-        def __init__(self, host, port):
-            events.append(("connect", host, port))
+        def __init__(self, host, port, timeout=None):
+            events.append(("connect", host, port, timeout))
 
         def __enter__(self):
             return self
@@ -208,7 +208,7 @@ def test_send_message_skips_login_when_no_user(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
 
     mailer.send_message("dest@x.com", "Hello", "World")
-    assert events == [("connect", "smtp.example.com", 587), ("send",)]
+    assert events == [("connect", "smtp.example.com", 587, 15), ("send",)]
 
 
 def test_smtp_configured_reflects_host(monkeypatch):

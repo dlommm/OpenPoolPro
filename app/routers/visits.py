@@ -159,7 +159,7 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     inventory.apply_visit_delta(session, v.id, prior_stock, new_stock)
     customer = v.property.customer
     if customer.email and customer.notify_email:
-        business = models.get_setting(session, "business_name", "Coastline Pools")
+        business = models.get_setting(session, "business_name", "Coastline Pools") or "Coastline Pools"
         lines = [business, v.property.label, v.date.strftime("%B %-d, %Y")]
         if v.tasks_done:
             lines.extend(v.tasks_done)

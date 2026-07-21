@@ -38,7 +38,7 @@ def send_message(to_addr: str, subject: str, body: str) -> None:
     msg["Subject"] = subject
     msg.set_content(body)
 
-    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as smtp:
+    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as smtp:
         if config.SMTP_STARTTLS:
             smtp.starttls()
         if config.SMTP_USER:
@@ -60,7 +60,7 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
         .where(or_(models.EmailOutbox.status == "pending",
                    and_(models.EmailOutbox.status == "failed",
                         models.EmailOutbox.attempts < MAX_ATTEMPTS)))
-        .order_by(models.EmailOutbox.created_at)
+        .order_by(models.EmailOutbox.created_at, models.EmailOutbox.id)
         .limit(limit)
     ).all()
 

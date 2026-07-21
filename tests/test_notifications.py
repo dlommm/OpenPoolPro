@@ -131,3 +131,18 @@ def test_double_post_identical_form_queues_one_row_per_post_without_error(client
     assert r2.status_code == 303
     with Session(engine) as s:
         assert len(s.scalars(select(models.EmailOutbox)).all()) == 2
+
+
+def test_blank_business_name_setting_falls_back_in_subject(client, engine):
+    with Session(engine) as s:
+        models.set_setting(s, "business_name", "")
+        s.commit()
+    pid, cid = seed(engine, email="blank@x.com")
+    _open(client, pid)
+    vid = _vid(engine)
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": ""},
+        follow_redirects=False)
+    with Session(engine) as s:
+        row = s.scalars(select(models.EmailOutbox)).one()
+        assert row.subject == "Coastline Pools — service visit completed"
