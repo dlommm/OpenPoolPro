@@ -38,9 +38,9 @@ def test_opted_in_with_email_queues_one_row_with_subject_and_body(client, engine
         row = rows[0]
         assert row.status == "pending"
         assert row.to_addr == "cust@example.com"
-        assert row.subject == "Coastline Pools — service visit completed"
+        assert row.subject == "OpenPoolPro — service visit completed"
         assert row.customer_id == cid  # FK persists (Task 1 review follow-up)
-        assert "Coastline Pools" in row.body
+        assert "OpenPoolPro" in row.body
         assert "Home" in row.body
         assert "July 13, 2026" in row.body
         assert "Skim surface" in row.body
@@ -59,7 +59,7 @@ def test_body_omits_task_section_when_no_tasks_completed(client, engine):
     with Session(engine) as s:
         row = s.scalars(select(models.EmailOutbox)).one()
         lines = row.body.splitlines()
-        assert lines == ["Coastline Pools", "Home", "July 13, 2026", "Technician: Owner"]
+        assert lines == ["OpenPoolPro", "Home", "July 13, 2026", "Technician: Owner"]
 
 
 def test_honors_configured_business_name(client, engine):
@@ -145,4 +145,4 @@ def test_blank_business_name_setting_falls_back_in_subject(client, engine):
         follow_redirects=False)
     with Session(engine) as s:
         row = s.scalars(select(models.EmailOutbox)).one()
-        assert row.subject == "Coastline Pools — service visit completed"
+        assert row.subject == "OpenPoolPro — service visit completed"

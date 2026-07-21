@@ -58,7 +58,7 @@ def test_provisioning_uri_has_issuer_and_username():
     secret = security.new_totp_secret()
     uri = security.provisioning_uri(secret, "sam")
     assert uri.startswith("otpauth://totp/")
-    assert "Coastline%20Pools" in uri or "Coastline+Pools" in uri
+    assert "OpenPoolPro" in uri  # issuer is now OpenPoolPro (single word, no URL-encoded space)
     assert "sam" in uri
 
 

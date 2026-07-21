@@ -16,7 +16,7 @@ import segno
 from app import config
 from app.auth_core import pwd_context
 
-ISSUER = "Coastline Pools"
+ISSUER = "OpenPoolPro"
 _PENDING_2FA_SALT = "cpp-2fa-pending"
 
 

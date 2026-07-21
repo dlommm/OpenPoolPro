@@ -16,12 +16,12 @@ def png_bytes(w=800, h=400):
 
 def test_company_settings_roundtrip(client, engine):
     r = client.post("/settings/company", data={
-        "business_name": "Coastline Pools LLC", "company_address": "1 Dock St",
+        "business_name": "OpenPoolPro LLC", "company_address": "1 Dock St",
         "company_phone": "555-0100", "company_email": "info@coastline.example",
         "company_license": "CPC-12345"}, follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:
-        assert models.get_setting(s, "business_name", "") == "Coastline Pools LLC"
+        assert models.get_setting(s, "business_name", "") == "OpenPoolPro LLC"
         assert models.get_setting(s, "company_license", "") == "CPC-12345"
     html = client.get("/settings").text
     assert "CPC-12345" in html

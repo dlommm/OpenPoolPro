@@ -90,7 +90,7 @@ def test_tier_save_with_no_actual_change_skips_audit(client, engine):
 
 def test_markup_setting(client, engine):
     client.post("/settings/general", data={"chem_markup_percent": "25",
-                                           "business_name": "Coastline Pools"})
+                                           "business_name": "OpenPoolPro"})
     with Session(engine) as s:
         assert models.get_setting(s, "chem_markup_percent", "0") == "25"
 
@@ -100,13 +100,13 @@ def test_garbage_markup_does_not_500_money_page(client, engine):
     # isn't a number at all is rejected and the previously stored value is
     # kept — either way /money must keep returning 200, never 500.
     client.post("/settings/general", data={"chem_markup_percent": "5%",
-                                           "business_name": "Coastline Pools"})
+                                           "business_name": "OpenPoolPro"})
     with Session(engine) as s:
         assert models.get_setting(s, "chem_markup_percent", "0") == "5"
     assert client.get("/money").status_code == 200
 
     r = client.post("/settings/general", data={"chem_markup_percent": "abc",
-                                                "business_name": "Coastline Pools"},
+                                                "business_name": "OpenPoolPro"},
                     follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:
@@ -118,12 +118,12 @@ def test_markup_non_finite_rejected(client, engine):
     # inf/nan markup would blow up round(cost * (1 + markup/100)) on the
     # Money page and every analytics tab — reject it like save_targets does.
     client.post("/settings/general", data={"chem_markup_percent": "10",
-                                           "business_name": "Coastline Pools"})
+                                           "business_name": "OpenPoolPro"})
     with Session(engine) as s:
         assert models.get_setting(s, "chem_markup_percent", "0") == "10"
 
     r = client.post("/settings/general", data={"chem_markup_percent": "inf",
-                                                "business_name": "Coastline Pools"},
+                                                "business_name": "OpenPoolPro"},
                     follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:

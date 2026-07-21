@@ -1,4 +1,10 @@
-# Coastline Pools Planner
+<p align="center">
+  <img src="app/static/brand/openpoolpro-logo.png" alt="OpenPoolPro" width="380">
+</p>
+
+<p align="center"><em>Self-hosted pool-service management — routes, water chemistry, invoicing, and crew.</em></p>
+
+---
 
 Self-hosted pool-route app. Phase 0: customers, properties, pools, routes,
 visits with chemistry costs and dose suggestions, jobs, analytics with income breakdowns and rate management, admin console with

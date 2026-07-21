@@ -349,8 +349,8 @@ async def send_test_email(request: Request, session: Session = Depends(get_sessi
     to_addr = (form.get("to_addr") or "").strip()
     if not to_addr or "@" not in to_addr:
         return RedirectResponse("/settings?mail_error=1", status_code=303)
-    mailer.queue(session, to_addr, "Coastline Pools test email",
-                "This is a test email from Coastline Pools Planner.")
+    mailer.queue(session, to_addr, "OpenPoolPro test email",
+                "This is a test email from OpenPoolPro.")
     session.commit()
     sent, failed = mailer.flush_outbox(session)
     session.commit()

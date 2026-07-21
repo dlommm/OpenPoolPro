@@ -114,7 +114,7 @@ templates.env.globals["low_stock_count"] = _low_stock_count
 
 
 def create_app(engine=None) -> FastAPI:
-    app = FastAPI(title="Coastline Pools Planner")
+    app = FastAPI(title="OpenPoolPro")
     app.state.engine = engine or make_engine()
     Base.metadata.create_all(app.state.engine)
     from app import migrate
