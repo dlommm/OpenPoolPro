@@ -56,6 +56,29 @@
 </div>
 
 <div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Spa rate tiers</h2>
+  <form method="post" action="/settings/spa_tiers" class="space-y-2">
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2 text-xs text-mist"><span>Max gallons (blank=∞)</span><span>Rate $</span><span>Label</span></div>
+    {% for t in spa_tiers %}
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <input type="hidden" name="tier_id" value="{{ t.id }}">
+      <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" class="field font-data">
+      <input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="field font-data">
+      <input name="label" value="{{ t.label }}" class="field">
+    </div>
+    {% endfor %}
+    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <input type="hidden" name="tier_id" value="">
+      <input inputmode="numeric" name="max_gallons" placeholder="New tier" class="field font-data">
+      <input inputmode="decimal" name="rate_dollars" class="field font-data">
+      <input name="label" class="field">
+    </div>
+    <p class="text-xs text-mist">Blank a rate to delete a tier.</p>
+    <button class="btn-secondary w-full">Save spa tiers</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals</h2>
   <form method="post" action="/settings/chemicals" class="space-y-2">
     {% for c in chems %}

@@ -413,3 +413,15 @@ def test_mail_result_banner_requires_both_counts(client, engine):
     html = client.get("/settings?mail_sent=3").text
     assert "Flushed" not in html
     assert "None" not in html
+
+
+def test_save_spa_tiers(client, engine):
+    r = client.post("/settings/spa_tiers", data={
+        "tier_id": ["", ""], "max_gallons": ["600", ""],
+        "rate_dollars": ["18.00", "26.00"],
+        "label": ["Spa small", "Spa large"]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        spa = s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).all()
+        assert {t.label for t in spa} >= {"Spa small", "Spa large"}
+        assert all(t.kind == "spa" for t in spa)

@@ -33,6 +33,8 @@ def settings_page(request: Request, rules_created: str | None = None,
     from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
+    spa_tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "spa").order_by(
+        models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     tasks = session.scalars(select(models.TaskTemplate)
                             .order_by(models.TaskTemplate.sort_order)).all()
@@ -48,7 +50,7 @@ def settings_page(request: Request, rules_created: str | None = None,
                              .limit(50)).all()
     mail_sent_n, mail_failed_n = _parse_count(mail_sent), _parse_count(mail_failed)
     return templates.TemplateResponse(request, "settings/index.html", {
-        "tiers": tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
+        "tiers": tiers, "spa_tiers": spa_tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
@@ -90,22 +92,20 @@ async def save_targets(request: Request, session: Session = Depends(get_session)
     return RedirectResponse("/settings", status_code=303)
 
 
-@router.post("/settings/tiers")
-async def save_tiers(request: Request, session: Session = Depends(get_session)):
+async def _save_tiers_of_kind(request: Request, session: Session, kind: str) -> None:
     form = await request.form()
     rows = zip(form.getlist("tier_id"), form.getlist("max_gallons"),
                form.getlist("rate_dollars"), form.getlist("label"))
     changed = 0
     for tid, max_g, rate, label in rows:
+        tier = None
         if tid:
             try:
                 tier = session.get(models.RateTier, int(tid))
             except ValueError:
                 continue
-            if tier is None:
+            if tier is None or tier.kind != kind:   # kind guard: never touch a tier of the other kind
                 continue
-        else:
-            tier = None
         if not rate.strip():
             if tier is not None:
                 session.delete(tier)
@@ -116,22 +116,30 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
             max_gallons = int(max_g) if max_g.strip() else None
         except ValueError:
             continue
-        if tier is not None:
+        if tier is None:
+            tier = models.RateTier(rate_cents=0, kind=kind)
+            changed += 1
+        else:
             before = (tier.max_gallons, tier.rate_cents, tier.label)
             if (max_gallons, rate_cents, label) != before:
                 changed += 1
-            t = tier
-        else:
-            t = models.RateTier(rate_cents=0)
-            changed += 1
-        t.max_gallons = max_gallons
-        t.rate_cents = rate_cents
-        t.label = label
-        session.add(t)
+        tier.max_gallons, tier.rate_cents, tier.label = max_gallons, rate_cents, label
+        session.add(tier)
     if changed:
         models.audit(session, request.state.user.id, "rates.change",
-                     detail=f"{changed} rate tier(s) changed")
+                     detail=f"{changed} {kind} rate tier(s) changed")
     session.commit()
+
+
+@router.post("/settings/tiers")
+async def save_tiers(request: Request, session: Session = Depends(get_session)):
+    await _save_tiers_of_kind(request, session, "pool")
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/spa_tiers")
+async def save_spa_tiers(request: Request, session: Session = Depends(get_session)):
+    await _save_tiers_of_kind(request, session, "spa")
     return RedirectResponse("/settings", status_code=303)
 
 
