@@ -167,6 +167,20 @@
   box-shadow: var(--shadow-card);
   background: linear-gradient(180deg, #FCF4E4, #F5E9D3);
 }
+/* Legibility scrim: keeps the off-white overlay text readable over the pale
+   sand at low water AND over the deep water at high fill. Sits above the
+   sand/water (z:1) but below the overlay text (z:2). */
+:root[data-theme="warm-coastal"] .wc-tide::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(11, 42, 51, 0.62), transparent);
+}
 :root[data-theme="warm-coastal"] .wc-tide-sun {
   position: absolute;
   top: 16px;
@@ -204,7 +218,9 @@
   bottom: 12px;
   z-index: 2;
   color: #FBF7EF;
-  text-shadow: 0 1px 6px rgba(12, 32, 40, 0.35);
+  /* Stronger shadow so the big number's top (which pokes above the scrim)
+     still reads against pale sand at 0 fill. */
+  text-shadow: 0 1px 2px rgba(11, 42, 51, 0.55), 0 1px 10px rgba(11, 42, 51, 0.40);
 }
 :root[data-theme="warm-coastal"] .wc-tide-num {
   display: flex;
@@ -235,12 +251,15 @@
   bottom: 12px;
   z-index: 2;
   text-align: right;
-  color: var(--color-ink);
+  /* Off-white (was ink → went dark-on-dark at high water). Legible on the
+     scrim at low water and on the deep water at high fill. */
+  color: #FBF7EF;
+  text-shadow: 0 1px 2px rgba(11, 42, 51, 0.55);
   font-size: 11.5px;
   font-weight: 700;
 }
 :root[data-theme="warm-coastal"] .wc-tide-remain span {
-  color: var(--color-mist);
+  color: rgba(251, 247, 239, 0.82);
   font-weight: 600;
 }
 
@@ -288,6 +307,16 @@
 }
 :root[data-theme="warm-coastal"] .wc-stop-next::before { background: var(--color-pool); }
 :root[data-theme="warm-coastal"] .wc-stop-up::before { background: var(--wc-upcoming); }
+/* Skipped: de-emphasized, clearly not a live/pending stop. The shared
+   `stop-done` class already grays the left band; here we also gray the index
+   and soften the card so it never reads like an active "due" stop. */
+:root[data-theme="warm-coastal"] .wc-stop-skipped::before { background: var(--color-seam); }
+:root[data-theme="warm-coastal"] .wc-stop-skipped { opacity: 0.92; }
+:root[data-theme="warm-coastal"] .wc-stop-skipped .wc-stop-idx {
+  background: var(--wc-line-soft);
+  color: var(--color-mist);
+  border-color: var(--color-seam);
+}
 :root[data-theme="warm-coastal"] .wc-stop-idx {
   width: 30px;
   height: 30px;
@@ -326,6 +355,14 @@
 :root[data-theme="warm-coastal"] .wc-status.wc-done { background: var(--wc-done-tint); color: var(--wc-done); }
 :root[data-theme="warm-coastal"] .wc-status.wc-next { background: var(--color-pool); color: #FBF7EF; }
 :root[data-theme="warm-coastal"] .wc-status.wc-missed { background: var(--color-safety); color: #fff; }
+/* Skipped pill: hollow, muted — visibly distinct from a filled "Upcoming"
+   sand pill and from the solid "Done"/"Next" pills. */
+:root[data-theme="warm-coastal"] .wc-status.wc-skipped {
+  background: transparent;
+  color: var(--color-mist);
+  border: 1px dashed var(--color-seam);
+  padding: 3px 8px;
+}
 :root[data-theme="warm-coastal"] .wc-read {
   display: inline-flex;
   align-items: baseline;

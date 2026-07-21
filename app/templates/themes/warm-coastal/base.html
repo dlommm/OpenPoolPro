@@ -34,15 +34,7 @@
     <a href="/" class="mb-5 flex items-center gap-2.5">
       {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
       {% else %}
-      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
-        <circle cx="16" cy="13" r="6.5" fill="#C58A2E"/>
-        <path d="M2 22c3-3.5 6-3.5 9 0s6 3.5 9 0 6-3.5 9 0" fill="none" stroke="#2B9EB3" stroke-width="2.4" stroke-linecap="round"/>
-        <path d="M3 27c2.4-2.6 4.6-2.6 7 0s4.6 2.6 7 0 4.6-2.6 7 0" fill="none" stroke="#1F7C8C" stroke-width="2" stroke-linecap="round" opacity=".55"/>
-      </svg>
-      <span class="leading-none">
-        <span class="block font-display text-lg font-extrabold tracking-tight text-ink">Coastline</span>
-        <span class="wc-brand-sub">OpenPoolPro</span>
-      </span>
+      <img src="/static/brand/openpoolpro-mark.png" alt="" class="h-9 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight text-ink leading-none">OpenPool<b class="text-pool">Pro</b></span>
       {% endif %}
     </a>
     <form method="get" action="/search" class="mb-4">
@@ -83,12 +75,7 @@
         <span class="flex items-center gap-2">
           {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
           {% else %}
-          <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
-            <circle cx="16" cy="13" r="6.5" fill="#C58A2E"/>
-            <path d="M2 22c3-3.5 6-3.5 9 0s6 3.5 9 0 6-3.5 9 0" fill="none" stroke="#2B9EB3" stroke-width="2.4" stroke-linecap="round"/>
-            <path d="M3 27c2.4-2.6 4.6-2.6 7 0s4.6 2.6 7 0 4.6-2.6 7 0" fill="none" stroke="#1F7C8C" stroke-width="2" stroke-linecap="round" opacity=".55"/>
-          </svg>
-          <span class="font-display text-lg font-extrabold tracking-tight">Coastline</span>{% endif %}
+          <img src="/static/brand/openpoolpro-mark.png" alt="" class="h-7 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight text-ink leading-none">OpenPool<b class="text-pool">Pro</b></span>{% endif %}
         </span>
         <span class="flex items-center gap-2">
           <span id="sync-badge" class="tag tag-safety" hidden>0 waiting</span>

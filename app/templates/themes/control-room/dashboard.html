@@ -63,7 +63,7 @@
 <div class="cr-tiles">
   <div class="cr-tile acc-cy"><div class="v">{{ stops_done }}<s>/{{ stops_total }}</s></div><div class="k">Route today</div><div class="foot">{{ remaining }} stop{{ "s" if remaining != 1 }} remaining</div></div>
   <div class="cr-tile acc-rs"><div class="v">{{ missed_count }}</div><div class="k">Missed</div><div class="foot">Unresolved · needs re-dispatch</div></div>
-  <div class="cr-tile acc-am"><div class="v">{{ open_jobs }}</div><div class="k">Open jobs</div><div class="foot">Awaiting scheduling</div></div>
+  <div class="cr-tile acc-am"><div class="v"><span data-card="open-jobs">{{ open_jobs }}</span></div><div class="k">Open jobs</div><div class="foot">Awaiting scheduling</div></div>
   <div class="cr-tile acc-gn"><div class="v">{{ high_jobs }}</div><div class="k">High priority</div><div class="foot">Needs owner review</div></div>
 </div>
 
@@ -106,7 +106,7 @@
 
   {# warranties #}
   <div class="cr-panel">
-    <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick am"></span>Warranties</h2><span class="cr-chip am">{{ warranty_items | length }}</span></div>
+    <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick am"></span>Warranties</h2><span class="cr-chip am" data-card="warranties">{{ warranty_items | length }}</span></div>
     <div class="cr-panel-bd" style="padding-top:2px;padding-bottom:2px">
       {% for e in warranty_items %}
       <div class="cr-arow warn">

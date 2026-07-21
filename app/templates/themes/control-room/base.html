@@ -33,7 +33,7 @@
   <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-tile p-4">
     <a href="/" class="mb-5 flex items-center gap-2">
       {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-10">
-      {% else %}<span class="cr-brand">Coastline<b> Ops</b></span>{% endif %}
+      {% else %}<span class="inline-flex items-center gap-2"><img src="/static/brand/openpoolpro-mark.png" alt="" class="cr-brand-mark h-9 w-auto shrink-0"><span class="cr-brand">OpenPool<b>Pro</b></span></span>{% endif %}
     </a>
     <form method="get" action="/search" class="mb-4">
       <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
@@ -67,7 +67,7 @@
       <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 [&::-webkit-details-marker]:hidden">
         <span class="flex items-center">
           {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
-          {% else %}<span class="cr-brand">Coastline<b> Ops</b></span>{% endif %}
+          {% else %}<span class="inline-flex items-center gap-2"><img src="/static/brand/openpoolpro-mark.png" alt="" class="cr-brand-mark h-7 w-auto shrink-0"><span class="cr-brand">OpenPool<b>Pro</b></span></span>{% endif %}
         </span>
         <span class="flex items-center gap-2">
           <span id="sync-badge" class="cr-sync" hidden>0 waiting</span>

@@ -118,7 +118,7 @@
       <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}" class="addr">
         {{ ui.icon("pin", "h-3.5 w-3.5 shrink-0") }}<span class="underline decoration-seam underline-offset-2">{{ s.property.address }}</span></a>
       <div class="meta">
-        <span class="statustag">{{ {'done':'DONE','skipped':'SKIPPED','next':'NEXT UP','upcoming':'DUE'}[variant] }}</span>
+        <span class="statustag">{{ {'done':'DONE','skipped':'SKIPPED','next':'NEXT UP','upcoming':'DUE','missed':'SKIPPED'}[variant] }}</span>
         {% if s.moved_in %}<span class="ff-chip">moved</span>{% endif %}
         {% if s.visit and s.visit.duration_minutes is not none %}<span class="ff-chip gate">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
         {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}

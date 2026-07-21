@@ -1,0 +1,63 @@
+# OpenPoolPro — Unraid Docker Compose
+# Use with the "Docker Compose Manager" plugin (Community Apps).
+#
+# SETUP (do these before starting):
+#   1. Create the appdata folder:  /mnt/user/appdata/openpoolpro
+#   2. Edit APP_PASSWORD and SECRET_KEY below (both REQUIRED — container won't be safe with defaults).
+#      Generate a SECRET_KEY on the Unraid terminal:  openssl rand -hex 32
+#   3. Adjust the host port (left side of 8000:8000) if 8000 is taken.
+#   4. Start the stack. Open the WebUI from the Unraid Docker tab.
+#
+# Image is pulled from your private GitLab registry (ghcr.io).
+# If the registry needs auth, log in on the Unraid terminal first:
+#   docker login ghcr.io -u <user> -p <deploy-token-or-PAT>
+# (The Compose Manager pulls with the host Docker's stored credentials.)
+
+services:
+  openpoolpro:
+    container_name: openpoolpro
+    image: ghcr.io/dlommm/openpoolpro:latest
+    # build: /mnt/user/appdata/openpoolpro/src   # <-- alt: build from a local clone instead of pulling
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"                 # host:container — change the host side if 8000 is in use
+
+    volumes:
+      - /mnt/user/appdata/openpoolpro:/data   # SQLite DB, uploaded logo, generated invoice PDFs
+
+    environment:
+      # --- REQUIRED ---
+      APP_PASSWORD: "CHANGE_ME_owner_login_password"
+      SECRET_KEY: "CHANGE_ME_run_openssl_rand_hex_32"
+
+      # --- Recommended ---
+      APP_TZ: "America/New_York"     # app-facing timezone (scheduling, timestamps)
+      TZ: "America/New_York"         # container OS timezone — keep the two in sync
+      RUN_SCHEDULER: "1"             # run the background scheduler in this container
+
+      # --- Enable if you put OpenPoolPro behind an HTTPS reverse proxy (SWAG/NPM) ---
+      # COOKIE_SECURE: "1"
+
+      # --- Optional: outbound email (invoices, notifications) ---
+      # SMTP_HOST: "smtp.example.com"
+      # SMTP_PORT: "587"
+      # SMTP_USER: "you@example.com"
+      # SMTP_PASS: "app-password"
+      # SMTP_FROM: "you@example.com"
+      # SMTP_STARTTLS: "1"
+
+    # python:slim has no curl — probe /health with the bundled Python instead
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    # Unraid Docker-tab integration: WebUI button + icon
+    labels:
+      net.unraid.docker.webui: "http://[IP]:[PORT:8000]/"
+      # Point at a raw icon URL on your GitLab web host (registry host != web host).
+      # e.g. https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/app/static/icons/icon-192.png
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/app/static/icons/icon-192.png"

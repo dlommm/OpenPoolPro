@@ -156,6 +156,9 @@
   color: var(--color-ink);
 }
 .cr-brand b { color: var(--color-pool); }
+/* Emblem sits on the near-black sidebar; a faint light halo keeps the navy
+   outer shield from muddying into the background. */
+.cr-brand-mark { filter: drop-shadow(0 0 0.5px rgba(230, 237, 243, 0.5)); }
 .cr-env {
   font-family: var(--font-data);
   font-size: 9px;

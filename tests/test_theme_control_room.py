@@ -62,6 +62,19 @@ def test_control_room_route_signatures_and_maps_links(client, engine):
     assert "maps.apple.com" in body or "No stops today" in body
 
 
+def test_control_room_dashboard_keeps_console_hooks(client, engine):
+    """The control-room dashboard must preserve the load-bearing data-card
+    hooks the shared dashboard exposes (test_console.py asserts on both)."""
+    _activate_control_room(engine)
+    _seed_customer(client, engine)
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    body = r.text
+    assert 'data-theme="control-room"' in body
+    assert 'data-card="open-jobs"' in body
+    assert 'data-card="warranties"' in body
+
+
 def test_control_room_money_preserves_export_and_nav(client, engine):
     """Money hero keeps the export action, month nav, and the mono invoice
     table once there is a billable row."""

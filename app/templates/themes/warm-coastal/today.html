@@ -97,7 +97,7 @@
   {% set is_next = (s.status == "due" and not ns2.seen_next) %}
   {% if is_next %}{% set ns2.seen_next = true %}{% endif %}
   <li class="stop p-3.5
-      {{ 'stop-done wc-stop-done' if is_done }}{{ ' wc-stop-next' if is_next }}{{ ' wc-stop-up' if (s.status == 'due' and not is_next) }}">
+      {{ 'stop-done wc-stop-done' if is_done }}{{ ' stop-done wc-stop-skipped' if is_skipped }}{{ ' wc-stop-next' if is_next }}{{ ' wc-stop-up' if (s.status == 'due' and not is_next) }}">
     <div class="flex items-start gap-3">
       <span class="wc-stop-idx {{ 'wc-stop-done' if is_done }}{{ ' wc-stop-next' if is_next }}">{{ loop.index }}</span>
       <div class="min-w-0 flex-1">
@@ -120,7 +120,7 @@
           {{ ui.icon("pin", "h-4 w-4 shrink-0") }}{{ s.property.address }}</a>
       </div>
       <div class="flex flex-none flex-col items-end gap-1.5">
-        <span class="wc-status {{ 'wc-done' if is_done }}{{ ' wc-next' if is_next }}">{{ "Done" if is_done else ("Skipped" if is_skipped else ("Next" if is_next else "Upcoming")) }}</span>
+        <span class="wc-status {{ 'wc-done' if is_done }}{{ ' wc-next' if is_next }}{{ ' wc-skipped' if is_skipped }}">{{ "Done" if is_done else ("Skipped" if is_skipped else ("Next" if is_next else "Upcoming")) }}</span>
         {% if s.visit and s.visit.duration_minutes is not none %}<span class="tag font-data">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
       </div>
     </div>

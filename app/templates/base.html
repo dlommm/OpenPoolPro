@@ -33,9 +33,9 @@
   {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
   {% set low_count = low_stock_count(request) if request is not none and (u is none or u.role == "admin") else 0 %}
   <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-white p-4">
-    <a href="/" class="mb-6 block">
+    <a href="/" class="mb-6 flex items-center gap-2.5">
       {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
-      {% else %}<span class="font-display text-2xl font-bold uppercase tracking-wide">Coastline</span>{% endif %}
+      {% else %}<img src="/static/brand/openpoolpro-mark.png" alt="" class="h-9 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight">OpenPool<b class="text-pool">Pro</b></span>{% endif %}
     </a>
     <form method="get" action="/search" class="mb-4">
       <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
@@ -67,9 +67,9 @@
           style="padding-top: env(safe-area-inset-top)">
     <details class="group relative">
       <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 [&::-webkit-details-marker]:hidden">
-        <span class="flex items-center">
+        <span class="flex items-center gap-2">
           {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
-          {% else %}<span class="font-display text-xl font-bold uppercase tracking-wide">Coastline</span>{% endif %}
+          {% else %}<img src="/static/brand/openpoolpro-mark.png" alt="" class="h-7 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight">OpenPool<b class="text-pool">Pro</b></span>{% endif %}
         </span>
         <span class="flex items-center gap-2">
           <span id="sync-badge" class="tag tag-safety" hidden>0 waiting</span>
