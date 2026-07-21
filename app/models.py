@@ -216,6 +216,9 @@ class Job(Base):
     property: Mapped[Property] = relationship()
     assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
+    tasks: Mapped[list["JobTask"]] = relationship(
+        back_populates="job", order_by="JobTask.position",
+        cascade="all, delete-orphan")
 
     @builtin_property
     def duration_minutes(self) -> int | None:
@@ -307,6 +310,28 @@ class JobTemplate(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     job_type: Mapped[str] = mapped_column(String(10), default="service")
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
+    tasks: Mapped[list["JobTemplateTask"]] = relationship(
+        back_populates="template", order_by="JobTemplateTask.position",
+        cascade="all, delete-orphan")
+
+
+class JobTemplateTask(Base):
+    __tablename__ = "job_template_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_template_id: Mapped[int] = mapped_column(ForeignKey("job_templates.id"))
+    label: Mapped[str] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    template: Mapped["JobTemplate"] = relationship(back_populates="tasks")
+
+
+class JobTask(Base):
+    __tablename__ = "job_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
+    label: Mapped[str] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    job: Mapped["Job"] = relationship(back_populates="tasks")
 
 
 class User(Base):

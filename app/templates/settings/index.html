@@ -144,6 +144,8 @@
       </select>
       <input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field font-data">
     </div>
+    <textarea name="tasks_text" rows="3" class="field"
+      placeholder="Checklist — one item per line">{{ t.tasks | map(attribute='label') | join('\n') if t else '' }}</textarea>
     {% endfor %}
     <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2">
       <input type="hidden" name="template_id" value="">
@@ -155,6 +157,8 @@
       </select>
       <input inputmode="decimal" name="labor_dollars" class="field font-data">
     </div>
+    <textarea name="tasks_text" rows="3" class="field"
+      placeholder="Checklist — one item per line"></textarea>
     <p class="text-xs text-mist">Blank a template's title to delete it.</p>
     <button class="btn-secondary w-full">Save templates</button>
   </form>

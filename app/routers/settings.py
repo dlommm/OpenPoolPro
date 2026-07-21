@@ -25,6 +25,17 @@ def _parse_count(s: str | None) -> int | None:
         return None  # non-int: ignore banner rather than 500 or render garbage
 
 
+def _parse_checklist(text: str) -> list[str]:
+    out: list[str] = []
+    for line in (text or "").splitlines():
+        label = line.strip()[:120]
+        if label:
+            out.append(label)
+        if len(out) == 30:
+            break
+    return out
+
+
 @router.get("/settings")
 def settings_page(request: Request, rules_created: str | None = None,
                   mail_sent: str | None = None, mail_failed: str | None = None,
@@ -229,6 +240,7 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
     descriptions = form.getlist("description")
     job_types = form.getlist("job_type")
     labors = form.getlist("labor_dollars")
+    tasks_texts = form.getlist("tasks_text")
 
     for i, (tid, title) in enumerate(zip(ids, titles)):
         description = descriptions[i] if i < len(descriptions) else ""
@@ -252,13 +264,20 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
                 continue
             t.title, t.description, t.job_type = title, description, job_type
             t.labor_cents = labor_cents
+            t.tasks = [models.JobTemplateTask(label=lbl, position=k)
+                       for k, lbl in enumerate(_parse_checklist(
+                           tasks_texts[i] if i < len(tasks_texts) else ""))]
         elif title.strip():
             try:
                 labor_cents = round(float(labor or 0) * 100)
             except ValueError:
                 continue
-            session.add(models.JobTemplate(title=title, description=description,
-                                           job_type=job_type, labor_cents=labor_cents))
+            tmpl = models.JobTemplate(title=title, description=description,
+                                      job_type=job_type, labor_cents=labor_cents)
+            tmpl.tasks = [models.JobTemplateTask(label=lbl, position=k)
+                          for k, lbl in enumerate(_parse_checklist(
+                              tasks_texts[i] if i < len(tasks_texts) else ""))]
+            session.add(tmpl)
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 
