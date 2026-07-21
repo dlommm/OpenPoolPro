@@ -38,7 +38,8 @@ COLUMNS = {
     "customers": [("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0")],
     "equipment": [("warranty_end", "DATE")],
     "photos": [("tag", "VARCHAR(10) DEFAULT ''")],
-    "pools": [("kind", "VARCHAR(8) DEFAULT 'pool'")],
+    "pools": [("kind", "VARCHAR(8) DEFAULT 'pool'"), ("gallons_override", "INTEGER")],
+    "size_presets": [("ref_gallons", "INTEGER")],
     "rate_tiers": [("kind", "VARCHAR(8) DEFAULT 'pool'")],
 }
 

@@ -136,13 +136,56 @@ def test_create_spa_pool_sets_kind(client, engine):
         assert pool.gallons > 0
 
 
-def test_new_pool_prefills_from_preset(client, engine):
+def test_new_pool_prefills_from_size_preset(client, engine):
     from sqlalchemy.orm import Session
+    from sqlalchemy import select
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Bob")
         p = models.Property(customer=c)
         s.add(p); s.commit(); pid = p.id
-    r = client.get(f"/properties/{pid}/pools/new?preset=ig_rect_16x32")
+        sp = s.scalars(select(models.SizePreset)
+                       .where(models.SizePreset.label == "16x32 Rectangle")).one()
+        preset_id = sp.id
+    r = client.get(f"/properties/{pid}/pools/new?preset={preset_id}")
     assert r.status_code == 200
     assert 'value="32"' in r.text and 'value="16"' in r.text  # length/width prefilled
+
+
+def test_pool_gallons_override_wins(client, engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Ovr")
+        p = models.Property(customer=c)
+        s.add(p); s.commit(); pid = p.id
+    r = client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Odd shape", "shape": "rectangle", "length_ft": "30", "width_ft": "15",
+        "avg_depth_ft": "5", "water_type": "chlorine", "surface": "plaster",
+        "notes": "", "kind": "pool", "gallons_override": "20000"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        pool = s.scalars(select(models.Pool).where(models.Pool.label == "Odd shape")).one()
+        assert pool.gallons_override == 20000
+        assert pool.gallons == 20000  # override wins over the computed 16875
+
+
+def test_size_presets_seeded(engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models, seeds
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        pool_sizes = s.scalars(select(models.SizePreset).where(models.SizePreset.kind == "pool")).all()
+        spa_sizes = s.scalars(select(models.SizePreset).where(models.SizePreset.kind == "spa")).all()
+        assert len(pool_sizes) >= 10 and len(spa_sizes) >= 1
+
+
+def test_rate_cards_offer_common_sizes(client):
+    # Pricing tab quick-add: pool rate card lists a common size from the seeded library
+    html = client.get("/settings").text
+    assert "Add common size" in html
+    assert "16x32 Rectangle" in html

@@ -1,283 +1,380 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
+{% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Business settings", "Settings") }}
-<a href="/users" class="btn-secondary mb-4 w-full">Manage crew</a>
-{% if backup_error %}<p class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
-{% if rules_created is not none %}
-<div class="card mb-4 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}</div>
-{% endif %}
 
-<h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Company</h2>
-<form method="post" action="/settings/company" class="card mb-3 space-y-2 p-3">
-  {% for key, label in [("business_name","Business name"),("company_address","Address"),
-                        ("company_phone","Phone"),("company_email","Email"),
-                        ("company_license","License #")] %}
-  <label class="block"><span class="field-label">{{ label }}</span>
-    <input name="{{ key }}" value="{{ company[key] }}" class="field"></label>
-  {% endfor %}
-  <button class="btn-secondary w-full">Save company</button>
-</form>
-<div class="card mb-4 space-y-2 p-3">
-  {% if company.has_logo %}
-  <img src="/branding/logo" alt="Company logo" class="max-h-24">
-  <form method="post" action="/settings/company/logo/remove">
-    <button class="btn-danger">Remove logo</button>
-  </form>
-  {% else %}<p class="text-sm text-mist">No logo yet.</p>{% endif %}
-  <form method="post" action="/settings/company/logo" enctype="multipart/form-data" class="flex gap-2">
-    <input type="file" name="file" accept="image/png,image/jpeg" required class="field flex-1 pt-2">
-    <button class="btn-secondary px-4">Upload</button>
-  </form>
-</div>
+{% set role_labels = {
+  "chlorine_liquid": "Liquid chlorine", "chlorine_granular": "Granular / shock",
+  "chlorine_tab": "Chlorine tabs", "ph_up": "pH up", "ph_down": "pH down / acid",
+  "alkalinity_up": "Alkalinity up", "stabilizer": "Stabilizer (CYA)", "salt": "Salt",
+  "other": "Other" } %}
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Rate tiers</h2>
-  <form method="post" action="/settings/tiers" class="space-y-2">
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2 text-xs text-mist"><span>Max gallons (blank=∞)</span><span>Rate $</span><span>Label</span></div>
-    {% for t in tiers %}
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-      <input type="hidden" name="tier_id" value="{{ t.id }}">
-      <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" class="field font-data">
-      <input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="field font-data">
-      <input name="label" value="{{ t.label }}" class="field">
-    </div>
-    {% endfor %}
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-      <input type="hidden" name="tier_id" value="">
-      <input inputmode="numeric" name="max_gallons" placeholder="New tier" class="field font-data">
-      <input inputmode="decimal" name="rate_dollars" class="field font-data">
-      <input name="label" class="field">
-    </div>
-    <p class="text-xs text-mist">Blank a rate to delete a tier.</p>
-    <button class="btn-secondary w-full">Save tiers</button>
-  </form>
-</div>
+{# ---- global feedback banners (visible on any tab) ---- #}
+{% if backup_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
+{% if rules_created is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
+{% if mail_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>{% endif %}
+{% if mail_result is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Spa rate tiers</h2>
-  <form method="post" action="/settings/spa_tiers" class="space-y-2">
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2 text-xs text-mist"><span>Max gallons (blank=∞)</span><span>Rate $</span><span>Label</span></div>
-    {% for t in spa_tiers %}
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-      <input type="hidden" name="tier_id" value="{{ t.id }}">
-      <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" class="field font-data">
-      <input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="field font-data">
-      <input name="label" value="{{ t.label }}" class="field">
-    </div>
-    {% endfor %}
-    <div class="grid grid-cols-[1fr_1fr_1fr] gap-2">
-      <input type="hidden" name="tier_id" value="">
-      <input inputmode="numeric" name="max_gallons" placeholder="New tier" class="field font-data">
-      <input inputmode="decimal" name="rate_dollars" class="field font-data">
-      <input name="label" class="field">
-    </div>
-    <p class="text-xs text-mist">Blank a rate to delete a tier.</p>
-    <button class="btn-secondary w-full">Save spa tiers</button>
-  </form>
-</div>
+<div class="settabs">
+  <input class="tab-radio" type="radio" name="settab" id="settab-business" checked>
+  <input class="tab-radio" type="radio" name="settab" id="settab-pricing">
+  <input class="tab-radio" type="radio" name="settab" id="settab-chemistry">
+  <input class="tab-radio" type="radio" name="settab" id="settab-service">
+  <input class="tab-radio" type="radio" name="settab" id="settab-crew">
+  <input class="tab-radio" type="radio" name="settab" id="settab-system">
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals</h2>
-  <form method="post" action="/settings/chemicals/add-from-library" class="mb-2 flex gap-2">
-    <select name="preset_name" class="field">
-      {% for c in chem_presets %}<option value="{{ c.name }}">{{ c.name }} ({{ c.role }})</option>{% endfor %}
-    </select>
-    <button class="btn-secondary">Add from library</button>
-  </form>
-  <form method="post" action="/settings/chemicals" class="space-y-2">
-    {% for c in chems %}
-    <div class="grid grid-cols-6 items-center gap-2">
-      <input type="hidden" name="chem_id" value="{{ c.id }}">
-      <input name="name" value="{{ c.name }}" class="field col-span-2">
-      <select name="unit" class="field">
-        {% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}
-      </select>
-      <input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="field font-data">
-      <select name="role" class="field">
-        {% for rv in role_values %}<option {{ "selected" if c.role == rv }}>{{ rv }}</option>{% endfor %}
-      </select>
-      <div class="flex gap-2 items-center">
-        <input inputmode="decimal" name="strength_pct" value="{{ c.strength_pct }}" class="field font-data">
-        <input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5">
+  <nav class="tabnav" role="tablist" aria-label="Settings sections">
+    <label class="tab-label" for="settab-business">Business</label>
+    <label class="tab-label" for="settab-pricing">Pricing</label>
+    <label class="tab-label" for="settab-chemistry">Chemistry</label>
+    <label class="tab-label" for="settab-service">Service</label>
+    <label class="tab-label" for="settab-crew">Crew</label>
+    <label class="tab-label" for="settab-system">System</label>
+  </nav>
+
+  <div class="tab-panels">
+
+    {# ============================ BUSINESS ============================ #}
+    <section class="tab-panel" data-tab="business">
+      <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <div class="card p-4">
+          <h2 class="set-h">Company profile</h2>
+          <p class="mb-3 text-sm text-mist">Appears on your invoices and customer emails.</p>
+          <form method="post" action="/settings/company" class="space-y-2">
+            {% for key, label, ph in [("business_name","Company name","Your business name"),
+                                      ("company_address","Address",""),("company_phone","Phone",""),
+                                      ("company_email","Email",""),("company_license","License #","")] %}
+            <label class="block"><span class="field-label">{{ label }}</span>
+              <input name="{{ key }}" value="{{ company[key] }}" placeholder="{{ ph }}" class="field"></label>
+            {% endfor %}
+            <button class="btn-secondary w-full">Save company profile</button>
+          </form>
+        </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">Logo</h2>
+          {% if company.has_logo %}
+          <img src="/branding/logo" alt="Company logo" class="mb-3 max-h-24 rounded-lg border border-seam bg-tile p-2">
+          <form method="post" action="/settings/company/logo/remove" class="mb-3"><button class="btn-danger">Remove logo</button></form>
+          {% else %}<p class="mb-3 text-sm text-mist">No logo yet — shown on invoices and the app header.</p>{% endif %}
+          <form method="post" action="/settings/company/logo" enctype="multipart/form-data" class="flex gap-2">
+            <input type="file" name="file" accept="image/png,image/jpeg" required class="field flex-1 pt-2">
+            <button class="btn-secondary px-4">Upload</button>
+          </form>
+        </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">App display name</h2>
+          <form method="post" action="/settings/general" class="space-y-2">
+            <label class="block"><span class="field-label">Display name</span>
+              <input name="business_name" value="{{ business_name }}" class="field"></label>
+            <p class="text-xs text-mist">Shown in the app header (when no logo) and as the sender name on customer emails. Usually the same as your company name.</p>
+            <button class="btn-secondary w-full">Save display name</button>
+          </form>
+        </div>
       </div>
-    </div>
-    {% endfor %}
-    <div class="grid grid-cols-6 gap-2">
-      <input type="hidden" name="chem_id" value="">
-      <input name="name" placeholder="New chemical" class="field col-span-2">
-      <select name="unit" class="field">
-        {% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}
-      </select>
-      <input inputmode="decimal" name="cost_dollars" class="field font-data">
-      <select name="role" class="field">
-        {% for rv in role_values %}<option {{ "selected" if rv == "other" }}>{{ rv }}</option>{% endfor %}
-      </select>
-      <input inputmode="decimal" name="strength_pct" placeholder="%" class="field font-data">
-    </div>
-    <p class="text-xs text-mist">Set a role so dosing can use this chemical.</p>
-    <button class="btn-secondary w-full">Save chemicals</button>
-  </form>
-</div>
+    </section>
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Visit tasks</h2>
-  <form method="post" action="/settings/tasks" class="space-y-2">
-    {% for t in tasks %}{% if t.active %}
-    <div><input type="hidden" name="task_id" value="{{ t.id }}">
-      <input name="label" value="{{ t.label }}" class="field"></div>
-    {% endif %}{% endfor %}
-    <div><input type="hidden" name="task_id" value="">
-      <input name="label" placeholder="New task" class="field"></div>
-    <p class="text-xs text-mist">Blank a task to remove it.</p>
-    <button class="btn-secondary w-full">Save tasks</button>
-  </form>
-</div>
+    {# ============================ PRICING ============================ #}
+    <section class="tab-panel" data-tab="pricing">
+      <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">How pricing works</h2>
+          <p class="text-sm text-mist">Each visit is billed at the tier for the property's largest active pool. A spa adds its own tier on top. Chemicals are billed at your cost plus the markup below.</p>
+        </div>
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Job templates</h2>
-  <form method="post" action="/settings/job_templates" class="space-y-2">
-    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2 text-xs text-mist"><span>Title</span><span>Description</span><span>Type</span><span>Labor $</span></div>
-    {% for t in job_templates %}
-    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2">
-      <input type="hidden" name="template_id" value="{{ t.id }}">
-      <input name="title" value="{{ t.title }}" class="field">
-      <input name="description" value="{{ t.description }}" class="field">
-      <select name="job_type" class="field">
-        <option value="service" {{ "selected" if t.job_type == "service" }}>Service</option>
-        <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option>
-      </select>
-      <input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field font-data">
-    </div>
-    <textarea name="tasks_text" rows="3" class="field"
-      placeholder="Checklist — one item per line">{{ t.tasks | map(attribute='label') | join('\n') if t else '' }}</textarea>
-    {% endfor %}
-    <div class="grid grid-cols-[1fr_1fr_6rem_6rem] gap-2">
-      <input type="hidden" name="template_id" value="">
-      <input name="title" placeholder="New template" class="field">
-      <input name="description" placeholder="Description" class="field">
-      <select name="job_type" class="field">
-        <option value="service">Service</option>
-        <option value="repair">Repair</option>
-      </select>
-      <input inputmode="decimal" name="labor_dollars" class="field font-data">
-    </div>
-    <textarea name="tasks_text" rows="3" class="field"
-      placeholder="Checklist — one item per line"></textarea>
-    <p class="text-xs text-mist">Blank a template's title to delete it.</p>
-    <button class="btn-secondary w-full">Save templates</button>
-  </form>
-</div>
-
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Appearance</h2>
-  <form method="post" action="/settings/appearance" class="space-y-2">
-    <label class="block"><span class="field-label">Theme</span>
-      <select name="active_theme" class="field">
-        {% for value, label in [("warm-coastal", "Warm Coastal"), ("control-room", "Control Room"), ("fresh-field", "Fresh Field")] %}
-        <option value="{{ value }}" {{ "selected" if active_theme == value }}>{{ label }}</option>
+        {% for title, action, rows, save, kind in [("Pool rates","/settings/tiers",tiers,"Save pool rates","pool"),
+                                                   ("Spa rates","/settings/spa_tiers",spa_tiers,"Save spa rates","spa")] %}
+        <div class="card p-4">
+          <h2 class="set-h">{{ title }}</h2>
+          <p class="mb-2 text-sm text-mist">A price per size. Pick common sizes below (gallons pre-filled) and just set the price, or add your own.</p>
+          <form method="post" action="{{ action }}">
+            <div class="grid grid-cols-[1fr_5rem_7rem_2.5rem] gap-2 px-1 pb-1 text-[11px] uppercase tracking-wide text-mist">
+              <span>Label</span><span>Up to gal</span><span>Price / visit</span><span></span></div>
+            <div class="tiers-body divide-y divide-seam/60">
+              {% for t in rows %}
+              <div class="tier-row grid grid-cols-[1fr_5rem_7rem_2.5rem] items-center gap-2 py-1.5">
+                <input type="hidden" name="tier_id" value="{{ t.id }}">
+                <input name="label" value="{{ t.label }}" placeholder="Tier" class="field">
+                <input inputmode="numeric" name="max_gallons" value="{{ t.max_gallons or '' }}" placeholder="∞" class="field text-center font-data">
+                <div class="money-in"><span>$</span><input inputmode="decimal" name="rate_dollars" value="{{ '%.2f'|format(t.rate_cents / 100) }}" class="field font-semibold"></div>
+                <button type="button" title="Remove tier" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=rate_dollars]').value='';r.style.display='none'">&times;</button>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="tier-row-tmpl hidden grid grid-cols-[1fr_5rem_7rem_2.5rem] items-center gap-2 py-1.5">
+              <input type="hidden" name="tier_id" value="">
+              <input name="label" placeholder="Tier" class="field">
+              <input inputmode="numeric" name="max_gallons" placeholder="∞" class="field text-center font-data">
+              <div class="money-in"><span>$</span><input inputmode="decimal" name="rate_dollars" placeholder="0.00" class="field font-semibold"></div>
+              <button type="button" title="Remove tier" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=rate_dollars]').value='';r.style.display='none'">&times;</button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2 border-t border-dashed border-seam pt-3">
+              <select class="field flex-1" onchange="opAddCommon(this)">
+                <option value="">Add common size…</option>
+                {% for o in size_opts[kind] %}<option value="{{ o.label }}|{{ o.ref_gallons }}">{{ o.label }} · {{ "{:,}".format(o.ref_gallons) }} gal</option>{% endfor %}
+              </select>
+              <button type="button" class="btn-secondary whitespace-nowrap px-4" onclick="opAddTier(this)">+ Add custom</button>
+            </div>
+            <button class="btn-secondary mt-3 w-full">{{ save }}</button>
+          </form>
+        </div>
         {% endfor %}
-      </select>
-    </label>
-    <p class="text-xs text-mist">Applies to the whole app for everyone.</p>
-    <button class="btn-secondary w-full">Save appearance</button>
-  </form>
-</div>
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">General</h2>
-  <form method="post" action="/settings/general" class="space-y-2">
-    <label class="block"><span class="field-label">Chemical markup %</span>
-      <input inputmode="decimal" name="chem_markup_percent" value="{{ markup }}" class="field font-data"></label>
-    <label class="block"><span class="field-label">Business name</span>
-      <input name="business_name" value="{{ business_name }}" class="field"></label>
-    <button class="btn-secondary w-full">Save</button>
-  </form>
-</div>
+        <div class="card p-4">
+          <h2 class="set-h">Chemical markup</h2>
+          <form method="post" action="/settings/general" class="space-y-2">
+            <label class="block"><span class="field-label">Markup added to chemical cost</span>
+              <div class="relative flex items-center">
+                <input inputmode="decimal" name="chem_markup_percent" value="{{ markup }}" class="field pr-8 font-data font-semibold">
+                <span class="pointer-events-none absolute right-3 font-data text-sm text-brass">%</span>
+              </div></label>
+            <p class="text-xs text-mist">Applied when billing customers for chemicals used on a visit.</p>
+            <button class="btn-secondary w-full">Save markup</button>
+          </form>
+        </div>
 
-<div class="card mb-4 p-4">
-  <h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Water targets</h2>
-  <form method="post" action="/settings/targets" class="card mb-4 space-y-2 p-3">
-    <div class="grid grid-cols-5 gap-2">
-      {% for key, label in [("target_fc","FC"),("target_ph","pH"),("target_ta","TA"),("target_cya","CYA"),("target_salt","Salt")] %}
-      <label class="block text-center"><span class="field-label">{{ label }}</span>
-        <input inputmode="decimal" name="{{ key }}" value="{{ targets[key] }}" class="field text-center font-data"></label>
-      {% endfor %}
-    </div>
-    <button class="btn-secondary w-full">Save targets</button>
-  </form>
-</div>
+      </div>
+    </section>
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Email</h2>
-  {% if smtp_configured %}
-  <span class="tag border-pool bg-shallow mb-2 inline-block">Configured — {{ smtp_host }}</span>
-  {% else %}
-  <span class="tag tag-safety mb-2 inline-block">Not configured</span>
-  {% endif %}
+    {# ============================ CHEMISTRY ============================ #}
+    <section class="tab-panel" data-tab="chemistry">
+      <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Chemicals</h2>
+          <p class="mb-3 text-sm text-mist">Your cost per unit feeds billing and inventory. Set a role so the dose calculator can pick the right product.</p>
+          <form method="post" action="/settings/chemicals/add-from-library" class="mb-3 flex gap-2">
+            <select name="preset_name" class="field max-w-md">
+              {% for c in chem_presets %}<option value="{{ c.name }}">{{ c.name }} — {{ role_labels.get(c.role, c.role) }}</option>{% endfor %}
+            </select>
+            <button class="btn-secondary whitespace-nowrap px-4">Add from library</button>
+          </form>
+          <form method="post" action="/settings/chemicals" class="space-y-2">
+            <div class="hidden grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem] gap-2 px-1 text-[11px] uppercase tracking-wide text-mist sm:grid">
+              <span>Name</span><span>Unit</span><span>Cost</span><span>Role</span><span>Str %</span><span>On</span></div>
+            {% for c in chems %}
+            <div class="grid grid-cols-2 items-center gap-2 sm:grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem]">
+              <input type="hidden" name="chem_id" value="{{ c.id }}">
+              <input name="name" value="{{ c.name }}" class="field col-span-2 sm:col-span-1">
+              <select name="unit" class="field">{% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}</select>
+              <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="field font-semibold"></div>
+              <select name="role" class="field col-span-2 sm:col-span-1">{% for rv in role_values %}<option value="{{ rv }}" {{ "selected" if c.role == rv }}>{{ role_labels.get(rv, rv) }}</option>{% endfor %}</select>
+              <input inputmode="decimal" name="strength_pct" value="{{ c.strength_pct }}" title="Strength %" placeholder="%" class="field font-data">
+              <label class="flex min-h-11 items-center justify-center gap-1 rounded-lg border border-seam text-xs text-mist"><input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5"><span class="sm:hidden">Active</span></label>
+            </div>
+            {% endfor %}
+            <div class="grid grid-cols-2 items-center gap-2 border-t border-dashed border-seam pt-2 sm:grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem]">
+              <input type="hidden" name="chem_id" value="">
+              <input name="name" placeholder="New chemical" class="field col-span-2 sm:col-span-1">
+              <select name="unit" class="field">{% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}</select>
+              <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" placeholder="0.00" class="field"></div>
+              <select name="role" class="field col-span-2 sm:col-span-1">{% for rv in role_values %}<option value="{{ rv }}" {{ "selected" if rv == "other" }}>{{ role_labels.get(rv, rv) }}</option>{% endfor %}</select>
+              <input inputmode="decimal" name="strength_pct" placeholder="%" class="field font-data">
+              <span class="hidden sm:block"></span>
+            </div>
+            <button class="btn-secondary w-full">Save chemicals</button>
+          </form>
+        </div>
 
-  {% if mail_error %}
-  <p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>
-  {% endif %}
-  {% if mail_result is not none %}
-  <div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>
-  {% endif %}
+        <div class="card p-4">
+          <h2 class="set-h">Water targets</h2>
+          <p class="mb-3 text-sm text-mist">The ideal readings the dose calculator aims for.</p>
+          <form method="post" action="/settings/targets" class="space-y-3">
+            <div class="grid grid-cols-5 gap-2">
+              {% for key, label in [("target_fc","FC"),("target_ph","pH"),("target_ta","TA"),("target_cya","CYA"),("target_salt","Salt")] %}
+              <label class="block text-center"><span class="field-label">{{ label }}</span>
+                <input inputmode="decimal" name="{{ key }}" value="{{ targets[key] }}" class="field text-center font-data"></label>
+              {% endfor %}
+            </div>
+            <button class="btn-secondary w-full">Save targets</button>
+          </form>
+        </div>
+      </div>
+    </section>
 
-  <form method="post" action="/settings/mail/test" class="mb-2 flex gap-2">
-    <input type="email" name="to_addr" placeholder="Send test email to…" class="field flex-1">
-    <button class="btn-secondary px-4">Send test email</button>
-  </form>
-  <form method="post" action="/settings/mail/flush" class="mb-3">
-    <button class="btn-secondary w-full">Flush now</button>
-  </form>
+    {# ============================ SERVICE ============================ #}
+    <section class="tab-panel" data-tab="service">
+      <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Job templates</h2>
+          <p class="mb-3 text-sm text-mist">Reusable jobs with a checklist — pick one when creating a job.</p>
+          <form method="post" action="/settings/job_templates" class="space-y-3">
+            {% for t in job_templates %}
+            <div class="space-y-2 rounded-lg border border-seam p-2">
+              <div class="grid grid-cols-[1fr_7rem] gap-2 sm:grid-cols-[1.5fr_1.5fr_7rem_6rem]">
+                <input type="hidden" name="template_id" value="{{ t.id }}">
+                <input name="title" value="{{ t.title }}" placeholder="Title" class="field col-span-2 sm:col-span-1">
+                <input name="description" value="{{ t.description }}" placeholder="Description" class="field col-span-2 sm:col-span-1">
+                <select name="job_type" class="field">
+                  <option value="service" {{ "selected" if t.job_type == "service" }}>Service</option>
+                  <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option></select>
+                <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field"></div>
+              </div>
+              <textarea name="tasks_text" rows="3" class="field" placeholder="Checklist — one item per line">{{ t.tasks | map(attribute='label') | join('\n') }}</textarea>
+            </div>
+            {% endfor %}
+            <div class="space-y-2 rounded-lg border border-dashed border-seam p-2">
+              <div class="grid grid-cols-[1fr_7rem] gap-2 sm:grid-cols-[1.5fr_1.5fr_7rem_6rem]">
+                <input type="hidden" name="template_id" value="">
+                <input name="title" placeholder="New template" class="field col-span-2 sm:col-span-1">
+                <input name="description" placeholder="Description" class="field col-span-2 sm:col-span-1">
+                <select name="job_type" class="field"><option value="service">Service</option><option value="repair">Repair</option></select>
+                <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" placeholder="0.00" class="field"></div>
+              </div>
+              <textarea name="tasks_text" rows="3" class="field" placeholder="Checklist — one item per line"></textarea>
+            </div>
+            <p class="text-xs text-mist">Clear a template's title to delete it.</p>
+            <button class="btn-secondary w-full">Save templates</button>
+          </form>
+        </div>
 
-  <div class="overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-seam text-left text-mist">
-        <th class="py-1.5 pr-3 font-medium">Created</th>
-        <th class="py-1.5 pr-3 font-medium">To</th>
-        <th class="py-1.5 pr-3 font-medium">Subject</th>
-        <th class="py-1.5 pr-3 font-medium">Status</th>
-        <th class="py-1.5 pr-3 font-medium">Attempts</th>
-        <th class="py-1.5 font-medium">Last error</th>
-      </tr>
-    </thead>
-    <tbody class="font-data">
-      {% for row in outbox %}
-      <tr class="border-b border-seam/60">
-        <td class="py-1.5 pr-3 whitespace-nowrap">{{ row.created_at | localdt }}</td>
-        <td class="py-1.5 pr-3 font-body">{{ row.to_addr }}</td>
-        <td class="py-1.5 pr-3 font-body">{{ row.subject }}</td>
-        <td class="py-1.5 pr-3"><span class="tag {{ 'tag-safety' if row.status == 'failed' }}">{{ row.status }}</span></td>
-        <td class="py-1.5 pr-3">{{ row.attempts }}</td>
-        <td class="py-1.5 text-xs text-mist">{{ (row.last_error or "")[:80] }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="py-6 text-center text-mist">No outbox activity yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        <div class="card p-4">
+          <h2 class="set-h">Visit checklist</h2>
+          <p class="mb-3 text-sm text-mist">Default tasks shown on every service visit.</p>
+          <form method="post" action="/settings/tasks" class="space-y-2">
+            {% for t in tasks %}{% if t.active %}
+            <div><input type="hidden" name="task_id" value="{{ t.id }}">
+              <input name="label" value="{{ t.label }}" class="field"></div>
+            {% endif %}{% endfor %}
+            <div><input type="hidden" name="task_id" value="">
+              <input name="label" placeholder="New task" class="field"></div>
+            <p class="text-xs text-mist">Clear a task's text to remove it.</p>
+            <button class="btn-secondary w-full">Save checklist</button>
+          </form>
+        </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">Maintenance rules</h2>
+          <p class="mb-3 text-sm text-mist">Recurring jobs generate automatically overnight — run them now if needed.</p>
+          <form method="post" action="/settings/maintenance/run-now"><button class="btn-secondary w-full">Run maintenance rules now</button></form>
+        </div>
+      </div>
+    </section>
+
+    {# ============================ CREW ============================ #}
+    <section class="tab-panel" data-tab="crew">
+      <div class="card p-4">
+        <div class="mb-2 flex items-center justify-between gap-3">
+          <h2 class="set-h mb-0">Crew</h2>
+          <a href="/users" class="btn-secondary px-4">Manage crew</a>
+        </div>
+        <p class="mb-3 text-sm text-mist">Your team and what they can access. Add people, set permissions, or reset 2FA from Manage crew.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-seam text-left text-mist">
+              <th class="py-2 pr-3 font-medium">Name</th><th class="py-2 pr-3 font-medium">Role</th>
+              <th class="py-2 pr-3 font-medium">Access</th><th class="py-2 font-medium">2FA</th></tr></thead>
+            <tbody>
+              {% for m in crew %}
+              <tr class="border-b border-seam/60">
+                <td class="py-2 pr-3 font-medium">{{ m.name }}</td>
+                <td class="py-2 pr-3"><span class="tag {{ 'border-pool bg-shallow' if m.role == 'admin' }}">{{ m.role }}</span></td>
+                <td class="py-2 pr-3 text-mist">
+                  {% if m.role == "admin" %}Full access{% else %}{{
+                    ["Money" if m.view_money else "", "Customers" if m.manage_customers else "",
+                     "Repairs" if m.can_repairs else "", "All routes" if m.view_all_routes else ""]
+                    | select | join(", ") or "Basic" }}{% endif %}
+                </td>
+                <td class="py-2">{% if m.totp_enabled %}<span class="tag border-pool bg-shallow">On</span>{% else %}<span class="tag">Off</span>{% endif %}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="py-6 text-center text-mist">No crew yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    {# ============================ SYSTEM ============================ #}
+    <section class="tab-panel" data-tab="system">
+      <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Email</h2>
+          {% if smtp_configured %}<span class="tag mb-2 inline-flex border-pool bg-shallow">Configured — {{ smtp_host }}</span>
+          {% else %}<span class="tag tag-safety mb-2 inline-flex">Not configured</span>{% endif %}
+          <div class="mb-3 flex flex-wrap gap-2">
+            <form method="post" action="/settings/mail/test" class="flex flex-1 gap-2">
+              <input type="email" name="to_addr" placeholder="Send test email to…" class="field flex-1">
+              <button class="btn-secondary whitespace-nowrap px-4">Send test</button></form>
+            <form method="post" action="/settings/mail/flush"><button class="btn-secondary px-4">Flush outbox</button></form>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-seam text-left text-mist">
+                <th class="py-1.5 pr-3 font-medium">Created</th><th class="py-1.5 pr-3 font-medium">To</th>
+                <th class="py-1.5 pr-3 font-medium">Subject</th><th class="py-1.5 pr-3 font-medium">Status</th>
+                <th class="py-1.5 pr-3 font-medium">Tries</th><th class="py-1.5 font-medium">Last error</th></tr></thead>
+              <tbody class="font-data">
+                {% for row in outbox %}
+                <tr class="border-b border-seam/60">
+                  <td class="whitespace-nowrap py-1.5 pr-3">{{ row.created_at | localdt }}</td>
+                  <td class="py-1.5 pr-3 font-body">{{ row.to_addr }}</td>
+                  <td class="py-1.5 pr-3 font-body">{{ row.subject }}</td>
+                  <td class="py-1.5 pr-3"><span class="tag {{ 'tag-safety' if row.status == 'failed' }}">{{ row.status }}</span></td>
+                  <td class="py-1.5 pr-3">{{ row.attempts }}</td>
+                  <td class="py-1.5 text-xs text-mist">{{ (row.last_error or "")[:80] }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="py-6 text-center text-mist">No outbox activity yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">Appearance</h2>
+          <form method="post" action="/settings/appearance" class="space-y-2">
+            <label class="block"><span class="field-label">Theme</span>
+              <select name="active_theme" class="field">
+                {% for value, label in [("warm-coastal","Warm Coastal"),("control-room","Control Room"),("fresh-field","Fresh Field")] %}
+                <option value="{{ value }}" {{ "selected" if active_theme == value }}>{{ label }}</option>{% endfor %}
+              </select></label>
+            <p class="text-xs text-mist">Applies to the whole app, for everyone.</p>
+            <button class="btn-secondary w-full">Save appearance</button>
+          </form>
+        </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">Backups</h2>
+          <div class="space-y-1">
+            {% for b in backups %}<a href="/settings/backups/{{ b }}" class="flex min-h-11 items-center font-data text-sm text-pool">{{ b }}</a>
+            {% else %}<p class="text-sm text-mist">No backups yet — created nightly.</p>{% endfor %}
+          </div>
+        </div>
+
+        <div class="lg:col-span-2">
+          <form method="post" action="/logout"><button class="btn-secondary w-full">Sign out</button></form>
+          <p class="mt-3 text-center font-data text-xs text-mist">OpenPoolPro {{ app_version }}</p>
+        </div>
+      </div>
+    </section>
+
   </div>
 </div>
-
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Maintenance rules</h2>
-  <p class="mb-2 text-xs text-mist">Runs nightly; use this to create due jobs right now.</p>
-  <form method="post" action="/settings/maintenance/run-now">
-    <button class="btn-secondary w-full">Run maintenance rules now</button>
-  </form>
-</div>
-
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Backups</h2>
-  <div class="space-y-1">
-    {% for b in backups %}<a href="/settings/backups/{{ b }}" class="flex min-h-11 items-center font-data text-sm text-pool">{{ b }}</a>
-    {% else %}<p class="text-sm text-mist">No backups yet (nightly).</p>{% endfor %}
-  </div>
-</div>
-
-<form method="post" action="/logout"><button class="btn-secondary w-full">Sign out</button></form>
-<p class="mt-4 text-center font-data text-xs text-mist">OpenPoolPro {{ app_version }}</p>
+<script>
+  function opAddTier(el, label, gallons) {
+    var form = el.closest("form");
+    var tmpl = form.querySelector(".tier-row-tmpl");
+    var body = form.querySelector(".tiers-body");
+    if (!tmpl || !body) return;
+    var row = tmpl.cloneNode(true);
+    row.classList.remove("tier-row-tmpl", "hidden");
+    row.classList.add("tier-row");
+    if (label) row.querySelector("[name=label]").value = label;
+    if (gallons) row.querySelector("[name=max_gallons]").value = gallons;
+    body.appendChild(row);
+    var price = row.querySelector("[name=rate_dollars]");
+    if (price) price.focus();
+  }
+  function opAddCommon(sel) {
+    if (!sel.value) return;
+    var parts = sel.value.split("|");
+    opAddTier(sel, parts[0], parts[1]);
+    sel.selectedIndex = 0;
+  }
+</script>
 {% endblock %}

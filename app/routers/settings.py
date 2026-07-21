@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models
+from app import chem_presets, config, mailer, models, sizes
 from app.db import get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -51,6 +51,8 @@ def settings_page(request: Request, rules_created: str | None = None,
                             .order_by(models.TaskTemplate.sort_order)).all()
     job_templates = session.scalars(select(models.JobTemplate)
                                     .order_by(models.JobTemplate.title)).all()
+    crew = session.scalars(select(models.User).where(models.User.active)
+                           .order_by(models.User.role, models.User.name)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
     targets = {k: models.get_setting(session, k, d) for k, d in [
@@ -63,6 +65,8 @@ def settings_page(request: Request, rules_created: str | None = None,
     return templates.TemplateResponse(request, "settings/index.html", {
         "tiers": tiers, "spa_tiers": spa_tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
+        "crew": crew,
+        "size_opts": sizes.presets_for_form(session),
         "app_version": config.APP_VERSION,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
@@ -315,20 +319,25 @@ async def save_appearance(request: Request, session: Session = Depends(get_sessi
 @router.post("/settings/general")
 async def save_general(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
-    raw = (form.get("chem_markup_percent", "0") or "0").strip()
-    if raw.endswith("%"):
-        raw = raw[:-1].strip()
-    try:
-        v = float(raw)
-        if not math.isfinite(v):
-            raise ValueError("inf/nan markup")
-        markup = raw
-    except ValueError:
-        # Garbage (or inf/nan) input: keep whatever was previously stored
-        # rather than overwriting it with something that will 500 the Money page.
-        markup = models.get_setting(session, "chem_markup_percent", "0")
-    models.set_setting(session, "chem_markup_percent", markup)
-    models.set_setting(session, "business_name", form.get("business_name", ""))
+    # Update only the fields actually submitted, so the markup (Pricing tab) and the
+    # display name (Business tab) can post from separate forms without clobbering
+    # each other.
+    if "chem_markup_percent" in form:
+        raw = (form.get("chem_markup_percent", "0") or "0").strip()
+        if raw.endswith("%"):
+            raw = raw[:-1].strip()
+        try:
+            v = float(raw)
+            if not math.isfinite(v):
+                raise ValueError("inf/nan markup")
+            markup = raw
+        except ValueError:
+            # Garbage (or inf/nan) input: keep whatever was previously stored
+            # rather than overwriting it with something that will 500 the Money page.
+            markup = models.get_setting(session, "chem_markup_percent", "0")
+        models.set_setting(session, "chem_markup_percent", markup)
+    if "business_name" in form:
+        models.set_setting(session, "business_name", form.get("business_name", ""))
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

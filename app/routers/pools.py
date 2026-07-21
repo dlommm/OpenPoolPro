@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, pool_presets
+from app import models, sizes
 from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
@@ -48,7 +48,7 @@ def _pool_form(request, session, pool, property_id, ptag: str = "", prefill=None
         photos = session.scalars(stmt.order_by(models.Photo.taken_at.desc())).all()
     return templates.TemplateResponse(request, "pools/form.html",
         {"pool": pool, "property_id": property_id, "photos": photos, "ptag": ptag,
-         "prefill": prefill, "preset_groups": pool_presets.grouped()})
+         "prefill": prefill, "size_presets": sizes.presets_for_form(session)})
 
 
 @router.get("/properties/{pid}/pools/new")
@@ -56,7 +56,7 @@ def new_pool(request: Request, pid: int, preset: str = "",
             session: Session = Depends(get_session),
             user=Depends(require_perm("manage_customers"))):
     get_or_404(session, models.Property, pid)
-    return _pool_form(request, session, None, pid, prefill=pool_presets.by_key.get(preset))
+    return _pool_form(request, session, None, pid, prefill=sizes.prefill_from_id(session, preset))
 
 
 @router.get("/pools/{pool_id}/edit")
@@ -74,7 +74,13 @@ def _apply(pool: models.Pool, form) -> None:
     width = form.get("width_ft") or ""
     pool.width_ft = float(width) if width else None
     pool.avg_depth_ft = float(form.get("avg_depth_ft") or 0)
-    pool.gallons = gallons(pool.shape, pool.length_ft, pool.width_ft, pool.avg_depth_ft)
+    computed = gallons(pool.shape, pool.length_ft, pool.width_ft, pool.avg_depth_ft)
+    ov = (form.get("gallons_override") or "").strip()
+    try:
+        pool.gallons_override = int(float(ov)) if ov else None
+    except ValueError:
+        pool.gallons_override = None
+    pool.gallons = pool.gallons_override or computed  # effective gallons (override wins)
     pool.water_type = form.get("water_type", "chlorine")
     pool.surface = form.get("surface", "plaster")
     pool.notes = form.get("notes", "")

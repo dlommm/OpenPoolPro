@@ -304,7 +304,8 @@ def test_new_chemical_defaults_role_other(client, engine):
     html = client.get("/settings").text
     import re
     new_row_selects = re.findall(r'<select name="role"[^>]*>(.*?)</select>', html, re.S)
-    assert any('selected' in s and '>other<' in s for s in new_row_selects)
+    # the new (blank) row defaults role to "other" by value (shown as the friendly "Other")
+    assert any(re.search(r'<option value="other"[^>]*selected', s) for s in new_row_selects)
 
 
 def test_run_now_admin_creates_job_and_shows_banner(client, engine):

@@ -83,7 +83,8 @@ class Pool(Base):
     length_ft: Mapped[float] = mapped_column(Float, default=0)  # round: diameter
     width_ft: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_depth_ft: Mapped[float] = mapped_column(Float, default=0)
-    gallons: Mapped[int] = mapped_column(Integer, default=0)
+    gallons: Mapped[int] = mapped_column(Integer, default=0)  # effective (override if set, else computed)
+    gallons_override: Mapped[int | None] = mapped_column(Integer, nullable=True)  # manual override of computed gallons
     water_type: Mapped[str] = mapped_column(String(12), default="chlorine")
     surface: Mapped[str] = mapped_column(String(12), default="plaster")
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -116,6 +117,22 @@ class Photo(Base):
     caption: Mapped[str] = mapped_column(String(200), default="")
     tag: Mapped[str] = mapped_column(String(10), default="")  # before|after|issue|""
     taken_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SizePreset(Base):
+    """Managed library of common pool/spa sizes (seeded defaults + custom).
+    Powers the pool-add size picker; dimensions drive computed gallons."""
+    __tablename__ = "size_presets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(8), default="pool")  # pool|spa
+    label: Mapped[str] = mapped_column(String(60))
+    shape: Mapped[str] = mapped_column(String(12), default="rectangle")
+    length_ft: Mapped[float] = mapped_column(Float, default=0)  # round: diameter
+    width_ft: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_depth_ft: Mapped[float] = mapped_column(Float, default=0)
+    ref_gallons: Mapped[int | None] = mapped_column(Integer, nullable=True)  # explicit gallons (spas); else computed
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class RateTier(Base):

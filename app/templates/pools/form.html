@@ -3,18 +3,20 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Pool profile", "Edit pool" if pool else "Add pool") }}
 {% if not pool %}
-<div class="mb-4">
+<div class="mb-4 space-y-2">
   <span class="field-label">Quick pick a size</span>
-  {% for group, items in preset_groups %}
-  <div class="mb-2">
-    <div class="text-[11px] uppercase tracking-wide text-mist">{{ group }}</div>
+  {% for kind, heading in [("pool","Pool sizes"),("spa","Spa sizes")] %}
+  {% if size_presets[kind] %}
+  <div>
+    <div class="text-[11px] uppercase tracking-wide text-mist">{{ heading }}</div>
     <div class="mt-1 flex flex-wrap gap-2">
-      {% for it in items %}
-      <a href="/properties/{{ property_id }}/pools/new?preset={{ it.key }}"
-         class="tag {{ 'tag-safety' if prefill and prefill.key == it.key }}">{{ it.label }}</a>
+      {% for it in size_presets[kind] %}
+      <a href="/properties/{{ property_id }}/pools/new?preset={{ it.id }}"
+         class="tag {{ 'tag-safety' if prefill and prefill.id == it.id }}">{{ it.label }}</a>
       {% endfor %}
     </div>
   </div>
+  {% endif %}
   {% endfor %}
   <a href="/properties/{{ property_id }}/pools/new" class="mt-1 inline-block text-sm text-mist underline">Custom size</a>
 </div>
@@ -55,6 +57,10 @@
        hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="load">
     {% if pool %}≈ {{ "{:,}".format(pool.gallons) }} gal{% else %}<span class="text-mist">Enter dimensions</span>{% endif %}
   </div>
+  <label class="block"><span class="field-label">Gallons override (optional)</span>
+    <input inputmode="numeric" name="gallons_override" value="{{ pool.gallons_override or '' if pool else (prefill.ref_gallons if prefill else '') }}"
+           placeholder="Auto-calculated from size" class="field font-data">
+    <span class="mt-1 block text-xs text-mist">Leave blank to use the auto-calculated gallons above.</span></label>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Water</span>
       <select name="water_type" class="field">

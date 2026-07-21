@@ -131,6 +131,57 @@
   .stop-missed::before {
     @apply bg-safety;
   }
+
+  /* ---- Settings tabs: CSS-only. Hidden radios drive the active panel + label. ---- */
+  .settabs .tab-radio { @apply sr-only; }
+  .tabnav {
+    @apply mb-4 flex gap-1 overflow-x-auto rounded-xl border border-seam p-1;
+    background-color: var(--color-surface);
+    scrollbar-width: none;
+  }
+  .tabnav::-webkit-scrollbar { display: none; }
+  .tab-label {
+    @apply flex min-h-11 flex-1 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg px-3 font-display text-sm font-bold uppercase tracking-wide text-mist transition;
+  }
+  .tab-label:hover { color: var(--color-ink); }
+  .tab-panel { display: none; }
+
+  #settab-business:checked  ~ .tab-panels [data-tab="business"],
+  #settab-pricing:checked   ~ .tab-panels [data-tab="pricing"],
+  #settab-chemistry:checked ~ .tab-panels [data-tab="chemistry"],
+  #settab-service:checked   ~ .tab-panels [data-tab="service"],
+  #settab-crew:checked      ~ .tab-panels [data-tab="crew"],
+  #settab-system:checked    ~ .tab-panels [data-tab="system"] { display: block; }
+
+  #settab-business:checked  ~ .tabnav label[for="settab-business"],
+  #settab-pricing:checked   ~ .tabnav label[for="settab-pricing"],
+  #settab-chemistry:checked ~ .tabnav label[for="settab-chemistry"],
+  #settab-service:checked   ~ .tabnav label[for="settab-service"],
+  #settab-crew:checked      ~ .tabnav label[for="settab-crew"],
+  #settab-system:checked    ~ .tabnav label[for="settab-system"] {
+    background-color: var(--color-pool);
+    color: #fff;
+  }
+  #settab-business:focus-visible  ~ .tabnav label[for="settab-business"],
+  #settab-pricing:focus-visible   ~ .tabnav label[for="settab-pricing"],
+  #settab-chemistry:focus-visible ~ .tabnav label[for="settab-chemistry"],
+  #settab-service:focus-visible   ~ .tabnav label[for="settab-service"],
+  #settab-crew:focus-visible      ~ .tabnav label[for="settab-crew"],
+  #settab-system:focus-visible    ~ .tabnav label[for="settab-system"] {
+    outline: 2px solid var(--color-pool);
+    outline-offset: 2px;
+  }
+
+  /* Compact section title inside a settings panel */
+  .set-h {
+    @apply mb-2 font-display text-lg font-bold uppercase tracking-wide text-ink;
+  }
+  /* Money adornment: a $ glued to a mono input */
+  .money-in { @apply relative flex items-center; }
+  .money-in > span {
+    @apply pointer-events-none absolute left-3 font-data text-sm text-brass;
+  }
+  .money-in > input { @apply pl-7 font-data; }
 }
 
 /* ---------- Signature motion: waterline draw + card rise ---------- */
