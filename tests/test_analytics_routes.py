@@ -389,3 +389,24 @@ def test_apply_writes_rates_bulk_raise_audit_row(client, engine):
         rows = s.scalars(select(models.AuditLog).where(models.AuditLog.action == "rates.bulk_raise")).all()
         assert len(rows) == 1
         assert rows[0].user_id == owner_id
+
+
+def test_bulk_raise_bumps_spa_overrides_and_spa_tiers(client, engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Dee")
+        p = models.Property(customer=c, spa_rate_override_cents=2000)
+        s.add(p)
+        s.add(models.RateTier(max_gallons=600, rate_cents=2000, label="Spa", kind="spa"))
+        s.commit()
+    r = client.post("/analytics/rates/apply", data={
+        "percent": "10", "scope_tiers": "true", "scope_overrides": "true"},
+        follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).where(models.Property.customer.has(name="Dee"))).one()
+        spa_tier = s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).first()
+        assert p.spa_rate_override_cents == 2200   # 2000 * 1.10
+        assert spa_tier.rate_cents == 2200

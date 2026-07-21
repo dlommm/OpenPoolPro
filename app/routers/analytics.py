@@ -298,7 +298,8 @@ def _override_props(session: Session) -> list["models.Property"]:
     return session.scalars(
         select(models.Property).join(models.Customer).where(
             models.Property.active.is_(True), models.Customer.active.is_(True),
-            models.Property.rate_override_cents.is_not(None))
+            (models.Property.rate_override_cents.is_not(None)
+             | models.Property.spa_rate_override_cents.is_not(None)))
     ).all()
 
 
@@ -310,9 +311,14 @@ def _preview_rows(session: Session, pct: float, scope_tiers: bool, scope_overrid
                         "new_cents": round(t.rate_cents * (1 + pct / 100))})
     if scope_overrides:
         for p in _override_props(session):
-            rows.append({"label": f"{p.customer.name} — {p.label}",
-                        "old_cents": p.rate_override_cents,
-                        "new_cents": round(p.rate_override_cents * (1 + pct / 100))})
+            if p.rate_override_cents is not None:
+                rows.append({"label": f"{p.customer.name} — {p.label}",
+                            "old_cents": p.rate_override_cents,
+                            "new_cents": round(p.rate_override_cents * (1 + pct / 100))})
+            if p.spa_rate_override_cents is not None:
+                rows.append({"label": f"{p.customer.name} — {p.label} (spa)",
+                            "old_cents": p.spa_rate_override_cents,
+                            "new_cents": round(p.spa_rate_override_cents * (1 + pct / 100))})
     return rows
 
 
@@ -355,8 +361,12 @@ def rates_apply(request: Request, percent: str = Form(""),
             affected += 1
     if scope_overrides:
         for p in _override_props(session):
-            p.rate_override_cents = round(p.rate_override_cents * (1 + pct / 100))
-            affected += 1
+            if p.rate_override_cents is not None:
+                p.rate_override_cents = round(p.rate_override_cents * (1 + pct / 100))
+                affected += 1
+            if p.spa_rate_override_cents is not None:
+                p.spa_rate_override_cents = round(p.spa_rate_override_cents * (1 + pct / 100))
+                affected += 1
 
     scope = "both" if scope_tiers and scope_overrides else ("tiers" if scope_tiers else "overrides")
     session.add(models.RateChange(percent=pct, scope=scope, affected_count=affected,
