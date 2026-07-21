@@ -169,7 +169,8 @@ def analytics_export(request: Request, tab: str = "income",
     writer = csv.writer(output, lineterminator="\n")
 
     if tab == "income":
-        writer.writerow(["week_start", "iso_week", "labor", "chemicals_cost", "chemicals_billable", "jobs", "total"])
+        writer.writerow(["week_start", "iso_week", "labor", "chemicals_cost",
+                         "chemicals_billable", "jobs", "revenue", "profit"])
         for r in rows:
             writer.writerow([
                 r.week_start_date,
@@ -179,6 +180,7 @@ def analytics_export(request: Request, tab: str = "income",
                 _format_cents(r.chem_billable_cents),
                 _format_cents(r.job_cents),
                 _format_cents(r.total_cents),
+                _format_cents(r.profit_cents),
             ])
     elif tab == "customers":
         writer.writerow(["customer", "visits", "labor", "chemicals", "jobs", "total"])

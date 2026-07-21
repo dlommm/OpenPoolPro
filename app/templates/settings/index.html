@@ -151,28 +151,39 @@
             </select>
             <button class="btn-secondary whitespace-nowrap px-4">Add from library</button>
           </form>
+          {% set chem_cols = "sm:grid-cols-[2fr_4.25rem_6.5rem_5rem_6.5rem_1.5fr_5.5rem_3rem]" %}
           <form method="post" action="/settings/chemicals" class="space-y-2">
-            <div class="hidden grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem] gap-2 px-1 text-[11px] uppercase tracking-wide text-mist sm:grid">
-              <span>Name</span><span>Unit</span><span>Cost</span><span>Role</span><span>Str %</span><span>On</span></div>
-            {% for c in chems %}
-            <div class="grid grid-cols-2 items-center gap-2 sm:grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem]">
-              <input type="hidden" name="chem_id" value="{{ c.id }}">
-              <input name="name" value="{{ c.name }}" class="field col-span-2 sm:col-span-1">
-              <select name="unit" class="field">{% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}</select>
-              <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" value="{{ '%.2f'|format(c.cost_per_unit_cents / 100) }}" class="field font-semibold"></div>
-              <select name="role" class="field col-span-2 sm:col-span-1">{% for rv in role_values %}<option value="{{ rv }}" {{ "selected" if c.role == rv }}>{{ role_labels.get(rv, rv) }}</option>{% endfor %}</select>
-              <input inputmode="decimal" name="strength_pct" value="{{ c.strength_pct }}" title="Strength %" placeholder="%" class="field font-data">
-              <label class="flex min-h-11 items-center justify-center gap-1 rounded-lg border border-seam text-xs text-mist"><input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5"><span class="sm:hidden">Active</span></label>
+            <div class="hidden gap-2 px-1 text-[11px] uppercase tracking-wide text-mist sm:grid {{ chem_cols }}">
+              <span>Name</span><span>Unit</span><span>Your cost</span><span>Markup</span><span>Customer</span><span>Role</span><span>Str %</span><span>On</span></div>
+            <div class="chem-body space-y-2">
+              {% for c in chem_rows %}
+              <div class="chem-row grid grid-cols-2 items-center gap-2 {{ chem_cols }}">
+                <input type="hidden" name="chem_id" value="{{ c.id }}">
+                <input name="name" value="{{ c.name }}" class="field col-span-2 sm:col-span-1">
+                <select name="unit" class="field">{% for u in ["gal","lb","oz","tab","each"] %}<option {{ "selected" if c.unit == u }}>{{ u }}</option>{% endfor %}</select>
+                <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" value="{{ c.cost_dollars }}" oninput="opChemCust(this)" class="field font-semibold"></div>
+                <div class="relative flex items-center"><input inputmode="decimal" name="markup" value="{{ c.markup }}" placeholder="{{ global_markup|int }}" oninput="opChemCust(this)" class="field pr-5 font-data"><span class="pointer-events-none absolute right-2 text-xs text-mist">%</span></div>
+                <div class="chem-cust font-data text-sm font-semibold text-brass">${{ c.customer_dollars }}</div>
+                <select name="role" class="field col-span-2 sm:col-span-1">{% for rv in role_values %}<option value="{{ rv }}" {{ "selected" if c.role == rv }}>{{ role_labels.get(rv, rv) }}</option>{% endfor %}</select>
+                <input inputmode="decimal" name="strength_pct" value="{{ c.strength_pct }}" title="Strength %" placeholder="%" class="field font-data">
+                <label class="flex min-h-11 items-center justify-center gap-1 rounded-lg border border-seam text-xs text-mist"><input type="checkbox" name="active_{{ c.id }}" {{ "checked" if c.active }} class="h-5 w-5"><span class="sm:hidden">Active</span></label>
+              </div>
+              {% endfor %}
             </div>
-            {% endfor %}
-            <div class="grid grid-cols-2 items-center gap-2 border-t border-dashed border-seam pt-2 sm:grid-cols-[2fr_4rem_7rem_1.5fr_4.5rem_3rem]">
+            <div class="chem-row-tmpl hidden grid grid-cols-2 items-center gap-2 {{ chem_cols }}">
               <input type="hidden" name="chem_id" value="">
               <input name="name" placeholder="New chemical" class="field col-span-2 sm:col-span-1">
               <select name="unit" class="field">{% for u in ["gal","lb","oz","tab","each"] %}<option>{{ u }}</option>{% endfor %}</select>
-              <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" placeholder="0.00" class="field"></div>
+              <div class="money-in"><span>$</span><input inputmode="decimal" name="cost_dollars" placeholder="0.00" oninput="opChemCust(this)" class="field"></div>
+              <div class="relative flex items-center"><input inputmode="decimal" name="markup" placeholder="{{ global_markup|int }}" oninput="opChemCust(this)" class="field pr-5 font-data"><span class="pointer-events-none absolute right-2 text-xs text-mist">%</span></div>
+              <div class="chem-cust font-data text-sm font-semibold text-brass">$0.00</div>
               <select name="role" class="field col-span-2 sm:col-span-1">{% for rv in role_values %}<option value="{{ rv }}" {{ "selected" if rv == "other" }}>{{ role_labels.get(rv, rv) }}</option>{% endfor %}</select>
               <input inputmode="decimal" name="strength_pct" placeholder="%" class="field font-data">
               <span class="hidden sm:block"></span>
+            </div>
+            <div class="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-seam pt-2">
+              <span class="text-xs text-mist">Blank markup uses the global {{ global_markup|int }}%. Clear a name to remove.</span>
+              <button type="button" class="btn-secondary px-4" onclick="opAddChem(this)">+ Add chemical</button>
             </div>
             <button class="btn-secondary w-full">Save chemicals</button>
           </form>
@@ -375,6 +386,29 @@
     var parts = sel.value.split("|");
     opAddTier(sel, parts[0], parts[1]);
     sel.selectedIndex = 0;
+  }
+  var OPP_MARKUP = {{ global_markup|tojson }};
+  function opChemCust(el) {
+    var row = el.closest(".chem-row") || el.closest(".chem-row-tmpl");
+    if (!row) return;
+    var cost = parseFloat((row.querySelector("[name=cost_dollars]") || {}).value) || 0;
+    var mkEl = row.querySelector("[name=markup]");
+    var mkRaw = mkEl ? (mkEl.value || "").trim() : "";
+    var mk = mkRaw === "" ? OPP_MARKUP : (parseFloat(mkRaw) || 0);
+    var out = row.querySelector(".chem-cust");
+    if (out) out.textContent = "$" + (cost * (1 + mk / 100)).toFixed(2);
+  }
+  function opAddChem(el) {
+    var form = el.closest("form");
+    var body = form.querySelector(".chem-body");
+    var tmpl = form.querySelector(".chem-row-tmpl");
+    if (!body || !tmpl) return;
+    var row = tmpl.cloneNode(true);
+    row.classList.remove("chem-row-tmpl", "hidden");
+    row.classList.add("chem-row");
+    body.appendChild(row);
+    var n = row.querySelector("[name=name]");
+    if (n) n.focus();
   }
 </script>
 {% endblock %}

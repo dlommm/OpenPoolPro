@@ -41,6 +41,20 @@ def line_billable_cents(cost_cents: int, markup_percent: float) -> int:
     return round(cost_cents * (1 + markup_percent / 100))
 
 
+def effective_markup(chemical, global_markup: float) -> float:
+    """Per-item markup when the chemical sets one, else the global markup."""
+    if chemical is not None and chemical.markup_percent is not None:
+        return chemical.markup_percent
+    return global_markup
+
+
+def billable_for_vc(vc, global_markup: float) -> int:
+    """Customer-billable cents for one VisitChemical, honouring its chemical's
+    per-item markup (fallback to global). Single source of truth so qbo,
+    analytics, and invoicing all agree to the cent."""
+    return line_billable_cents(vc.total_cost_cents, effective_markup(vc.chemical, global_markup))
+
+
 def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]:
     first, last = _month_range(year, month)
     try:
@@ -61,7 +75,7 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         r.labor_visits += 1
         for vc in v.chemicals:
             r.chem_cost_cents += vc.total_cost_cents
-            r.chem_billable_cents += line_billable_cents(vc.total_cost_cents, markup)
+            r.chem_billable_cents += billable_for_vc(vc, markup)
 
     jobs = session.scalars(select(models.Job).where(
         models.Job.status == "done",

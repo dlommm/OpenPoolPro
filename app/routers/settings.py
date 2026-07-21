@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, sizes
+from app import chem_presets, config, mailer, models, qbo, sizes
 from app.db import get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -47,6 +47,22 @@ def settings_page(request: Request, rules_created: str | None = None,
     spa_tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "spa").order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
+    try:
+        _gmarkup = float(models.get_setting(session, "chem_markup_percent", "0") or 0)
+    except ValueError:
+        _gmarkup = 0.0
+
+    def _mk_fmt(v):
+        return "" if v is None else ("%g" % v)
+
+    chem_rows = [{
+        "id": c.id, "name": c.name, "unit": c.unit, "role": c.role,
+        "strength_pct": ("%g" % c.strength_pct), "active": c.active,
+        "cost_dollars": "%.2f" % (c.cost_per_unit_cents / 100),
+        "markup": _mk_fmt(c.markup_percent),
+        "customer_dollars": "%.2f" % (
+            qbo.line_billable_cents(c.cost_per_unit_cents, qbo.effective_markup(c, _gmarkup)) / 100),
+    } for c in chems]
     tasks = session.scalars(select(models.TaskTemplate)
                             .order_by(models.TaskTemplate.sort_order)).all()
     job_templates = session.scalars(select(models.JobTemplate)
@@ -67,6 +83,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         "backups": backups,
         "crew": crew,
         "size_opts": sizes.presets_for_form(session),
+        "chem_rows": chem_rows,
+        "global_markup": _gmarkup,
         "app_version": config.APP_VERSION,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
@@ -160,6 +178,18 @@ async def save_spa_tiers(request: Request, session: Session = Depends(get_sessio
     return RedirectResponse("/settings", status_code=303)
 
 
+def _parse_markup(raw: str) -> float | None:
+    """Per-item markup %: blank/garbage -> None (use the global markup)."""
+    raw = (raw or "").strip().rstrip("%").strip()
+    if not raw:
+        return None
+    try:
+        v = float(raw)
+    except ValueError:
+        return None
+    return v if (math.isfinite(v) and v >= 0) else None
+
+
 @router.post("/settings/chemicals")
 async def save_chemicals(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
@@ -169,10 +199,12 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
     costs = form.getlist("cost_dollars")
     roles = form.getlist("role")
     strengths = form.getlist("strength_pct")
+    markups = form.getlist("markup")
 
     for i, (cid, name, unit, cost) in enumerate(zip(chem_ids, names, units, costs)):
         role = roles[i] if i < len(roles) else "other"
         strength = strengths[i] if i < len(strengths) else ""
+        markup_raw = markups[i] if i < len(markups) else ""
 
         if cid:
             try:
@@ -197,6 +229,7 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
                 new_strength = c.strength_pct
             if math.isfinite(new_strength) and new_strength > 0:
                 c.strength_pct = new_strength
+            c.markup_percent = _parse_markup(markup_raw)
             c.active = form.get(f"active_{cid}") == "on"
         elif name.strip():
             try:
@@ -212,7 +245,8 @@ async def save_chemicals(request: Request, session: Session = Depends(get_sessio
                 strength_pct = 100.0
             session.add(models.Chemical(name=name, unit=unit,
                                         cost_per_unit_cents=cost_cents,
-                                        role=chem_role, strength_pct=strength_pct))
+                                        role=chem_role, strength_pct=strength_pct,
+                                        markup_percent=_parse_markup(markup_raw)))
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

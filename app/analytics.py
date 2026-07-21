@@ -27,6 +27,7 @@ class WeekRow:
     chem_billable_cents: int = 0
     job_cents: int = 0
     total_cents: int = 0
+    profit_cents: int = 0  # revenue minus chemical cost (what you actually spent)
 
 
 @dataclass
@@ -141,7 +142,7 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
         r.labor_cents += v.rate_cents or 0
         for vc in v.chemicals:
             r.chem_cost_cents += vc.total_cost_cents
-            r.chem_billable_cents += qbo.line_billable_cents(vc.total_cost_cents, markup)
+            r.chem_billable_cents += qbo.billable_for_vc(vc, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(_week_key(_local_date(j.completed_at)))
@@ -150,6 +151,7 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
     out = list(rows.values())
     for r in out:
         r.total_cents = r.labor_cents + r.chem_billable_cents + r.job_cents
+        r.profit_cents = r.total_cents - r.chem_cost_cents  # take-home after chemical spend
     out.sort(key=lambda r: (r.iso_year, r.iso_week))
     return out
 
@@ -168,7 +170,7 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
         r.labor_cents += v.rate_cents or 0
         r.visit_count += 1
         for vc in v.chemicals:
-            chem_billable[cust.id] += qbo.line_billable_cents(vc.total_cost_cents, markup)
+            chem_billable[cust.id] += qbo.billable_for_vc(vc, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(j.property.customer)
@@ -196,7 +198,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
         r.total_cents += v.rate_cents or 0
         r.visit_count += 1
         for vc in v.chemicals:
-            chem_billable[key] += qbo.line_billable_cents(vc.total_cost_cents, markup)
+            chem_billable[key] += qbo.billable_for_vc(vc, markup)
         dur = v.duration_minutes
         if dur is not None:
             r.total_minutes += dur
@@ -223,7 +225,7 @@ def revenue_by_job_type(session: Session, start: date, end: date) -> list[TypeRo
     markup = _markup(session)
     visits = _done_visits(session, start, end)
     visit_labor = sum(v.rate_cents or 0 for v in visits)
-    visit_chem_billable = sum(qbo.line_billable_cents(vc.total_cost_cents, markup)
+    visit_chem_billable = sum(qbo.billable_for_vc(vc, markup)
                                for v in visits for vc in v.chemicals)
     visits_total = visit_labor + visit_chem_billable
 
@@ -251,7 +253,7 @@ def chem_margin(session: Session, start: date, end: date) -> list[ChemRow]:
         r = rows.setdefault(vc.chemical_id, ChemRow(chemical=vc.chemical))
         r.quantity += vc.amount
         r.cost_cents += vc.total_cost_cents
-        r.billable_cents += qbo.line_billable_cents(vc.total_cost_cents, markup)
+        r.billable_cents += qbo.billable_for_vc(vc, markup)
 
     for r in rows.values():
         r.margin_cents = r.billable_cents - r.cost_cents

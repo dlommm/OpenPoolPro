@@ -153,6 +153,7 @@ class Chemical(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String(20), default="other")
     strength_pct: Mapped[float] = mapped_column(Float, default=100.0)
+    markup_percent: Mapped[float | None] = mapped_column(Float, nullable=True)  # per-item; None = global markup
     stock_qty: Mapped[float] = mapped_column(Float, default=0.0)
     reorder_point: Mapped[float | None] = mapped_column(Float, nullable=True)
     reorder_qty: Mapped[float | None] = mapped_column(Float, nullable=True)

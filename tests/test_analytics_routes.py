@@ -259,7 +259,7 @@ def test_income_export_golden(client, engine):
     assert r.status_code == 200
     assert "text/csv" in r.headers["content-type"]
     lines = r.text.strip().split("\n")
-    assert lines[0] == "week_start,iso_week,labor,chemicals_cost,chemicals_billable,jobs,total"
+    assert lines[0] == "week_start,iso_week,labor,chemicals_cost,chemicals_billable,jobs,revenue,profit"
     # Find week 28 and week 31 rows
     week28_row = None
     week31_row = None

@@ -106,7 +106,7 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
                                     duration_minutes=v.duration_minutes,
                                     rate_cents=v.rate_cents or 0))
             for vc in v.chemicals:
-                billable = qbo.line_billable_cents(vc.total_cost_cents, markup)
+                billable = qbo.billable_for_vc(vc, markup)
                 bucket = chem_totals.setdefault(
                     vc.chemical_id, [vc.chemical.name, vc.chemical.unit, 0.0, 0])
                 bucket[2] += vc.amount

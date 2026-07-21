@@ -31,6 +31,7 @@ COLUMNS = {
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),
         ("strength_pct", "FLOAT DEFAULT 100"),
+        ("markup_percent", "FLOAT"),
         ("stock_qty", "REAL DEFAULT 0"),
         ("reorder_point", "REAL"),
         ("reorder_qty", "REAL"),

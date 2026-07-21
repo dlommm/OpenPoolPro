@@ -53,7 +53,8 @@
       <th class="py-1.5 pr-3 font-medium">Chem cost</th>
       <th class="py-1.5 pr-3 font-medium">Chem billable</th>
       <th class="py-1.5 pr-3 font-medium">Jobs</th>
-      <th class="py-1.5 pr-3 font-medium">Total</th>
+      <th class="py-1.5 pr-3 font-medium">Revenue</th>
+      <th class="py-1.5 pr-3 font-medium">Profit</th>
       <th class="py-1.5 font-medium">&nbsp;</th>
     </tr>
   </thead>
@@ -62,10 +63,11 @@
     <tr class="border-b border-seam/60">
       <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
       <td class="py-1.5 pr-3">{{ r.labor_cents | dollars }}</td>
-      <td class="py-1.5 pr-3">{{ r.chem_cost_cents | dollars }}</td>
+      <td class="py-1.5 pr-3 text-mist">{{ r.chem_cost_cents | dollars }}</td>
       <td class="py-1.5 pr-3">{{ r.chem_billable_cents | dollars }}</td>
       <td class="py-1.5 pr-3">{{ r.job_cents | dollars }}</td>
-      <td class="py-1.5 pr-3 money">{{ r.total_cents | dollars }}</td>
+      <td class="py-1.5 pr-3">{{ r.total_cents | dollars }}</td>
+      <td class="py-1.5 pr-3 money">{{ r.profit_cents | dollars }}</td>
       <td class="py-1.5 w-32">
         <div class="h-2 rounded bg-shallow">
           <div class="h-2 bg-pool/70 rounded" style="width: {{ (r.total_cents / max_total * 100) if max_total else 0 }}%"></div>
@@ -73,7 +75,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="py-6 text-center text-mist">No income for this range.</td></tr>
+    <tr><td colspan="8" class="py-6 text-center text-mist">No income for this range.</td></tr>
     {% endfor %}
   </tbody>
 </table>
