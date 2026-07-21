@@ -14,14 +14,9 @@ from app.rates import gallons
 router = APIRouter()
 
 
-def _tier_rate_for(session, g: int) -> int:
-    tiers = session.scalars(
-        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None),
-                                         models.RateTier.max_gallons)).all()
-    for t in tiers:
-        if t.max_gallons is None or g <= t.max_gallons:
-            return t.rate_cents
-    return 0
+def _tier_rate_for(session, g: int, kind: str = "pool") -> int:
+    from app.rates import tier_rate_cents
+    return tier_rate_cents(session, kind, g)
 
 
 @router.get("/pools/gallons-preview", response_class=HTMLResponse)

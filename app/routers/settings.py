@@ -31,7 +31,7 @@ def settings_page(request: Request, rules_created: str | None = None,
                   mail_error: str | None = None,
                   session: Session = Depends(get_session)):
     from app.routers.company import company_info
-    tiers = session.scalars(select(models.RateTier).order_by(
+    tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     tasks = session.scalars(select(models.TaskTemplate)

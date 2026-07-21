@@ -18,14 +18,47 @@ def gallons(shape: str, length_ft: float, width_ft: float | None, avg_depth_ft: 
     return round(length_ft * width_ft * avg_depth_ft * SHAPE_MULT[shape])
 
 
-def effective_rate_cents(session, prop: models.Property) -> int:
-    if prop.rate_override_cents is not None:
-        return prop.rate_override_cents
-    largest = max((p.gallons for p in prop.pools if p.active), default=0)
+def tier_rate_cents(session, kind: str, gallons_val: int) -> int:
     tiers = session.scalars(
-        select(models.RateTier).order_by(models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
+        select(models.RateTier)
+        .where(models.RateTier.kind == kind)
+        .order_by(models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
     ).all()
     for t in tiers:
-        if t.max_gallons is None or largest <= t.max_gallons:
+        if t.max_gallons is None or gallons_val <= t.max_gallons:
             return t.rate_cents
     return 0
+
+
+def service_type(prop: models.Property) -> str:
+    pools = [p for p in prop.pools if p.active]
+    has_pool = any(p.kind == "pool" for p in pools)
+    has_spa = any(p.kind == "spa" for p in pools)
+    if has_pool and has_spa:
+        return "pool_spa"
+    if has_spa:
+        return "spa"
+    return "pool"
+
+
+def effective_rate_cents(session, prop: models.Property) -> int:
+    pools = [p for p in prop.pools if p.active]
+    # Pool component: property override wins (legacy semantics), else pool-tier by
+    # largest pool-kind gallons, else 0 when there is no pool.
+    if prop.rate_override_cents is not None:
+        pool_cents = prop.rate_override_cents
+    elif any(p.kind == "pool" for p in pools):
+        largest = max((p.gallons for p in pools if p.kind == "pool"), default=0)
+        pool_cents = tier_rate_cents(session, "pool", largest)
+    else:
+        pool_cents = 0
+    # Spa component: spa override wins, else spa-tier by largest spa-kind gallons,
+    # else 0 when there is no spa.
+    if prop.spa_rate_override_cents is not None:
+        spa_cents = prop.spa_rate_override_cents
+    elif any(p.kind == "spa" for p in pools):
+        largest_spa = max((p.gallons for p in pools if p.kind == "spa"), default=0)
+        spa_cents = tier_rate_cents(session, "spa", largest_spa)
+    else:
+        spa_cents = 0
+    return pool_cents + spa_cents
