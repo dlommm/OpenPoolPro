@@ -1,6 +1,7 @@
 import os
 from zoneinfo import ZoneInfo
 
+APP_VERSION = os.environ.get("APP_VERSION", "dev")  # baked at build time via --build-arg APP_VERSION
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "changeme")
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")

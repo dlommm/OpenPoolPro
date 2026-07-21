@@ -12,6 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY --from=css /build/app.css ./app/static/app.css
-ENV DATA_DIR=/data RUN_SCHEDULER=1
+ARG APP_VERSION=dev
+ENV DATA_DIR=/data RUN_SCHEDULER=1 APP_VERSION=$APP_VERSION
 EXPOSE 8000
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

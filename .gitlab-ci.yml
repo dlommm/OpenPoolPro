@@ -1,0 +1,60 @@
+# CI/CD for OpenPoolPro — self-hosted GitLab (github.com), SHELL runner with docker.
+#
+# On every push to main:
+#   1. test    — run the pytest suite in a throwaway python container.
+#   2. release — always (re)build & push the image as `:latest`; when conventional
+#                commits since the last tag warrant a version bump, also create the
+#                git tag `vX.Y.Z`, push the `:vX.Y.Z` image, and publish a GitLab Release.
+#
+# Requirements (see docs/ci-cd.md):
+#   - A shell runner with `docker`, `git`, and `curl` on PATH.
+#   - A masked CI/CD variable RELEASE_TOKEN = a Project Access Token with scopes
+#     `api` + `write_repository` (role Maintainer). Used to push the tag and create
+#     the Release. Docker registry auth uses the built-in CI job token.
+
+stages:
+  - test
+  - release
+
+test:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+  script:
+    - >
+      docker run --rm -v "$CI_PROJECT_DIR:/src" -w /src python:3.12-slim
+      bash -c "pip install --no-cache-dir -r requirements.txt && python -m pytest -q"
+
+release:
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  variables:
+    GIT_DEPTH: "0" # full history + tags so next-version.sh can read the last tag and commit range
+  script:
+    - git fetch --tags --force
+    - eval "$(bash scripts/next-version.sh)"
+    - echo "computed VERSION=$VERSION BUMP=$BUMP"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    # Always refresh :latest (carries the baked APP_VERSION).
+    - docker build --build-arg APP_VERSION="$VERSION" -t "$CI_REGISTRY_IMAGE:latest" .
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+    # On a real version bump: tag the image, create+push the git tag, publish the Release.
+    - |
+      if [ "$BUMP" != "none" ]; then
+        docker tag "$CI_REGISTRY_IMAGE:latest" "$CI_REGISTRY_IMAGE:$VERSION"
+        docker push "$CI_REGISTRY_IMAGE:$VERSION"
+        git config user.email "ci@example.com"
+        git config user.name  "GitLab CI"
+        git tag -a "$VERSION" -m "Release $VERSION"
+        # -o ci.skip: the tag push must NOT trigger another pipeline (no release loop).
+        git push -o ci.skip "https://oauth2:${RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "$VERSION"
+        curl --fail --silent --show-error \
+          --header "PRIVATE-TOKEN: ${RELEASE_TOKEN}" \
+          --header "Content-Type: application/json" \
+          --data "{\"tag_name\":\"${VERSION}\",\"name\":\"${VERSION}\",\"description\":\"Docker image \`${CI_REGISTRY_IMAGE}:${VERSION}\` (also \`:latest\`). Built from ${CI_COMMIT_SHORT_SHA}.\"}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+      else
+        echo "No feat/fix/breaking commits since last tag — pushed :latest only, no new release."
+      fi

@@ -63,6 +63,7 @@ def settings_page(request: Request, rules_created: str | None = None,
     return templates.TemplateResponse(request, "settings/index.html", {
         "tiers": tiers, "spa_tiers": spa_tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
+        "app_version": config.APP_VERSION,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
