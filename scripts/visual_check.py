@@ -80,6 +80,38 @@ with sync_playwright() as p:
         failures.append(("/ (tech)", probs))
     tctx.close()
 
+    # Tablet-portrait pass (iPad): topbar still in charge, md: width tier applied.
+    tabctx = browser.new_context(viewport={"width": 834, "height": 1194}, device_scale_factor=2)
+    tabpage = tabctx.new_page()
+    tabpage.goto(f"{BASE}/login")
+    tabpage.fill("input[name=username]", "owner")
+    tabpage.fill("input[name=password]", PASSWORD)
+    tabpage.click("button")
+    tabpage.wait_for_load_state("networkidle")
+    for path in ["/", "/week", "/dashboard"]:
+        tabpage.goto(f"{BASE}{path}")
+        tabpage.wait_for_timeout(600)
+        tablet_probs = tabpage.evaluate("""
+() => {
+  const probs = [];
+  const topbar = document.querySelector("#topbar");
+  const sidebar = document.querySelector("#sidebar");
+  if (!topbar || getComputedStyle(topbar).display === "none") probs.push("topbar hidden at tablet viewport");
+  if (sidebar && getComputedStyle(sidebar).display !== "none") probs.push("sidebar visible at tablet viewport");
+  const main = document.querySelector("main");
+  if (main && main.offsetWidth < 600) probs.push("main not using md width tier: " + main.offsetWidth + "px");
+  if (document.documentElement.scrollWidth > document.documentElement.clientWidth)
+    probs.push("horizontal overflow at tablet viewport");
+  return probs;
+}
+""")
+        if tablet_probs:
+            failures.append((f"{path} (tablet)", tablet_probs))
+        if SHOTS:
+            name = (path.strip("/").replace("/", "_") or "today") + "_tablet"
+            tabpage.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+    tabctx.close()
+
     # Desktop pass: sidebar visible, tab bar hidden at lg: viewport.
     dctx = browser.new_context(viewport={"width": 1280, "height": 900})
     dpage = dctx.new_page()
