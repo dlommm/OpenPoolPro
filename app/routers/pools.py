@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, pool_presets
 from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
@@ -21,7 +21,8 @@ def _tier_rate_for(session, g: int, kind: str = "pool") -> int:
 
 @router.get("/pools/gallons-preview", response_class=HTMLResponse)
 def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str = "",
-                    avg_depth_ft: str = "", session: Session = Depends(get_session),
+                    avg_depth_ft: str = "", kind: str = "pool",
+                    session: Session = Depends(get_session),
                     user=Depends(require_perm("manage_customers"))):
     try:
         g = gallons(shape, float(length_ft or 0), float(width_ft or 0) or None,
@@ -30,12 +31,12 @@ def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str
         return HTMLResponse("<span class='text-mist/60'>—</span>")
     html = f"<span class='font-semibold'>≈ {g:,} gal</span>"
     if user.can("view_money"):
-        rate = _tier_rate_for(session, g)
+        rate = _tier_rate_for(session, g, "spa" if kind == "spa" else "pool")
         html += f"<span class='text-mist'> — suggested rate ${rate / 100:.2f}</span>"
     return HTMLResponse(html)
 
 
-def _pool_form(request, session, pool, property_id, ptag: str = ""):
+def _pool_form(request, session, pool, property_id, ptag: str = "", prefill=None):
     photos = []
     ptag = ptag if ptag in models.PHOTO_TAGS else ""  # tolerant: unknown -> all
     if pool is not None:
@@ -46,14 +47,16 @@ def _pool_form(request, session, pool, property_id, ptag: str = ""):
             stmt = stmt.where(models.Photo.tag == ptag)
         photos = session.scalars(stmt.order_by(models.Photo.taken_at.desc())).all()
     return templates.TemplateResponse(request, "pools/form.html",
-        {"pool": pool, "property_id": property_id, "photos": photos, "ptag": ptag})
+        {"pool": pool, "property_id": property_id, "photos": photos, "ptag": ptag,
+         "prefill": prefill, "preset_groups": pool_presets.grouped()})
 
 
 @router.get("/properties/{pid}/pools/new")
-def new_pool(request: Request, pid: int, session: Session = Depends(get_session),
+def new_pool(request: Request, pid: int, preset: str = "",
+            session: Session = Depends(get_session),
             user=Depends(require_perm("manage_customers"))):
     get_or_404(session, models.Property, pid)
-    return _pool_form(request, session, None, pid)
+    return _pool_form(request, session, None, pid, prefill=pool_presets.by_key.get(preset))
 
 
 @router.get("/pools/{pool_id}/edit")
@@ -75,6 +78,8 @@ def _apply(pool: models.Pool, form) -> None:
     pool.water_type = form.get("water_type", "chlorine")
     pool.surface = form.get("surface", "plaster")
     pool.notes = form.get("notes", "")
+    kind = form.get("kind", "pool")
+    pool.kind = "spa" if kind == "spa" else "pool"
 
 
 async def _save(request: Request, session: Session, pool: models.Pool, redirect_cid: int):

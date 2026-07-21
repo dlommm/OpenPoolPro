@@ -115,3 +115,34 @@ def test_missing_form_fields_return_400_not_500(client, engine):
     pid = _prop(client, engine)
     r = client.post(f"/properties/{pid}/pools/new", data={"shape": "rectangle"})
     assert r.status_code == 400
+
+
+def test_create_spa_pool_sets_kind(client, engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Ann")
+        p = models.Property(customer=c)
+        s.add(p); s.commit(); pid = p.id
+    r = client.post(f"/properties/{pid}/pools/new", data={
+        "label": "Hot tub", "shape": "round", "length_ft": "6", "width_ft": "",
+        "avg_depth_ft": "3", "water_type": "chlorine", "surface": "plaster",
+        "notes": "", "kind": "spa"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        pool = s.scalars(select(models.Pool).where(models.Pool.label == "Hot tub")).one()
+        assert pool.kind == "spa"
+        assert pool.gallons > 0
+
+
+def test_new_pool_prefills_from_preset(client, engine):
+    from sqlalchemy.orm import Session
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Bob")
+        p = models.Property(customer=c)
+        s.add(p); s.commit(); pid = p.id
+    r = client.get(f"/properties/{pid}/pools/new?preset=ig_rect_16x32")
+    assert r.status_code == 200
+    assert 'value="32"' in r.text and 'value="16"' in r.text  # length/width prefilled

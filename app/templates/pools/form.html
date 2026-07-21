@@ -2,6 +2,23 @@
 {% block content %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Pool profile", "Edit pool" if pool else "Add pool") }}
+{% if not pool %}
+<div class="mb-4">
+  <span class="field-label">Quick pick a size</span>
+  {% for group, items in preset_groups %}
+  <div class="mb-2">
+    <div class="text-[11px] uppercase tracking-wide text-mist">{{ group }}</div>
+    <div class="mt-1 flex flex-wrap gap-2">
+      {% for it in items %}
+      <a href="/properties/{{ property_id }}/pools/new?preset={{ it.key }}"
+         class="tag {{ 'tag-safety' if prefill and prefill.key == it.key }}">{{ it.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <a href="/properties/{{ property_id }}/pools/new" class="mt-1 inline-block text-sm text-mist underline">Custom size</a>
+</div>
+{% endif %}
 <form method="post" class="space-y-3">
   <label class="block"><span class="field-label">Label</span>
     <input name="label" value="{{ pool.label if pool else 'Main pool' }}" class="field"></label>
@@ -12,11 +29,13 @@
         ("rectangle", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><rect x='3' y='5' width='14' height='10' rx='1.5'/></svg>"),
         ("round", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><circle cx='10' cy='10' r='7'/></svg>"),
         ("oval", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><ellipse cx='10' cy='10' rx='8' ry='5.5'/></svg>"),
-        ("kidney", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M13.5 3.2c-2.6 0-3 2.6-5 2.6S5 3.6 3.6 5.4c-1.6 2-1 5 .8 6 1.6.9 1.6 2.6 3 3.6 2 1.4 5 .6 5.8-1.4.6-1.6-.4-2.6-.2-4 .2-1.4 2-1.6 2.4-3.2.5-2-.4-3.2-1.9-3.2z'/></svg>")
+        ("kidney", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M13.5 3.2c-2.6 0-3 2.6-5 2.6S5 3.6 3.6 5.4c-1.6 2-1 5 .8 6 1.6.9 1.6 2.6 3 3.6 2 1.4 5 .6 5.8-1.4.6-1.6-.4-2.6-.2-4 .2-1.4 2-1.6 2.4-3.2.5-2-.4-3.2-1.9-3.2z'/></svg>"),
+        ("grecian", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M6 5h8l3 3v4l-3 3H6l-3-3V8z'/></svg>")
       ] %}
       <label class="flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl border border-seam py-2 has-[:checked]:border-pool has-[:checked]:bg-shallow">
         <input type="radio" name="shape" value="{{ s }}" class="sr-only" hx-get="/pools/gallons-preview"
-               hx-include="closest form" hx-target="#gallons" {{ "checked" if (pool.shape if pool else "rectangle") == s }}>
+               hx-include="closest form" hx-target="#gallons"
+               {{ "checked" if (pool.shape if pool else (prefill.shape if prefill else "rectangle")) == s }}>
         {{ icon | safe }}<span class="text-[11px] capitalize text-mist">{{ s }}</span>
       </label>
       {% endfor %}
@@ -25,7 +44,8 @@
   <div class="grid grid-cols-3 gap-2">
     {% for name, label in [("length_ft","Length/diam ft"),("width_ft","Width ft"),("avg_depth_ft","Avg depth ft")] %}
     <label class="block"><span class="field-label">{{ label }}</span>
-      <input inputmode="decimal" name="{{ name }}" value="{{ pool|attr(name) or '' if pool else '' }}"
+      <input inputmode="decimal" name="{{ name }}"
+             value="{{ pool|attr(name) or '' if pool else (prefill[name] if prefill and prefill[name] is not none else '') }}"
              hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons"
              hx-trigger="input changed delay:300ms"
              class="field font-data"></label>
@@ -44,6 +64,12 @@
         {% for su in ["plaster","pebble","fiberglass","vinyl","tile","other"] %}<option {{ "selected" if pool and pool.surface == su }}>{{ su }}</option>{% endfor %}
       </select></label>
   </div>
+  <label class="block"><span class="field-label">This is a</span>
+    <select name="kind" class="field">
+      {% set cur_kind = pool.kind if pool else (prefill.kind if prefill else "pool") %}
+      <option value="pool" {{ "selected" if cur_kind == "pool" }}>Pool</option>
+      <option value="spa" {{ "selected" if cur_kind == "spa" }}>Spa</option>
+    </select></label>
   <label class="block"><span class="field-label">Notes</span>
     <textarea name="notes" class="field min-h-24 py-2">{{ pool.notes if pool else "" }}</textarea></label>
   <button class="btn-primary">Save pool</button>
