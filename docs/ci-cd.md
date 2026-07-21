@@ -47,15 +47,16 @@ the **Settings** page ("OpenPoolPro vX.Y.Z"), theme-agnostic. Local/dev shows `d
 
 ## One-time setup (required for the pipeline to work)
 
-1. **Shell runner** with `docker`, `git`, and `curl` on PATH, assigned to this project.
-2. **CI/CD variable** `RELEASE_TOKEN` — a **Project Access Token**
-   (Settings → Access Tokens): scopes **`api`** + **`write_repository`**, role **Maintainer**.
-   Add it under Settings → CI/CD → Variables as **Masked** (and Protected if `main` is protected).
-   Used to push the tag and create the Release. Docker registry auth uses the built-in
-   `CI_JOB_TOKEN` — no extra secret needed.
+1. **Docker-executor runner** assigned to this project, with a reachable docker daemon
+   (the `test` job runs in a `python:3.12-slim` image; the `release` job runs in
+   `docker:27-cli` and builds via `docker build`). The project's existing runner already
+   provides this — no volume mounts are used (an earlier shell-runner assumption is gone).
+**No extra secret is required.** The release job creates the git tag + GitLab Release via
+the Releases API using the built-in `CI_JOB_TOKEN` (`POST /releases` with a `ref` creates
+the tag at the commit and the Release). Docker registry auth also uses `CI_JOB_TOKEN`.
 
-Until both exist, pushes to `main` will not build/release automatically — use the manual
-fallback below.
+Until a docker runner is assigned, pushes to `main` won't build/release automatically — use
+the manual fallback below.
 
 ## Manual release fallback (no runner / one-off)
 
