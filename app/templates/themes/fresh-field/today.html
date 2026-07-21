@@ -1,0 +1,167 @@
+{% extends "themes/fresh-field/base.html" %}
+{% block title %}Today{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<!-- gradient defs for the water-fill ring -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ff-poolgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<header class="pt-2 pb-1">
+  <p class="ff-eyebrow">Field · Today</p>
+  <h1 class="ff-title text-[26px]">{{ d.strftime("%A, %b %-d") }}</h1>
+  <div class="ff-flourish" aria-hidden="true"></div>
+</header>
+
+{% if queued %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium text-safety">Saved offline — will sync when back online</div>
+{% endif %}
+{% if backup_remaining is not none %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Backup code used — {{ backup_remaining }} remaining. Generate new codes from your Account page.</div>
+{% endif %}
+
+<a href="/today/print" class="btn-secondary hidden lg:flex no-print mb-3">Print route sheet</a>
+
+<!-- SIGNATURE 1: water-fill progress ring (fills like a pool) -->
+{% set pct = (done / total) if total else 0 %}
+{% set circ = 326.726 %}
+<div class="ff-progress-card mb-1"
+     role="progressbar" aria-valuenow="{{ done }}" aria-valuemin="0" aria-valuemax="{{ total }}"
+     aria-label="Route progress">
+  <div class="ff-ring">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+      <circle class="fill" cx="60" cy="60" r="52" fill="none" stroke-width="12"
+              stroke-dasharray="{{ circ }}" stroke-dashoffset="{{ circ * (1 - pct) }}"/>
+    </svg>
+    <div class="center">
+      <div class="big"><b>{{ done }}</b>/{{ total }}</div>
+      <div class="lbl">Stops done</div>
+    </div>
+  </div>
+  <div class="ff-progress-meta">
+    <h4>{{ "Route complete" if total and done == total else ("Route filling up" if done else "Route ready") }}</h4>
+    <p>{{ (total - done) }} of {{ total }} to go</p>
+    {% if total %}
+    <div class="ff-mini-wave" aria-hidden="true">
+      {% for i in range(total) %}<i class="{{ 'on' if i < done }}"></i>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+<p class="mb-5 mt-1 ff-eyebrow">Route level</p>
+
+{% if techs %}
+<div class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter by tech">
+  <a href="/" class="ff-filter {{ 'on' if tech_filter is none }}">All</a>
+  {% for t in techs %}
+  <a href="/?tech={{ t.id }}" class="ff-filter {{ 'on' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if missed %}
+<div class="ff-alert mb-3" role="alert">
+  <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.2" fill="currentColor"/><path d="M10.3 3.8L2.7 17a2 2 0 001.7 3h15.2a2 2 0 001.7-3L13.7 3.8a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+  <div>
+    <div class="text-[13.5px] font-bold text-ink">{{ missed | length }} missed stop{{ "s" if missed | length != 1 }}</div>
+    <div class="text-xs text-mist">Needs reschedule or dismissal</div>
+  </div>
+</div>
+<div class="rise mb-5 space-y-2">
+  {% for m in missed %}
+  <article class="ff-stop missed">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="body">
+      <div class="top">
+        <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="name">{{ m.property.customer.name }} — {{ m.property.label }}</a>
+        <span class="status-dot" aria-hidden="true"></span>
+      </div>
+      <div class="meta">
+        <span class="statustag">MISSED</span>
+        <span class="text-xs text-mist font-data">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</span>
+      </div>
+      <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
+        <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="ff-section-label">
+  <span>Stops</span>
+  <b>{{ total }} total{{ " · " ~ done ~ " done" if total }}</b>
+</div>
+
+{% set ns = namespace(next_done=false) %}
+<div class="rise space-y-2.5">
+  {% for s in stops %}
+  {% set is_next = (s.status == 'due' and not ns.next_done) %}
+  {% if is_next %}{% set ns.next_done = true %}{% endif %}
+  {% set variant = 'done' if s.status == 'done' else ('missed' if s.status == 'skipped' else ('next' if is_next else 'upcoming')) %}
+  <article class="ff-stop {{ variant }}">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="body">
+      <div class="top">
+        <a href="/visit/{{ s.property.id }}/{{ d }}" class="name {{ 'line-through decoration-seam text-mist' if s.status == 'done' }}">
+          {{ s.property.customer.name }} — {{ s.property.label }}</a>
+        <span class="status-dot" aria-hidden="true"></span>
+      </div>
+      <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}" class="addr">
+        {{ ui.icon("pin", "h-3.5 w-3.5 shrink-0") }}<span class="underline decoration-seam underline-offset-2">{{ s.property.address }}</span></a>
+      <div class="meta">
+        <span class="statustag">{{ {'done':'DONE','skipped':'SKIPPED','next':'NEXT UP','upcoming':'DUE'}[variant] }}</span>
+        {% if s.moved_in %}<span class="ff-chip">moved</span>{% endif %}
+        {% if s.visit and s.visit.duration_minutes is not none %}<span class="ff-chip gate">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
+        {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
+          {% if s.effective_tech_id == assigned_id %}
+            {% if assigned_id %}<span class="ff-chip">{{ (s.property.assigned_tech.name if s.property.assigned_tech else "") | initials }}</span>{% endif %}
+            {% if not assigned_id %}<span class="ff-chip coral">unassigned</span>{% endif %}
+            {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="ff-chip coral">disabled tech</span>{% endif %}
+          {% elif s.effective_tech_id %}
+            <span class="ff-chip coral" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
+          {% else %}
+            <span class="ff-chip coral">unassigned</span>
+          {% endif %}
+        {% endif %}
+        <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}" class="ff-chip">G-Maps</a>
+        {% if s.property.gate_code %}<span class="ff-chip gate"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.8"/></svg>Gate {{ s.property.gate_code }}</span>{% endif %}
+        {% if s.property.dog_warning %}<span class="ff-chip coral">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ s.property.dog_note or "Dog" }}</span>{% endif %}
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-lg font-extrabold tracking-tight">No stops today</p>
+    <p class="mt-1 text-sm text-mist">Your route is clear. Add a customer or check the week ahead.</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% if jobs %}
+<div class="ff-jobs-line mt-5 mb-2">
+  {{ ui.icon("jobs", "h-4 w-4") }}
+  <span>Jobs today: <b>{{ jobs | length }}</b> — {{ jobs | map(attribute="title") | join(" · ") }}</span>
+</div>
+<div class="rise space-y-2.5">
+  {% for j in jobs %}
+  <a href="/jobs/{{ j.id }}" class="card flex items-center gap-3 p-3.5">
+    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-mist") }}
+    <span class="min-w-0">
+      <span class="block truncate font-semibold">{{ j.title }}</span>
+      <span class="block truncate text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+    </span>
+    {{ ui.icon("chevron", "ml-auto h-4 w-4 shrink-0 text-mist") }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "themes/control-room/base.html" %}
+{% block title %}Money{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{% set month_name = ["January","February","March","April","May","June","July","August","September","October","November","December"][month-1] %}
+
+<div class="flex items-start justify-between gap-2">
+  <a href="/money?ym={{ prev }}" class="btn-secondary shrink-0" style="min-height:44px" aria-label="Previous month">{{ ui.icon("chevron", "h-5 w-5 rotate-180") }}</a>
+  <div class="cr-phead grow text-center" style="margin-bottom:0">
+    <div class="cr-ey">Money</div>
+    <h1 class="cr-h">{{ month_name }} <small>{{ year }}</small></h1>
+  </div>
+  <a href="/money?ym={{ next }}" class="btn-secondary shrink-0" style="min-height:44px" aria-label="Next month">{{ ui.icon("chevron", "h-5 w-5") }}</a>
+</div>
+<div class="cr-rule mx-auto mt-3" style="margin-left:auto;margin-right:auto" aria-hidden="true"></div>
+
+{% set chem_total = rows | sum(attribute='chem_billable_cents') %}
+{% set labor_total = rows | sum(attribute='labor_cents') %}
+
+<div class="cr-msum mt-4">
+  <div class="cr-m am"><div class="k">Billable · month</div><div class="v money">{{ grand | dollars }}</div><div class="f">{{ rows | length }} customer{{ "s" if rows | length != 1 }}</div></div>
+  <div class="cr-m cy"><div class="k">Labor</div><div class="v">{{ labor_total | dollars }}</div><div class="f">Visits &amp; jobs</div></div>
+  <div class="cr-m gn"><div class="k">Chemicals</div><div class="v">{{ chem_total | dollars }}</div><div class="f">Billable to customers</div></div>
+</div>
+
+<div class="cr-panel mt-4">
+  <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Invoices · {{ month_name }}</h2><span class="cr-lbl">{{ rows | length }} shown</span></div>
+  {% if rows %}
+  <div class="cr-inv">
+    <div class="cr-inv-hd"><span>Customer</span><span class="r">Status</span><span class="r">Amount</span></div>
+    {% for r in rows %}
+    <details class="cr-inv-item">
+      <summary>
+        <div class="cr-inv-row">
+          <span class="cx">{{ r.customer.name }}</span>
+          <span class="r">
+            {% if r.jobs %}<span class="cr-badge am"><i></i>Jobs</span>
+            {% elif r.total_cents %}<span class="cr-badge cy"><i></i>Recurring</span>
+            {% else %}<span class="cr-badge muted"><i></i>None</span>{% endif %}
+          </span>
+          <span class="r amt money">{{ r.total_cents | dollars }}</span>
+        </div>
+      </summary>
+      <div class="cr-inv-break">
+        <div class="line"><span>Labor ({{ r.labor_visits }} visit{{ "s" if r.labor_visits != 1 }})</span><span class="money">{{ r.labor_cents | dollars }}</span></div>
+        <div class="line"><span>Chemicals (cost {{ r.chem_cost_cents | dollars }})</span><span class="money">{{ r.chem_billable_cents | dollars }}</span></div>
+        {% for j in r.jobs %}<div class="line"><span>Job: {{ j.title }}</span><span class="money">{{ j.labor_cents | dollars }}</span></div>{% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="cr-panel-bd">
+    <div class="cr-empty"><b>Nothing billable</b>No completed visits or jobs this month yet.</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="cr-panel mt-4">
+  <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick am"></span>Monthly billing summary</h2><span class="cr-chip">{{ month_name }} {{ year }}</span></div>
+  <div class="cr-panel-bd">
+    <div class="cr-billsum">
+      <div class="b"><span class="k">Customers billed</span><span class="v">{{ rows | length }}</span></div>
+      <div class="b"><span class="k">Total billable</span><span class="v am money">{{ grand | dollars }}</span></div>
+      <div class="sp"></div>
+      <a href="/money/export?ym={{ ym }}" class="btn-primary" style="width:auto;min-width:220px">
+        {{ ui.icon("chevron", "h-4 w-4 rotate-90") }}Export for QuickBooks</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

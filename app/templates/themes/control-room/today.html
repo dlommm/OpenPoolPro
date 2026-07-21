@@ -1,0 +1,176 @@
+{% extends "themes/control-room/base.html" %}
+{% block title %}Today{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<div class="cr-phead">
+  <div class="cr-ey">Route</div>
+  <h1 class="cr-h">{{ d.strftime("%A") }} <small>· {{ d.strftime("%b %-d") }}</small></h1>
+  <div class="cr-rule" aria-hidden="true"></div>
+</div>
+
+{% if queued %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium text-safety">Saved offline — will sync when back online</div>
+{% endif %}
+
+{% if backup_remaining is not none %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Backup code used — {{ backup_remaining }} remaining. Generate new codes from your Account page.</div>
+{% endif %}
+
+<a href="/today/print" class="btn-secondary hidden lg:flex no-print mb-3 w-max">Print route sheet</a>
+
+{# ---- SIGNATURE 1: segmented conic gauge ring + mono readout ---- #}
+{% set g = namespace(next=-1, parts=[]) %}
+{% for s in stops %}{% if g.next < 0 and s.status == 'due' %}{% set g.next = loop.index0 %}{% endif %}{% endfor %}
+{% set seg = 360.0 / (total if total else 1) %}
+{% set gap = 3 if total <= 12 else 1.5 %}
+{% for s in stops %}
+  {% set a0 = loop.index0 * seg %}
+  {% set a1 = loop.index * seg %}
+  {% if s.status == 'done' %}{% set col = 'var(--cr-green)' %}
+  {% elif s.status == 'skipped' %}{% set col = 'var(--color-safety)' %}
+  {% elif loop.index0 == g.next %}{% set col = 'var(--color-pool)' %}
+  {% else %}{% set col = 'var(--color-mist)' %}{% endif %}
+  {% set g.parts = g.parts + [col ~ ' ' ~ a0 ~ 'deg ' ~ (a1 - gap) ~ 'deg', 'var(--color-tile) ' ~ (a1 - gap) ~ 'deg ' ~ a1 ~ 'deg'] %}
+{% endfor %}
+{% set ring = ('conic-gradient(from -90deg, ' ~ (g.parts | join(', ')) ~ ')') if total else 'conic-gradient(var(--color-seam) 0deg 360deg)' %}
+{% set due_count = stops | selectattr('status', 'equalto', 'due') | list | length %}
+{% set skipped_count = stops | selectattr('status', 'equalto', 'skipped') | list | length %}
+{% set next_count = 1 if due_count > 0 else 0 %}
+
+<div class="cr-opsrow">
+  <div class="cr-gauge" role="img" aria-label="Route progress: {{ done }} of {{ total }} stops done{% if skipped_count %}, {{ skipped_count }} missed{% endif %}">
+    <div class="cr-gauge-ring" style="background: {{ ring }}"></div>
+    <div class="cr-gauge-c">
+      <div class="cr-gauge-big">{{ done }}<s>/{{ total }}</s></div>
+      <div class="cr-gauge-cap">Stops done</div>
+    </div>
+  </div>
+  <div class="cr-legend">
+    <div class="cr-lg"><i style="background:var(--cr-green)"></i><span class="k">Done</span><span class="v" style="color:var(--cr-green)">{{ done }}</span></div>
+    <div class="cr-lg"><i style="background:var(--color-pool)"></i><span class="k">Next</span><span class="v" style="color:var(--color-pool)">{{ next_count }}</span></div>
+    <div class="cr-lg"><i style="background:var(--color-mist)"></i><span class="k">Upcoming</span><span class="v" style="color:var(--color-ink)">{{ due_count - next_count }}</span></div>
+    <div class="cr-lg"><i style="background:var(--color-safety)"></i><span class="k">Missed</span><span class="v" style="color:var(--color-safety)">{{ skipped_count }}</span></div>
+  </div>
+</div>
+
+{# ---- missed re-dispatch alerts (prior-day unresolved stops) ---- #}
+{% if missed %}
+<h2 class="cr-lbl mb-2 mt-4" style="color:var(--color-safety)">Missed — re-dispatch</h2>
+<div class="rise space-y-2">
+  {% for m in missed %}
+  <div class="cr-alert" role="alert">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="17" r="1.1" fill="currentColor"/></svg>
+    <div class="min-w-0">
+      <div class="a-t">{{ m.property.customer.name }} — {{ m.property.label }}</div>
+      <div class="a-s">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+    </div>
+    <div class="cr-alert-act">
+      <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="btn-secondary" style="min-height:44px">Re-dispatch</a>
+      <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss">
+        <button class="min-h-11 px-2 font-data text-xs uppercase tracking-[0.08em] text-safety">Dismiss</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ---- tech filter ---- #}
+{% if techs %}
+<div class="cr-filters" role="group" aria-label="Filter by tech">
+  <span class="cr-lbl mr-1">Tech</span>
+  <a href="/" class="cr-fchip {{ 'is-active' if tech_filter is none }}" {% if tech_filter is none %}aria-current="true"{% endif %}>All</a>
+  {% for t in techs %}
+  <a href="/?tech={{ t.id }}" class="cr-fchip {{ 'is-active' if tech_filter == t.id }}" {% if tech_filter == t.id %}aria-current="true"{% endif %}>{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if jobs %}
+<div class="cr-jobsline">
+  <span class="cr-lbl">Jobs today</span>
+  <span class="font-data text-xs text-ink">{{ jobs | length }}</span>
+</div>
+{% endif %}
+
+{# ---- SIGNATURE 3: vertical dispatch rail ---- #}
+<div class="cr-rail">
+  <div class="cr-rail-hd">
+    <h2 class="cr-lbl">Dispatch rail · {{ total }} stop{{ "s" if total != 1 }}</h2>
+    {% if due_count %}<span class="cr-lbl" style="color:var(--color-pool)">Live</span>{% endif %}
+  </div>
+  <ol class="rise">
+    {% for s in stops %}
+    {% if s.status == 'done' %}{% set state = 'is-done' %}
+    {% elif s.status == 'skipped' %}{% set state = 'is-missed' %}
+    {% elif loop.index0 == g.next %}{% set state = 'is-next' %}
+    {% else %}{% set state = 'is-up' %}{% endif %}
+    <li class="cr-stop {{ state }}">
+      <span class="cr-node" aria-hidden="true">
+        {% if state == 'is-done' %}<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {% elif state == 'is-missed' %}<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        {% else %}{{ loop.index }}{% endif %}
+      </span>
+      <div class="cr-stopcard">
+        <div class="cr-sc-top">
+          <div class="min-w-0">
+            <a href="/visit/{{ s.property.id }}/{{ d }}" class="cr-sc-name {{ 'done' if s.status == 'done' }}">
+              {{ s.property.customer.name }} — {{ s.property.label }}</a>
+            <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}" class="cr-sc-addr" aria-label="Open {{ s.property.address }} in Apple Maps">
+              {{ ui.icon("pin", "h-3.5 w-3.5") }}{{ s.property.address }}<span class="go">Maps</span></a>
+          </div>
+          {% if s.status == 'done' %}<span class="cr-pill done"><i></i>Done</span>
+          {% elif s.status == 'skipped' %}<span class="cr-pill missed"><i></i>Missed</span>
+          {% elif state == 'is-next' %}<span class="cr-pill next"><i></i>Next</span>
+          {% else %}<span class="cr-pill up"><i></i>Upcoming</span>{% endif %}
+        </div>
+        <div class="cr-sc-meta">
+          <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}" class="cr-chip">G-Maps</a>
+          {% if s.property.frequency and s.property.frequency != 'none' %}<span class="cr-chip">{{ s.property.frequency }}</span>{% endif %}
+          {% if s.moved_in %}<span class="cr-chip am">Moved</span>{% endif %}
+          {% if s.property.gate_code %}<span class="cr-chip gate">{{ ui.icon("pin", "h-3 w-3") }}Gate {{ s.property.gate_code }}</span>{% endif %}
+          {% if s.property.dog_warning %}<span class="cr-chip rose">{{ ui.icon("dog", "h-3 w-3") }}{{ s.property.dog_note or "Dog" }}</span>{% endif %}
+          {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
+          {% if s.effective_tech_id == assigned_id %}
+            {% if assigned_id and s.property.assigned_tech %}<span class="cr-chip tech">{{ s.property.assigned_tech.name.split()[0] }}</span>{% endif %}
+            {% if not assigned_id %}<span class="cr-chip rose">Unassigned</span>{% endif %}
+            {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="cr-chip rose">Disabled tech</span>{% endif %}
+          {% elif s.effective_tech_id %}
+            <span class="cr-chip rose" title="covering">{{ (tech_by_id[s.effective_tech_id].name.split()[0]) if s.effective_tech_id in tech_by_id else "Covering" }}</span>
+          {% else %}
+            <span class="cr-chip rose">Unassigned</span>
+          {% endif %}{% endif %}
+          {% if s.visit and s.visit.duration_minutes is not none %}<span class="cr-chip">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
+        </div>
+        {% if s.visit and (s.visit.fc is not none or s.visit.ph is not none) %}
+        <div class="cr-sc-read">
+          {% if s.visit.fc is not none %}<div class="rd"><span class="k">FC ppm</span><span class="v">{{ s.visit.fc }}</span></div>{% endif %}
+          {% if s.visit.ph is not none %}<div class="rd"><span class="k">pH</span><span class="v">{{ s.visit.ph }}</span></div>{% endif %}
+          {% if s.visit.salt is not none %}<div class="rd"><span class="k">Salt</span><span class="v">{{ s.visit.salt | int }}</span></div>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </li>
+    {% else %}
+    <li class="cr-empty"><b>No stops today</b>Your route is clear. Add a customer or check the week ahead.</li>
+    {% endfor %}
+  </ol>
+</div>
+
+{% if jobs %}
+<h2 class="cr-lbl mb-2 mt-6">Jobs today</h2>
+<div class="rise space-y-2">
+  {% for j in jobs %}
+  <a href="/jobs/{{ j.id }}" class="cr-panel flex items-center gap-3 p-3.5">
+    <span class="cr-tick"></span>
+    <span class="min-w-0">
+      <span class="block truncate font-semibold text-ink">{{ j.title }}</span>
+      <span class="block truncate font-data text-xs text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+    </span>
+    {{ ui.icon("chevron", "ml-auto h-4 w-4 shrink-0 text-mist") }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

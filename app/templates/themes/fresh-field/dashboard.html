@@ -1,0 +1,143 @@
+{% extends "themes/fresh-field/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ff-sparkgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<header class="pt-2 pb-4">
+  <p class="ff-eyebrow">Dashboard</p>
+  <h1 class="ff-title text-[28px]">{{ d.strftime("%A, %b %-d") }}</h1>
+  <div class="ff-flourish" aria-hidden="true"></div>
+</header>
+
+<!-- gradient revenue hero + decorative sparkline -->
+<div class="ff-hero-rev rise mb-4">
+  <div class="hleft">
+    <div class="eyebrow">Revenue · Month to date</div>
+    <div class="amount"><span class="money" style="color:#fff">{{ revenue_mtd_cents | dollars }}</span></div>
+    <div class="sub">{{ stops_done }} of {{ stops_total }} stops done today</div>
+  </div>
+  <div class="spark" aria-hidden="true">
+    <svg viewBox="0 0 180 68" fill="none" preserveAspectRatio="none">
+      <path d="M0 54 L20 48 L40 51 L60 41 L80 44 L100 32 L120 36 L140 24 L160 20 L180 12 L180 68 L0 68 Z" fill="url(#ff-sparkgrad)"/>
+      <path d="M0 54 L20 48 L40 51 L60 41 L80 44 L100 32 L120 36 L140 24 L160 20 L180 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="180" cy="12" r="3.5" fill="#fff"/>
+    </svg>
+  </div>
+</div>
+
+<!-- stat tiles -->
+<div class="rise mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <div class="ff-tile route">
+    <div class="th"><span class="lab" style="margin-top:0">Route today</span>
+      <span class="ic">{{ ui.icon("route", "h-4 w-4") }}</span></div>
+    <div class="num">{{ stops_done }}<small>/{{ stops_total }}</small></div>
+    <div class="lab">stops complete</div>
+  </div>
+  <div class="ff-tile missed">
+    <div class="th"><span class="lab" style="margin-top:0">Missed</span>
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg></span></div>
+    <div class="num">{{ missed_count }}</div>
+    <div class="lab">needs reschedule</div>
+  </div>
+  <div class="ff-tile jobs">
+    <div class="th"><span class="lab" style="margin-top:0">Open jobs</span>
+      <span class="ic">{{ ui.icon("jobs", "h-4 w-4") }}</span></div>
+    <div class="num"><span data-card="open-jobs">{{ open_jobs }}</span></div>
+    <div class="lab">across all crews</div>
+  </div>
+  <div class="ff-tile pri">
+    <div class="th"><span class="lab" style="margin-top:0">High priority</span>
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3v18M5 4h11l-2 3 2 3H5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span></div>
+    <div class="num">{{ high_jobs }}</div>
+    <div class="lab">flagged today</div>
+  </div>
+</div>
+
+<div class="grid gap-4 lg:grid-cols-2">
+  <!-- low stock -->
+  <a href="/inventory" class="card block p-4">
+    <div class="ff-panel-title">
+      <span class="ph-ic coral"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.1" fill="currentColor"/><path d="M10.3 3.8L2.7 17a2 2 0 001.7 3h15.2a2 2 0 001.7-3L13.7 3.8a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+      Low stock
+      {% if low_chems %}<span class="tag tag-safety ml-auto">{{ low_chems | length }}</span>{% endif %}
+    </div>
+    {% if low_chems %}
+    <div class="mt-3 space-y-2.5">
+      {% for ch in low_chems %}
+      {% set ratio = (ch.stock_qty / ch.reorder_point) if ch.reorder_point else 1 %}
+      <div class="ff-stock">
+        <div class="min-w-0 flex-1">
+          <div class="name">{{ ch.name }}</div>
+          <div class="lvl">{{ "Critical" if ratio <= 0.5 else "Reorder soon" }}</div>
+          <div class="bar"><i style="width: {{ [ratio * 100, 8] | max if ratio else 8 }}%"></i></div>
+        </div>
+        <div class="font-data text-xs font-bold text-mist shrink-0">{{ "%g"|format(ch.stock_qty) }} {{ ch.unit }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="mt-2 text-sm text-mist">All chemicals above reorder point.</p>
+    {% endif %}
+  </a>
+
+  <!-- warranties + crew -->
+  <div class="card p-4">
+    <details>
+      <summary class="ff-panel-title cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <span class="ph-ic aqua"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        Warranties
+        <span class="tag ml-auto" data-card="warranties">{{ warranty_items | length }}</span>
+      </summary>
+      <div class="ff-warranty mt-3">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <div>
+          <b>{{ warranty_items | length }}</b>
+          <p>expiring or past due within 60 days</p>
+        </div>
+      </div>
+      {% if warranty_items %}
+      <div class="mt-3 space-y-2 border-t border-seam pt-2 font-data text-sm">
+        {% for e in warranty_items %}
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-body">{{ e.kind }}{% if e.brand %} · {{ e.brand }}{% endif %} — {{ e.pool.property.label }} ({{ e.pool.property.customer.name }})</span>
+          <span class="{{ 'text-safety' if e.warranty_end < d }}">{{ e.warranty_end.strftime("%b %-d, %Y") }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="mt-2 text-sm text-mist">Nothing due in the next 60 days.</p>
+      {% endif %}
+    </details>
+
+    <div class="ff-panel-title mt-5">
+      <span class="ph-ic mint">{{ ui.icon("customers", "h-4 w-4") }}</span>
+      Crew load
+    </div>
+    <div class="mt-3 space-y-4">
+      {% set nsx = namespace(max=1) %}
+      {% for t, count in crew %}{% if count > nsx.max %}{% set nsx.max = count %}{% endif %}{% endfor %}
+      {% for t, count in crew %}
+      <div class="ff-crew-row">
+        <div class="ch">
+          <span class="av">{{ t.name | initials }}</span>
+          <span class="nm">{{ t.name }}</span>
+          <span class="ct"><b>{{ count }}</b> stop{{ "s" if count != 1 }}</span>
+        </div>
+        <div class="ff-fillbar"><i style="width: {{ (count / nsx.max * 100) }}%"></i></div>
+      </div>
+      {% else %}
+      <p class="text-sm text-mist">No crew assigned today.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
