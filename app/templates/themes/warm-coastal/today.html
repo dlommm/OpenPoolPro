@@ -1,0 +1,156 @@
+{% extends "themes/warm-coastal/base.html" %}
+{% block title %}Today{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+{# ---- Warm header + hand-drawn horizon rule ---- #}
+<header class="pb-3 pt-2">
+  <p class="page-eyebrow">Route</p>
+  <h1 class="page-title mt-0.5">{{ d.strftime("%A, %b %-d") }}</h1>
+  <svg class="wc-horizon" viewBox="0 0 130 12" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M1 8 C 12 2, 20 2, 30 7 S 48 12, 60 7 S 82 2, 94 7 S 118 11, 129 6"
+          fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M1 10 C 14 6, 22 6, 33 9 S 52 12, 64 9" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" opacity=".4"/>
+  </svg>
+</header>
+
+{% if queued %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium text-safety">Saved offline — will sync when back online</div>
+{% endif %}
+
+{% if backup_remaining is not none %}
+<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Backup code used — {{ backup_remaining }} remaining. Generate new codes from your Account page.</div>
+{% endif %}
+
+<a href="/today/print" class="btn-secondary hidden lg:flex no-print mb-3">Print route sheet</a>
+
+{# ---- Rising tide-line gauge (signature): water fills to done/total ---- #}
+<div class="wc-tide mb-1" role="img" aria-label="Route progress: {{ done }} of {{ total }} done">
+  <span class="wc-tide-sun"></span>
+  <div class="wc-tide-water" style="height: {{ (done / total * 100) if total else 0 }}%">
+    <svg class="wc-tide-crest wc-back" viewBox="0 0 120 14" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8 C 15 2, 25 2, 40 8 S 65 14, 80 8 S 105 2, 120 8 L120 14 L0 14 Z" fill="currentColor"/></svg>
+    <svg class="wc-tide-crest" viewBox="0 0 120 14" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8 C 15 14, 25 14, 40 8 S 65 2, 80 8 S 105 14, 120 8 L120 14 L0 14 Z" fill="currentColor"/></svg>
+  </div>
+  <div class="wc-tide-overlay">
+    <div class="wc-tide-num"><b>{{ done }}</b><span>of {{ total }}</span></div>
+    <div class="wc-tide-label">{{ done }} of {{ total }} done</div>
+  </div>
+  <div class="wc-tide-remain">{{ total - done }} to go{% if jobs %}<br><span>Jobs today: {{ jobs | length }}</span>{% endif %}</div>
+</div>
+
+{# ---- Status pips mirror real stop + missed statuses ---- #}
+{% set ns = namespace(seen_next=false) %}
+<div class="wc-pips mt-3" aria-hidden="true">
+  {% for s in stops %}
+    {% if s.status == "done" %}<span class="wc-pip wc-done"></span>
+    {% elif s.status == "due" and not ns.seen_next %}<span class="wc-pip wc-next"></span>{% set ns.seen_next = true %}
+    {% else %}<span class="wc-pip wc-up"></span>{% endif %}
+  {% endfor %}
+  {% for m in missed %}<span class="wc-pip wc-missed"></span>{% endfor %}
+</div>
+<div class="wc-legend mt-2">
+  <span class="wc-lg"><i style="background:var(--wc-done)"></i>Done</span>
+  <span class="wc-lg"><i style="background:var(--color-brass)"></i>Next</span>
+  <span class="wc-lg"><i style="background:var(--wc-upcoming)"></i>Upcoming</span>
+  <span class="wc-lg"><i style="background:var(--color-safety)"></i>Missed</span>
+</div>
+
+{# ---- Tech filter chips (only for view_all_routes; techs never see them) ---- #}
+{% if techs %}
+<div class="mb-4 mt-4 flex flex-wrap gap-1.5">
+  <a href="/" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
+  {% for t in techs %}
+  <a href="/?tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ---- Missed alert + reschedule/dismiss (real dismiss forms preserved) ---- #}
+{% if missed %}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide text-safety">Missed</h2>
+<div class="wc-alert mb-3" role="alert">
+  <span class="wc-ai">{{ ui.icon("plus", "h-5 w-5 rotate-45") }}</span>
+  <div class="min-w-0 flex-1"><b class="block text-sm font-extrabold">{{ missed | length }} stop{{ "s" if missed | length != 1 else "" }} missed</b>
+    <span class="text-xs text-mist">Reschedule or dismiss below.</span></div>
+</div>
+<div class="rise mb-5 space-y-2">
+  {% for m in missed %}
+  <div class="stop stop-missed p-3">
+    <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="block font-semibold">
+      {{ m.property.customer.name }} — {{ m.property.label }}</a>
+    <div class="mt-0.5 font-data text-xs text-mist">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+    <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
+      <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ---- Warm pebble stop cards ---- #}
+{% set ns2 = namespace(seen_next=false) %}
+<ol class="rise space-y-2.5">
+  {% for s in stops %}
+  {% set is_done = s.status == "done" %}
+  {% set is_skipped = s.status == "skipped" %}
+  {% set is_next = (s.status == "due" and not ns2.seen_next) %}
+  {% if is_next %}{% set ns2.seen_next = true %}{% endif %}
+  <li class="stop p-3.5
+      {{ 'stop-done wc-stop-done' if is_done }}{{ ' stop-done wc-stop-skipped' if is_skipped }}{{ ' wc-stop-next' if is_next }}{{ ' wc-stop-up' if (s.status == 'due' and not is_next) }}">
+    <div class="flex items-start gap-3">
+      <span class="wc-stop-idx {{ 'wc-stop-done' if is_done }}{{ ' wc-stop-next' if is_next }}">{{ loop.index }}</span>
+      <div class="min-w-0 flex-1">
+        <a href="/visit/{{ s.property.id }}/{{ d }}"
+           class="font-semibold leading-snug {{ 'text-mist line-through decoration-seam' if is_done }}">
+          {{ s.property.customer.name }} — {{ s.property.label }}
+          {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}
+          {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
+          {% if s.effective_tech_id == assigned_id %}
+          {% if assigned_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
+          {% if not assigned_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
+          {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}
+          {% elif s.effective_tech_id %}
+          <span class="tag tag-safety ml-1" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
+          {% else %}
+          <span class="tag tag-safety">unassigned</span>
+          {% endif %}{% endif %}</a>
+        <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
+           class="mt-1 flex min-h-11 items-center gap-1.5 text-sm text-pool">
+          {{ ui.icon("pin", "h-4 w-4 shrink-0") }}{{ s.property.address }}</a>
+      </div>
+      <div class="flex flex-none flex-col items-end gap-1.5">
+        <span class="wc-status {{ 'wc-done' if is_done }}{{ ' wc-next' if is_next }}{{ ' wc-skipped' if is_skipped }}">{{ "Done" if is_done else ("Skipped" if is_skipped else ("Next" if is_next else "Upcoming")) }}</span>
+        {% if s.visit and s.visit.duration_minutes is not none %}<span class="tag font-data">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}" class="tag">G-Maps</a>
+      {% if s.property.gate_code %}<span class="tag">Gate {{ s.property.gate_code }}</span>{% endif %}
+      {% if s.property.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ s.property.dog_note or "Dog" }}</span>{% endif %}
+    </div>
+  </li>
+  {% else %}
+  <li class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No stops today</p>
+    <p class="mt-1 text-sm text-mist">Your route is clear. Add a customer or check the week ahead.</p>
+  </li>
+  {% endfor %}
+</ol>
+
+{% if jobs %}
+<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Jobs today</h2>
+<div class="rise space-y-2.5">
+  {% for j in jobs %}
+  <a href="/jobs/{{ j.id }}" class="card flex items-center gap-3 p-3.5">
+    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-mist") }}
+    <span class="min-w-0">
+      <span class="block truncate font-semibold">{{ j.title }}</span>
+      <span class="block truncate text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>
+    </span>
+    {{ ui.icon("chevron", "ml-auto h-4 w-4 shrink-0 text-mist") }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

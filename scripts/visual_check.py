@@ -19,18 +19,36 @@ SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
 SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/money", "/settings", "/account", "/audit", "/inventory", "/routes/balance"]
 
+# Per-theme expected computed styles. THEME selects which theme is active
+# (set it via the Settings control or `set_setting` before running); the map
+# defaults to warm-coastal, whose values are the base defaults in
+# css/base.css. Check a non-default theme only once its css/themes/<theme>.css
+# is filled in. fresh-field values are its light-mode tokens (Playwright's
+# default color scheme is light).
+THEME = os.environ.get("THEME", "warm-coastal")
+EXPECTED = {
+    "warm-coastal": {"body_font": "system-ui", "display_font": "system-ui",
+                     "body_bg": "rgb(243, 237, 227)"},   # tile #F3EDE3
+    "control-room": {"body_font": "Helvetica Neue", "display_font": "Helvetica Neue",
+                     "body_bg": "rgb(14, 20, 27)"},       # tile #0E141B
+    "fresh-field": {"body_font": "system-ui", "display_font": "system-ui",
+                    "body_bg": "rgb(247, 250, 252)"},     # tile #F7FAFC (light)
+}
+EXPECT = EXPECTED.get(THEME, EXPECTED["warm-coastal"])
+
 # Computed-style assertions: proves app.css APPLIED, not merely returned 200.
+# Expected values are passed in per theme (see EXPECT above).
 CHECKS = """
-() => {
+(exp) => {
   const body = getComputedStyle(document.body);
   const probs = [];
-  if (!body.fontFamily.includes("IBM Plex Sans")) probs.push("body font not Plex: " + body.fontFamily);
-  if (body.backgroundColor !== "rgb(246, 249, 250)") probs.push("bg not tile: " + body.backgroundColor);
+  if (!body.fontFamily.includes(exp.body_font)) probs.push("body font not " + exp.body_font + ": " + body.fontFamily);
+  if (body.backgroundColor !== exp.body_bg) probs.push("bg not tile (want " + exp.body_bg + "): " + body.backgroundColor);
   const topbar = document.querySelector("#topbar");
   if (!topbar) probs.push("topbar missing");
   else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
   const h1 = document.querySelector("h1");
-  if (h1 && !getComputedStyle(h1).fontFamily.includes("Barlow")) probs.push("h1 not display font");
+  if (h1 && !getComputedStyle(h1).fontFamily.includes(exp.display_font)) probs.push("h1 not display font (want " + exp.display_font + ")");
   return probs;
 }
 """
@@ -48,7 +66,7 @@ with sync_playwright() as p:
     for path in SCREENS:
         page.goto(f"{BASE}{path}")
         page.wait_for_timeout(600)
-        problems = page.evaluate(CHECKS)
+        problems = page.evaluate(CHECKS, EXPECT)
         if problems:
             failures.append((path, problems))
         if SHOTS:
@@ -75,7 +93,7 @@ with sync_playwright() as p:
     for forbidden in ['href="/money"', 'href="/settings"']:
         if forbidden in content:
             failures.append(("/ (tech)", [f"tech nav leaks {forbidden}"]))
-    probs = tpage.evaluate(CHECKS)
+    probs = tpage.evaluate(CHECKS, EXPECT)
     if probs:
         failures.append(("/ (tech)", probs))
     tctx.close()
@@ -142,4 +160,4 @@ if failures:
     for path, problems in failures:
         print(f"FAIL {path}: {'; '.join(problems)}")
     sys.exit(1)
-print(f"OK — {len(SCREENS)} screens styled correctly")
+print(f"OK — {len(SCREENS)} screens styled correctly for theme '{THEME}'")

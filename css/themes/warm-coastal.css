@@ -1,0 +1,541 @@
+/* warm-coastal.css — Warm-Coastal theme. OWNED BY THE WARM-COASTAL AGENT.
+ *
+ * A light, warm, friendly-premium coastal service brand. Sand-and-water calm.
+ * System fonts only, zero external requests.
+ *
+ * Contents:
+ *   1. The 9 role tokens + --color-surface + fonts (spec §2), re-asserted here
+ *      under :root[data-theme="warm-coastal"] for clarity, plus warm shadow +
+ *      theme-only namespaced extras (--wc-*).
+ *   2. Theme-scoped component overrides (radii, shadows, .card, .btn-*, .stop,
+ *      .gauge, .tag, .page-title / .page-eyebrow) — all scoped so they never
+ *      touch another theme in the single compiled app.css.
+ *   3. Bespoke hero classes prefixed `wc-` for the signature devices:
+ *      the rising tide-line gauge, the hand-drawn horizon rule, and the
+ *      warm pebble stop-cards with a soft left status band.
+ *
+ * RULES: no @theme block here (token names live in base.css); set token VALUES
+ * under :root[data-theme="warm-coastal"]; bespoke classes stay `wc-`-prefixed.
+ */
+
+/* ============================================================
+   1. TOKENS
+   ============================================================ */
+:root[data-theme="warm-coastal"] {
+  /* 9 semantic roles + surface (spec §2 warm-coastal column) */
+  --color-tile: #F3EDE3;      /* warm sand / bone page canvas */
+  --color-surface: #FBF7EF;   /* pebble card surface */
+  --color-ink: #16303B;       /* deep marine navy ink */
+  --color-pool: #2B9EB3;      /* warm aqua primary action */
+  --color-pooldeep: #1F7C8C;  /* pressed aqua */
+  --color-shallow: #D6EAE6;   /* soft seafoam selection */
+  --color-brass: #C58A2E;     /* sun-gold money */
+  --color-safety: #E76F51;    /* coral alert */
+  --color-seam: #E4DBCC;      /* warm grout hairline */
+  --color-mist: #5E6E70;      /* warm taupe secondary */
+
+  /* Fonts — system stacks only (heavy, humanist) */
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: ui-monospace, Menlo, Consolas, monospace;
+
+  /* Warmer, softer card shadow than the coastal default */
+  --shadow-card: 0 1px 2px rgba(58, 42, 22, 0.06), 0 14px 30px -16px rgba(48, 36, 20, 0.22);
+
+  /* Theme-only extras (namespaced, never shared) */
+  --wc-sand-deep: #EADFCD;
+  --wc-card-raised: #FFFDF8;
+  --wc-line-soft: #EFE6D6;
+  --wc-aqua-tint: #E4F1F0;
+  --wc-done: #4E9E8B;
+  --wc-done-tint: #DDEDE6;
+  --wc-upcoming: #C6B295;
+  --wc-coral-deep: #C1543A;
+  --wc-coral-tint: #FBE5DC;
+  --wc-gold-deep: #9E6C1C;
+  --wc-gold-tint: #F4E7CE;
+  --wc-shadow-md: 0 2px 4px rgba(58, 42, 22, 0.05), 0 14px 30px -16px rgba(48, 36, 20, 0.28);
+  --wc-r-lg: 18px;
+  --wc-r-md: 14px;
+  --wc-r-sm: 11px;
+  --wc-pill: 999px;
+}
+
+/* ============================================================
+   2. THEME-SCOPED COMPONENT OVERRIDES
+   ============================================================ */
+
+/* Header signature: sentence-case, tight, heavy (not the clinical uppercase). */
+:root[data-theme="warm-coastal"] .page-title {
+  text-transform: none;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  font-size: 27px;
+  line-height: 1.05;
+}
+:root[data-theme="warm-coastal"] .page-eyebrow {
+  color: var(--color-pooldeep);
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+/* Pebble cards: softer, larger radius. */
+:root[data-theme="warm-coastal"] .card {
+  border-radius: var(--wc-r-lg);
+}
+
+/* Buttons: friendly (not shouty uppercase), soft radius. */
+:root[data-theme="warm-coastal"] .btn-primary,
+:root[data-theme="warm-coastal"] .btn-secondary,
+:root[data-theme="warm-coastal"] .btn-danger {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  border-radius: var(--wc-r-sm);
+}
+:root[data-theme="warm-coastal"] .btn-primary {
+  font-weight: 800;
+  font-size: 15px;
+}
+:root[data-theme="warm-coastal"] .btn-primary:hover {
+  background-color: var(--color-pooldeep);
+}
+
+/* Tags become warm pills. */
+:root[data-theme="warm-coastal"] .tag {
+  border-radius: var(--wc-pill);
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  min-height: 1.6rem;
+}
+
+/* Stop cards: pebble surface, wider soft left status band, raised. */
+:root[data-theme="warm-coastal"] .stop {
+  border-radius: var(--wc-r-md);
+  padding-left: 1.125rem;
+}
+:root[data-theme="warm-coastal"] .stop::before {
+  width: 6px;
+}
+
+/* Depth gauge kept coherent on any long-tail screen still using it. */
+:root[data-theme="warm-coastal"] .gauge {
+  border-radius: var(--wc-r-md);
+}
+
+/* ============================================================
+   3. BESPOKE HERO CLASSES (wc-*)
+   ============================================================ */
+
+/* --- Owner avatar / brandmark (chrome) --- */
+:root[data-theme="warm-coastal"] .wc-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  color: #FBF7EF;
+  background: var(--color-pooldeep);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+:root[data-theme="warm-coastal"] .wc-brand-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-mist);
+}
+
+/* --- Hand-drawn horizon rule under headers --- */
+:root[data-theme="warm-coastal"] .wc-horizon {
+  display: block;
+  width: 130px;
+  height: 12px;
+  margin-top: 8px;
+  color: var(--color-pool);
+}
+:root[data-theme="warm-coastal"] .wc-horizon.wc-gold {
+  color: var(--color-brass);
+}
+
+/* --- Rising tide-line gauge (Route signature) --- */
+:root[data-theme="warm-coastal"] .wc-tide {
+  position: relative;
+  height: 132px;
+  border-radius: var(--wc-r-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-seam);
+  box-shadow: var(--shadow-card);
+  background: linear-gradient(180deg, #FCF4E4, #F5E9D3);
+}
+/* Legibility scrim: keeps the off-white overlay text readable over the pale
+   sand at low water AND over the deep water at high fill. Sits above the
+   sand/water (z:1) but below the overlay text (z:2). */
+:root[data-theme="warm-coastal"] .wc-tide::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(11, 42, 51, 0.62), transparent);
+}
+:root[data-theme="warm-coastal"] .wc-tide-sun {
+  position: absolute;
+  top: 16px;
+  right: 26px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 38%, #F6D07A, #E4A93F 70%, #D2952C);
+  box-shadow: 0 0 0 10px rgba(240, 196, 106, 0.18), 0 0 26px rgba(224, 169, 63, 0.40);
+}
+:root[data-theme="warm-coastal"] .wc-tide-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, var(--color-pool), var(--color-pooldeep));
+  transition: height 0.7s ease-out;
+}
+:root[data-theme="warm-coastal"] .wc-tide-crest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -13px;
+  width: 100%;
+  height: 14px;
+  color: var(--color-pool);
+}
+:root[data-theme="warm-coastal"] .wc-tide-crest.wc-back {
+  top: -9px;
+  opacity: 0.45;
+}
+:root[data-theme="warm-coastal"] .wc-tide-overlay {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  z-index: 2;
+  color: #FBF7EF;
+  /* Stronger shadow so the big number's top (which pokes above the scrim)
+     still reads against pale sand at 0 fill. */
+  text-shadow: 0 1px 2px rgba(11, 42, 51, 0.55), 0 1px 10px rgba(11, 42, 51, 0.40);
+}
+:root[data-theme="warm-coastal"] .wc-tide-num {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-data);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+:root[data-theme="warm-coastal"] .wc-tide-num b {
+  font-size: 40px;
+  line-height: 0.9;
+}
+:root[data-theme="warm-coastal"] .wc-tide-num span {
+  font-size: 15px;
+  opacity: 0.9;
+}
+:root[data-theme="warm-coastal"] .wc-tide-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+  opacity: 0.95;
+}
+:root[data-theme="warm-coastal"] .wc-tide-remain {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 2;
+  text-align: right;
+  /* Off-white (was ink → went dark-on-dark at high water). Legible on the
+     scrim at low water and on the deep water at high fill. */
+  color: #FBF7EF;
+  text-shadow: 0 1px 2px rgba(11, 42, 51, 0.55);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+:root[data-theme="warm-coastal"] .wc-tide-remain span {
+  color: rgba(251, 247, 239, 0.82);
+  font-weight: 600;
+}
+
+/* --- Status pips mirroring real stop statuses --- */
+:root[data-theme="warm-coastal"] .wc-pips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+:root[data-theme="warm-coastal"] .wc-pip {
+  height: 8px;
+  flex: 1;
+  border-radius: var(--wc-pill);
+  background: var(--wc-sand-deep);
+}
+:root[data-theme="warm-coastal"] .wc-pip.wc-done { background: var(--wc-done); }
+:root[data-theme="warm-coastal"] .wc-pip.wc-next { background: var(--color-brass); }
+:root[data-theme="warm-coastal"] .wc-pip.wc-up { background: var(--wc-upcoming); }
+:root[data-theme="warm-coastal"] .wc-pip.wc-missed { background: var(--color-safety); }
+:root[data-theme="warm-coastal"] .wc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+:root[data-theme="warm-coastal"] .wc-lg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-mist);
+}
+:root[data-theme="warm-coastal"] .wc-lg i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+/* --- Warm pebble stop-card internals --- */
+:root[data-theme="warm-coastal"] .wc-stop-next {
+  background: var(--wc-card-raised);
+  border-color: color-mix(in srgb, var(--color-pool) 40%, var(--color-seam));
+  box-shadow: var(--wc-shadow-md);
+}
+:root[data-theme="warm-coastal"] .wc-stop-next::before { background: var(--color-pool); }
+:root[data-theme="warm-coastal"] .wc-stop-up::before { background: var(--wc-upcoming); }
+/* Skipped: de-emphasized, clearly not a live/pending stop. The shared
+   `stop-done` class already grays the left band; here we also gray the index
+   and soften the card so it never reads like an active "due" stop. */
+:root[data-theme="warm-coastal"] .wc-stop-skipped::before { background: var(--color-seam); }
+:root[data-theme="warm-coastal"] .wc-stop-skipped { opacity: 0.92; }
+:root[data-theme="warm-coastal"] .wc-stop-skipped .wc-stop-idx {
+  background: var(--wc-line-soft);
+  color: var(--color-mist);
+  border-color: var(--color-seam);
+}
+:root[data-theme="warm-coastal"] .wc-stop-idx {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-data);
+  font-weight: 800;
+  font-size: 14px;
+  background: var(--wc-sand-deep);
+  color: var(--color-ink);
+  border: 1px solid var(--color-seam);
+}
+:root[data-theme="warm-coastal"] .wc-stop-done .wc-stop-idx {
+  background: var(--wc-done-tint);
+  color: var(--wc-done);
+  border-color: transparent;
+}
+:root[data-theme="warm-coastal"] .wc-stop-next .wc-stop-idx {
+  background: var(--color-pool);
+  color: #FBF7EF;
+  border-color: transparent;
+}
+:root[data-theme="warm-coastal"] .wc-status {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: var(--wc-pill);
+  flex: none;
+  background: var(--wc-sand-deep);
+  color: var(--color-mist);
+}
+:root[data-theme="warm-coastal"] .wc-status.wc-done { background: var(--wc-done-tint); color: var(--wc-done); }
+:root[data-theme="warm-coastal"] .wc-status.wc-next { background: var(--color-pool); color: #FBF7EF; }
+:root[data-theme="warm-coastal"] .wc-status.wc-missed { background: var(--color-safety); color: #fff; }
+/* Skipped pill: hollow, muted — visibly distinct from a filled "Upcoming"
+   sand pill and from the solid "Done"/"Next" pills. */
+:root[data-theme="warm-coastal"] .wc-status.wc-skipped {
+  background: transparent;
+  color: var(--color-mist);
+  border: 1px dashed var(--color-seam);
+  padding: 3px 8px;
+}
+:root[data-theme="warm-coastal"] .wc-read {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-data);
+  font-size: 12px;
+  background: var(--color-shallow);
+  color: var(--color-ink);
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+:root[data-theme="warm-coastal"] .wc-read .wc-rk { color: var(--color-pooldeep); font-weight: 700; }
+
+/* --- Coral missed-alert banner --- */
+:root[data-theme="warm-coastal"] .wc-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--wc-r-md);
+  background: var(--wc-coral-tint);
+  box-shadow: inset 3px 0 0 var(--color-safety);
+}
+:root[data-theme="warm-coastal"] .wc-alert .wc-ai {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--color-safety);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+:root[data-theme="warm-coastal"] .wc-alert b { color: var(--wc-coral-deep); }
+
+/* --- Revenue hero (Dashboard / Money) --- */
+:root[data-theme="warm-coastal"] .wc-hero-rev {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--wc-r-lg);
+  padding: 22px;
+  background: linear-gradient(135deg, #FBF7F0, #F6ECD9);
+  border: 1px solid var(--color-brass);
+  box-shadow: var(--wc-shadow-md);
+}
+:root[data-theme="warm-coastal"] .wc-hero-sun {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 38%, #F6D07A, #D2952C 72%);
+  box-shadow: 0 0 20px rgba(210, 149, 44, 0.35);
+}
+:root[data-theme="warm-coastal"] .wc-rev-amt {
+  font-family: var(--font-data);
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-brass);
+  line-height: 1;
+  margin: 4px 0 2px;
+}
+
+/* --- Stat tiles (Dashboard) --- */
+:root[data-theme="warm-coastal"] .wc-tile {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  border-radius: var(--wc-r-md);
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="warm-coastal"] .wc-tile .wc-t-k {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mist);
+}
+:root[data-theme="warm-coastal"] .wc-tile .wc-t-v {
+  font-family: var(--font-data);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 6px;
+  line-height: 1;
+}
+:root[data-theme="warm-coastal"] .wc-tile .wc-t-sub {
+  font-size: 11.5px;
+  color: var(--color-mist);
+  margin-top: 3px;
+  font-weight: 600;
+}
+:root[data-theme="warm-coastal"] .wc-tile.wc-aqua .wc-t-v { color: var(--color-pooldeep); }
+:root[data-theme="warm-coastal"] .wc-tile.wc-gold .wc-t-v { color: var(--color-brass); }
+:root[data-theme="warm-coastal"] .wc-tile.wc-coral {
+  background: linear-gradient(180deg, var(--wc-coral-tint), var(--color-surface));
+}
+:root[data-theme="warm-coastal"] .wc-tile.wc-coral .wc-t-v { color: var(--wc-coral-deep); }
+
+/* --- Customer 360 hero --- */
+:root[data-theme="warm-coastal"] .wc-cust-hero {
+  background: linear-gradient(135deg, var(--wc-card-raised), var(--color-surface));
+  border: 1px solid var(--color-seam);
+  border-radius: var(--wc-r-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="warm-coastal"] .wc-cust-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: #FBF7EF;
+  background: linear-gradient(140deg, var(--color-pool), var(--color-pooldeep));
+  box-shadow: var(--shadow-card);
+}
+
+/* --- Money summary sum-cards --- */
+:root[data-theme="warm-coastal"] .wc-sum {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  border-radius: var(--wc-r-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="warm-coastal"] .wc-sum .wc-s-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--color-brass);
+}
+:root[data-theme="warm-coastal"] .wc-sum.wc-labor .wc-s-bar { background: var(--color-pool); }
+:root[data-theme="warm-coastal"] .wc-sum.wc-jobs .wc-s-bar { background: var(--wc-done); }
+:root[data-theme="warm-coastal"] .wc-s-k {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-mist);
+}
+:root[data-theme="warm-coastal"] .wc-s-v {
+  font-family: var(--font-data);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin-top: 6px;
+  line-height: 1;
+  color: var(--color-brass);
+}
+:root[data-theme="warm-coastal"] .wc-sum.wc-labor .wc-s-v { color: var(--color-pooldeep); }
+:root[data-theme="warm-coastal"] .wc-sum.wc-jobs .wc-s-v { color: var(--wc-done); }
+
+/* Tide bob + sync pulse honour reduced-motion (base.css clamps globally). */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="warm-coastal"] .wc-tide-crest {
+    animation: wc-bob 6s ease-in-out infinite;
+  }
+  :root[data-theme="warm-coastal"] .wc-tide-crest.wc-back {
+    animation: wc-bob 8s ease-in-out infinite reverse;
+  }
+  @keyframes wc-bob {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-10px); }
+  }
+}

@@ -1,0 +1,775 @@
+/* fresh-field.css — Fresh-Field theme. OWNED BY THE FRESH-FIELD AGENT.
+ *
+ * Bright modern-SaaS field-ops direction. Light + dark (theme-aware): the
+ * light tokens live under :root[data-theme="fresh-field"]; the dark variant
+ * is applied via @media (prefers-color-scheme: dark) so dark follows the OS
+ * (the real app has no manual light/dark toggle — data-theme carries the
+ * THEME name, not light/dark).
+ *
+ * RULES honored: no @theme block here (token NAMES live in css/base.css); this
+ * file only sets token VALUES under the theme scope + theme-scoped component
+ * overrides + bespoke classes, all prefixed `ff-`.
+ */
+
+/* ============================================================
+   1. ROLE TOKENS + SURFACE + FONTS  — LIGHT
+   ============================================================ */
+:root[data-theme="fresh-field"] {
+  /* 9 shared role tokens (+ surface) — reskins every long-tail screen */
+  --color-tile: #F7FAFC;      /* page background */
+  --color-surface: #FFFFFF;   /* card / panel background */
+  --color-ink: #0F172A;       /* primary text */
+  --color-pool: #14B8A6;      /* primary action */
+  --color-pooldeep: #0D9488;  /* pressed / hover */
+  --color-shallow: #E0F5F1;   /* selected wash */
+  --color-brass: #059669;     /* money ONLY */
+  --color-safety: #FB7185;    /* warnings ONLY */
+  --color-seam: #E2E8F0;      /* borders */
+  --color-mist: #64748B;      /* secondary text */
+
+  /* Fonts — geometric system stacks (no web fonts) */
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: ui-monospace, Menlo, monospace;
+
+  /* Softer, layered card shadow (overrides the base token under this scope) */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 16px rgba(15, 23, 42, 0.06);
+
+  /* ---- Bespoke ff- tokens (namespaced, never shared) ---- */
+  --ff-aqua: #06B6D4;   /* pool-water gradient — light end */
+  --ff-teal: #14B8A6;   /* pool-water gradient — deep end */
+  --ff-mint: #34D399;   /* positive / done */
+  --ff-coral: #FB7185;  /* alert / missed */
+  --ff-money: #059669;  /* dollars */
+
+  --ff-surface-2: #F1F6FA; /* nested tint surface */
+  --ff-ink-2: #475569;     /* secondary ink */
+  --ff-ink-3: #55637A;     /* faint ink — AA on white (~4.6:1) */
+
+  --ff-tint-aqua: rgba(6, 182, 212, 0.10);
+  --ff-tint-mint: rgba(52, 211, 153, 0.12);
+  --ff-tint-coral: rgba(251, 113, 133, 0.12);
+  --ff-tint-slate: rgba(100, 116, 139, 0.08);
+
+  --ff-grad: linear-gradient(100deg, var(--ff-aqua), var(--ff-teal));
+  --ff-grad-soft: linear-gradient(120deg, rgba(6, 182, 212, 0.14), rgba(20, 184, 166, 0.14));
+
+  --ff-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --ff-shadow-md: 0 6px 16px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
+  --ff-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.14), 0 6px 14px rgba(15, 23, 42, 0.08);
+  --ff-glow-aqua: 0 0 0 4px rgba(6, 182, 212, 0.14);
+
+  --ff-r-sm: 10px;
+  --ff-r: 14px;
+  --ff-r-lg: 18px;
+  --ff-r-xl: 22px;
+}
+
+/* ============================================================
+   2. ROLE TOKENS + ff- TOKENS  — DARK (follows the OS)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="fresh-field"] {
+    --color-tile: #0B1220;
+    --color-surface: #131C2B;
+    --color-ink: #E6EDF3;
+    --color-pool: #14B8A6;
+    --color-pooldeep: #0F766E;
+    --color-shallow: #12312C;
+    --color-brass: #10B981;
+    --color-safety: #FB7185;
+    --color-seam: #1E293B;
+    --color-mist: #94A3B8;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.40), 0 8px 20px rgba(0, 0, 0, 0.35);
+
+    --ff-money: #10B981;
+    --ff-surface-2: #0E1728;
+    --ff-ink-2: #A7BACE;
+    --ff-ink-3: #6B7F97;
+
+    --ff-tint-aqua: rgba(6, 182, 212, 0.16);
+    --ff-tint-mint: rgba(52, 211, 153, 0.16);
+    --ff-tint-coral: rgba(251, 113, 133, 0.18);
+    --ff-tint-slate: rgba(148, 163, 184, 0.10);
+
+    --ff-grad-soft: linear-gradient(120deg, rgba(6, 182, 212, 0.22), rgba(20, 184, 166, 0.20));
+
+    --ff-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+    --ff-shadow-md: 0 8px 20px rgba(0, 0, 0, 0.45);
+    --ff-shadow-lg: 0 22px 46px rgba(0, 0, 0, 0.55);
+    --ff-glow-aqua: 0 0 0 4px rgba(6, 182, 212, 0.22);
+  }
+}
+
+/* ============================================================
+   3. THEME-SCOPED OVERRIDES OF SHARED COMPONENTS
+   (so long-tail screens inherit the fresh-field polish)
+   ============================================================ */
+
+/* Soft ambient wash on the page background */
+:root[data-theme="fresh-field"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 12% 0%, rgba(6, 182, 212, 0.08), transparent 60%),
+    radial-gradient(50% 40% at 92% 8%, rgba(20, 184, 166, 0.07), transparent 60%);
+}
+
+/* Generous radii + softer shadow on cards */
+:root[data-theme="fresh-field"] .card {
+  border-radius: var(--ff-r-lg);
+}
+
+/* Modern (non-uppercase, tight) page headers */
+:root[data-theme="fresh-field"] .page-title {
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-size: 28px;
+}
+:root[data-theme="fresh-field"] .page-eyebrow {
+  color: var(--ff-teal);
+  letter-spacing: 0.16em;
+}
+
+/* Pill-shaped chips everywhere */
+:root[data-theme="fresh-field"] .tag {
+  border-radius: 999px;
+  background: var(--ff-surface-2);
+  padding-inline: 0.6rem;
+}
+:root[data-theme="fresh-field"] .tag-safety {
+  background: var(--ff-tint-coral);
+  border-color: transparent;
+}
+
+/* Buttons: rounded, gradient primary, no uppercase */
+:root[data-theme="fresh-field"] .btn-primary {
+  border-radius: 14px;
+  background: var(--ff-grad);
+  box-shadow: 0 8px 18px rgba(6, 182, 212, 0.35);
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: 15px;
+}
+:root[data-theme="fresh-field"] .btn-primary:active {
+  filter: brightness(0.97);
+}
+:root[data-theme="fresh-field"] .btn-secondary {
+  border-radius: 12px;
+}
+:root[data-theme="fresh-field"] .field {
+  border-radius: 12px;
+}
+
+/* Depth-gauge (long-tail today fallback / any gauge): rounder */
+:root[data-theme="fresh-field"] .gauge {
+  border-radius: 999px;
+}
+:root[data-theme="fresh-field"] .gauge-fill {
+  background: var(--ff-grad);
+}
+
+/* ============================================================
+   4. BESPOKE ff- CLASSES  (signature devices)
+   Tokens they use are only defined under the theme scope, so
+   these rules are inert outside fresh-field even though the
+   selectors are unscoped.
+   ============================================================ */
+
+/* ---- Chrome: gradient logo mark + sync pill ---- */
+.ff-mark {
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--ff-grad);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.40);
+  color: #fff;
+}
+.ff-mark svg { width: 60%; height: 60%; }
+
+.ff-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ff-sync::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ff-aqua);
+  animation: ff-pulse 2s ease-out infinite;
+}
+
+/* ---- Signature 2: gradient-underline glow header ---- */
+.ff-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ff-teal);
+}
+.ff-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--color-ink);
+}
+.ff-flourish {
+  height: 5px;
+  width: 74px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: var(--ff-grad);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.45);
+}
+
+/* ---- Generic chip (route + customer) ---- */
+.ff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--ff-surface-2);
+  color: var(--ff-ink-2);
+  border: 1px solid var(--color-seam);
+  min-height: 28px;
+}
+.ff-chip svg { width: 13px; height: 13px; }
+.ff-chip.aqua { background: var(--ff-tint-aqua); color: var(--ff-teal); border-color: transparent; }
+.ff-chip.coral { background: var(--ff-tint-coral); color: var(--ff-coral); border-color: transparent; }
+.ff-chip.gate { font-family: var(--font-data); letter-spacing: 0.02em; }
+.ff-chem {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--ff-teal);
+  background: var(--ff-tint-aqua);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* ---- Signature 1: water-fill progress ring ---- */
+.ff-progress-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--ff-r-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  box-shadow: var(--ff-shadow-sm);
+}
+.ff-ring { position: relative; width: 92px; height: 92px; flex: none; }
+.ff-ring svg { width: 92px; height: 92px; transform: rotate(-90deg); }
+.ff-ring .track { stroke: var(--color-seam); }
+.ff-ring .fill {
+  stroke: url(#ff-poolgrad);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.1s cubic-bezier(.2, .8, .2, 1);
+}
+.ff-ring .center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+.ff-ring .center .big {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.ff-ring .center .big b { color: var(--ff-teal); }
+.ff-ring .center .lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ff-ink-3);
+  margin-top: 3px;
+}
+.ff-progress-meta h4 { font-size: 15px; font-weight: 750; color: var(--color-ink); }
+.ff-progress-meta p { font-size: 12.5px; color: var(--ff-ink-2); margin-top: 3px; }
+.ff-mini-wave { margin-top: 10px; display: flex; gap: 5px; }
+.ff-mini-wave i { height: 6px; flex: 1; border-radius: 999px; background: var(--color-seam); }
+.ff-mini-wave i.on { background: var(--ff-grad); }
+
+/* ---- Route filter chips ---- */
+.ff-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 38px;
+  background: var(--color-surface);
+  color: var(--ff-ink-2);
+  border: 1px solid var(--color-seam);
+}
+.ff-filter.on {
+  background: var(--ff-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 14px rgba(6, 182, 212, 0.35);
+}
+
+/* ---- Missed alert ---- */
+.ff-alert {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: var(--ff-r);
+  background: var(--ff-tint-coral);
+  border: 1px solid rgba(251, 113, 133, 0.30);
+}
+.ff-alert .ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--ff-coral);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ff-alert .ic svg { width: 17px; height: 17px; }
+
+/* ---- Section label ---- */
+.ff-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 2px 10px;
+}
+.ff-section-label span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ff-ink-3);
+}
+.ff-section-label b { font-size: 12px; font-weight: 700; color: var(--ff-ink-2); }
+
+/* ---- Signature 3: stop cards, soft status dot + tint ---- */
+.ff-stop {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 13px 14px;
+  border-radius: var(--ff-r);
+  background: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  box-shadow: var(--ff-shadow-sm);
+  min-height: 62px;
+  position: relative;
+  overflow: hidden;
+}
+.ff-stop .rail { width: 4px; border-radius: 999px; background: var(--color-seam); flex: none; }
+.ff-stop .body { flex: 1; min-width: 0; }
+.ff-stop .top { display: flex; align-items: center; gap: 8px; }
+.ff-stop .num {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ff-ink-3);
+  background: var(--ff-surface-2);
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex: none;
+}
+.ff-stop .name {
+  font-size: 14.5px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+.ff-stop .status-dot { width: 9px; height: 9px; border-radius: 999px; flex: none; margin-left: auto; }
+.ff-stop .addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ff-teal);
+  margin-top: 3px;
+  min-height: 40px;
+}
+.ff-stop .addr svg { width: 13px; height: 13px; }
+.ff-stop .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+.ff-stop .statustag { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; }
+
+.ff-stop.done .rail { background: var(--ff-mint); }
+.ff-stop.done .status-dot { background: var(--ff-mint); }
+.ff-stop.done .statustag { color: var(--ff-money); }
+.ff-stop.next {
+  border-color: rgba(6, 182, 212, 0.50);
+  background: linear-gradient(120deg, var(--ff-tint-aqua), var(--color-surface) 60%);
+  box-shadow: var(--ff-shadow-md), var(--ff-glow-aqua);
+}
+.ff-stop.next .rail { background: var(--ff-grad); }
+.ff-stop.next .status-dot {
+  background: var(--ff-aqua);
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.18);
+  animation: ff-pulse 2s ease-out infinite;
+}
+.ff-stop.next .statustag { color: var(--ff-teal); }
+.ff-stop.upcoming .rail { background: var(--color-seam); }
+.ff-stop.upcoming .status-dot { background: var(--ff-ink-3); }
+.ff-stop.upcoming .statustag { color: var(--ff-ink-3); }
+.ff-stop.missed {
+  border-color: rgba(251, 113, 133, 0.40);
+  background: linear-gradient(120deg, var(--ff-tint-coral), var(--color-surface) 65%);
+}
+.ff-stop.missed .rail { background: var(--ff-coral); }
+.ff-stop.missed .status-dot { background: var(--ff-coral); }
+.ff-stop.missed .statustag { color: var(--ff-coral); }
+
+/* ---- Jobs line ---- */
+.ff-jobs-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: var(--ff-r);
+  background: var(--ff-surface-2);
+  border: 1px dashed var(--color-seam);
+  font-size: 13px;
+  color: var(--ff-ink-2);
+}
+.ff-jobs-line svg { width: 16px; height: 16px; color: var(--ff-teal); flex: none; }
+.ff-jobs-line b { color: var(--color-ink); font-weight: 750; }
+
+/* ---- Gradient revenue / money hero ---- */
+.ff-hero-rev {
+  border-radius: var(--ff-r-xl);
+  padding: 24px 26px;
+  position: relative;
+  overflow: hidden;
+  /* Deeper "pool water" teal so white text clears WCAG AA (>=4.5:1). */
+  background: linear-gradient(100deg, #0B6E7E, #0F766E);
+  color: #fff;
+  box-shadow: 0 20px 50px rgba(11, 110, 126, 0.34);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.ff-hero-rev::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -60px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 62%);
+  pointer-events: none;
+}
+.ff-hero-rev .hleft { position: relative; z-index: 1; }
+.ff-hero-rev .eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+.ff-hero-rev .amount {
+  font-family: var(--font-data);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.ff-hero-rev .sub { font-size: 13.5px; color: rgba(255, 255, 255, 0.95); margin-top: 10px; }
+.ff-hero-rev .spark { position: relative; z-index: 1; }
+.ff-hero-rev .spark svg { width: 180px; height: 68px; }
+
+/* ---- Stat tiles ---- */
+.ff-tile {
+  padding: 16px;
+  border-radius: var(--ff-r-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  box-shadow: var(--ff-shadow-sm);
+}
+.ff-tile .th { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ff-tile .ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.ff-tile .ic svg { width: 17px; height: 17px; }
+.ff-tile .num {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 12px;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.ff-tile .num small { font-size: 15px; font-weight: 700; color: var(--ff-ink-3); }
+.ff-tile .lab { font-size: 12.5px; color: var(--ff-ink-2); margin-top: 6px; font-weight: 600; }
+.ff-tile.route .ic { background: var(--ff-tint-aqua); color: var(--ff-teal); }
+.ff-tile.missed .ic { background: var(--ff-tint-coral); color: var(--ff-coral); }
+.ff-tile.missed .num { color: var(--ff-coral); }
+.ff-tile.jobs .ic { background: var(--ff-tint-mint); color: var(--ff-money); }
+.ff-tile.pri .ic { background: var(--ff-tint-slate); color: var(--ff-ink-2); }
+
+/* ---- Panel title row ---- */
+.ff-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--color-ink);
+}
+.ff-panel-title .ph-ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.ff-panel-title .ph-ic svg { width: 15px; height: 15px; }
+.ff-panel-title .ph-ic.aqua { background: var(--ff-tint-aqua); color: var(--ff-teal); }
+.ff-panel-title .ph-ic.coral { background: var(--ff-tint-coral); color: var(--ff-coral); }
+.ff-panel-title .ph-ic.mint { background: var(--ff-tint-mint); color: var(--ff-money); }
+.ff-panel-title .ph-ic.slate { background: var(--ff-tint-slate); color: var(--ff-ink-2); }
+
+/* ---- Low-stock rows with severity ---- */
+.ff-stock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: var(--ff-r);
+  background: var(--ff-tint-coral);
+  border: 1px solid rgba(251, 113, 133, 0.25);
+}
+.ff-stock .name { font-size: 13.5px; font-weight: 700; color: var(--color-ink); }
+.ff-stock .lvl { font-size: 12px; color: var(--ff-coral); font-weight: 600; margin-top: 1px; }
+.ff-stock .bar { height: 7px; border-radius: 999px; background: rgba(251, 113, 133, 0.20); overflow: hidden; margin-top: 7px; }
+.ff-stock .bar i { display: block; height: 100%; background: var(--ff-coral); border-radius: 999px; }
+
+/* ---- Warranty callout ---- */
+.ff-warranty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border-radius: var(--ff-r);
+  background: var(--ff-surface-2);
+  border: 1px solid var(--color-seam);
+}
+.ff-warranty .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--ff-tint-aqua); color: var(--ff-teal); display: grid; place-items: center; flex: none; }
+.ff-warranty .ic svg { width: 18px; height: 18px; }
+.ff-warranty b { font-size: 22px; font-weight: 800; color: var(--color-ink); }
+.ff-warranty p { font-size: 12.5px; color: var(--ff-ink-2); }
+
+/* ---- Crew-load water-fill bars ---- */
+.ff-crew-row .ch { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ff-crew-row .av {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--ff-grad);
+}
+.ff-crew-row .nm { font-size: 13.5px; font-weight: 700; color: var(--color-ink); }
+.ff-crew-row .ct { margin-left: auto; font-size: 12.5px; color: var(--ff-ink-2); font-weight: 600; }
+.ff-crew-row .ct b { color: var(--color-ink); font-weight: 800; }
+.ff-fillbar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ff-surface-2);
+  border: 1px solid var(--color-seam);
+  overflow: hidden;
+  position: relative;
+}
+.ff-fillbar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ff-grad);
+  position: relative;
+  overflow: hidden;
+}
+.ff-fillbar i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-100%);
+  animation: ff-shimmer 2.6s ease-in-out infinite;
+}
+
+/* ---- Customer 360 ---- */
+.ff-cust-hero {
+  padding: 22px;
+  border-radius: var(--ff-r-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-seam);
+  box-shadow: var(--ff-shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  position: relative;
+  overflow: hidden;
+}
+.ff-cust-hero::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: var(--ff-grad);
+}
+.ff-cust-avatar {
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  flex: none;
+  background: var(--ff-grad);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(6, 182, 212, 0.35);
+}
+.ff-cust-balance { margin-left: auto; text-align: right; }
+.ff-cust-balance .lbl {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ff-ink-3);
+}
+.ff-cust-balance .amt {
+  font-family: var(--font-data);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ff-money);
+  margin-top: 2px;
+}
+
+.ff-info-row { display: flex; align-items: flex-start; gap: 12px; }
+.ff-info-row .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--ff-surface-2);
+  color: var(--ff-teal);
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 1px solid var(--color-seam);
+}
+.ff-info-row .ic svg { width: 17px; height: 17px; }
+.ff-info-row .k {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ff-ink-3);
+}
+.ff-info-row .v { font-size: 14px; font-weight: 600; margin-top: 1px; color: var(--color-ink); }
+
+.ff-chem-cell {
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--ff-surface-2);
+  border: 1px solid var(--color-seam);
+  border-radius: 9px;
+  padding: 5px 9px;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 56px;
+}
+.ff-chem-cell .cl { font-size: 9.5px; letter-spacing: 0.06em; color: var(--ff-ink-3); font-weight: 700; }
+.ff-chem-cell .cv { font-size: 13.5px; color: var(--color-ink); font-weight: 700; }
+
+/* ---- Activity timeline ---- */
+.ff-timeline { position: relative; padding-left: 8px; }
+.ff-tl-item { position: relative; padding: 0 0 18px 26px; }
+.ff-tl-item::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--color-seam);
+}
+.ff-tl-item:last-child::before { display: none; }
+.ff-tl-item .dot {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ff-aqua);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35);
+}
+.ff-tl-item.pay .dot { background: var(--ff-money); box-shadow: 0 0 0 2px var(--ff-tint-mint); }
+.ff-tl-item .tt { font-size: 13.5px; font-weight: 700; color: var(--color-ink); }
+.ff-tl-item .tm { font-size: 12px; color: var(--ff-ink-3); margin-top: 1px; font-family: var(--font-data); }
+.ff-tl-item .tp { font-size: 12.5px; color: var(--ff-ink-2); margin-top: 3px; }
+
+/* ---- Money billing summary ---- */
+.ff-billing {
+  padding: 20px;
+  border-radius: var(--ff-r-lg);
+  background: var(--ff-grad-soft);
+  border: 1px solid var(--color-seam);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.ff-billing .n { font-family: var(--font-data); font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: var(--color-ink); }
+.ff-billing .n.money { color: var(--ff-money); }
+.ff-billing .l { font-size: 12px; color: var(--ff-ink-2); font-weight: 600; margin-top: 2px; }
+
+/* ============================================================
+   5. MOTION  (respect reduced-motion)
+   ============================================================ */
+@keyframes ff-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(6, 182, 212, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+}
+@keyframes ff-shimmer {
+  0% { transform: translateX(-100%); }
+  55%, 100% { transform: translateX(320%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="fresh-field"] .ff-sync::before,
+  :root[data-theme="fresh-field"] .ff-stop.next .status-dot,
+  :root[data-theme="fresh-field"] .ff-fillbar i::after,
+  :root[data-theme="fresh-field"] .ff-ring .fill {
+    animation: none !important;
+    transition: none !important;
+  }
+}

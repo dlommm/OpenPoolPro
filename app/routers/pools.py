@@ -32,11 +32,11 @@ def gallons_preview(shape: str = "rectangle", length_ft: str = "", width_ft: str
         g = gallons(shape, float(length_ft or 0), float(width_ft or 0) or None,
                     float(avg_depth_ft or 0))
     except (ValueError, TypeError):
-        return HTMLResponse("<span class='text-slate-400'>—</span>")
+        return HTMLResponse("<span class='text-mist/60'>—</span>")
     html = f"<span class='font-semibold'>≈ {g:,} gal</span>"
     if user.can("view_money"):
         rate = _tier_rate_for(session, g)
-        html += f"<span class='text-slate-500'> — suggested rate ${rate / 100:.2f}</span>"
+        html += f"<span class='text-mist'> — suggested rate ${rate / 100:.2f}</span>"
     return HTMLResponse(html)
 
 

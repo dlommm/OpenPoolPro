@@ -138,6 +138,21 @@
 </div>
 
 <div class="card mb-4 p-4">
+  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Appearance</h2>
+  <form method="post" action="/settings/appearance" class="space-y-2">
+    <label class="block"><span class="field-label">Theme</span>
+      <select name="active_theme" class="field">
+        {% for value, label in [("warm-coastal", "Warm Coastal"), ("control-room", "Control Room"), ("fresh-field", "Fresh Field")] %}
+        <option value="{{ value }}" {{ "selected" if active_theme == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="text-xs text-mist">Applies to the whole app for everyone.</p>
+    <button class="btn-secondary w-full">Save appearance</button>
+  </form>
+</div>
+
+<div class="card mb-4 p-4">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">General</h2>
   <form method="post" action="/settings/general" class="space-y-2">
     <label class="block"><span class="field-label">Chemical markup %</span>

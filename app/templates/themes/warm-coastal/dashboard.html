@@ -1,0 +1,98 @@
+{% extends "themes/warm-coastal/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<header class="pb-4 pt-2">
+  <p class="page-eyebrow">Dashboard</p>
+  <h1 class="page-title mt-0.5">{{ d.strftime("%A, %b %-d") }}</h1>
+  <svg class="wc-horizon" viewBox="0 0 130 12" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M1 8 C 12 2, 20 2, 30 7 S 48 12, 60 7 S 82 2, 94 7 S 118 11, 129 6"
+          fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>
+</header>
+
+{# ---- Revenue hero (brass, month-to-date) ---- #}
+<div class="wc-hero-rev mb-4">
+  <span class="wc-hero-sun"></span>
+  <p class="page-eyebrow" style="color:var(--wc-gold-deep)">Revenue · month to date</p>
+  <div class="wc-rev-amt"><span class="money">{{ revenue_mtd_cents | dollars }}</span></div>
+  <div class="text-sm font-semibold text-mist">MTD revenue</div>
+</div>
+
+{# ---- Stat tiles ---- #}
+<div class="rise mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+  <div class="wc-tile wc-aqua">
+    <div class="wc-t-k">Route today</div>
+    <div class="wc-t-v">{{ stops_done }}<span class="text-mist">/{{ stops_total }}</span></div>
+    <div class="wc-t-sub">{{ stops_total - stops_done }} remaining</div>
+  </div>
+  <div class="wc-tile {{ 'wc-coral' if missed_count }}">
+    <div class="wc-t-k">Missed</div>
+    <div class="wc-t-v">{{ missed_count }}</div>
+    <div class="wc-t-sub">{{ "needs reschedule" if missed_count else "all covered" }}</div>
+  </div>
+  <div class="wc-tile">
+    <div class="wc-t-k">Open jobs</div>
+    <div class="wc-t-v"><span data-card="open-jobs">{{ open_jobs }}</span></div>
+    <div class="wc-t-sub">across the board</div>
+  </div>
+  <div class="wc-tile wc-gold">
+    <div class="wc-t-k">High priority</div>
+    <div class="wc-t-v">{{ high_jobs }}</div>
+    <div class="wc-t-sub">needs review</div>
+  </div>
+</div>
+
+{# ---- Low stock ---- #}
+<a href="/inventory" class="card mb-5 block p-3.5 {{ 'border-safety/40 bg-safety/5' if low_chems }}">
+  <div class="flex items-center justify-between">
+    <span class="font-semibold {{ 'text-safety' if low_chems }}">Low stock</span>
+    <span class="font-data text-sm {{ 'text-safety' if low_chems }}">{{ low_chems | length }}</span>
+  </div>
+  {% if low_chems %}
+  <p class="mt-1 text-sm text-mist">{{ low_chems | map(attribute="name") | join(", ") }}</p>
+  {% endif %}
+</a>
+
+{# ---- Warranties (data-card wrapper preserved for tests) ---- #}
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Warranties</h2>
+<div class="rise mb-5">
+  <details class="card p-3.5">
+    <summary class="flex min-h-11 cursor-pointer items-center justify-between font-semibold">
+      <span>Expiring or past due</span>
+      <span class="font-data text-sm" data-card="warranties">{{ warranty_items | length }}</span>
+    </summary>
+    {% if warranty_items %}
+    <div class="mt-2 space-y-2 border-t border-seam pt-2 font-data text-sm">
+      {% for e in warranty_items %}
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-body">{{ e.kind }}{% if e.brand %} &middot; {{ e.brand }}{% endif %} &mdash;
+          {{ e.pool.property.label }} ({{ e.pool.property.customer.name }})</span>
+        <span class="{{ 'text-safety' if e.warranty_end < d }}">{{ e.warranty_end.strftime("%b %-d, %Y") }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="mt-2 text-sm text-mist">Nothing due in the next 60 days.</p>
+    {% endif %}
+  </details>
+</div>
+
+{# ---- Crew load ---- #}
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Crew</h2>
+<div class="rise space-y-2">
+  {% for t, count in crew %}
+  <div class="card p-3.5">
+    <div class="flex items-center justify-between gap-3">
+      <span class="flex items-center gap-2.5 font-semibold"><span class="wc-avatar h-8 w-8 text-[11px]">{{ t.name | initials }}</span>{{ t.name }}</span>
+      <span class="font-data text-sm">{{ count }} stop{{ "s" if count != 1 else "" }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No crew assigned</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

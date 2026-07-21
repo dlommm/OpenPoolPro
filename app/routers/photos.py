@@ -48,5 +48,5 @@ async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
         except ValueError:
             session.rollback()
             frags.append(
-                f"<span class='text-red-600 text-sm'>{html.escape(f.filename or '')} failed — retry</span>")
+                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} failed — retry</span>")
     return HTMLResponse("".join(frags))

@@ -1,0 +1,202 @@
+{% extends "themes/control-room/base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<div class="cr-phead">
+  <div class="cr-ey">Customer file</div>
+  <h1 class="cr-h">{{ c.name }}</h1>
+  <div class="cr-rule" aria-hidden="true"></div>
+</div>
+
+{# ---- identity card ---- #}
+<div class="cr-cust-id">
+  <div class="cr-avatar" aria-hidden="true">{{ c.name | initials }}</div>
+  <div class="who min-w-0">
+    <h1>{{ c.name }}</h1>
+    <div class="meta">
+      {% if c.phone %}<a href="tel:{{ c.phone }}">{{ ui.icon("phone", "h-3.5 w-3.5") }}{{ c.phone }}</a>{% endif %}
+      {% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% endif %}
+      {% if not c.phone and not c.email %}<span>No contact on file</span>{% endif %}
+    </div>
+    {% if c.tags %}
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      {% for t in c.tags %}<span class="cr-chip">{{ t }}</span>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="bal">
+    {% if show_money and lifetime_cents is not none %}
+    <div class="k">Lifetime</div>
+    <div class="v money">{{ lifetime_cents | dollars }}</div>
+    {% endif %}
+    <a href="/customers/{{ c.id }}/edit" class="btn-secondary mt-2">Edit</a>
+  </div>
+</div>
+
+{% if not c.active %}
+<div class="card mt-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+  <span>This customer is inactive.</span>
+  {% if can_manage %}
+  <form method="post" action="/customers/{{ c.id }}/reactivate" class="mt-2">
+    <button class="btn-secondary w-full">Reactivate customer</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% if c.notes %}<p class="card mt-3 bg-shallow/40 p-3 font-data text-sm text-ink">{{ c.notes }}</p>{% endif %}
+
+<div class="cr-cust-grid">
+  <div class="cr-stack">
+    {# ---- properties ---- #}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Properties</h2></div>
+      <div class="cr-panel-bd rise space-y-2">
+        {% for p in props %}
+        <div class="cr-panel p-3.5 {{ 'opacity-60' if not p.active }}">
+          <div class="flex justify-between gap-2">
+            <div class="font-semibold text-ink">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
+            <a href="/properties/{{ p.id }}/edit" class="min-h-11 font-data text-xs uppercase tracking-[0.08em] text-pool">Edit</a>
+          </div>
+          <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
+             class="cr-sc-addr">{{ ui.icon("pin", "h-3.5 w-3.5") }}{{ p.address }}<span class="go">Maps</span></a>
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span class="cr-chip">{{ p.frequency }} · {{ ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][p.weekday] }}</span>
+            {% if show_money %}<span class="cr-chip am"><span class="money">{{ rates[p.id] | dollars }}</span>/visit{{ " (ovr)" if p.rate_override_cents is not none }}</span>{% endif %}
+            {% if p.gate_code %}<span class="cr-chip gate">Gate {{ p.gate_code }}</span>{% endif %}
+            {% if p.dog_warning %}<span class="cr-chip rose">{{ ui.icon("dog", "h-3 w-3") }}{{ p.dog_note }}</span>{% endif %}
+            {% if p.id in active_holds %}<span class="cr-chip am">On hold until {{ active_holds[p.id].resume_date or "further notice" }}</span>{% endif %}
+          </div>
+          {% if not p.active and can_manage %}
+          <form method="post" action="/properties/{{ p.id }}/reactivate" class="mt-2">
+            <button class="btn-secondary w-full">Reactivate property</button>
+          </form>
+          {% else %}
+          <div class="mt-2 space-y-1">
+            {% for pool in p.pools if pool.active %}
+            <a href="/pools/{{ pool.id }}/edit" class="flex min-h-11 items-center justify-between gap-2 text-sm">
+              <span class="text-ink">{{ pool.label }} — {{ pool.water_type }}</span>
+              <span class="font-data text-mist">{{ pool.length_ft|int }}{% if pool.width_ft %}×{{ pool.width_ft|int }}{% endif %} ft · {{ "{:,}".format(pool.gallons) }} gal</span>
+            </a>
+            {% endfor %}
+            <a href="/properties/{{ p.id }}/pools/new" class="flex min-h-11 items-center gap-1 text-sm text-pool">{{ ui.icon("plus", "h-3.5 w-3.5") }}Add pool</a>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        <a href="/customers/{{ c.id }}/properties/new"
+           class="flex min-h-11 items-center justify-center gap-1 rounded-lg border border-dashed border-seam py-2 text-sm text-mist">
+          {{ ui.icon("plus", "h-4 w-4") }}Add property</a>
+      </div>
+    </div>
+
+    {# ---- tags ---- #}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Tags</h2></div>
+      <div class="cr-panel-bd">
+        <div class="mb-2 flex flex-wrap gap-1.5">
+          {% for t in c.tags %}
+          <span class="cr-chip">{{ t }}
+            {% if can_manage %}
+            <form method="post" action="/customers/{{ c.id }}/tags/remove" class="inline">
+              <input type="hidden" name="tag" value="{{ t }}">
+              <button class="text-safety" aria-label="Remove tag {{ t }}">×</button>
+            </form>
+            {% endif %}
+          </span>
+          {% else %}<span class="font-data text-xs text-mist">No tags yet.</span>{% endfor %}
+        </div>
+        {% if can_manage %}
+        <form method="post" action="/customers/{{ c.id }}/tags/add" class="flex gap-2">
+          <input name="tags" placeholder="Add tag (comma-separated)" class="field flex-1">
+          <button class="btn-secondary">Add</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ---- communication log ---- #}
+    {% if can_manage %}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Communication log</h2></div>
+      <div class="cr-panel-bd">
+        <form method="post" action="/customers/{{ c.id }}/comm/add" class="flex flex-wrap gap-2">
+          <select name="kind" class="field w-28 flex-none">
+            {% for k in ["call","email","text","note"] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          </select>
+          <input name="note" placeholder="Note" class="field min-w-0 flex-1">
+          <button class="btn-secondary">Log</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ---- photos ---- #}
+    {% if photos or ptag %}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Photos</h2></div>
+      <div class="cr-panel-bd">
+        <div class="mb-2 flex flex-wrap gap-2">
+          <a href="/customers/{{ c.id }}" class="cr-chip {{ 'gate' if not ptag }}">All</a>
+          {% for pt in ["before", "after", "issue"] %}
+          <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="cr-chip {{ 'gate' if ptag == pt }}">{{ pt | title }}</a>
+          {% endfor %}
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {% for ph, prop in photos %}
+          <div class="relative h-20 w-20">
+            <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+            {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+          </div>
+          {% else %}
+          <p class="font-data text-xs text-mist">No photos yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ---- right column: open jobs + activity ---- #}
+  <div class="cr-stack">
+    {% if jobs %}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Open jobs</h2><span class="cr-chip job">{{ jobs | length }} open</span></div>
+      <div class="cr-panel-bd space-y-2">
+        {% for j in jobs %}
+        <a href="/jobs/{{ j.id }}" class="cr-jobc block">
+          <div class="t">{{ j.title }}</div>
+          <div class="m">Status · {{ j.status }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Activity</h2></div>
+      <div class="cr-panel-bd">
+        {% if timeline %}
+        <div class="cr-tl">
+          {% for e in timeline %}
+          <div class="cr-ev {{ 'am' if e.money is not none else 'cy' }}">
+            <span class="nd" aria-hidden="true"></span>
+            <div class="min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="tt">{{ e.title }}</span>
+                {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
+              </div>
+              {% if e.detail %}<div class="tt" style="font-weight:400;color:var(--color-mist)">{{ e.detail }}</div>{% endif %}
+              <div class="dd">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="cr-empty"><b>No activity yet</b>Visits, jobs, photos and notes appear here once service begins.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

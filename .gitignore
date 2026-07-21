@@ -4,3 +4,4 @@ data/
 .venv/
 app/static/app.css
 .env
+.DS_Store

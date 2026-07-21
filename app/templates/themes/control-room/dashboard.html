@@ -1,0 +1,123 @@
+{% extends "themes/control-room/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+
+<div class="cr-phead">
+  <div class="cr-ey">Dashboard</div>
+  <h1 class="cr-h">{{ d.strftime("%A") }} <small>· {{ d.strftime("%b %-d") }}</small></h1>
+  <div class="cr-rule" aria-hidden="true"></div>
+</div>
+
+{% set remaining = stops_total - stops_done %}
+{% set nx = 1 if remaining > 0 else 0 %}
+{% set pct = (stops_done / stops_total * 100) | round | int if stops_total else 0 %}
+
+<div class="cr-dashtop">
+  {# amber money hero + decorative sparkline #}
+  <div class="cr-hero">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="cr-lbl">Revenue · Month to date</h2>
+      <span class="cr-chip am">{{ d.strftime("%b %Y") }}</span>
+    </div>
+    <div class="cr-hero-money money">{{ revenue_mtd_cents | dollars }}</div>
+    <div class="cr-hero-sub"><span class="subtxt">Billed so far this month</span></div>
+    <svg class="cr-spark" width="100%" height="52" viewBox="0 0 320 52" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="cr-sg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#F59E0B" stop-opacity=".26"/><stop offset="1" stop-color="#F59E0B" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="M0 40 40 36 80 38 120 28 160 30 200 20 240 24 280 12 320 8 320 52 0 52Z" fill="url(#cr-sg)"/>
+      <path d="M0 40 40 36 80 38 120 28 160 30 200 20 240 24 280 12 320 8" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="320" cy="8" r="3" fill="#F59E0B"/>
+    </svg>
+  </div>
+
+  {# route today — segmented tiles (segmented-bar variant of the gauge) #}
+  <div class="cr-segcard">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="cr-lbl"><span class="cr-tick"></span>Route today</h2>
+      {% if remaining %}<span class="cr-lbl" style="color:var(--color-pool)">Live</span>{% endif %}
+    </div>
+    {% if stops_total %}
+    <div class="cr-segbar" role="img" aria-label="{{ stops_done }} of {{ stops_total }} stops complete">
+      {% for i in range(stops_total) %}
+        {% if i < stops_done %}<span class="done"></span>
+        {% elif i == stops_done and nx %}<span class="next"></span>
+        {% else %}<span></span>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="mt-3 font-data text-xs text-mist">No stops scheduled today.</p>
+    {% endif %}
+    <div class="cr-segread"><span class="big">{{ stops_done }}<s>/{{ stops_total }}</s></span><span class="cr-lbl">stops complete · {{ pct }}%</span></div>
+    <div class="cr-segkeys">
+      <span class="kk"><i style="background:var(--cr-green)"></i>Done {{ stops_done }}</span>
+      <span class="kk"><i style="background:var(--color-pool)"></i>Next {{ nx }}</span>
+      <span class="kk"><i style="background:var(--color-mist)"></i>Upcoming {{ (remaining - nx) if remaining else 0 }}</span>
+      <span class="kk"><i style="background:var(--color-safety)"></i>Missed {{ missed_count }}</span>
+    </div>
+  </div>
+</div>
+
+{# stat tiles #}
+<div class="cr-tiles">
+  <div class="cr-tile acc-cy"><div class="v">{{ stops_done }}<s>/{{ stops_total }}</s></div><div class="k">Route today</div><div class="foot">{{ remaining }} stop{{ "s" if remaining != 1 }} remaining</div></div>
+  <div class="cr-tile acc-rs"><div class="v">{{ missed_count }}</div><div class="k">Missed</div><div class="foot">Unresolved · needs re-dispatch</div></div>
+  <div class="cr-tile acc-am"><div class="v"><span data-card="open-jobs">{{ open_jobs }}</span></div><div class="k">Open jobs</div><div class="foot">Awaiting scheduling</div></div>
+  <div class="cr-tile acc-gn"><div class="v">{{ high_jobs }}</div><div class="k">High priority</div><div class="foot">Needs owner review</div></div>
+</div>
+
+<div class="cr-dashbot">
+  {# crew load #}
+  <div class="cr-panel">
+    <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Crew load · today</h2><span class="cr-lbl">{{ stops_total }} stop{{ "s" if stops_total != 1 }}</span></div>
+    <div class="cr-panel-bd">
+      {% if crew %}
+      <div class="cr-crew">
+        {% for t, count in crew %}
+        <div class="cr-cw">
+          <span class="nm">{{ t.name }}</span>
+          <span class="ct">{{ count }}<s>/{{ stops_total }}</s></span>
+          <span class="cr-bar"><b style="width:{{ (count / stops_total * 100) if stops_total else 0 }}%"></b></span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="font-data text-xs text-mist">No crew assigned today.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# low stock #}
+  <a href="/inventory" class="cr-panel block">
+    <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick rs"></span>Low stock</h2><span class="cr-chip {{ 'rose' if low_chems }}">{{ low_chems | length }} item{{ "s" if low_chems | length != 1 }}</span></div>
+    <div class="cr-panel-bd" style="padding-top:2px;padding-bottom:2px">
+      {% for ch in low_chems %}
+      <div class="cr-arow rose">
+        <span class="ic">{{ ui.icon("inventory", "h-4 w-4") }}</span>
+        <div class="min-w-0"><div class="nm">{{ ch.name }}</div><div class="mt">Below reorder point</div></div>
+        <span class="qty low">Low</span>
+      </div>
+      {% else %}
+      <p class="py-2 font-data text-xs text-mist">All chemicals above reorder point.</p>
+      {% endfor %}
+    </div>
+  </a>
+
+  {# warranties #}
+  <div class="cr-panel">
+    <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick am"></span>Warranties</h2><span class="cr-chip am" data-card="warranties">{{ warranty_items | length }}</span></div>
+    <div class="cr-panel-bd" style="padding-top:2px;padding-bottom:2px">
+      {% for e in warranty_items %}
+      <div class="cr-arow warn">
+        <span class="ic">{{ ui.icon("check", "h-4 w-4") }}</span>
+        <div class="min-w-0"><div class="nm">{{ e.kind }}{% if e.brand %} · {{ e.brand }}{% endif %}</div><div class="mt">{{ e.pool.property.label }} ({{ e.pool.property.customer.name }})</div></div>
+        <span class="qty {{ 'low' if e.warranty_end < d }}">{{ e.warranty_end.strftime("%b %Y") }}</span>
+      </div>
+      {% else %}
+      <p class="py-2 font-data text-xs text-mist">Nothing due in the next 60 days.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

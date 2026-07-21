@@ -1,0 +1,139 @@
+<!doctype html>
+{% set active_theme = (request.state.active_theme if request else none) or 'control-room' %}
+<html lang="en" data-theme="{{ active_theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0E141B">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <title>{% block title %}Coastline Pools{% endblock %}</title>
+</head>
+<body class="pb-8 lg:pt-[env(safe-area-inset-top)]">
+  {% import "_ui.html" as ui %}
+  {% block nav %}
+  {% set path = request.url.path if request else "/" %}
+  {% set u = request.state.user if request is not none and request.state is defined else None %}
+  {% set items = [] %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/dashboard", "Dashboard", "money")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/analytics", "Analytics", "week")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/invoices", "Invoices", "money")] %}{% endif %}
+  {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
+    ("/customers", "Customers", "customers"), ("/jobs", "Jobs", "jobs")] %}
+  {% if u is none or u.can("manage_customers") %}{% set items = items + [("/quotes", "Quotes", "money")] %}{% endif %}
+  {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/inventory", "Inventory", "inventory")] %}{% endif %}
+  {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
+  {% set low_count = low_stock_count(request) if request is not none and (u is none or u.role == "admin") else 0 %}
+  <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-tile p-4">
+    <a href="/" class="mb-5 flex items-center gap-2">
+      {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-10">
+      {% else %}<span class="inline-flex items-center gap-2"><img src="/static/brand/openpoolpro-mark.png" alt="" class="cr-brand-mark h-9 w-auto shrink-0"><span class="cr-brand">OpenPool<b>Pro</b></span></span>{% endif %}
+    </a>
+    <form method="get" action="/search" class="mb-4">
+      <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
+    </form>
+    <div class="cr-side-lbl">Operations</div>
+    <div class="flex flex-col gap-0.5">
+      {% for href, label, name in items %}
+      {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
+      <a href="{{ href }}" class="cr-navlink {{ 'is-active' if active }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}
+        {% if href == "/inventory" and low_count > 0 %}<span class="tag tag-safety ml-auto">{{ low_count }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    <div class="mt-auto pt-4 text-sm text-mist">
+      {% if u %}
+      <a href="/account" class="cr-navlink mb-1 {{ 'is-active' if path == '/account' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
+      {% if u.role == "admin" %}
+      <a href="/audit" class="cr-navlink mb-1 {{ 'is-active' if path == '/audit' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
+      {% endif %}
+      <div class="mt-2 flex items-center justify-between gap-2 px-1">
+        <span class="font-data text-xs uppercase tracking-[0.08em]">{{ u.name }}</span>
+        <span id="sync-badge-desktop" class="cr-sync" hidden>0 waiting</span>
+      </div>
+      {% endif %}
+      <form method="post" action="/logout"><button class="mt-2 px-1 font-data text-xs uppercase tracking-[0.08em] text-safety">Sign out</button></form>
+    </div>
+  </aside>
+  <header id="topbar" class="lg:hidden sticky top-0 z-40 border-b border-seam bg-tile/95 backdrop-blur"
+          style="padding-top: env(safe-area-inset-top)">
+    <details class="group relative">
+      <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 [&::-webkit-details-marker]:hidden">
+        <span class="flex items-center">
+          {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
+          {% else %}<span class="inline-flex items-center gap-2"><img src="/static/brand/openpoolpro-mark.png" alt="" class="cr-brand-mark h-7 w-auto shrink-0"><span class="cr-brand">OpenPool<b>Pro</b></span></span>{% endif %}
+        </span>
+        <span class="flex items-center gap-2">
+          <span id="sync-badge" class="cr-sync" hidden>0 waiting</span>
+          <span class="relative flex h-11 w-11 items-center justify-center rounded-lg text-ink" aria-label="Menu">
+            <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
+            <span class="hidden group-open:block">{{ ui.icon("plus", "h-6 w-6 rotate-45") }}</span>
+            {% if low_count > 0 %}<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-safety group-open:hidden"></span>{% endif %}
+          </span>
+        </span>
+      </summary>
+      <div class="absolute inset-x-0 top-full max-h-[calc(100vh-5rem)] overflow-y-auto border-b border-seam bg-surface shadow-lg">
+        <form method="get" action="/search" class="px-4 pb-1 pt-3">
+          <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
+        </form>
+        <div class="cr-side-lbl px-4 pt-2">Operations</div>
+        <nav class="flex flex-col gap-0.5 px-4 pb-3" aria-label="Main">
+          {% for href, label, name in items %}
+          {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
+          <a href="{{ href }}" {% if active %}aria-current="page"{% endif %}
+             class="cr-navlink {{ 'is-active' if active }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}
+            {% if href == "/inventory" and low_count > 0 %}<span class="tag tag-safety ml-auto">{{ low_count }}</span>{% endif %}
+          </a>
+          {% endfor %}
+          {% if u %}
+          <div class="my-1 border-t border-seam"></div>
+          <a href="/account" class="cr-navlink {{ 'is-active' if path == '/account' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
+          {% if u.role == "admin" %}
+          <a href="/audit" class="cr-navlink {{ 'is-active' if path == '/audit' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
+          {% endif %}
+          <div class="flex min-h-11 items-center justify-between px-3 font-data text-xs uppercase tracking-[0.08em] text-mist">
+            <span>{{ u.name }}</span>
+            <form method="post" action="/logout"><button class="font-medium text-safety">Sign out</button></form>
+          </div>
+          {% endif %}
+        </nav>
+      </div>
+    </details>
+  </header>
+  {% endblock %}
+  <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-5xl lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+    var syncBadges = function () {
+      return [document.getElementById("sync-badge"), document.getElementById("sync-badge-desktop")]
+        .filter(Boolean);
+    };
+    var setSyncCount = function (count) {
+      syncBadges().forEach(function (badge) {
+        badge.textContent = count + " waiting";
+        badge.hidden = count <= 0;
+      });
+    };
+    navigator.serviceWorker.addEventListener("message", function (e) {
+      if (e.data && e.data.type === "queue-count") setSyncCount(e.data.count);
+    });
+    var flushQueue = function () {
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg.active) reg.active.postMessage({type: "flush-queue"});
+      });
+    };
+    // iOS Safari has no Background Sync API -- reconnecting (`online`) and
+    // every page load are the real replay triggers on that platform.
+    window.addEventListener("online", flushQueue);
+    flushQueue();
+  }
+  </script>
+</body>
+</html>
