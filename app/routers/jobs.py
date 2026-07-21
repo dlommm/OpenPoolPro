@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, rates
 from app.db import get_session, get_or_404
 from app.main import templates
 
@@ -64,11 +64,18 @@ def new_job(request: Request, property_id: int | None = None, template: str = ""
                                     .order_by(models.User.name)).all()
     template_id = _parse_int_tolerant(template)  # missing/garbage template -> plain form
     tmpl = session.get(models.JobTemplate, template_id) if template_id is not None else None
+    price_cents, price_status = None, "flat"
+    if tmpl is not None and property_id is not None:
+        prop = session.get(models.Property, property_id)
+        if prop is not None:
+            price_cents, price_status = rates.template_price_cents(
+                tmpl, rates.largest_pool_gallons(prop))
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": None, "props": props, "selected": property_id,
          "assignees_all": assignees_all,
          "show_money": request.state.user.can("view_money"),
-         "template": tmpl})
+         "template": tmpl, "template_price_cents": price_cents,
+         "price_status": price_status})
 
 
 @router.post("/jobs/new")
@@ -78,25 +85,36 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
                job_type: str = Form("service"), assigned_tech_id: str = Form(""),
                template_id: str = Form(""),
                session: Session = Depends(get_session)):
-    # Validate property exists
-    get_or_404(session, models.Property, property_id)
+    prop = get_or_404(session, models.Property, property_id)
     job_type = "repair" if job_type == "repair" else "service"
     assigned_id = _parse_assignee(assigned_tech_id)
     if assigned_id is not None:
         eligible_ids = {u.id for u in _eligible_assignees(session, job_type)}
         if assigned_id not in eligible_ids:
             return HTMLResponse("That tech can't take this job type", status_code=400)
+    can_money = request.state.user.can("view_money")
+    tmpl_id = _parse_int_tolerant(template_id)
+    tmpl = session.get(models.JobTemplate, tmpl_id) if tmpl_id is not None else None
+    # Resolve template size-based pricing. If the template has a size matrix and the
+    # customer's pool matches a row, auto-set the price; if it matches none and the
+    # owner didn't enter a price, block the job until they do.
+    labor_cents = _labor_cents(labor_dollars) if can_money else 0
+    if tmpl is not None and can_money and not labor_dollars.strip():
+        price, status = rates.template_price_cents(tmpl, rates.largest_pool_gallons(prop))
+        if status == "matched":
+            labor_cents = price
+        elif status == "unmatched":
+            return HTMLResponse(
+                f"This pool size isn't priced in the “{tmpl.title}” template — "
+                "enter a price to create the job.", status_code=400)
     j = models.Job(property_id=property_id, title=title, description=description,
-                   priority=priority,
-                   labor_cents=_labor_cents(labor_dollars) if request.state.user.can("view_money") else 0)
+                   priority=priority, labor_cents=labor_cents)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
     if scheduled_date:
         j.scheduled_date = date.fromisoformat(scheduled_date)
         j.status = "scheduled"
     session.add(j)
     session.flush()  # assign j.id before attaching tasks
-    tmpl_id = _parse_int_tolerant(template_id)
-    tmpl = session.get(models.JobTemplate, tmpl_id) if tmpl_id is not None else None
     if tmpl is not None:
         j.tasks = [models.JobTask(label=t.label, position=t.position) for t in tmpl.tasks]
     session.commit()

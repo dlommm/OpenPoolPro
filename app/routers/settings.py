@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import chem_presets, config, mailer, models, qbo, sizes
-from app.db import get_session
+from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
 
@@ -176,6 +176,46 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
 async def save_spa_tiers(request: Request, session: Session = Depends(get_session)):
     await _save_tiers_of_kind(request, session, "spa")
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.get("/settings/job_templates/{tid}/prices")
+def template_prices_page(request: Request, tid: int, session: Session = Depends(get_session)):
+    t = get_or_404(session, models.JobTemplate, tid)
+    return templates.TemplateResponse(request, "settings/template_prices.html",
+        {"t": t, "size_opts": sizes.presets_for_form(session)})
+
+
+@router.post("/settings/job_templates/{tid}/prices")
+async def save_template_prices(request: Request, tid: int,
+                               session: Session = Depends(get_session)):
+    t = get_or_404(session, models.JobTemplate, tid)
+    form = await request.form()
+    rows = zip(form.getlist("price_id"), form.getlist("label"),
+               form.getlist("max_gallons"), form.getlist("price_dollars"))
+    for pid, label, max_g, price in rows:
+        row = None
+        if pid:
+            try:
+                row = session.get(models.JobTemplatePrice, int(pid))
+            except ValueError:
+                continue
+            if row is None or row.job_template_id != t.id:
+                continue
+        if not (price or "").strip():
+            if row is not None:
+                session.delete(row)  # blank price removes the row
+            continue
+        try:
+            price_cents = round(float(price) * 100)
+            max_gallons = int(max_g) if (max_g or "").strip() else None
+        except ValueError:
+            continue
+        if row is None:
+            row = models.JobTemplatePrice(job_template_id=t.id)
+        row.label, row.max_gallons, row.price_cents = label, max_gallons, price_cents
+        session.add(row)
+    session.commit()
+    return RedirectResponse(f"/settings/job_templates/{tid}/prices", status_code=303)
 
 
 def _parse_markup(raw: str) -> float | None:

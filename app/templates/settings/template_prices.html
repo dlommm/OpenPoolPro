@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ t.title }} — prices{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Job template pricing", t.title) }}
+<a href="/settings" class="btn-secondary mb-4 inline-flex px-4">&larr; Back to settings</a>
+
+<div class="card max-w-2xl p-4">
+  <h2 class="set-h">Price by pool size</h2>
+  <p class="mb-3 text-sm text-mist">When a job uses this template, the customer's largest pool gallons pick the price. If nothing matches, you'll be asked to enter a price before the job is created. Leave this empty to just use the template's flat labor price.</p>
+  <form method="post" action="/settings/job_templates/{{ t.id }}/prices">
+    <div class="grid grid-cols-[1fr_6rem_7rem_2.5rem] gap-2 px-1 pb-1 text-[11px] uppercase tracking-wide text-mist">
+      <span>Label</span><span>Up to gal</span><span>Price</span><span></span></div>
+    <div class="tiers-body divide-y divide-seam/60">
+      {% for p in t.prices %}
+      <div class="tier-row grid grid-cols-[1fr_6rem_7rem_2.5rem] items-center gap-2 py-1.5">
+        <input type="hidden" name="price_id" value="{{ p.id }}">
+        <input name="label" value="{{ p.label }}" placeholder="Size" class="field">
+        <input inputmode="numeric" name="max_gallons" value="{{ p.max_gallons or '' }}" placeholder="∞" class="field text-center font-data">
+        <div class="money-in"><span>$</span><input inputmode="decimal" name="price_dollars" value="{{ '%.2f'|format(p.price_cents / 100) }}" class="field font-semibold"></div>
+        <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=price_dollars]').value='';r.style.display='none'">&times;</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tier-row-tmpl hidden grid grid-cols-[1fr_6rem_7rem_2.5rem] items-center gap-2 py-1.5">
+      <input type="hidden" name="price_id" value="">
+      <input name="label" placeholder="Size" class="field">
+      <input inputmode="numeric" name="max_gallons" placeholder="∞" class="field text-center font-data">
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="price_dollars" placeholder="0.00" class="field font-semibold"></div>
+      <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=price_dollars]').value='';r.style.display='none'">&times;</button>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2 border-t border-dashed border-seam pt-3">
+      <select class="field flex-1" onchange="tpAddCommon(this)">
+        <option value="">Add common size…</option>
+        {% for o in size_opts["pool"] %}<option value="{{ o.label }}|{{ o.ref_gallons }}">{{ o.label }} &middot; {{ "{:,}".format(o.ref_gallons) }} gal</option>{% endfor %}
+      </select>
+      <button type="button" class="btn-secondary whitespace-nowrap px-4" onclick="tpAddTier(this)">+ Add custom</button>
+    </div>
+    <button class="btn-primary mt-3">Save prices</button>
+  </form>
+</div>
+<script>
+  function tpAddTier(el, label, gallons) {
+    var form = el.closest("form");
+    var tmpl = form.querySelector(".tier-row-tmpl");
+    var body = form.querySelector(".tiers-body");
+    if (!tmpl || !body) return;
+    var row = tmpl.cloneNode(true);
+    row.classList.remove("tier-row-tmpl", "hidden");
+    row.classList.add("tier-row");
+    if (label) row.querySelector("[name=label]").value = label;
+    if (gallons) row.querySelector("[name=max_gallons]").value = gallons;
+    body.appendChild(row);
+    var pr = row.querySelector("[name=price_dollars]");
+    if (pr) pr.focus();
+  }
+  function tpAddCommon(sel) {
+    if (!sel.value) return;
+    var parts = sel.value.split("|");
+    tpAddTier(sel, parts[0], parts[1]);
+    sel.selectedIndex = 0;
+  }
+</script>
+{% endblock %}

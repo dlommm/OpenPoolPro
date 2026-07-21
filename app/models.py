@@ -331,6 +331,21 @@ class JobTemplate(Base):
     tasks: Mapped[list["JobTemplateTask"]] = relationship(
         back_populates="template", order_by="JobTemplateTask.position",
         cascade="all, delete-orphan")
+    prices: Mapped[list["JobTemplatePrice"]] = relationship(
+        back_populates="template", order_by="JobTemplatePrice.max_gallons",
+        cascade="all, delete-orphan")
+
+
+class JobTemplatePrice(Base):
+    """Per-template size->price row (gallons-keyed, like a rate tier). When a job
+    is created from this template, the customer's largest pool gallons pick the row."""
+    __tablename__ = "job_template_prices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_template_id: Mapped[int] = mapped_column(ForeignKey("job_templates.id"))
+    label: Mapped[str] = mapped_column(String(60), default="")
+    max_gallons: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = catch-all
+    price_cents: Mapped[int] = mapped_column(Integer, default=0)
+    template: Mapped["JobTemplate"] = relationship(back_populates="prices")
 
 
 class JobTemplateTask(Base):
