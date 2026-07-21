@@ -176,3 +176,22 @@ def test_rate_review_flags_underpriced(engine):
         pa.rate_override_cents = 6000                          # above tier: not flagged
         s.commit()
         assert analytics.rate_review(s) == []
+
+
+def test_rate_review_ignores_spa_only_property(engine):
+    """A property with only a spa pool (no pool-kind pool) must never surface
+    a bogus "suggested pool rate" flag -- the pool tier ladder doesn't apply
+    to it. Regression test: rate_review used to take the largest gallons
+    across ALL pool kinds (including spa) and feed it into the pool tier
+    lookup, which could flag a spa-only property as underpriced for a pool
+    rate it was never meant to have."""
+    _fix(engine)
+    with Session(engine) as s:
+        pb = s.scalars(select(models.Property)).all()[1]
+        # Big spa (larger gallons than the biggest pool tier) -- if the bug
+        # were present this would push a huge bogus "pool" tier rate.
+        s.add(models.Pool(property_id=pb.id, gallons=50000, kind="spa"))
+        pb.rate_override_cents = 100                            # deliberately tiny
+        s.commit()
+        rows = analytics.rate_review(s)
+        assert all(r.property.id != pb.id for r in rows)

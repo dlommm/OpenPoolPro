@@ -298,7 +298,10 @@ def rate_review(session: Session) -> list[RateReviewRow]:
         active_pools = [pl for pl in p.pools if pl.active]
         if not active_pools:
             continue
-        largest = max(pl.gallons for pl in active_pools)
+        pool_pools = [pl for pl in active_pools if pl.kind == "pool"]
+        if not pool_pools:
+            continue
+        largest = max(pl.gallons for pl in pool_pools)
         tier_cents = _tier_for_gallons(session, largest)
         current_cents = effective_rate_cents(session, p)
         if current_cents < tier_cents:

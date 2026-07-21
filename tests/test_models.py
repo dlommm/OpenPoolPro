@@ -24,6 +24,34 @@ def test_seeds_idempotent(engine):
         assert s.scalars(select(models.User)).one().role == "admin"
 
 
+def test_seeds_backfills_spa_tiers_on_upgraded_install(engine):
+    """An install that already has pool tiers but was seeded before spa tiers
+    existed (or had them removed) must get spa tiers backfilled on the next
+    seeds.run -- otherwise the spa component prices at $0 forever."""
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        # Simulate a pre-spa-tier install: pool tiers present, no spa tiers,
+        # so the top-level `if not any RateTier` seed guard is already false.
+        for max_g, cents, label in seeds.TIERS:
+            s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="pool"))
+        s.commit()
+        assert s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).first() is None
+
+    seeds.run(engine)
+    with Session(engine) as s:
+        spa_tiers = s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).all()
+        assert len(spa_tiers) == len(seeds.SPA_TIERS)
+        labels = {t.label for t in spa_tiers}
+        assert labels == {label for _, _, label in seeds.SPA_TIERS}
+
+    # Idempotent: running again must not duplicate the backfilled spa tiers.
+    seeds.run(engine)
+    with Session(engine) as s:
+        assert len(s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).all()) \
+            == len(seeds.SPA_TIERS)
+
+
 def test_settings_helpers(engine):
     from app.db import Base
     Base.metadata.create_all(engine)

@@ -24,7 +24,7 @@
     <input name="label" value="{{ pool.label if pool else 'Main pool' }}" class="field"></label>
   <div>
     <span class="field-label">Shape</span>
-    <div class="grid grid-cols-4 gap-2">
+    <div class="grid grid-cols-5 gap-2">
       {% for s, icon in [
         ("rectangle", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><rect x='3' y='5' width='14' height='10' rx='1.5'/></svg>"),
         ("round", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><circle cx='10' cy='10' r='7'/></svg>"),
@@ -51,7 +51,8 @@
              class="field font-data"></label>
     {% endfor %}
   </div>
-  <div id="gallons" class="card flex min-h-11 items-center bg-shallow/60 px-3 font-data">
+  <div id="gallons" class="card flex min-h-11 items-center bg-shallow/60 px-3 font-data"
+       hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="load">
     {% if pool %}≈ {{ "{:,}".format(pool.gallons) }} gal{% else %}<span class="text-mist">Enter dimensions</span>{% endif %}
   </div>
   <div class="grid grid-cols-2 gap-3">
@@ -65,7 +66,8 @@
       </select></label>
   </div>
   <label class="block"><span class="field-label">This is a</span>
-    <select name="kind" class="field">
+    <select name="kind" class="field" hx-get="/pools/gallons-preview" hx-include="closest form"
+            hx-target="#gallons" hx-trigger="change">
       {% set cur_kind = pool.kind if pool else (prefill.kind if prefill else "pool") %}
       <option value="pool" {{ "selected" if cur_kind == "pool" }}>Pool</option>
       <option value="spa" {{ "selected" if cur_kind == "spa" }}>Spa</option>

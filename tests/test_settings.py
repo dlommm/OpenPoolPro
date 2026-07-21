@@ -37,7 +37,9 @@ def test_add_and_edit_tier(client, engine):
 
 def test_tier_edit_writes_rates_change_audit_row(client, engine):
     with Session(engine) as s:
-        tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
+        tiers = s.scalars(
+            select(models.RateTier).where(models.RateTier.kind == "pool").order_by(models.RateTier.id)
+        ).all()
         ids = [str(t.id) for t in tiers]
         owner_id = s.scalars(select(models.User).where(models.User.username == "owner")).one().id
     client.post("/settings/tiers", data={
@@ -53,7 +55,9 @@ def test_tier_edit_writes_rates_change_audit_row(client, engine):
 
 def test_tier_save_with_no_actual_change_skips_audit(client, engine):
     with Session(engine) as s:
-        tiers = s.scalars(select(models.RateTier).order_by(models.RateTier.id)).all()
+        tiers = s.scalars(
+            select(models.RateTier).where(models.RateTier.kind == "pool").order_by(models.RateTier.id)
+        ).all()
         ids = [str(t.id) for t in tiers]
         rate_cents = [t.rate_cents for t in tiers]
         maxg = [str(t.max_gallons) if t.max_gallons is not None else "" for t in tiers]

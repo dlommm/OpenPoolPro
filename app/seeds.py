@@ -38,6 +38,11 @@ def run(engine) -> None:
                 s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="pool"))
             for max_g, cents, label in SPA_TIERS:
                 s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="spa"))
+        # Backfill for installs upgraded from before spa tiers existed: pool tiers
+        # already present but spa tiers were never seeded (spa would price at $0).
+        if not s.scalars(select(models.RateTier).where(models.RateTier.kind == "spa")).first():
+            for max_g, cents, label in SPA_TIERS:
+                s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="spa"))
         from app import config
         from app.auth_core import hash_password, verify_password
 
