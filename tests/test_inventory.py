@@ -203,3 +203,70 @@ def test_low_stock_ordered_by_name(engine):
         _chem(s, name="Alpha chem", stock_qty=1.0, reorder_point=5.0)
         names = [c.name for c in inventory.low_stock(s)]
         assert names == sorted(names)
+
+
+# --- inventory_value_cents --------------------------------------------
+
+def test_value_empty_is_zero(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        assert inventory.inventory_value_cents(s) == 0
+
+
+def test_value_sums_qty_times_cost(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="A", stock_qty=10.0, cost_per_unit_cents=100)   # 1000
+        _chem(s, name="B", stock_qty=2.5, cost_per_unit_cents=400)    # 1000
+        assert inventory.inventory_value_cents(s) == 2000
+
+
+def test_value_counts_negative_stock(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="A", stock_qty=-3.0, cost_per_unit_cents=200)   # -600
+        assert inventory.inventory_value_cents(s) == -600
+
+
+def test_value_ignores_inactive(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="A", stock_qty=10.0, cost_per_unit_cents=100)   # 1000
+        _chem(s, name="Z", stock_qty=99.0, cost_per_unit_cents=999, active=False)
+        assert inventory.inventory_value_cents(s) == 1000
+
+
+# --- reorder_list ------------------------------------------------------
+
+def test_reorder_list_returns_low_items_with_suggested_qty(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        c = _chem(s, name="A", stock_qty=1.0, reorder_point=5.0, reorder_qty=15.0)
+        rows = inventory.reorder_list(s)
+        assert len(rows) == 1
+        assert rows[0]["chemical"].id == c.id
+        assert rows[0]["suggested_qty"] == 15.0
+
+
+def test_reorder_list_suggested_qty_none_when_unset(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="A", stock_qty=1.0, reorder_point=5.0, reorder_qty=None)
+        assert inventory.reorder_list(s)[0]["suggested_qty"] is None
+
+
+def test_reorder_list_excludes_non_low(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="A", stock_qty=50.0, reorder_point=5.0, reorder_qty=15.0)  # above point
+        _chem(s, name="B", stock_qty=99.0, reorder_point=None)                   # alerting off
+        assert inventory.reorder_list(s) == []
+
+
+def test_reorder_list_name_order(engine):
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        _chem(s, name="Zinc", stock_qty=0.0, reorder_point=5.0)
+        _chem(s, name="Acid", stock_qty=0.0, reorder_point=5.0)
+        names = [r["chemical"].name for r in inventory.reorder_list(s)]
+        assert names == ["Acid", "Zinc"]

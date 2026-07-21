@@ -105,3 +105,22 @@ def low_stock(session: Session) -> list[models.Chemical]:
                models.Chemical.stock_qty <= models.Chemical.reorder_point)
         .order_by(models.Chemical.name)
     ).all()
+
+
+def inventory_value_cents(session: Session) -> int:
+    """Total value of active stock: sum(stock_qty * cost_per_unit_cents),
+    rounded to whole cents. Negative stock contributes negative value.
+    Inactive chemicals are excluded."""
+    total = 0.0
+    for c in session.scalars(
+            select(models.Chemical).where(models.Chemical.active.is_(True))):
+        total += c.stock_qty * c.cost_per_unit_cents
+    return round(total)
+
+
+def reorder_list(session: Session) -> list[dict]:
+    """Low-stock items paired with a suggested order quantity (the chemical's
+    reorder_qty, which may be None when unset). Ordered by name, matching
+    low_stock()."""
+    return [{"chemical": c, "suggested_qty": c.reorder_qty}
+            for c in low_stock(session)]
