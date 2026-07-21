@@ -105,3 +105,20 @@ def test_rate_changes_table_created_fresh(engine):
     from app.db import Base
     Base.metadata.create_all(engine)
     assert _cols(engine, "rate_changes")
+
+
+def test_migrate_adds_spa_columns(engine):
+    from sqlalchemy import text
+    from app import migrate
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE pools (id INTEGER PRIMARY KEY)"))
+        conn.execute(text("CREATE TABLE rate_tiers (id INTEGER PRIMARY KEY)"))
+        conn.execute(text("CREATE TABLE properties (id INTEGER PRIMARY KEY)"))
+    migrate.run(engine)
+    with engine.begin() as conn:
+        pool_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(pools)"))}
+        tier_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(rate_tiers)"))}
+        prop_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(properties)"))}
+    assert "kind" in pool_cols
+    assert "kind" in tier_cols
+    assert "spa_rate_override_cents" in prop_cols

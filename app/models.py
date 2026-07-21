@@ -65,6 +65,7 @@ class Property(Base):
     weekday: Mapped[int] = mapped_column(Integer, default=0)  # 0=Mon
     anchor_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     rate_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    spa_rate_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     route_order: Mapped[int] = mapped_column(Integer, default=0)
     assigned_tech_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     customer: Mapped[Customer] = relationship(back_populates="properties")
@@ -78,6 +79,7 @@ class Pool(Base):
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
     label: Mapped[str] = mapped_column(String(80), default="Main pool")
     shape: Mapped[str] = mapped_column(String(12), default="rectangle")  # rectangle|round|oval|kidney
+    kind: Mapped[str] = mapped_column(String(8), default="pool")  # pool|spa
     length_ft: Mapped[float] = mapped_column(Float, default=0)  # round: diameter
     width_ft: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_depth_ft: Mapped[float] = mapped_column(Float, default=0)
@@ -122,6 +124,7 @@ class RateTier(Base):
     max_gallons: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = catch-all
     rate_cents: Mapped[int] = mapped_column(Integer)
     label: Mapped[str] = mapped_column(String(60), default="")
+    kind: Mapped[str] = mapped_column(String(8), default="pool")  # pool|spa
 
 
 class Chemical(Base):

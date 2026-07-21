@@ -13,7 +13,10 @@ COLUMNS = {
         ("totp_enabled", "BOOLEAN DEFAULT 0"),
         ("session_epoch", "INTEGER DEFAULT 0"),
     ],
-    "properties": [("assigned_tech_id", "INTEGER REFERENCES users(id)")],
+    "properties": [
+        ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
+        ("spa_rate_override_cents", "INTEGER"),
+    ],
     "jobs": [
         ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
         ("job_type", "VARCHAR(10) DEFAULT 'service'"),
@@ -35,6 +38,8 @@ COLUMNS = {
     "customers": [("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0")],
     "equipment": [("warranty_end", "DATE")],
     "photos": [("tag", "VARCHAR(10) DEFAULT ''")],
+    "pools": [("kind", "VARCHAR(8) DEFAULT 'pool'")],
+    "rate_tiers": [("kind", "VARCHAR(8) DEFAULT 'pool'")],
 }
 
 

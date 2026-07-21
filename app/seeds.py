@@ -12,6 +12,7 @@ TASKS = ["Skim surface", "Brush walls", "Vacuum", "Empty skimmer baskets",
          "Empty pump trap", "Backwash/clean filter", "Test water", "Add chemicals"]
 TIERS = [(15000, 4500, "Small (to 15k gal)"), (25000, 5500, "Medium (to 25k gal)"),
          (None, 7000, "Large")]
+SPA_TIERS = [(600, 2000, "Spa small (to 600 gal)"), (None, 3000, "Spa large")]
 ROLE_SEED = {
     "Liquid chlorine": ("chlorine_liquid", 12.5),
     "Shock (cal-hypo)": ("chlorine_granular", 65.0),
@@ -34,7 +35,9 @@ def run(engine) -> None:
                 s.add(models.TaskTemplate(label=label, sort_order=i))
         if not s.scalars(select(models.RateTier)).first():
             for max_g, cents, label in TIERS:
-                s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label))
+                s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="pool"))
+            for max_g, cents, label in SPA_TIERS:
+                s.add(models.RateTier(max_gallons=max_g, rate_cents=cents, label=label, kind="spa"))
         from app import config
         from app.auth_core import hash_password, verify_password
 
