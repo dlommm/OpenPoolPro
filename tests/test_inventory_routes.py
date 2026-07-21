@@ -375,7 +375,7 @@ def test_page_hides_reorder_now_when_nothing_low(client, engine):
 
 def test_page_status_pill_out(client, engine):
     seed_chem(engine, stock_qty=0.0, reorder_point=5.0)  # Out
-    assert ">Out<" in client.get("/inventory").text
+    assert 'tag tag-safety">Out<' in client.get("/inventory").text
 
 
 def test_page_activity_tabs_present(client, engine):
