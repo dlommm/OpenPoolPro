@@ -2,7 +2,7 @@ from sqlalchemy import select
 
 from app import models
 
-SHAPE_MULT = {"rectangle": 7.5, "oval": 5.9, "kidney": 6.0}
+SHAPE_MULT = {"rectangle": 7.5, "oval": 5.9, "kidney": 6.0, "grecian": 7.0}
 MAX_DIM_FT = 100
 
 

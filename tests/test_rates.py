@@ -37,3 +37,9 @@ def test_rate_resolution(engine):
         s.add(models.Pool(property=big, gallons=90000))
         s.commit()
         assert effective_rate_cents(s, big) == 7000   # catch-all NULL tier
+
+
+def test_gallons_grecian():
+    from app.rates import SHAPE_MULT
+    assert SHAPE_MULT["grecian"] == 7.0
+    assert gallons("grecian", 33, 17, 5) == round(33 * 17 * 5 * 7.0)
