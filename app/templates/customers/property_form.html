@@ -45,6 +45,10 @@
       <input inputmode="decimal" name="rate_override_dollars"
              value="{{ '%.2f'|format(p.rate_override_cents / 100) if p and p.rate_override_cents is not none else '' }}"
              class="field font-data"></label>
+    <label class="block"><span class="field-label">Spa rate override $</span>
+      <input inputmode="decimal" name="spa_rate_override_dollars"
+             value="{{ '%.2f'|format(p.spa_rate_override_cents / 100) if p and p.spa_rate_override_cents is not none else '' }}"
+             class="field font-data"></label>
     {% endif %}
   </div>
   <label class="block"><span class="field-label">Notes</span>

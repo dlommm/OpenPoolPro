@@ -434,3 +434,19 @@ def test_notify_email_toggle_persists(client, engine):
         "notes": ""})
     with Session(engine) as s:
         assert s.get(models.Customer, cid).notify_email is False
+
+
+def test_property_spa_override_saved(client, engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Cara")
+        s.add(c); s.commit(); cid = c.id
+    r = client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "frequency": "weekly", "weekday": "0",
+        "spa_rate_override_dollars": "25.00"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
+        assert p.spa_rate_override_cents == 2500

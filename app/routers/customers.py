@@ -363,13 +363,14 @@ def _parse_tech_id(assigned_tech_id: str) -> int | None:
 
 def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
                     dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
-                    assigned_tech_id, allow_rate: bool = True):
+                    assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True):
     p.label, p.address, p.gate_code, p.notes = label, address, gate_code, notes
     p.dog_warning, p.dog_note = dog_warning, dog_note
     p.frequency, p.weekday = frequency, int(weekday)
     p.anchor_date = date.fromisoformat(anchor_date) if anchor_date else None
     if allow_rate:
         p.rate_override_cents = _cents(rate_override_dollars)
+        p.spa_rate_override_cents = _cents(spa_rate_override_dollars)
     p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
 
 
@@ -415,12 +416,13 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     weekday: int = Form(0), anchor_date: str = Form(""),
                     rate_override_dollars: str = Form(""),
                     assigned_tech_id: str = Form(""),
+                    spa_rate_override_dollars: str = Form(""),
                     session: Session = Depends(get_session),
                     user=Depends(require_perm("manage_customers"))):
     p = models.Property(customer_id=cid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     session.add(p)
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
@@ -441,12 +443,13 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"), address
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
                   assigned_tech_id: str = Form(""),
+                  spa_rate_override_dollars: str = Form(""),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
     _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)
 
