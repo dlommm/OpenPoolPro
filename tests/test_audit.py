@@ -62,7 +62,9 @@ def test_headers_on_404(client):
 
 
 def test_headers_on_static_asset(client):
-    r = client.get("/static/app.css")
+    # htmx.min.js is a committed static asset; app.css is a gitignored build artifact
+    # (absent in a clean checkout / CI), so assert headers on one that always exists.
+    r = client.get("/static/htmx.min.js")
     assert r.status_code == 200
     _assert_security_headers(r)
 
