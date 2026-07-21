@@ -1,6 +1,8 @@
 """Additive-only SQLite migrations, run at startup before seeds."""
 from sqlalchemy import text
 
+from app import addresses
+
 COLUMNS = {
     "users": [
         ("username", "VARCHAR(40)"),
@@ -16,6 +18,12 @@ COLUMNS = {
     "properties": [
         ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
         ("spa_rate_override_cents", "INTEGER"),
+        ("street", "VARCHAR(120) DEFAULT ''"),
+        ("city", "VARCHAR(80) DEFAULT ''"),
+        ("state", "VARCHAR(20) DEFAULT ''"),
+        ("zip", "VARCHAR(16) DEFAULT ''"),
+        ("latitude", "FLOAT"),
+        ("longitude", "FLOAT"),
     ],
     "jobs": [
         ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
@@ -54,3 +62,17 @@ def run(engine) -> None:
             for name, ddl in cols:
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+        # Best-effort backfill of structured address from the legacy free-text
+        # `address` for rows that have an address but no city yet. Never
+        # overwrites `address`; unparseable rows keep address + blank fields.
+        cols = {r[1] for r in conn.execute(text("PRAGMA table_info(properties)"))}
+        if {"street", "city", "address"} <= cols:
+            rows = conn.execute(text(
+                "SELECT id, address FROM properties WHERE address != '' AND city = ''")).all()
+            for pid, address in rows:
+                d = addresses.parse_address(address)
+                if d["street"]:
+                    conn.execute(text(
+                        "UPDATE properties SET street=:s, city=:c, state=:st, zip=:z WHERE id=:id"),
+                        {"s": d["street"], "c": d["city"], "st": d["state"], "z": d["zip"], "id": pid})

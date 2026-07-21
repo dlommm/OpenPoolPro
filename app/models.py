@@ -38,7 +38,7 @@ def normalize_tags(raw: str) -> list[str]:
 class Customer(Base):
     __tablename__ = "customers"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(120), index=True)
     qb_display_name: Mapped[str] = mapped_column(String(120), default="")
     phone: Mapped[str] = mapped_column(String(40), default="")
     email: Mapped[str] = mapped_column(String(120), default="")
@@ -56,6 +56,12 @@ class Property(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
     label: Mapped[str] = mapped_column(String(80), default="Home")
     address: Mapped[str] = mapped_column(String(200), default="")
+    street: Mapped[str] = mapped_column(String(120), default="")
+    city: Mapped[str] = mapped_column(String(80), default="", index=True)
+    state: Mapped[str] = mapped_column(String(20), default="")
+    zip: Mapped[str] = mapped_column(String(16), default="")
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     gate_code: Mapped[str] = mapped_column(String(40), default="")
     dog_warning: Mapped[bool] = mapped_column(Boolean, default=False)
     dog_note: Mapped[str] = mapped_column(String(120), default="")
