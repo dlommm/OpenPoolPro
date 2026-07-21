@@ -277,10 +277,15 @@ def test_last_purchase_excludes_adjustment_rows(client, engine):
         "chemical_id": str(chem_id), "quantity": "3", "cost_dollars": "9.00",
         "update_cost": "on", "note": "restock"})
     client.post(f"/inventory/adjust/{chem_id}", data={"target": "100", "note": "recount"})
-    html = client.get("/inventory").text
-    # the recount adjustment (note "adjust: recount", $0.00/unit) must not
-    # displace the real purchase's $3.00/unit in the last-purchase column
-    assert '<span class="money">$3.00</span>/gal' in html
+    # The redesigned template (Task 3) no longer renders a per-row "last
+    # purchase" column in Zone 3 (approved design spec drops it in favor of
+    # Chemical/On hand/Status/Reorder pt/Value/Edit). The underlying guard —
+    # a recount adjustment ("adjust: ..." note, $0.00/unit) must not displace
+    # the real purchase's $3.00/unit as that chemical's last purchase — still
+    # lives in `_context`'s `last_purchase_unit_cost`, so assert it there.
+    with Session(engine) as s:
+        ctx = _context(s)
+    assert ctx["last_purchase_unit_cost"][chem_id] == 300
 
 
 # --- badge guard exception branch ----------------------------------------
@@ -352,3 +357,41 @@ def test_context_restock_prefill(client, engine):
         ctx = _context(s, restock_id=cid)
     assert ctx["restock_id"] == cid
     assert ctx["restock_qty"] == 15.0
+
+
+# --- page template: 4-zone redesign ---------------------------------------
+
+def test_page_shows_reorder_now_when_low(client, engine):
+    seed_chem(engine, stock_qty=1.0, reorder_point=5.0)  # low
+    body = client.get("/inventory").text
+    assert "Reorder now" in body
+    assert "Restock" in body
+
+
+def test_page_hides_reorder_now_when_nothing_low(client, engine):
+    seed_chem(engine, stock_qty=50.0, reorder_point=None)
+    assert "Reorder now" not in client.get("/inventory").text
+
+
+def test_page_status_pill_out(client, engine):
+    seed_chem(engine, stock_qty=0.0, reorder_point=5.0)  # Out
+    assert ">Out<" in client.get("/inventory").text
+
+
+def test_page_activity_tabs_present(client, engine):
+    seed_chem(engine)
+    body = client.get("/inventory").text
+    assert "Purchases" in body
+    assert "Adjustments" in body
+
+
+def test_page_restock_preselects_and_prefills(client, engine):
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        chem.reorder_qty = 15.0
+        s.commit()
+        cid = chem.id
+    body = client.get(f"/inventory?restock={cid}").text
+    assert f'value="{cid}" selected' in body
+    assert 'value="15.00"' in body

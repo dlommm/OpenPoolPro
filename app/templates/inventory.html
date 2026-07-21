@@ -2,53 +2,151 @@
 {% block title %}Inventory{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+
+{% macro history_table(rows, users_by_id, empty) %}
+<div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="py-1.5 pr-3 font-medium">Date</th>
+        <th class="py-1.5 pr-3 font-medium">Chemical</th>
+        <th class="py-1.5 pr-3 font-medium">Qty</th>
+        <th class="py-1.5 pr-3 font-medium">Total</th>
+        <th class="py-1.5 pr-3 font-medium">Note</th>
+        <th class="py-1.5 font-medium">By</th>
+      </tr>
+    </thead>
+    <tbody class="font-data">
+      {% for p in rows %}
+      <tr class="border-b border-seam/60">
+        <td class="py-1.5 pr-3 whitespace-nowrap">{{ p.at.strftime("%Y-%m-%d") }}</td>
+        <td class="py-1.5 pr-3 font-body">{{ p.chemical.name }}</td>
+        <td class="py-1.5 pr-3 {{ 'text-safety' if p.quantity < 0 }}">{{ "%+.2f"|format(p.quantity) }}</td>
+        <td class="py-1.5 pr-3 money">{{ p.total_cost_cents | dollars }}</td>
+        <td class="py-1.5 pr-3 font-body text-mist">{{ p.note }}</td>
+        <td class="py-1.5">{% if p.user_id in users_by_id %}<span class="tag">{{ users_by_id[p.user_id].name | initials }}</span>{% else %}—{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="py-6 text-center font-body text-mist">{{ empty }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
 {{ ui.page_header("Chemical stock", "Inventory") }}
 {% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
 
+{# Zone 1 — summary strip #}
+<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+  <div class="card p-3.5">
+    <div class="field-label">Value</div>
+    <div class="money font-data text-xl font-bold">{{ total_value_cents | dollars }}</div>
+  </div>
+  <div class="card p-3.5">
+    <div class="field-label">Low</div>
+    <div class="font-data text-xl font-bold {{ 'text-safety' if low_count }}">{{ low_count }}</div>
+  </div>
+  <div class="card p-3.5">
+    <div class="field-label">Out</div>
+    <div class="font-data text-xl font-bold {{ 'text-safety' if out_count }}">{{ out_count }}</div>
+  </div>
+  <div class="card p-3.5">
+    <div class="field-label">Items</div>
+    <div class="font-data text-xl font-bold">{{ item_count }}</div>
+  </div>
+</div>
+
+{# Zone 2 — reorder now (only when something is low) #}
+{% if reorder_items %}
+<div class="card mb-4 border-safety/40 p-4">
+  <h2 class="set-h mb-2 text-safety">Reorder now</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <tbody class="font-data">
+        {% for item in reorder_items %}
+        {% set c = item.chemical %}
+        <tr class="border-b border-seam/60">
+          <td class="py-2 pr-3 font-body font-semibold">{{ c.name }}</td>
+          <td class="py-2 pr-3 text-safety">{{ "%.2f"|format(c.stock_qty) }} {{ c.unit }} on hand</td>
+          <td class="py-2 pr-3 text-mist">
+            {% if item.suggested_qty is not none %}
+              order <span class="font-semibold text-ink">{{ "%.2f"|format(item.suggested_qty) }} {{ c.unit }}</span>
+            {% else %}
+              <button type="button" onclick="invEdit({{ c.id }})" class="text-pool underline">set order qty</button>
+            {% endif %}
+          </td>
+          <td class="py-2 text-right">
+            <a href="/inventory?restock={{ c.id }}#log" class="btn-secondary inline-block px-3 py-1 text-xs">Restock</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# Zone 3 — all stock #}
 <div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Stock on hand</h2>
+  <div class="mb-2 flex items-center justify-between">
+    <h2 class="set-h">All stock</h2>
+    <label class="flex items-center gap-2 text-xs text-mist">
+      <input type="checkbox" onchange="invShowInactive(this.checked)" class="h-4 w-4"> Show inactive
+    </label>
+  </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-seam text-left text-mist">
           <th class="py-1.5 pr-3 font-medium">Chemical</th>
-          <th class="py-1.5 pr-3 font-medium">Unit</th>
           <th class="py-1.5 pr-3 font-medium">On hand</th>
-          <th class="py-1.5 pr-3 font-medium">Reorder pt / qty</th>
-          <th class="py-1.5 pr-3 font-medium">Last purchase</th>
-          <th class="py-1.5 font-medium">Set on-hand</th>
+          <th class="py-1.5 pr-3 font-medium">Status</th>
+          <th class="py-1.5 pr-3 font-medium">Reorder pt</th>
+          <th class="py-1.5 pr-3 font-medium">Value</th>
+          <th class="py-1.5 font-medium"></th>
         </tr>
       </thead>
       <tbody class="font-data">
         {% for c in chems %}
-        <tr class="border-b border-seam/60 {{ 'bg-safety/5' if c.id in low_ids }} {{ 'text-mist' if not c.active }}">
-          <td class="py-1.5 pr-3 font-body">{{ c.name }}{% if not c.active %} <span class="tag">inactive</span>{% endif %}
-            {% if c.id in low_ids %}<span class="tag tag-safety ml-1">low</span>{% endif %}</td>
-          <td class="py-1.5 pr-3">{{ c.unit }}</td>
-          <td class="py-1.5 pr-3 {{ 'text-safety' if c.stock_qty < 0 }}">{{ "%.2f"|format(c.stock_qty) }}</td>
-          <td class="py-1.5 pr-3 text-mist">{{ "%.2f"|format(c.reorder_point) if c.reorder_point is not none else "—" }}
-            / {{ "%.2f"|format(c.reorder_qty) if c.reorder_qty is not none else "—" }}</td>
-          <td class="py-1.5 pr-3 text-mist">
-            {% if last_purchase[c.id] %}
-              {{ last_purchase[c.id].at.strftime("%Y-%m-%d") }}
-              {% if last_purchase_unit_cost[c.id] is not none %}· <span class="money">{{ last_purchase_unit_cost[c.id] | dollars }}</span>/{{ c.unit }}{% endif %}
-            {% else %}—{% endif %}
+        {% set out = c.stock_qty <= 0 %}
+        {% set low = c.id in low_ids %}
+        <tr class="border-b border-seam/60 {{ 'hidden inv-inactive' if not c.active }} {{ 'bg-safety/5' if (low or out) and c.active }}">
+          <td class="py-2 pr-3 font-body">{{ c.name }}{% if not c.active %} <span class="tag">inactive</span>{% endif %}</td>
+          <td class="py-2 pr-3 {{ 'text-safety' if out and c.active }}">{{ "%.2f"|format(c.stock_qty) }} {{ c.unit }}</td>
+          <td class="py-2 pr-3">
+            {% if not c.active %}<span class="text-xs text-mist">—</span>
+            {% elif out %}<span class="tag tag-safety">Out</span>
+            {% elif low %}<span class="tag tag-safety">Low</span>
+            {% elif c.reorder_point is none %}<span class="text-xs text-mist">Off</span>
+            {% else %}<span class="tag">OK</span>{% endif %}
           </td>
-          <td class="py-1.5">
-            <form method="post" action="/inventory/adjust/{{ c.id }}" class="mb-1 flex flex-wrap gap-1">
-              <input inputmode="decimal" name="target" placeholder="{{ '%.2f'|format(c.stock_qty) }}" class="field w-20 px-2 text-xs">
-              <input name="note" placeholder="note" class="field w-24 px-2 text-xs">
-              <button class="btn-secondary px-2 text-xs">Set</button>
-            </form>
-            <form method="post" action="/inventory/reorder/{{ c.id }}" class="flex flex-wrap items-center gap-1">
-              <input inputmode="decimal" name="reorder_point"
-                     value="{{ '%.2f'|format(c.reorder_point) if c.reorder_point is not none else '' }}"
-                     placeholder="reorder pt" class="field font-data w-16 px-2 text-xs">
-              <input inputmode="decimal" name="reorder_qty"
-                     value="{{ '%.2f'|format(c.reorder_qty) if c.reorder_qty is not none else '' }}"
-                     placeholder="reorder qty" class="field font-data w-16 px-2 text-xs">
-              <button class="btn-secondary px-2 text-xs">Reorder</button>
-            </form>
+          <td class="py-2 pr-3 text-mist">{{ "%.2f"|format(c.reorder_point) if c.reorder_point is not none else "—" }}</td>
+          <td class="py-2 pr-3 money">{{ (c.stock_qty * c.cost_per_unit_cents) | dollars }}</td>
+          <td class="py-2 text-right">
+            <button type="button" onclick="invEdit({{ c.id }})" class="btn-secondary px-3 py-1 text-xs">Edit</button>
+          </td>
+        </tr>
+        <tr id="edit-{{ c.id }}" class="hidden">
+          <td colspan="6" class="bg-tile/40 px-3 py-3">
+            <div class="grid gap-3 sm:grid-cols-2">
+              <form method="post" action="/inventory/adjust/{{ c.id }}" class="space-y-1.5">
+                <div class="field-label">Set on-hand</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <input inputmode="decimal" name="target" placeholder="{{ '%.2f'|format(c.stock_qty) }}" class="field w-24 px-2">
+                  <input name="note" placeholder="note" class="field min-w-0 flex-1 px-2">
+                  <button class="btn-secondary px-3">Set</button>
+                </div>
+              </form>
+              <form method="post" action="/inventory/reorder/{{ c.id }}" class="space-y-1.5">
+                <div class="field-label">Reorder point / qty</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <input inputmode="decimal" name="reorder_point" value="{{ '%.2f'|format(c.reorder_point) if c.reorder_point is not none else '' }}" placeholder="point" class="field w-20 px-2">
+                  <input inputmode="decimal" name="reorder_qty" value="{{ '%.2f'|format(c.reorder_qty) if c.reorder_qty is not none else '' }}" placeholder="qty" class="field w-20 px-2">
+                  <button class="btn-secondary px-3">Save</button>
+                </div>
+              </form>
+            </div>
           </td>
         </tr>
         {% else %}
@@ -59,16 +157,17 @@
   </div>
 </div>
 
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Log a purchase</h2>
+{# Zone 4 — activity: log a purchase #}
+<div class="card mb-4 p-4" id="log">
+  <h2 class="set-h mb-2">Log a purchase</h2>
   <form method="post" action="/inventory/purchase" class="space-y-2">
     <label class="block"><span class="field-label">Chemical</span>
       <select name="chemical_id" class="field">
-        {% for c in active_chems %}<option value="{{ c.id }}">{{ c.name }} ({{ c.unit }})</option>{% endfor %}
+        {% for c in active_chems %}<option value="{{ c.id }}"{{ " selected" if c.id == restock_id }}>{{ c.name }} ({{ c.unit }})</option>{% endfor %}
       </select></label>
     <div class="grid grid-cols-2 gap-2">
       <label class="block"><span class="field-label">Quantity</span>
-        <input inputmode="decimal" name="quantity" class="field font-data"></label>
+        <input inputmode="decimal" name="quantity" value="{{ '%.2f'|format(restock_qty) if restock_qty is not none else '' }}" class="field font-data"></label>
       <label class="block"><span class="field-label">Total cost $</span>
         <input inputmode="decimal" name="cost_dollars" class="field font-data"></label>
     </div>
@@ -81,35 +180,31 @@
   </form>
 </div>
 
+{# Zone 4 — activity: history (tabbed) #}
 <div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Purchase history</h2>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-seam text-left text-mist">
-          <th class="py-1.5 pr-3 font-medium">Date</th>
-          <th class="py-1.5 pr-3 font-medium">Chemical</th>
-          <th class="py-1.5 pr-3 font-medium">Qty</th>
-          <th class="py-1.5 pr-3 font-medium">Total</th>
-          <th class="py-1.5 pr-3 font-medium">Note</th>
-          <th class="py-1.5 font-medium">By</th>
-        </tr>
-      </thead>
-      <tbody class="font-data">
-        {% for p in history %}
-        <tr class="border-b border-seam/60">
-          <td class="py-1.5 pr-3 whitespace-nowrap">{{ p.at.strftime("%Y-%m-%d") }}</td>
-          <td class="py-1.5 pr-3 font-body">{{ p.chemical.name }}</td>
-          <td class="py-1.5 pr-3 {{ 'text-safety' if p.quantity < 0 }}">{{ "%+.2f"|format(p.quantity) }}</td>
-          <td class="py-1.5 pr-3 money">{{ p.total_cost_cents | dollars }}</td>
-          <td class="py-1.5 pr-3 font-body text-mist">{{ p.note }}</td>
-          <td class="py-1.5">{% if p.user_id in users_by_id %}<span class="tag">{{ users_by_id[p.user_id].name | initials }}</span>{% else %}—{% endif %}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="py-6 text-center font-body text-mist">No purchases logged yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="mb-3 flex gap-4 border-b border-seam">
+    <button type="button" id="tabbtn-purchases" onclick="invTab('purchases')"
+            class="border-b-2 border-pool pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-ink">Purchases</button>
+    <button type="button" id="tabbtn-adjustments" onclick="invTab('adjustments')"
+            class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Adjustments</button>
   </div>
+  <div id="tab-purchases">{{ history_table(purchases, users_by_id, "No purchases logged yet.") }}</div>
+  <div id="tab-adjustments" class="hidden">{{ history_table(adjustments, users_by_id, "No recount adjustments yet.") }}</div>
 </div>
+
+<script>
+function invEdit(id){var r=document.getElementById('edit-'+id);if(r)r.classList.toggle('hidden');}
+function invShowInactive(show){
+  document.querySelectorAll('.inv-inactive').forEach(function(el){el.classList.toggle('hidden', !show);});
+}
+function invTab(name){
+  ['purchases','adjustments'].forEach(function(n){
+    var on = n===name;
+    document.getElementById('tab-'+n).classList.toggle('hidden', !on);
+    var b = document.getElementById('tabbtn-'+n);
+    b.classList.toggle('border-pool', on); b.classList.toggle('text-ink', on);
+    b.classList.toggle('border-transparent', !on); b.classList.toggle('text-mist', !on);
+  });
+}
+</script>
 {% endblock %}
