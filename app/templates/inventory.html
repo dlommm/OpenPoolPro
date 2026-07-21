@@ -193,9 +193,10 @@
 </div>
 
 <script>
-function invEdit(id){var r=document.getElementById('edit-'+id);if(r)r.classList.toggle('hidden');}
+function invEdit(id){var r=document.getElementById('edit-'+id);if(!r)return;var willShow=r.classList.contains('hidden');r.classList.toggle('hidden');if(willShow)r.scrollIntoView({block:'center',behavior:'smooth'});}
 function invShowInactive(show){
   document.querySelectorAll('.inv-inactive').forEach(function(el){el.classList.toggle('hidden', !show);});
+  if(!show){document.querySelectorAll('tr[id^="edit-"]').forEach(function(el){el.classList.add('hidden');});}
 }
 function invTab(name){
   ['purchases','adjustments'].forEach(function(n){

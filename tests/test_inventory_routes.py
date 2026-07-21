@@ -269,25 +269,6 @@ def test_reorder_nonfinite_input_no_mutation(client, engine):
         assert s.get(models.Chemical, chem_id).reorder_point == 5.0  # unchanged
 
 
-# --- last-purchase column excludes recount adjustments -------------------
-
-def test_last_purchase_excludes_adjustment_rows(client, engine):
-    chem_id = seed_chem(engine, stock_qty=5.0)
-    client.post("/inventory/purchase", data={
-        "chemical_id": str(chem_id), "quantity": "3", "cost_dollars": "9.00",
-        "update_cost": "on", "note": "restock"})
-    client.post(f"/inventory/adjust/{chem_id}", data={"target": "100", "note": "recount"})
-    # The redesigned template (Task 3) no longer renders a per-row "last
-    # purchase" column in Zone 3 (approved design spec drops it in favor of
-    # Chemical/On hand/Status/Reorder pt/Value/Edit). The underlying guard —
-    # a recount adjustment ("adjust: ..." note, $0.00/unit) must not displace
-    # the real purchase's $3.00/unit as that chemical's last purchase — still
-    # lives in `_context`'s `last_purchase_unit_cost`, so assert it there.
-    with Session(engine) as s:
-        ctx = _context(s)
-    assert ctx["last_purchase_unit_cost"][chem_id] == 300
-
-
 # --- badge guard exception branch ----------------------------------------
 
 def test_badge_guard_swallows_exception_and_page_still_renders(client, engine, monkeypatch):

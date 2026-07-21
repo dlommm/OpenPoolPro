@@ -47,19 +47,6 @@ def _context(session: Session, error: str | None = None,
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     active_chems = [c for c in chems if c.active]
     low_ids = {c.id for c in inventory.low_stock(session)}
-    last_purchase = {}
-    last_purchase_unit_cost = {}
-    for c in chems:
-        # Exclude recount-adjustment rows (note "adjust: ...", $0.00/unit) —
-        # they're not a real purchase and would otherwise mask the actual
-        # last purchase's cost in this column.
-        p = session.scalars(
-            select(models.Purchase).where(
-                models.Purchase.chemical_id == c.id,
-                ~models.Purchase.note.startswith("adjust: "))
-            .order_by(models.Purchase.at.desc())).first()
-        last_purchase[c.id] = p
-        last_purchase_unit_cost[c.id] = round(p.total_cost_cents / p.quantity) if p and p.quantity else None
     history = session.scalars(
         select(models.Purchase).order_by(models.Purchase.at.desc()).limit(50)).all()
     purchases = [p for p in history if not p.note.startswith("adjust: ")]
@@ -67,8 +54,7 @@ def _context(session: Session, error: str | None = None,
     users_by_id = {u.id: u for u in session.scalars(select(models.User)).all()}
     restock_chem = session.get(models.Chemical, restock_id) if restock_id else None
     return {"chems": chems, "active_chems": active_chems, "low_ids": low_ids,
-            "last_purchase": last_purchase, "last_purchase_unit_cost": last_purchase_unit_cost,
-            "history": history, "purchases": purchases, "adjustments": adjustments,
+            "purchases": purchases, "adjustments": adjustments,
             "users_by_id": users_by_id, "error": error,
             "total_value_cents": inventory.inventory_value_cents(session),
             "reorder_items": inventory.reorder_list(session),
