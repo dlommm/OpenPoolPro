@@ -1,0 +1,12 @@
+/* fresh-field.css — Fresh-Field theme. OWNED BY THE FRESH-FIELD AGENT.
+ *
+ * Light + dark (theme-aware). Fill in the 9 role tokens + --color-surface +
+ * fonts under the scope below, and add the dark variant via:
+ *   @media (prefers-color-scheme: dark){ :root[data-theme="fresh-field"]{...} }
+ * Theme-scoped component overrides + bespoke classes PREFIXED `ff-`.
+ *
+ * RULES: no @theme block here (tokens live in base.css); set token values
+ * under :root[data-theme="fresh-field"]; keep bespoke classes `ff-`-prefixed.
+ */
+:root[data-theme="fresh-field"] {
+}

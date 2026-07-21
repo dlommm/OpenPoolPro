@@ -1,0 +1,12 @@
+/* warm-coastal.css — Warm-Coastal theme. OWNED BY THE WARM-COASTAL AGENT.
+ *
+ * The @theme defaults in css/base.css ARE the warm-coastal values, so this
+ * scope can stay empty and the theme still renders correctly. The agent may
+ * (re)assert the 9 role tokens + --color-surface + fonts here for clarity,
+ * add theme-scoped component overrides, and bespoke classes PREFIXED `wc-`.
+ *
+ * RULES: no @theme block here (tokens live in base.css); set token values
+ * under :root[data-theme="warm-coastal"]; keep bespoke classes `wc-`-prefixed.
+ */
+:root[data-theme="warm-coastal"] {
+}

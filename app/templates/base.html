@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en">
+{% set active_theme = (request.state.active_theme if request else none) or 'warm-coastal' %}
+<html lang="en" data-theme="{{ active_theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0B2A33">
+  {% set theme_colors = {'warm-coastal': '#16303B', 'control-room': '#0E141B', 'fresh-field': '#0F172A'} %}
+  <meta name="theme-color" content="{{ theme_colors.get(active_theme, '#16303B') }}">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="preload" href="/static/fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>

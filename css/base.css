@@ -1,0 +1,165 @@
+/* base.css — Foundation layer of the multi-theme system.
+ *
+ * Owns the @theme token NAMES + their warm-coastal DEFAULT values, the
+ * system-font stacks (no web fonts), and every shared @layer base / @layer
+ * components rule — all built on tokens (var(--color-*)) so a theme reskins
+ * the whole app simply by redefining those custom properties under
+ * :root[data-theme="X"].
+ *
+ * Theme files (css/themes/*.css) set their own token values + scoped
+ * component overrides + bespoke prefixed classes. They MUST NOT contain an
+ * @theme block — @theme (token names + utility generation) lives ONLY here.
+ */
+
+@theme {
+  /* Semantic role tokens — values below are the warm-coastal DEFAULT.
+     Each theme overrides them under :root[data-theme="X"]. */
+  --color-ink: #16303B;       /* primary text */
+  --color-tile: #F3EDE3;      /* page background */
+  --color-surface: #FBF7EF;   /* card / panel background */
+  --color-pool: #2B9EB3;      /* primary action */
+  --color-pooldeep: #1F7C8C;  /* pressed / hover */
+  --color-shallow: #D6EAE6;   /* selected wash */
+  --color-brass: #C58A2E;     /* money accents ONLY */
+  --color-safety: #E76F51;    /* warnings ONLY */
+  --color-seam: #E4DBCC;      /* card borders — grout line */
+  --color-mist: #5E6E70;      /* secondary text */
+
+  /* Fonts — system stacks only (no @font-face). warm-coastal defaults. */
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: ui-monospace, Menlo, Consolas, monospace;
+
+  --shadow-card: 0 1px 2px rgba(11, 42, 51, 0.06), 0 4px 12px rgba(11, 42, 51, 0.04);
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  body {
+    @apply bg-tile text-ink font-body antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-pool);
+    outline-offset: 2px;
+  }
+}
+
+/* ---------- Components ---------- */
+@layer components {
+  /* Page header: eyebrow + display title + waterline */
+  .page-eyebrow {
+    @apply font-data text-[11px] font-medium uppercase tracking-[0.18em] text-mist;
+  }
+  .page-title {
+    @apply font-display text-[34px] font-bold uppercase leading-none tracking-wide text-ink;
+  }
+
+  .card {
+    @apply rounded-xl border border-seam shadow-card;
+    background-color: var(--color-surface);
+  }
+
+  .btn-primary {
+    @apply flex min-h-12 w-full items-center justify-center rounded-xl bg-pool font-display text-lg font-bold uppercase tracking-wider text-white transition active:scale-[0.98] active:bg-pooldeep;
+  }
+  .btn-secondary {
+    @apply flex min-h-11 items-center justify-center rounded-xl border border-seam px-4 font-medium text-ink transition active:scale-[0.98] active:bg-shallow;
+    background-color: var(--color-surface);
+  }
+  .btn-danger {
+    @apply flex min-h-11 w-full items-center justify-center rounded-xl border border-safety/40 font-medium text-safety transition active:scale-[0.98];
+    background-color: var(--color-surface);
+  }
+
+  .field {
+    @apply w-full min-h-11 rounded-lg border border-seam px-3 text-ink placeholder:text-mist/60 focus:border-pool;
+    background-color: var(--color-surface);
+  }
+  .field-label {
+    @apply mb-1 block text-[13px] font-medium text-mist;
+  }
+
+  /* Deck tag: small mono chip for gate codes, flags */
+  .tag {
+    @apply inline-flex min-h-6 items-center gap-1 rounded border border-seam bg-tile px-1.5 font-data text-[11px] font-medium text-ink;
+  }
+  .tag-safety {
+    @apply border-safety/30 bg-safety/5 text-safety;
+  }
+
+  /* Money: mono + brass, used nowhere else */
+  .money {
+    @apply font-data font-semibold text-brass;
+  }
+
+  /* Depth-gauge progress (signature) */
+  .gauge {
+    @apply relative h-6 overflow-hidden rounded-md border border-seam;
+    background-color: var(--color-surface);
+  }
+  .gauge-fill {
+    @apply absolute inset-y-0 left-0 bg-pool/85 transition-[width] duration-700 ease-out;
+  }
+  .gauge-ticks {
+    @apply absolute inset-0;
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(100% / var(--ticks, 8) - 1px),
+      color-mix(in srgb, var(--color-ink) 18%, transparent) calc(100% / var(--ticks, 8) - 1px),
+      color-mix(in srgb, var(--color-ink) 18%, transparent) calc(100% / var(--ticks, 8))
+    );
+  }
+  .gauge-label {
+    @apply absolute inset-0 flex items-center justify-center font-display text-sm font-bold uppercase tracking-[0.2em];
+    color: var(--color-ink);
+    mix-blend-mode: normal;
+  }
+
+  /* Stop card status stripe */
+  .stop {
+    @apply relative overflow-hidden rounded-xl border border-seam pl-4 shadow-card;
+    background-color: var(--color-surface);
+  }
+  .stop::before {
+    content: "";
+    @apply absolute inset-y-0 left-0 w-1 bg-pool;
+  }
+  .stop-done::before {
+    @apply bg-seam;
+  }
+  .stop-missed::before {
+    @apply bg-safety;
+  }
+}
+
+/* ---------- Signature motion: waterline draw + card rise ---------- */
+.waterline path {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: waterline-draw 0.7s ease-out 0.05s forwards;
+}
+@keyframes waterline-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.rise > * {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: rise-in 0.4s ease-out forwards;
+}
+.rise > *:nth-child(1) { animation-delay: 0.05s; }
+.rise > *:nth-child(2) { animation-delay: 0.1s; }
+.rise > *:nth-child(3) { animation-delay: 0.15s; }
+.rise > *:nth-child(4) { animation-delay: 0.2s; }
+.rise > *:nth-child(5) { animation-delay: 0.25s; }
+.rise > *:nth-child(n + 6) { animation-delay: 0.3s; }
+@keyframes rise-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waterline path { animation: none; stroke-dashoffset: 0; }
+  .rise > * { animation: none; opacity: 1; transform: none; }
+  * { transition-duration: 0.01ms !important; }
+}

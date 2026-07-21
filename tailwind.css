@@ -1,181 +1,21 @@
+/* tailwind.css — CSS entry point / aggregator for the multi-theme system.
+ *
+ * This file is intentionally thin: it pulls in Tailwind, points content
+ * scanning at the templates, then imports the Foundation base layer and each
+ * theme file. Tailwind v4 bundles these local @import files at build time
+ * (verified with pytailwindcss v4), so app/static/app.css stays a single
+ * compiled stylesheet (unchanged URL, network-first via the service worker —
+ * a theme swap is a pure re-render, no cache bump, no stale CSS).
+ *
+ * File ownership (do not merge these back together):
+ *   css/base.css                 — Foundation: @theme tokens + shared layers
+ *   css/themes/warm-coastal.css  — Warm-Coastal agent
+ *   css/themes/control-room.css  — Control-Room agent
+ *   css/themes/fresh-field.css   — Fresh-Field agent
+ */
 @import "tailwindcss";
 @source "./app/templates";
-
-@theme {
-  --color-ink: #0B2A33;      /* deep end — primary text */
-  --color-tile: #F6F9FA;     /* page background, cool tile white */
-  --color-pool: #0E7490;     /* primary action teal */
-  --color-pooldeep: #0A5666; /* pressed / hover state */
-  --color-shallow: #DCF1F3;  /* selected wash */
-  --color-brass: #B07818;    /* money accents only */
-  --color-safety: #BA3A26;   /* warnings: dogs, missed */
-  --color-seam: #D8E4E7;     /* card borders — grout line */
-  --color-mist: #5C7A82;     /* secondary text */
-  --font-display: "Barlow Condensed", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, sans-serif;
-  --font-data: "IBM Plex Mono", ui-monospace, monospace;
-  --shadow-card: 0 1px 2px rgba(11, 42, 51, 0.06), 0 4px 12px rgba(11, 42, 51, 0.04);
-}
-
-/* ---------- Fonts (self-hosted, latin subsets) ---------- */
-@font-face {
-  font-family: "Barlow Condensed";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/static/fonts/barlow-condensed-600.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Barlow Condensed";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/static/fonts/barlow-condensed-700.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans";
-  font-style: normal;
-  font-weight: 100 700;
-  font-display: swap;
-  src: url("/static/fonts/plex-sans-var.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/static/fonts/plex-mono-500.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/static/fonts/plex-mono-600.woff2") format("woff2");
-}
-
-/* ---------- Base ---------- */
-@layer base {
-  body {
-    @apply bg-tile text-ink font-body antialiased;
-  }
-  :focus-visible {
-    outline: 2px solid #0e7490;
-    outline-offset: 2px;
-  }
-}
-
-/* ---------- Components ---------- */
-@layer components {
-  /* Page header: eyebrow + display title + waterline */
-  .page-eyebrow {
-    @apply font-data text-[11px] font-medium uppercase tracking-[0.18em] text-mist;
-  }
-  .page-title {
-    @apply font-display text-[34px] font-bold uppercase leading-none tracking-wide text-ink;
-  }
-
-  .card {
-    @apply rounded-xl border border-seam bg-white shadow-card;
-  }
-
-  .btn-primary {
-    @apply flex min-h-12 w-full items-center justify-center rounded-xl bg-pool font-display text-lg font-bold uppercase tracking-wider text-white transition active:scale-[0.98] active:bg-pooldeep;
-  }
-  .btn-secondary {
-    @apply flex min-h-11 items-center justify-center rounded-xl border border-seam bg-white px-4 font-medium text-ink transition active:scale-[0.98] active:bg-shallow;
-  }
-  .btn-danger {
-    @apply flex min-h-11 w-full items-center justify-center rounded-xl border border-safety/40 bg-white font-medium text-safety transition active:scale-[0.98];
-  }
-
-  .field {
-    @apply w-full min-h-11 rounded-lg border border-seam bg-white px-3 text-ink placeholder:text-mist/60 focus:border-pool;
-  }
-  .field-label {
-    @apply mb-1 block text-[13px] font-medium text-mist;
-  }
-
-  /* Deck tag: small mono chip for gate codes, flags */
-  .tag {
-    @apply inline-flex min-h-6 items-center gap-1 rounded border border-seam bg-tile px-1.5 font-data text-[11px] font-medium text-ink;
-  }
-  .tag-safety {
-    @apply border-safety/30 bg-safety/5 text-safety;
-  }
-
-  /* Money: mono + brass, used nowhere else */
-  .money {
-    @apply font-data font-semibold text-brass;
-  }
-
-  /* Depth-gauge progress (signature) */
-  .gauge {
-    @apply relative h-6 overflow-hidden rounded-md border border-seam bg-white;
-  }
-  .gauge-fill {
-    @apply absolute inset-y-0 left-0 bg-pool/85 transition-[width] duration-700 ease-out;
-  }
-  .gauge-ticks {
-    @apply absolute inset-0;
-    background-image: repeating-linear-gradient(
-      to right,
-      transparent 0,
-      transparent calc(100% / var(--ticks, 8) - 1px),
-      rgba(11, 42, 51, 0.18) calc(100% / var(--ticks, 8) - 1px),
-      rgba(11, 42, 51, 0.18) calc(100% / var(--ticks, 8))
-    );
-  }
-  .gauge-label {
-    @apply absolute inset-0 flex items-center justify-center font-display text-sm font-bold uppercase tracking-[0.2em];
-    color: #0b2a33;
-    mix-blend-mode: normal;
-  }
-
-  /* Stop card status stripe */
-  .stop {
-    @apply relative overflow-hidden rounded-xl border border-seam bg-white pl-4 shadow-card;
-  }
-  .stop::before {
-    content: "";
-    @apply absolute inset-y-0 left-0 w-1 bg-pool;
-  }
-  .stop-done::before {
-    @apply bg-seam;
-  }
-  .stop-missed::before {
-    @apply bg-safety;
-  }
-
-}
-
-/* ---------- Signature motion: waterline draw + card rise ---------- */
-.waterline path {
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  animation: waterline-draw 0.7s ease-out 0.05s forwards;
-}
-@keyframes waterline-draw {
-  to { stroke-dashoffset: 0; }
-}
-
-.rise > * {
-  opacity: 0;
-  transform: translateY(8px);
-  animation: rise-in 0.4s ease-out forwards;
-}
-.rise > *:nth-child(1) { animation-delay: 0.05s; }
-.rise > *:nth-child(2) { animation-delay: 0.1s; }
-.rise > *:nth-child(3) { animation-delay: 0.15s; }
-.rise > *:nth-child(4) { animation-delay: 0.2s; }
-.rise > *:nth-child(5) { animation-delay: 0.25s; }
-.rise > *:nth-child(n + 6) { animation-delay: 0.3s; }
-@keyframes rise-in {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .waterline path { animation: none; stroke-dashoffset: 0; }
-  .rise > * { animation: none; opacity: 1; transform: none; }
-  * { transition-duration: 0.01ms !important; }
-}
+@import "./css/base.css";
+@import "./css/themes/warm-coastal.css";
+@import "./css/themes/control-room.css";
+@import "./css/themes/fresh-field.css";

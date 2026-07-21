@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app import config, mailer, models
 from app.db import get_session
 from app.deps import require_admin
-from app.main import templates
+from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -51,6 +51,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "tiers": tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
+        "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
         "business_name": models.get_setting(session, "business_name", ""),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
         "role_values": models.ROLE_VALUES,
@@ -251,6 +252,19 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
             session.add(models.JobTemplate(title=title, description=description,
                                            job_type=job_type, labor_cents=labor_cents))
     session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/appearance")
+async def save_appearance(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    theme = (form.get("active_theme") or "").strip()
+    # Only persist a recognized theme; anything else (garbage/tampering) keeps
+    # whatever was previously stored rather than saving an invalid value that
+    # the middleware would just fall back on -- mirrors save_general/save_targets.
+    if theme in ALLOWED_THEMES:
+        models.set_setting(session, "active_theme", theme)
+        session.commit()
     return RedirectResponse("/settings", status_code=303)
 
 

@@ -1,0 +1,11 @@
+/* control-room.css — Control-Room theme. OWNED BY THE CONTROL-ROOM AGENT.
+ *
+ * Dark, mono-forward console look. Fill in the 9 role tokens + --color-surface
+ * + fonts under the scope below, theme-scoped component overrides, and bespoke
+ * classes PREFIXED `cr-` (plus theme-only tokens like --color-panel).
+ *
+ * RULES: no @theme block here (tokens live in base.css); set token values
+ * under :root[data-theme="control-room"]; keep bespoke classes `cr-`-prefixed.
+ */
+:root[data-theme="control-room"] {
+}
