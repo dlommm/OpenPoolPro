@@ -76,6 +76,7 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
                description: str = Form(""), priority: str = Form("normal"),
                labor_dollars: str = Form(""), scheduled_date: str = Form(""),
                job_type: str = Form("service"), assigned_tech_id: str = Form(""),
+               template_id: str = Form(""),
                session: Session = Depends(get_session)):
     # Validate property exists
     get_or_404(session, models.Property, property_id)
@@ -93,6 +94,11 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
         j.scheduled_date = date.fromisoformat(scheduled_date)
         j.status = "scheduled"
     session.add(j)
+    session.flush()  # assign j.id before attaching tasks
+    tmpl_id = _parse_int_tolerant(template_id)
+    tmpl = session.get(models.JobTemplate, tmpl_id) if tmpl_id is not None else None
+    if tmpl is not None:
+        j.tasks = [models.JobTask(label=t.label, position=t.position) for t in tmpl.tasks]
     session.commit()
     return RedirectResponse(f"/jobs/{j.id}", status_code=303)
 
@@ -197,5 +203,15 @@ def reopen_job(jid: int, session: Session = Depends(get_session)):
     j.status = "scheduled" if j.scheduled_date else "open"
     j.completed_at = None
     j.completed_by_id = None
+    session.commit()
+    return RedirectResponse(f"/jobs/{jid}", status_code=303)
+
+
+@router.post("/jobs/{jid}/tasks/{tid}/toggle")
+def toggle_task(jid: int, tid: int, session: Session = Depends(get_session)):
+    task = get_or_404(session, models.JobTask, tid)
+    if task.job_id != jid:
+        return HTMLResponse("mismatch", status_code=400)
+    task.done = not task.done
     session.commit()
     return RedirectResponse(f"/jobs/{jid}", status_code=303)

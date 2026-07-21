@@ -3,6 +3,7 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Job ticket", "Edit job" if j else "New job") }}
 <form method="post" class="space-y-3">
+  {% if template %}<input type="hidden" name="template_id" value="{{ template.id }}">{% endif %}
   <label class="block"><span class="field-label">Property</span>
     <select name="property_id" class="field">
       {% for p in props %}

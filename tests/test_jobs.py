@@ -163,3 +163,32 @@ def test_job_detail_shows_start_button_then_duration(client, engine):
     client.post(f"/jobs/{jid}/times", data={"started_hhmm": "10:00", "ended_hhmm": "11:05"})
     html = client.get(f"/jobs/{jid}").text
     assert "1 h 05" in html and "Start job" not in html
+
+
+def test_create_job_from_template_seeds_tasks(client, engine):
+    from sqlalchemy.orm import Session
+    from sqlalchemy import select
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="Eve")
+        p = models.Property(customer=c)
+        s.add(p)
+        t = models.JobTemplate(title="Filter clean", job_type="service", labor_cents=0)
+        t.tasks = [models.JobTemplateTask(label="Backwash", position=0),
+                   models.JobTemplateTask(label="Rinse", position=1)]
+        s.add(t); s.commit()
+        pid, tid = p.id, t.id
+    r = client.post("/jobs/new", data={
+        "property_id": pid, "title": "Filter clean", "job_type": "service",
+        "template_id": str(tid)}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        job = s.scalars(select(models.Job).where(models.Job.title == "Filter clean")).one()
+        labels = [x.label for x in sorted(job.tasks, key=lambda z: z.position)]
+        assert labels == ["Backwash", "Rinse"]
+        jt = job.tasks[0]
+        assert jt.done is False
+    r2 = client.post(f"/jobs/{job.id}/tasks/{jt.id}/toggle", follow_redirects=False)
+    assert r2.status_code == 303
+    with Session(engine) as s:
+        assert s.get(models.JobTask, jt.id).done is True

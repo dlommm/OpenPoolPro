@@ -15,6 +15,20 @@
   {% if j.started_at and not j.completed_at %}<span class="tag">Started {{ j.started_at | hhmm }}</span>{% endif %}</p>
 {% if j.description %}<p class="card mb-4 p-3.5 text-sm">{{ j.description }}</p>{% endif %}
 
+{% if j.tasks %}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Checklist</h2>
+<div class="space-y-1">
+  {% for t in j.tasks %}
+  <form method="post" action="/jobs/{{ j.id }}/tasks/{{ t.id }}/toggle">
+    <button class="flex min-h-11 w-full items-center gap-2 rounded-lg border border-seam px-3 text-left">
+      <span class="{{ 'text-pool' if t.done else 'text-mist' }}">{{ '☑' if t.done else '☐' }}</span>
+      <span class="{{ 'line-through text-mist' if t.done }}">{{ t.label }}</span>
+    </button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
   {% for ph in photos %}
   <div class="relative h-20 w-20">
