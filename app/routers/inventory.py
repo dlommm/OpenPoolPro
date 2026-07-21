@@ -42,7 +42,8 @@ def _reorder_field(val) -> tuple[bool, float | None]:
     return True, f
 
 
-def _context(session: Session, error: str | None = None) -> dict:
+def _context(session: Session, error: str | None = None,
+             restock_id: int | None = None) -> dict:
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     active_chems = [c for c in chems if c.active]
     low_ids = {c.id for c in inventory.low_stock(session)}
@@ -61,15 +62,28 @@ def _context(session: Session, error: str | None = None) -> dict:
         last_purchase_unit_cost[c.id] = round(p.total_cost_cents / p.quantity) if p and p.quantity else None
     history = session.scalars(
         select(models.Purchase).order_by(models.Purchase.at.desc()).limit(50)).all()
+    purchases = [p for p in history if not p.note.startswith("adjust: ")]
+    adjustments = [p for p in history if p.note.startswith("adjust: ")]
     users_by_id = {u.id: u for u in session.scalars(select(models.User)).all()}
+    restock_chem = session.get(models.Chemical, restock_id) if restock_id else None
     return {"chems": chems, "active_chems": active_chems, "low_ids": low_ids,
             "last_purchase": last_purchase, "last_purchase_unit_cost": last_purchase_unit_cost,
-            "history": history, "users_by_id": users_by_id, "error": error}
+            "history": history, "purchases": purchases, "adjustments": adjustments,
+            "users_by_id": users_by_id, "error": error,
+            "total_value_cents": inventory.inventory_value_cents(session),
+            "reorder_items": inventory.reorder_list(session),
+            "item_count": len(active_chems),
+            "low_count": len(low_ids),
+            "out_count": sum(1 for c in active_chems if c.stock_qty <= 0),
+            "restock_id": restock_chem.id if restock_chem else None,
+            "restock_qty": restock_chem.reorder_qty if restock_chem else None}
 
 
 @router.get("/inventory")
-def inventory_page(request: Request, session: Session = Depends(get_session)):
-    return templates.TemplateResponse(request, "inventory.html", _context(session))
+def inventory_page(request: Request, restock: int | None = None,
+                   session: Session = Depends(get_session)):
+    return templates.TemplateResponse(request, "inventory.html",
+                                      _context(session, restock_id=restock))
 
 
 @router.post("/inventory/purchase")

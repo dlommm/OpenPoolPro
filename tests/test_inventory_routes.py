@@ -304,3 +304,51 @@ def test_adjust_zero_delta_no_purchase_row(client, engine):
     with Session(engine) as s:
         assert s.get(models.Chemical, chem_id).stock_qty == 5.0
         assert s.scalars(select(models.Purchase)).all() == []
+
+
+# --- _context enrichment (value/counts/split/restock) ---------------------
+
+from app.routers.inventory import _context  # noqa: E402
+
+
+def test_context_splits_purchases_and_adjustments(client, engine):
+    chem_id = seed_chem(engine, stock_qty=10.0)
+    client.post("/inventory/purchase", data={
+        "chemical_id": str(chem_id), "quantity": "5", "cost_dollars": "20",
+        "update_cost": "on", "note": "restock run"})
+    client.post(f"/inventory/adjust/{chem_id}", data={"target": "12", "note": "recount"})
+    with Session(engine) as s:
+        ctx = _context(s)
+    pnotes = [p.note for p in ctx["purchases"]]
+    anotes = [p.note for p in ctx["adjustments"]]
+    assert "restock run" in pnotes
+    assert any(n.startswith("adjust: ") for n in anotes)
+    assert all(not n.startswith("adjust: ") for n in pnotes)
+
+
+def test_context_reports_counts_and_value(client, engine):
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        chem.cost_per_unit_cents = 450
+        chem.stock_qty = 4.0
+        chem.reorder_point = 5.0    # low (4 <= 5)
+        s.commit()
+        ctx = _context(s)
+    assert isinstance(ctx["total_value_cents"], int)
+    assert ctx["low_count"] >= 1
+    assert isinstance(ctx["out_count"], int)
+    assert ctx["item_count"] >= 1
+    assert any(r["chemical"].name == "Liquid chlorine" for r in ctx["reorder_items"])
+
+
+def test_context_restock_prefill(client, engine):
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical).where(
+            models.Chemical.name == "Liquid chlorine")).one()
+        chem.reorder_qty = 15.0
+        s.commit()
+        cid = chem.id
+        ctx = _context(s, restock_id=cid)
+    assert ctx["restock_id"] == cid
+    assert ctx["restock_qty"] == 15.0
