@@ -503,6 +503,53 @@ def test_property_save_survives_geocode_failure(client, engine, monkeypatch):
     assert r.status_code in (200, 303)  # save did not blow up
 
 
+def test_edit_does_not_regeocode_when_address_unchanged(client, engine, monkeypatch):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models, geocode
+
+    calls = {"n": 0}
+
+    def counting_geocode(text, key, **kw):
+        calls["n"] += 1
+        return (28.3, -80.6)
+
+    monkeypatch.setattr(geocode, "geocode", counting_geocode)
+    with Session(engine) as s:
+        models.set_setting(s, "geoapify_key", "TESTKEY"); s.commit()
+
+    client.post("/customers/new", data={"name": "Regeo Co"})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == "Regeo Co")).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "street": "1 A St", "city": "Cocoa Beach", "state": "FL",
+        "zip": "32931", "gate_code": "0000", "frequency": "weekly", "weekday": "0"})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one().id
+
+    assert calls["n"] == 1
+    with Session(engine) as s:
+        p = s.get(models.Property, pid)
+        assert (p.latitude, p.longitude) == (28.3, -80.6)
+
+    # Edit ONLY the gate code -- same street/city/state/zip -- must not re-geocode.
+    client.post(f"/properties/{pid}/edit", data={
+        "label": "Home", "street": "1 A St", "city": "Cocoa Beach", "state": "FL",
+        "zip": "32931", "gate_code": "9999", "frequency": "weekly", "weekday": "0"})
+
+    assert calls["n"] == 1  # unchanged: no second geocode call
+    with Session(engine) as s:
+        p = s.get(models.Property, pid)
+        assert p.gate_code == "9999"
+        assert (p.latitude, p.longitude) == (28.3, -80.6)  # coords untouched
+
+    # Now change the street -- must re-geocode.
+    client.post(f"/properties/{pid}/edit", data={
+        "label": "Home", "street": "2 B St", "city": "Cocoa Beach", "state": "FL",
+        "zip": "32931", "gate_code": "9999", "frequency": "weekly", "weekday": "0"})
+    assert calls["n"] == 2
+
+
 def _mk_customer(client, engine, name, city="", street="1 A St"):
     client.post("/customers/new", data={"name": name})
     with Session(engine) as s:

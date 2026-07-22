@@ -470,6 +470,21 @@ def _apply_property(p: models.Property, label, street, city, state, zip, gate_co
     p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
 
 
+def _maybe_geocode(p: models.Property, key: str, old_address: str) -> None:
+    """Geocode `p` only when the composed address actually changed (or coords
+    are missing) -- avoids a needless synchronous Geoapify call (up to a 5s
+    timeout) on every edit, e.g. changing just a gate code or dog note.
+    `old_address` should be "" for a brand-new property, so a fresh property
+    with any address always geocodes on first save."""
+    if key and p.address and (p.address != old_address or p.latitude is None):
+        try:
+            coords = geocode.geocode(p.address, key)
+            if coords:
+                p.latitude, p.longitude = coords
+        except Exception:
+            pass
+
+
 def _active_techs(session: Session):
     return session.scalars(select(models.User).where(models.User.active)
                            .order_by(models.User.name)).all()
@@ -521,13 +536,7 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     key = models.get_setting(session, "geoapify_key", "")
-    if key and p.address:
-        try:
-            coords = geocode.geocode(p.address, key)
-            if coords:
-                p.latitude, p.longitude = coords
-        except Exception:
-            pass
+    _maybe_geocode(p, key, old_address="")
     session.add(p)
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
@@ -553,17 +562,12 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
+    old_address = p.address
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     key = models.get_setting(session, "geoapify_key", "")
-    if key and p.address:
-        try:
-            coords = geocode.geocode(p.address, key)
-            if coords:
-                p.latitude, p.longitude = coords
-        except Exception:
-            pass
+    _maybe_geocode(p, key, old_address)
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)
 

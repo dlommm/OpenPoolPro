@@ -164,7 +164,7 @@
 <h2 class="{{ ffh2 }}">Photos</h2>
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
-  {% for pt in ["before", "after", "issue"] %}
+  {% for pt in ["before", "after", "issue", "house"] %}
   <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
   {% endfor %}
 </div>
