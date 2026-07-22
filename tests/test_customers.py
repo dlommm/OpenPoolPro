@@ -610,3 +610,18 @@ def test_detail_map_absent_without_key(client, engine):
 def test_csp_allows_geoapify_images(client):
     r = client.get("/customers")
     assert "maps.geoapify.com" in r.headers["content-security-policy"]
+
+
+def test_detail_shows_map_and_navigate_with_key_and_coords(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    cid = _mk_customer(client, engine, "Map Co", city="Cocoa Beach")
+    with Session(engine) as s:
+        models.set_setting(s, "geoapify_key", "TESTKEY")
+        p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
+        p.latitude, p.longitude = 28.3, -80.6
+        s.commit()
+    body = client.get(f"/customers/{cid}").text
+    assert "maps.geoapify.com" in body            # static map img rendered
+    assert "maps.apple.com/?q=" in body           # Navigate deep link present
