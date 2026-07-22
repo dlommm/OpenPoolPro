@@ -15,7 +15,34 @@ from app import config, models
 MAX_ATTEMPTS = 5
 
 
-def smtp_configured() -> bool:
+def _config_conf() -> dict:
+    """SMTP config from env/app.config (the fallback when no DB settings exist)."""
+    return {"host": config.SMTP_HOST, "port": config.SMTP_PORT, "user": config.SMTP_USER,
+            "password": config.SMTP_PASS, "from": config.SMTP_FROM,
+            "starttls": config.SMTP_STARTTLS}
+
+
+def smtp_settings(session) -> dict:
+    """Resolved SMTP config: DB settings first, env/config as the fallback."""
+    g = models.get_setting
+    try:
+        port = int(g(session, "smtp_port", str(config.SMTP_PORT)) or config.SMTP_PORT)
+    except ValueError:
+        port = config.SMTP_PORT
+    user = g(session, "smtp_user", config.SMTP_USER)
+    return {
+        "host": g(session, "smtp_host", config.SMTP_HOST),
+        "port": port,
+        "user": user,
+        "password": g(session, "smtp_pass", config.SMTP_PASS),
+        "from": g(session, "smtp_from", "") or user or config.SMTP_FROM,
+        "starttls": g(session, "smtp_starttls", "1" if config.SMTP_STARTTLS else "0") != "0",
+    }
+
+
+def smtp_configured(session=None) -> bool:
+    if session is not None:
+        return bool(smtp_settings(session)["host"])
     return bool(config.SMTP_HOST)
 
 
@@ -29,20 +56,22 @@ def queue(session: Session, to_addr: str, subject: str, body: str,
     return row
 
 
-def send_message(to_addr: str, subject: str, body: str) -> None:
+def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None) -> None:
     """The only function that touches smtplib -- tests monkeypatch this.
+    `conf` is a resolved SMTP config (from smtp_settings); None -> env/config.
     Raises on failure; never logs or surfaces credentials."""
+    conf = conf or _config_conf()
     msg = EmailMessage()
-    msg["From"] = config.SMTP_FROM
+    msg["From"] = conf["from"]
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
 
-    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as smtp:
-        if config.SMTP_STARTTLS:
+    with smtplib.SMTP(conf["host"], conf["port"], timeout=15) as smtp:
+        if conf["starttls"]:
             smtp.starttls()
-        if config.SMTP_USER:
-            smtp.login(config.SMTP_USER, config.SMTP_PASS)
+        if conf["user"]:
+            smtp.login(conf["user"], conf["password"])
         smtp.send_message(msg)
 
 
@@ -52,7 +81,8 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
     Caller commits (same contract as queue/audit). Unconfigured SMTP is a
     no-op: returns (0, 0) without touching any row.
     """
-    if not smtp_configured():
+    conf = smtp_settings(session)
+    if not conf["host"]:
         return (0, 0)
 
     rows = session.scalars(
@@ -67,7 +97,7 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
     sent = failed = 0
     for row in rows:
         try:
-            send_message(row.to_addr, row.subject, row.body)
+            send_message(row.to_addr, row.subject, row.body, conf)
         except Exception as exc:
             row.attempts += 1
             row.last_error = str(exc)[:200]

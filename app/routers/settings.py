@@ -95,8 +95,9 @@ def settings_page(request: Request, rules_created: str | None = None,
         "targets": targets,
         "rules_created": _parse_count(rules_created),
         "company": company_info(session),
-        "smtp_configured": mailer.smtp_configured(),
-        "smtp_host": config.SMTP_HOST,
+        "smtp_configured": mailer.smtp_configured(session),
+        "smtp": {**mailer.smtp_settings(session),
+                 "pass_set": bool(mailer.smtp_settings(session)["password"])},
         "outbox": outbox,
         "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
                        and mail_failed_n is not None else None,
@@ -424,6 +425,22 @@ def download_backup(filename: str):
     if not os.path.isfile(path):
         return HTMLResponse("not found", status_code=404)
     return FileResponse(path, filename=filename)
+
+
+@router.post("/settings/smtp")
+async def save_smtp(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    for key in ("smtp_host", "smtp_user", "smtp_from"):
+        models.set_setting(session, key, (form.get(key) or "").strip())
+    port = (form.get("smtp_port") or "").strip()
+    if port.isdigit():
+        models.set_setting(session, "smtp_port", port)
+    models.set_setting(session, "smtp_starttls", "1" if form.get("smtp_starttls") == "on" else "0")
+    pw = form.get("smtp_pass")  # write-only: only overwrite when a value is supplied
+    if pw is not None and pw.strip():
+        models.set_setting(session, "smtp_pass", pw)
+    session.commit()
+    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/settings/mail/test")

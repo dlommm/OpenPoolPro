@@ -210,37 +210,47 @@
       <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Job templates</h2>
-          <p class="mb-3 text-sm text-mist">Reusable jobs with a checklist — pick one when creating a job.</p>
-          <form method="post" action="/settings/job_templates" class="space-y-3">
+          <p class="mb-4 text-sm text-mist">Reusable jobs with a checklist and optional size-based pricing — pick one when creating a job.</p>
+          <form method="post" action="/settings/job_templates" class="space-y-4">
             {% for t in job_templates %}
-            <div class="space-y-2 rounded-xl border border-seam bg-tile/40 p-3">
-              <div class="grid grid-cols-[1fr_7rem] gap-2 sm:grid-cols-[1.5fr_1.5fr_7rem_7.5rem]">
-                <input type="hidden" name="template_id" value="{{ t.id }}">
-                <input name="title" value="{{ t.title }}" placeholder="Title" class="field col-span-2 sm:col-span-1">
-                <input name="description" value="{{ t.description }}" placeholder="Description" class="field col-span-2 sm:col-span-1">
-                <select name="job_type" class="field">
-                  <option value="service" {{ "selected" if t.job_type == "service" }}>Service</option>
-                  <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option></select>
-                <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field"></div>
+            <div class="space-y-3 rounded-xl border border-seam bg-tile/40 p-4">
+              <input type="hidden" name="template_id" value="{{ t.id }}">
+              <div class="flex flex-wrap items-end gap-3">
+                <label class="block min-w-[12rem] flex-1"><span class="field-label">Template name</span>
+                  <input name="title" value="{{ t.title }}" placeholder="e.g. Green-to-clean" class="field font-semibold"></label>
+                <label class="block w-32"><span class="field-label">Type</span>
+                  <select name="job_type" class="field">
+                    <option value="service" {{ "selected" if t.job_type == "service" }}>Service</option>
+                    <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option></select></label>
+                <label class="block w-28"><span class="field-label">Flat price</span>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field font-semibold"></div></label>
               </div>
-              <textarea name="tasks_text" rows="3" class="field" placeholder="Checklist — one item per line">{{ t.tasks | map(attribute='label') | join('\n') }}</textarea>
-              <div class="flex items-center justify-between gap-2 pt-1">
-                <span class="text-xs text-mist">Checklist — one item per line</span>
-                <a href="/settings/job_templates/{{ t.id }}/prices" class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-seam px-3 text-sm font-medium text-pool hover:bg-shallow">Size prices{% if t.prices %} · {{ t.prices|length }}{% endif %} &rarr;</a>
+              <label class="block"><span class="field-label">Description</span>
+                <input name="description" value="{{ t.description }}" placeholder="Short description" class="field"></label>
+              <label class="block"><span class="field-label">Checklist (one item per line)</span>
+                <textarea name="tasks_text" rows="3" class="field">{{ t.tasks | map(attribute='label') | join('\n') }}</textarea></label>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs text-mist">Clear the name to delete</span>
+                <a href="/settings/job_templates/{{ t.id }}/prices" class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-seam px-3 text-sm font-medium text-pool hover:bg-shallow">Size prices{% if t.prices %} &middot; {{ t.prices|length }}{% endif %} &rarr;</a>
               </div>
             </div>
             {% endfor %}
-            <div class="space-y-2 rounded-lg border border-dashed border-seam p-2">
-              <div class="grid grid-cols-[1fr_7rem] gap-2 sm:grid-cols-[1.5fr_1.5fr_7rem_7.5rem]">
-                <input type="hidden" name="template_id" value="">
-                <input name="title" placeholder="New template" class="field col-span-2 sm:col-span-1">
-                <input name="description" placeholder="Description" class="field col-span-2 sm:col-span-1">
-                <select name="job_type" class="field"><option value="service">Service</option><option value="repair">Repair</option></select>
-                <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" placeholder="0.00" class="field"></div>
+            <div class="space-y-3 rounded-xl border border-dashed border-seam p-4">
+              <div class="mb-1 text-xs font-medium uppercase tracking-wide text-mist">New template</div>
+              <input type="hidden" name="template_id" value="">
+              <div class="flex flex-wrap items-end gap-3">
+                <label class="block min-w-[12rem] flex-1"><span class="field-label">Template name</span>
+                  <input name="title" placeholder="e.g. Filter clean" class="field"></label>
+                <label class="block w-32"><span class="field-label">Type</span>
+                  <select name="job_type" class="field"><option value="service">Service</option><option value="repair">Repair</option></select></label>
+                <label class="block w-28"><span class="field-label">Flat price</span>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" placeholder="0.00" class="field"></div></label>
               </div>
-              <textarea name="tasks_text" rows="3" class="field" placeholder="Checklist — one item per line"></textarea>
+              <label class="block"><span class="field-label">Description</span>
+                <input name="description" placeholder="Short description" class="field"></label>
+              <label class="block"><span class="field-label">Checklist (one item per line)</span>
+                <textarea name="tasks_text" rows="3" class="field" placeholder="Test water&#10;Brush walls&#10;Add shock"></textarea></label>
             </div>
-            <p class="text-xs text-mist">Clear a template's title to delete it.</p>
             <button class="btn-secondary w-full">Save templates</button>
           </form>
         </div>
@@ -308,8 +318,25 @@
       <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Email</h2>
-          {% if smtp_configured %}<span class="tag mb-2 inline-flex border-pool bg-shallow">Configured — {{ smtp_host }}</span>
-          {% else %}<span class="tag tag-safety mb-2 inline-flex">Not configured</span>{% endif %}
+          {% if smtp_configured %}<span class="tag mb-3 inline-flex border-pool bg-shallow">Configured — {{ smtp.host }}</span>
+          {% else %}<span class="tag tag-safety mb-3 inline-flex">Not configured</span>{% endif %}
+          <form method="post" action="/settings/smtp" class="mb-4 space-y-2">
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="block"><span class="field-label">SMTP host</span>
+                <input name="smtp_host" value="{{ smtp.host }}" placeholder="smtp.gmail.com" class="field"></label>
+              <label class="block"><span class="field-label">Port</span>
+                <input inputmode="numeric" name="smtp_port" value="{{ smtp.port }}" class="field font-data"></label>
+              <label class="block"><span class="field-label">Username</span>
+                <input name="smtp_user" value="{{ smtp.user }}" autocomplete="off" class="field"></label>
+              <label class="block"><span class="field-label">Password {% if smtp.pass_set %}<span class="font-normal normal-case text-mist">— saved, blank keeps it</span>{% endif %}</span>
+                <input type="password" name="smtp_pass" autocomplete="new-password" placeholder="{% if smtp.pass_set %}••••••••{% endif %}" class="field"></label>
+              <label class="block"><span class="field-label">From address</span>
+                <input name="smtp_from" value="{{ smtp['from'] }}" placeholder="Defaults to username" class="field"></label>
+              <label class="flex items-center gap-2 self-end pb-2.5"><input type="checkbox" name="smtp_starttls" {{ "checked" if smtp.starttls }} class="h-5 w-5"><span class="text-sm text-ink">Use STARTTLS</span></label>
+            </div>
+            <p class="text-xs text-mist">Stored in the app database. Leave host blank to disable email. Env vars still work as a fallback.</p>
+            <button class="btn-secondary w-full">Save email settings</button>
+          </form>
           <div class="mb-3 flex flex-wrap gap-2">
             <form method="post" action="/settings/mail/test" class="flex flex-1 gap-2">
               <input type="email" name="to_addr" placeholder="Send test email to…" class="field flex-1">
@@ -340,15 +367,31 @@
           </div>
         </div>
 
-        <div class="card p-4">
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Appearance</h2>
-          <form method="post" action="/settings/appearance" class="space-y-2">
-            <label class="block"><span class="field-label">Theme</span>
-              <select name="active_theme" class="field">
-                {% for value, label in [("warm-coastal","Warm Coastal"),("control-room","Control Room"),("fresh-field","Fresh Field")] %}
-                <option value="{{ value }}" {{ "selected" if active_theme == value }}>{{ label }}</option>{% endfor %}
-              </select></label>
-            <p class="text-xs text-mist">Applies to the whole app, for everyone.</p>
+          <p class="mb-3 text-sm text-mist">Pick a theme — applies to the whole app, for everyone.</p>
+          <form method="post" action="/settings/appearance" class="space-y-3">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {% for value, label, desc in [
+                ("warm-coastal","Warm Coastal","Sand & water, friendly"),
+                ("control-room","Control Room","Dark, high-contrast"),
+                ("fresh-field","Fresh Field","Bright & clean")] %}
+              <label class="group block cursor-pointer overflow-hidden rounded-xl border-2 border-seam transition has-[:checked]:border-pool has-[:checked]:shadow-card">
+                <input type="radio" name="active_theme" value="{{ value }}" class="sr-only" {{ "checked" if active_theme == value }}>
+                <div class="relative">
+                  <img src="/static/themes/{{ value }}.png" alt="{{ label }} theme preview"
+                       class="block h-32 w-full border-b border-seam object-cover object-left-top" loading="lazy">
+                  <div class="absolute right-2 top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-pool group-has-[:checked]:flex">
+                    <svg viewBox="0 0 20 20" class="h-3 w-3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between gap-2 border-t border-seam px-3 py-2">
+                  <span class="font-display text-sm font-bold uppercase tracking-wide text-ink">{{ label }}</span>
+                  <span class="truncate text-xs text-mist">{{ desc }}</span>
+                </div>
+              </label>
+              {% endfor %}
+            </div>
             <button class="btn-secondary w-full">Save appearance</button>
           </form>
         </div>

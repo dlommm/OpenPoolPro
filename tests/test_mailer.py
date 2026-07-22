@@ -28,7 +28,7 @@ def test_flush_success_marks_sent(engine, monkeypatch):
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
     calls = []
 
-    def fake_send(to_addr, subject, body):
+    def fake_send(to_addr, subject, body, conf=None):
         calls.append((to_addr, subject, body))
 
     monkeypatch.setattr(mailer, "send_message", fake_send)
@@ -48,7 +48,7 @@ def test_flush_failure_records_attempt_and_error(engine, monkeypatch):
     _mk_engine_with_schema(engine)
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
 
-    def fake_send(to_addr, subject, body):
+    def fake_send(to_addr, subject, body, conf=None):
         raise RuntimeError("boom" * 100)  # long error, should be truncated to 200 chars
 
     monkeypatch.setattr(mailer, "send_message", fake_send)
@@ -100,7 +100,7 @@ def test_flush_oldest_first_and_limit_respected(engine, monkeypatch):
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
     order = []
     monkeypatch.setattr(mailer, "send_message",
-                        lambda to_addr, subject, body: order.append(to_addr))
+                        lambda to_addr, subject, body, conf=None: order.append(to_addr))
     with Session(engine) as s:
         for i in range(5):
             row = models.EmailOutbox(to_addr=f"n{i}@x.com", subject="s", body="b")
@@ -216,3 +216,25 @@ def test_smtp_configured_reflects_host(monkeypatch):
     assert mailer.smtp_configured() is False
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
     assert mailer.smtp_configured() is True
+
+
+def test_save_smtp_settings_via_ui(client, engine):
+    from sqlalchemy.orm import Session
+    from app import mailer
+    r = client.post("/settings/smtp", data={
+        "smtp_host": "smtp.test.com", "smtp_port": "465", "smtp_user": "me@test.com",
+        "smtp_pass": "secret", "smtp_from": "noreply@test.com", "smtp_starttls": "on"},
+        follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        conf = mailer.smtp_settings(s)
+        assert conf["host"] == "smtp.test.com" and conf["port"] == 465
+        assert conf["user"] == "me@test.com" and conf["password"] == "secret"
+        assert conf["from"] == "noreply@test.com" and conf["starttls"] is True
+        assert mailer.smtp_configured(s) is True
+    # blank password on a later save keeps the stored one (write-only field)
+    client.post("/settings/smtp", data={
+        "smtp_host": "smtp.test.com", "smtp_port": "465", "smtp_user": "me@test.com",
+        "smtp_pass": "", "smtp_from": "noreply@test.com", "smtp_starttls": "on"})
+    with Session(engine) as s:
+        assert mailer.smtp_settings(s)["password"] == "secret"
