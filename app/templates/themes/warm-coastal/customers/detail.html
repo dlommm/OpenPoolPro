@@ -202,6 +202,22 @@
         <span>{{ pool.label }} — {{ pool.water_type }}</span>
         <span class="font-data text-mist">{{ pool.length_ft|int }}{% if pool.width_ft %}×{{ pool.width_ft|int }}{% endif %} ft · {{ "{:,}".format(pool.gallons) }} gal</span>
       </a>
+      <div class="ml-1 space-y-1 border-l border-seam py-1 pl-3">
+        {% for contract in contracts_by_pool.get(pool.id, []) %}
+        <div class="flex flex-wrap items-center gap-1.5 text-xs">
+          <a href="/contracts/{{ contract.id }}" class="text-pool">{{ contract.season_year }} contract</a>
+          <span class="tag {{ 'tag-safety' if contract.status == 'void' }}">{{ contract.status }}</span>
+          {% if contract.pdf_filename %}<a href="/contracts/{{ contract.id }}/pdf" class="text-mist">PDF</a>{% endif %}
+        </div>
+        {% else %}
+        <p class="text-xs text-mist">No contracts yet.</p>
+        {% endfor %}
+        {% if can_manage %}
+        <form method="post" action="/pools/{{ pool.id }}/contracts/new">
+          <button class="flex min-h-11 items-center gap-1 text-xs text-pool">{{ ui.icon("plus", "h-3 w-3") }}New contract</button>
+        </form>
+        {% endif %}
+      </div>
       {% endfor %}
       <a href="/properties/{{ p.id }}/pools/new" class="flex min-h-11 items-center gap-1 text-sm text-pool">{{ ui.icon("plus", "h-3.5 w-3.5") }}Add pool</a>
     </div>

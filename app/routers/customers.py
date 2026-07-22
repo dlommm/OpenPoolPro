@@ -349,6 +349,16 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     key = models.get_setting(session, "geoapify_key", "")
     map_urls = {p.id: maps.static_map_url(p.latitude, p.longitude, key) for p in props}
 
+    pool_ids = [pool.id for p in props for pool in p.pools]
+    contracts_by_pool: dict[int, list[models.Contract]] = {}
+    if pool_ids:
+        contracts = session.scalars(
+            select(models.Contract).where(models.Contract.pool_id.in_(pool_ids))
+            .order_by(models.Contract.season_year.desc(), models.Contract.created_at.desc())
+        ).all()
+        for ct in contracts:
+            contracts_by_pool.setdefault(ct.pool_id, []).append(ct)
+
     today = business_today()
     active_holds: dict[int, models.ServiceHold] = {}
     if props:
@@ -370,6 +380,7 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
          "active_holds": active_holds, "lifetime_cents": lifetime_cents,
          "photos": photos, "ptag": ptag, "house_photos": house_photos,
          "map_urls": map_urls, "geoapify_configured": bool(key),
+         "contracts_by_pool": contracts_by_pool,
          "show_money": user.can("view_money"),
          "can_manage": user.can("manage_customers")})
 

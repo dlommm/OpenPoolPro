@@ -674,6 +674,31 @@ def test_detail_shows_map_and_navigate_with_key_and_coords(client, engine):
     assert "maps.apple.com/?q=" in body           # Navigate deep link present
 
 
+def test_pool_panel_shows_contract_and_new_contract_form(client, engine):
+    cid = _mk_customer(client, engine, "Contract Co", city="Cocoa Beach")
+    with Session(engine) as s:
+        prop = s.scalars(select(models.Property).where(
+            models.Property.customer_id == cid)).one()
+        pool = models.Pool(property_id=prop.id, label="Main pool", kind="pool",
+                           gallons=12000, active=True)
+        s.add(pool)
+        s.commit()
+        pool_id = pool.id
+
+    r = client.post(f"/pools/{pool_id}/contracts/new", follow_redirects=False)
+    assert r.status_code == 303
+    contract_id = int(r.headers["location"].rstrip("/").rsplit("/", 1)[-1])
+    with Session(engine) as s:
+        season_year = s.get(models.Contract, contract_id).season_year
+
+    body = client.get(f"/customers/{cid}").text
+    assert f'href="/contracts/{contract_id}"' in body   # link to the contract
+    assert str(season_year) in body                     # season shown
+    assert "draft" in body                               # status pill
+    assert f'action="/pools/{pool_id}/contracts/new"' in body  # New contract form
+    assert "New contract" in body
+
+
 def test_detail_has_custab_tab_bar_and_panels(client, engine, monkeypatch):
     # Task 1 tabs the shared/base customers/detail.html. The live route is
     # theme-aware (DEFAULT_THEME="warm-coastal") and all 3 ALLOWED_THEMES
