@@ -142,6 +142,29 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
     return RedirectResponse(f"/jobs/{j.id}", status_code=303)
 
 
+@router.get("/jobs/new/search")
+def job_customer_search(request: Request, q: str = "", session: Session = Depends(get_session)):
+    q = (q or "").strip()[:80]
+    customers = []
+    if q:
+        like = f"%{q}%"
+        customers = session.scalars(select(models.Customer).where(
+            models.Customer.active,
+            models.Customer.name.ilike(like) | models.Customer.phone.ilike(like)
+            | models.Customer.email.ilike(like)).order_by(models.Customer.name).limit(15)).all()
+    return templates.TemplateResponse(request, "jobs/_customer_results.html",
+                                      {"customers": customers, "q": q})
+
+
+@router.get("/jobs/new/properties")
+def job_customer_properties(request: Request, customer_id: int,
+                            session: Session = Depends(get_session)):
+    c = get_or_404(session, models.Customer, customer_id)
+    props = [p for p in sorted(c.properties, key=lambda p: p.label) if p.active]
+    return templates.TemplateResponse(request, "jobs/_property_options.html",
+                                      {"c": c, "props": props})
+
+
 @router.get("/jobs/{jid}")
 def job_detail(request: Request, jid: int, session: Session = Depends(get_session)):
     j = get_or_404(session, models.Job, jid)

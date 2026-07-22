@@ -1,0 +1,20 @@
+<div class="card p-3.5">
+  <input type="hidden" name="customer_id" value="{{ c.id }}">
+  <div class="font-semibold">{{ c.name }}</div>
+  {% if props %}
+  <div class="mt-2 space-y-1.5">
+    {% for p in props %}
+    <label class="flex min-h-11 items-center gap-2 rounded-xl border border-seam px-3 py-2 has-[:checked]:border-pool has-[:checked]:bg-shallow">
+      <input type="radio" name="property_id" value="{{ p.id }}" {{ "checked" if props | length == 1 }}
+             class="accent-pool">
+      <span>
+        <span class="block font-semibold">{{ p.label }}</span>
+        <span class="block text-sm text-mist">{{ p.address }}</span>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="mt-2 text-sm text-mist">No active properties for this customer.</p>
+  {% endif %}
+</div>

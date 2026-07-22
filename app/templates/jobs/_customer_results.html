@@ -1,0 +1,19 @@
+{% if not q %}
+<p class="p-3 text-sm text-mist">Start typing a name, phone, or email to find a customer.</p>
+{% elif not customers %}
+<p class="p-3 text-sm text-mist">No customers match &ldquo;{{ q }}&rdquo;.</p>
+{% else %}
+<div class="rise space-y-1.5">
+  {% for c in customers %}
+  {% set city = (c.properties|selectattr('active')|map(attribute='city')|select|first) or '' %}
+  {% set parts = [c.phone, city] | select | list %}
+  <button type="button"
+          hx-get="/jobs/new/properties?customer_id={{ c.id }}"
+          hx-target="#job-props" hx-swap="innerHTML"
+          class="card block w-full p-3 text-left">
+    <div class="font-semibold">{{ c.name }}</div>
+    {% if parts %}<div class="mt-0.5 text-sm text-mist">{{ parts | join(' · ') }}</div>{% endif %}
+  </button>
+  {% endfor %}
+</div>
+{% endif %}
