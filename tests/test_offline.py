@@ -16,11 +16,42 @@ def _anon_client(engine, monkeypatch):
     return TestClient(create_app(engine=engine))
 
 
-def test_sw_js_contains_v3_markers(client):
-    text = client.get("/sw.js").text
-    assert "cpp-static-v3" in text
-    assert "cpp-pages-v1" in text
+def test_sw_js_versioned_cache_names_and_no_cache(client):
+    """Cache names now derive from APP_VERSION so sw.js's bytes change on every
+    release (the browser then detects a new worker and purges old caches). The
+    __APP_VERSION__ token must be substituted at serve time, and /sw.js must be
+    served no-cache so the version check isn't itself cached."""
+    r = client.get("/sw.js")
+    text = r.text
+    assert "cpp-static-" in text
+    assert "cpp-pages-" in text
     assert "cpp-queue" in text
+    assert "__APP_VERSION__" not in text          # token substituted
+    assert '"dev"' in text                          # config.APP_VERSION default in tests
+    assert r.headers.get("cache-control") == "no-cache"
+
+
+def test_manifest_and_html_served_no_cache(client):
+    """/manifest.json and HTML pages revalidate every load so a home-screen
+    PWA can't render a stale shell after a deploy."""
+    assert client.get("/manifest.json").headers.get("cache-control") == "no-cache"
+    assert "no-cache" in (client.get("/").headers.get("cache-control") or "")
+
+
+def test_assets_are_version_busted(client):
+    html = client.get("/").text
+    assert "/static/app.css?v=" in html
+    assert "/static/htmx.min.js?v=" in html
+
+
+def test_pwa_partial_wires_update_and_pull_to_refresh(client):
+    """The shared _pwa.html partial (included by every base) must ship the
+    auto-update reload path and the pull-to-refresh gesture."""
+    html = client.get("/").text
+    assert "controllerchange" in html      # apply a shipped update
+    assert "reg.update" in html            # check for a new worker
+    assert "touchstart" in html            # pull-to-refresh gesture
+    assert 'id="pwa-ptr"' in html          # pull/refresh indicator element
 
 
 def test_sw_js_queued_redirect_targets_root_not_today(client):

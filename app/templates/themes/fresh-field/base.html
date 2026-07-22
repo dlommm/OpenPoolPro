@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#14B8A6">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
+  <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
   <title>{% block title %}OpenPoolPro{% endblock %}</title>
 </head>
 <body class="pb-8 lg:pt-[env(safe-area-inset-top)]">
@@ -141,5 +141,6 @@
     flushQueue();
   }
   </script>
+  {% include "_pwa.html" %}
 </body>
 </html>

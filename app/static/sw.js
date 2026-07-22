@@ -1,5 +1,9 @@
-const CACHE = "cpp-static-v3";
-const PAGES_CACHE = "cpp-pages-v1";
+// VERSION is substituted with config.APP_VERSION when /sw.js is served, so the
+// worker's bytes change every release -> the browser detects a new worker and
+// activate() purges the previous version's caches (both derive from VERSION).
+const VERSION = "__APP_VERSION__";
+const CACHE = "cpp-static-" + VERSION;
+const PAGES_CACHE = "cpp-pages-" + VERSION;
 const QUEUE_DB = "cpp-queue";
 const QUEUE_STORE = "posts";
 

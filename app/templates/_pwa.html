@@ -1,0 +1,73 @@
+{# PWA auto-update + pull-to-refresh. Additive to the SW-registration / offline-
+   queue block already in each base template. Rendered inline (HTML is served
+   no-cache) so this logic is itself never stale. CSP-safe: inline style + script
+   are allowed by 'unsafe-inline'. #}
+<style>
+  #pwa-ptr{position:fixed;left:50%;top:0;z-index:60;
+    transform:translate(-50%,-140%);margin-top:env(safe-area-inset-top);
+    display:flex;align-items:center;justify-content:center;height:38px;width:38px;
+    border-radius:9999px;background:var(--color-surface,#fff);color:var(--color-pool,#2b9eb3);
+    box-shadow:0 2px 10px rgba(0,0,0,.18);opacity:0;pointer-events:none;
+    transition:transform .18s ease,opacity .18s ease}
+  #pwa-ptr svg{height:20px;width:20px}
+  #pwa-ptr.spin svg{animation:pwaspin .8s linear infinite}
+  @keyframes pwaspin{to{transform:rotate(360deg)}}
+</style>
+<div id="pwa-ptr" aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+</div>
+<script>
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  var el = document.getElementById("pwa-ptr");
+  var hadController = !!navigator.serviceWorker.controller;
+  var reloading = false, reg = null;
+
+  function reload() {
+    if (reloading) return;
+    reloading = true;
+    if (el) { el.classList.add("spin"); el.style.opacity = 1; el.style.transform = "translate(-50%,0)"; }
+    setTimeout(function () { location.reload(); }, 200);
+  }
+
+  // Re-registering is idempotent; use it to drive update checks.
+  navigator.serviceWorker.register("/sw.js").then(function (r) {
+    reg = r;
+    var check = function () { if (reg && reg.update) reg.update().catch(function () {}); };
+    check();
+    // Reopening the standalone app fires visibilitychange/focus, not a fresh load.
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+    window.addEventListener("focus", check);
+  }).catch(function () {});
+
+  // A new worker taking control of an already-controlled page = a shipped update.
+  // hadController guard skips the first-ever install; reloading guard prevents loops.
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (hadController) reload();
+  });
+
+  // Pull-to-refresh: passive, overlays the native rubber-band while at scroll-top.
+  var startY = null, dist = 0;
+  var THRESH = 70;
+  addEventListener("touchstart", function (e) {
+    startY = (window.scrollY <= 0 && e.touches.length === 1) ? e.touches[0].clientY : null;
+    dist = 0;
+  }, {passive: true});
+  addEventListener("touchmove", function (e) {
+    if (startY === null || reloading || window.scrollY > 0) return;
+    dist = e.touches[0].clientY - startY;
+    if (dist > 0 && el) {
+      var d = Math.min(dist, 130);
+      el.style.opacity = Math.min(1, d / THRESH);
+      el.style.transform = "translate(-50%," + (d - 46) + "px)";
+    }
+  }, {passive: true});
+  addEventListener("touchend", function () {
+    if (startY === null) return;
+    var go = dist > THRESH && window.scrollY <= 0 && !reloading;
+    startY = null;
+    if (go) { if (reg && reg.update) reg.update().catch(function () {}); reload(); }
+    else if (el) { el.style.opacity = 0; el.style.transform = "translate(-50%,-140%)"; }
+  }, {passive: true});
+})();
+</script>

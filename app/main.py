@@ -2,7 +2,7 @@ import contextvars
 import os
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import BaseLoader, FileSystemLoader, TemplateNotFound
@@ -72,6 +72,8 @@ class ThemeAwareLoader(BaseLoader):
 
 
 templates = Jinja2Templates(directory="app/templates")
+# Bust cached CSS/JS on every release so a home-screen PWA fetches new assets.
+templates.env.globals["app_version"] = config.APP_VERSION
 # Swap the default FileSystemLoader for the theme-aware one on the shared
 # singleton so every render (all 22 routers) goes through theme resolution.
 templates.env.loader = ThemeAwareLoader("app/templates")
@@ -180,6 +182,11 @@ def create_app(engine=None) -> FastAPI:
             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
         )
+        # HTML must always revalidate so a home-screen PWA never renders a stale
+        # shell (the SW is network-first for navigations, but iOS's HTTP cache
+        # can otherwise satisfy the fetch from Last-Modified heuristics).
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     from fastapi.responses import RedirectResponse as _RR
@@ -202,11 +209,16 @@ def create_app(engine=None) -> FastAPI:
 
     @app.get("/manifest.json", include_in_schema=False)
     def manifest():
-        return FileResponse("app/static/manifest.json")
+        return FileResponse("app/static/manifest.json", headers={"Cache-Control": "no-cache"})
 
     @app.get("/sw.js", include_in_schema=False)
     def sw():
-        return FileResponse("app/static/sw.js", media_type="application/javascript")
+        # Inject APP_VERSION into the cache names so sw.js's bytes change every
+        # release -> the browser detects a new worker -> install/activate purges
+        # old caches. Served no-cache so the version check isn't itself cached.
+        js = open("app/static/sw.js").read().replace("__APP_VERSION__", config.APP_VERSION)
+        return Response(js, media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache"})
 
     from app.routers import auth as auth_router
     app.include_router(auth_router.router)
