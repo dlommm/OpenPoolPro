@@ -52,6 +52,29 @@ def tier_rate_cents(session, kind: str, gallons_val: int) -> int:
     return 0
 
 
+CONTRACT_RATE_FIELDS = (
+    "weekly_cents", "open_close_cents", "green_clean_cents",
+    "storm_cents", "service_call_cents", "spa_cents",
+)
+
+
+def contract_rates_for(session, pool_gallons: int) -> dict | None:
+    """Resolve the size-matched ContractRate row's 6 cents fields as a dict.
+
+    Rows are ordered by max_gallons (catch-all/None last); the first row where
+    pool_gallons <= max_gallons (or the catch-all) wins. No rows, or no row
+    fits, -> None (owner fills the contract in manually).
+    """
+    rows = session.scalars(
+        select(models.ContractRate)
+        .order_by(models.ContractRate.max_gallons.is_(None), models.ContractRate.max_gallons)
+    ).all()
+    for r in rows:
+        if r.max_gallons is None or pool_gallons <= r.max_gallons:
+            return {field: getattr(r, field) for field in CONTRACT_RATE_FIELDS}
+    return None
+
+
 def service_type(prop: models.Property) -> str:
     pools = [p for p in prop.pools if p.active]
     has_pool = any(p.kind == "pool" for p in pools)

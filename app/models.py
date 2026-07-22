@@ -150,6 +150,47 @@ class RateTier(Base):
     kind: Mapped[str] = mapped_column(String(8), default="pool")  # pool|spa
 
 
+class Contract(Base):
+    __tablename__ = "contracts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pool_id: Mapped[int] = mapped_column(ForeignKey("pools.id"))
+    season_year: Mapped[int] = mapped_column(Integer)
+    open_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    close_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    weeks: Mapped[int] = mapped_column(Integer, default=16)
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+    weekly_cents: Mapped[int] = mapped_column(Integer, default=0)
+    open_close_cents: Mapped[int] = mapped_column(Integer, default=0)
+    green_clean_cents: Mapped[int] = mapped_column(Integer, default=0)
+    storm_cents: Mapped[int] = mapped_column(Integer, default=0)
+    service_call_cents: Mapped[int] = mapped_column(Integer, default=0)
+    spa_cents: Mapped[int] = mapped_column(Integer, default=0)
+    includes_spa: Mapped[bool] = mapped_column(Boolean, default=False)
+    pdf_filename: Mapped[str] = mapped_column(String(200), default="")
+    signed_pdf_filename: Mapped[str] = mapped_column(String(200), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    pool: Mapped[Pool] = relationship()
+
+
+class ContractRate(Base):
+    __tablename__ = "contract_rates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    max_gallons: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = catch-all
+    label: Mapped[str] = mapped_column(String(60), default="")
+    weekly_cents: Mapped[int] = mapped_column(Integer, default=0)
+    open_close_cents: Mapped[int] = mapped_column(Integer, default=0)
+    green_clean_cents: Mapped[int] = mapped_column(Integer, default=0)
+    storm_cents: Mapped[int] = mapped_column(Integer, default=0)
+    service_call_cents: Mapped[int] = mapped_column(Integer, default=0)
+    spa_cents: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Chemical(Base):
     __tablename__ = "chemicals"
     id: Mapped[int] = mapped_column(primary_key=True)
