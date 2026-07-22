@@ -3,20 +3,161 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Job ticket", "Edit job" if j else "New job") }}
 <form method="post" class="space-y-3">
-  {% if template %}<input type="hidden" name="template_id" value="{{ template.id }}">{% endif %}
+  {% if j %}
   <label class="block"><span class="field-label">Property</span>
     <select name="property_id" class="field">
       {% for p in props %}
       <option value="{{ p.id }}" {{ "selected" if selected == p.id }}>{{ p.customer.name }} — {{ p.label }}</option>
       {% endfor %}
     </select></label>
+  {% else %}
+  <div class="flex gap-2">
+    <label class="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-seam py-2 has-[:checked]:border-pool has-[:checked]:bg-shallow">
+      <input type="radio" name="mode" value="existing" id="mode_existing" checked class="accent-pool">
+      <span class="text-sm font-medium">Existing customer</span>
+    </label>
+    {% if can_manage_customers %}
+    <label class="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-seam py-2 has-[:checked]:border-pool has-[:checked]:bg-shallow">
+      <input type="radio" name="mode" value="new" id="mode_new" class="accent-pool">
+      <span class="text-sm font-medium">New customer</span>
+    </label>
+    {% endif %}
+  </div>
+
+  <div id="mode-existing-block" class="space-y-3">
+    <label class="block"><span class="field-label">Find customer</span>
+      <input type="search" name="customer_search" autocomplete="off" placeholder="Name, phone, or email"
+             hx-get="/jobs/new/search" hx-trigger="input changed delay:250ms" hx-target="#job-results"
+             class="field"></label>
+    <div id="job-results"></div>
+    <div id="job-props"></div>
+  </div>
+
+  {% if can_manage_customers %}
+  <div id="mode-new-block" class="hidden space-y-3">
+    <h2 class="font-display text-base font-bold uppercase tracking-wide text-mist">New customer</h2>
+    <label class="block"><span class="field-label">Name</span>
+      <input name="customer_name" class="field"></label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block"><span class="field-label">Phone</span>
+        <input type="tel" name="customer_phone" class="field"></label>
+      <label class="block"><span class="field-label">Email</span>
+        <input type="email" name="customer_email" class="field"></label>
+    </div>
+
+    <h2 class="mt-1 font-display text-base font-bold uppercase tracking-wide text-mist">Property</h2>
+    <label class="block"><span class="field-label">Label</span>
+      <input name="new_label" value="Home" class="field"></label>
+    <label class="block"><span class="field-label">Street</span>
+      <input name="new_street" class="field"></label>
+    <label class="block"><span class="field-label">City</span>
+      <input name="new_city" class="field"></label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block"><span class="field-label">State</span>
+        <input name="new_state" class="field"></label>
+      <label class="block"><span class="field-label">Zip</span>
+        <input name="new_zip" class="field font-data"></label>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block"><span class="field-label">Gate code</span>
+        <input name="new_gate_code" class="field font-data"></label>
+      <label class="block"><span class="field-label">Dog note</span>
+        <input name="new_dog_note" class="field"></label>
+    </div>
+    <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="new_dog_warning"
+           class="h-5 w-5 rounded border-seam text-pool"> Dog on property</label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block"><span class="field-label">Frequency</span>
+        <select name="new_frequency" class="field">
+          {% for f in ["weekly","biweekly","every4weeks","none"] %}
+          <option value="{{ f }}">{{ f }}</option>
+          {% endfor %}
+        </select></label>
+      <label class="block"><span class="field-label">Day</span>
+        <select name="new_weekday" class="field">
+          {% for i, d in [(0,"Mon"),(1,"Tue"),(2,"Wed"),(3,"Thu"),(4,"Fri"),(5,"Sat"),(6,"Sun")] %}
+          <option value="{{ i }}">{{ d }}</option>
+          {% endfor %}
+        </select></label>
+    </div>
+
+    <h2 class="mt-1 font-display text-base font-bold uppercase tracking-wide text-mist">Pool</h2>
+    <div id="new-pool-fields" class="space-y-2">
+      <label class="block"><span class="field-label">Quick pick a size</span>
+        <select id="new_pool_preset" class="field">
+          <option value="">Custom size</option>
+          {% for kind_key, heading in [("pool","Pool"),("spa","Spa")] %}
+          {% for it in size_presets.get(kind_key, []) %}
+          <option value="{{ it.id }}" data-kind="{{ kind_key }}" data-shape="{{ it.shape }}"
+                  data-length_ft="{{ it.length_ft if it.length_ft is not none else '' }}"
+                  data-width_ft="{{ it.width_ft if it.width_ft is not none else '' }}"
+                  data-avg_depth_ft="{{ it.avg_depth_ft if it.avg_depth_ft is not none else '' }}"
+                  data-ref_gallons="{{ it.ref_gallons }}">{{ heading }} — {{ it.label }}</option>
+          {% endfor %}
+          {% endfor %}
+        </select></label>
+      <label class="block"><span class="field-label">Pool label</span>
+        <input name="label" value="Main pool" class="field"></label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block"><span class="field-label">This is a</span>
+          <select name="kind" id="new_pool_kind" class="field">
+            <option value="pool">Pool</option>
+            <option value="spa">Spa</option>
+          </select></label>
+        <label class="block"><span class="field-label">Shape</span>
+          <select name="shape" id="new_pool_shape" class="field">
+            {% for s in ["rectangle","round","oval","kidney","grecian"] %}
+            <option value="{{ s }}">{{ s|capitalize }}</option>
+            {% endfor %}
+          </select></label>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        {% for name, dlabel in [("length_ft","Length/diam ft"),("width_ft","Width ft"),("avg_depth_ft","Avg depth ft")] %}
+        <label class="block"><span class="field-label">{{ dlabel }}</span>
+          <input inputmode="decimal" name="{{ name }}" id="new_pool_{{ name }}" class="field font-data"></label>
+        {% endfor %}
+      </div>
+      <div id="new_gallons" class="card flex min-h-11 items-center bg-shallow/60 px-3 font-data">
+        <span class="text-mist">Enter dimensions</span>
+      </div>
+      <label class="block"><span class="field-label">Gallons override (optional)</span>
+        <input inputmode="numeric" name="gallons_override" id="new_pool_gallons_override"
+               placeholder="Auto-calculated from size" class="field font-data">
+        <span class="mt-1 block text-xs text-mist">Leave blank to use the auto-calculated gallons above.</span></label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block"><span class="field-label">Water</span>
+          <select name="water_type" class="field">
+            {% for w in ["chlorine","salt"] %}<option value="{{ w }}">{{ w }}</option>{% endfor %}
+          </select></label>
+        <label class="block"><span class="field-label">Surface</span>
+          <select name="surface" class="field">
+            {% for su in ["plaster","pebble","fiberglass","vinyl","tile","other"] %}<option value="{{ su }}">{{ su }}</option>{% endfor %}
+          </select></label>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <label class="block"><span class="field-label">Job template</span>
+    <select id="job_template_select" name="template_id" class="field">
+      <option value="">— Custom —</option>
+      {% for t in templates_list %}
+      <option value="{{ t.id }}" {{ "selected" if template and template.id == t.id }}
+              data-title="{{ t.title }}" data-description="{{ t.description }}"
+              data-job_type="{{ t.job_type }}" data-est_hours="{{ t.est_hours }}"
+              data-rows='{{ template_rows[t.id] | tojson }}'>{{ t.title }}</option>
+      {% endfor %}
+    </select></label>
+  {% endif %}
+
   <label class="block"><span class="field-label">Title</span>
-    <input name="title" value="{{ j.title if j else (template.title if template else '') }}" required class="field"></label>
+    <input name="title" id="job_title"
+           value="{{ j.title if j else (template.title if template else '') }}" required class="field"></label>
   <label class="block"><span class="field-label">Description</span>
-    <textarea name="description" class="field min-h-24 py-2">{{ j.description if j else (template.description if template else "") }}</textarea></label>
+    <textarea name="description" id="job_description" class="field min-h-24 py-2">{{ j.description if j else (template.description if template else "") }}</textarea></label>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Type</span>
-      <select name="job_type" class="field">
+      <select name="job_type" id="job_type_select" class="field">
         <option value="service" {{ "selected" if (j and j.job_type == "service") or (not j and (not template or template.job_type == "service")) }}>Service</option>
         <option value="repair" {{ "selected" if (j and j.job_type == "repair") or (not j and template and template.job_type == "repair") }}>Repair</option>
       </select></label>
@@ -59,31 +200,170 @@
     <span class="text-[13px] font-medium text-mist">Labor total</span>
     <span id="job_labor_total" class="money">$0.00</span>
   </div>
-  {% endif %}
-  {% if show_money and template and hours_status in ['matched', 'unmatched'] %}
-  <p class="text-sm {{ 'text-safety' if hours_status == 'unmatched' else 'text-mist' }}">
-    {% if hours_status == 'matched' %}Auto-set {{ '%g'|format(resolved_hours) }} hrs from the “{{ template.title }}” template for this pool size.
-    {% else %}This pool size isn't priced in the “{{ template.title }}” template — enter hours to create the job.{% endif %}
+  <p id="job_hours_hint" class="text-sm {{ 'text-safety' if (template and hours_status == 'unmatched') else 'text-mist' }}">
+    {% if template and hours_status == 'matched' %}Auto-set {{ '%g'|format(resolved_hours) }} hrs from the “{{ template.title }}” template for this pool size.
+    {% elif template and hours_status == 'unmatched' %}This pool size isn't priced in the “{{ template.title }}” template — enter hours to create the job.{% endif %}
   </p>
   {% endif %}
   <button class="btn-primary">Save</button>
 </form>
-{% if show_money %}
 <script>
 (function () {
+  // --- Mode toggle (Existing / New customer) ------------------------------
+  var existingRadio = document.getElementById("mode_existing");
+  var newRadio = document.getElementById("mode_new");
+  var existingBlock = document.getElementById("mode-existing-block");
+  var newBlock = document.getElementById("mode-new-block");
+  if (existingRadio && existingBlock) {
+    var syncMode = function () {
+      var isNew = !!(newRadio && newRadio.checked);
+      existingBlock.classList.toggle("hidden", isNew);
+      if (newBlock) newBlock.classList.toggle("hidden", !isNew);
+    };
+    existingRadio.addEventListener("change", syncMode);
+    if (newRadio) newRadio.addEventListener("change", syncMode);
+    syncMode();
+  }
+
+  // --- New-customer pool: size presets + client-side gallons preview ------
+  var SHAPE_MULT = {rectangle: 7.5, oval: 5.9, kidney: 6.0, grecian: 7.0};
+  function computeGallons(shape, lengthFt, widthFt, depthFt) {
+    var dims = [lengthFt, depthFt];
+    if (shape !== "round") dims.push(widthFt || 0);
+    for (var i = 0; i < dims.length; i++) {
+      var d = dims[i];
+      if (d === null || isNaN(d) || d <= 0 || d > 100) return null;
+    }
+    if (shape === "round") {
+      var r = lengthFt / 2;
+      return Math.round(r * r * 3.14 * depthFt * 7.5);
+    }
+    if (!(shape in SHAPE_MULT)) return null;
+    return Math.round(lengthFt * widthFt * depthFt * SHAPE_MULT[shape]);
+  }
+
+  var presetSelect = document.getElementById("new_pool_preset");
+  var poolKindEl = document.getElementById("new_pool_kind");
+  var poolShapeEl = document.getElementById("new_pool_shape");
+  var poolLengthEl = document.getElementById("new_pool_length_ft");
+  var poolWidthEl = document.getElementById("new_pool_width_ft");
+  var poolDepthEl = document.getElementById("new_pool_avg_depth_ft");
+  var poolOverrideEl = document.getElementById("new_pool_gallons_override");
+  var newGallonsEl = document.getElementById("new_gallons");
+  var newPoolFields = document.getElementById("new-pool-fields");
+
+  function currentNewPoolGallons() {
+    if (!poolShapeEl) return null;
+    var override = poolOverrideEl && poolOverrideEl.value.trim();
+    if (override) {
+      var ov = parseFloat(override);
+      if (!isNaN(ov) && ov > 0) return Math.round(ov);
+    }
+    return computeGallons(poolShapeEl.value, parseFloat(poolLengthEl && poolLengthEl.value),
+      poolWidthEl ? parseFloat(poolWidthEl.value) : null, parseFloat(poolDepthEl && poolDepthEl.value));
+  }
+
+  function refreshNewGallonsPreview() {
+    if (!newGallonsEl) return;
+    var g = currentNewPoolGallons();
+    newGallonsEl.innerHTML = g
+      ? '<span class="font-semibold">≈ ' + g.toLocaleString() + ' gal</span>'
+      : '<span class="text-mist">Enter dimensions</span>';
+  }
+
+  if (presetSelect) {
+    presetSelect.addEventListener("change", function () {
+      var opt = presetSelect.selectedOptions[0];
+      if (!opt || !opt.value) return;
+      if (poolKindEl && opt.dataset.kind) poolKindEl.value = opt.dataset.kind;
+      if (poolShapeEl && opt.dataset.shape) poolShapeEl.value = opt.dataset.shape;
+      if (poolLengthEl) poolLengthEl.value = opt.dataset.length_ft || "";
+      if (poolWidthEl) poolWidthEl.value = opt.dataset.width_ft || "";
+      if (poolDepthEl) poolDepthEl.value = opt.dataset.avg_depth_ft || "";
+      if (poolOverrideEl) poolOverrideEl.value = opt.dataset.ref_gallons || "";
+      refreshNewGallonsPreview();
+      recomputeHours();
+    });
+  }
+  if (newPoolFields) {
+    newPoolFields.addEventListener("input", function () { refreshNewGallonsPreview(); recomputeHours(); });
+    newPoolFields.addEventListener("change", function () { refreshNewGallonsPreview(); recomputeHours(); });
+  }
+  refreshNewGallonsPreview();
+
+  // --- Job template: fill title/description/type, resolve hours, live total
+  var templateSelect = document.getElementById("job_template_select");
+  var titleEl = document.getElementById("job_title");
+  var descEl = document.getElementById("job_description");
+  var jobTypeEl = document.getElementById("job_type_select");
   var rateEl = document.getElementById("job_rate_dollars");
   var hoursEl = document.getElementById("job_hours");
   var totalEl = document.getElementById("job_labor_total");
-  if (!rateEl || !hoursEl || !totalEl) return;
-  function update() {
+  var hintEl = document.getElementById("job_hours_hint");
+
+  function updateLaborTotal() {
+    if (!rateEl || !hoursEl || !totalEl) return;
     var rate = parseFloat(rateEl.value) || 0;
     var hrs = parseFloat(hoursEl.value) || 0;
     totalEl.textContent = "$" + (rate * hrs).toFixed(2);
   }
-  rateEl.addEventListener("input", update);
-  hoursEl.addEventListener("input", update);
-  update();
+
+  function resolveTemplateHours(opt) {
+    // Mirrors app.rates.template_hours: flat (no size rows) / matched / unmatched.
+    var estHours = parseFloat(opt.dataset.est_hours) || 0;
+    var rows = [];
+    try { rows = JSON.parse(opt.dataset.rows || "[]"); } catch (e) { rows = []; }
+    if (!rows.length) return {hours: estHours, status: "flat"};
+    var isNewMode = !!(newRadio && newRadio.checked);
+    var gallons = isNewMode ? currentNewPoolGallons() : null;
+    if (gallons === null) return {hours: estHours, status: "flat"};
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.max_gallons === null || gallons <= r.max_gallons) return {hours: r.hours, status: "matched"};
+    }
+    return {hours: null, status: "unmatched"};
+  }
+
+  function recomputeHours() {
+    if (!templateSelect || !hoursEl) return;
+    var opt = templateSelect.selectedOptions[0];
+    if (!opt || !opt.value) return;  // "— Custom —" -- leave hours alone
+    var res = resolveTemplateHours(opt);
+    if (res.status === "unmatched") {
+      hoursEl.value = "";
+      hoursEl.required = true;
+    } else {
+      hoursEl.value = res.hours || 0;
+      hoursEl.required = false;
+    }
+    if (hintEl) {
+      if (res.status === "matched") {
+        hintEl.textContent = "Auto-set " + res.hours + " hrs from the “" + opt.dataset.title + "” template for this pool size.";
+      } else if (res.status === "unmatched") {
+        hintEl.textContent = "This pool size isn’t priced in the “" + opt.dataset.title + "” template — enter hours to create the job.";
+      } else {
+        hintEl.textContent = "";
+      }
+      hintEl.classList.toggle("text-safety", res.status === "unmatched");
+      hintEl.classList.toggle("text-mist", res.status !== "unmatched");
+    }
+    updateLaborTotal();
+  }
+
+  if (templateSelect) {
+    templateSelect.addEventListener("change", function () {
+      var opt = templateSelect.selectedOptions[0];
+      if (opt && opt.value) {
+        if (titleEl) titleEl.value = opt.dataset.title || "";
+        if (descEl) descEl.value = opt.dataset.description || "";
+        if (jobTypeEl && opt.dataset.job_type) jobTypeEl.value = opt.dataset.job_type;
+      }
+      recomputeHours();
+    });
+  }
+  if (rateEl) rateEl.addEventListener("input", updateLaborTotal);
+  if (hoursEl) hoursEl.addEventListener("input", updateLaborTotal);
+  updateLaborTotal();
 })();
 </script>
-{% endif %}
 {% endblock %}

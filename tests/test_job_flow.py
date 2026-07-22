@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
@@ -118,3 +119,66 @@ def test_properties_404_for_missing_customer(client, engine):
     seed_two_customers(engine)
     r = client.get("/jobs/new/properties", params={"customer_id": 999999})
     assert r.status_code == 404
+
+
+# --- Task 5: New/Existing job-create flow ------------------------------------
+
+def test_create_job_existing_mode_search_then_hourly_labor(client, engine):
+    alice_id, prop_id, _bob_id = seed_two_customers(engine)
+    with Session(engine) as s:
+        t = models.JobTemplate(title="Green clean", job_type="service", est_hours=1.5)
+        s.add(t)
+        s.commit()
+        tid = t.id
+    # Exercise the Task-4 typeahead search that feeds the property picker.
+    r = client.get("/jobs/new/search", params={"q": "alice"})
+    assert "Alice Anderson" in r.text
+    r2 = client.get("/jobs/new/properties", params={"customer_id": alice_id})
+    assert f'value="{prop_id}"' in r2.text
+
+    r3 = client.post("/jobs/new", data={
+        "mode": "existing", "property_id": str(prop_id), "title": "Green clean",
+        "template_id": str(tid), "job_type": "service",
+        "rate_dollars": "50", "hours": "2"}, follow_redirects=False)
+    assert r3.status_code == 303
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "Green clean")).one()
+        assert j.property_id == prop_id
+        assert j.hours == 2.0 and j.labor_cents == 10000  # $50/hr x 2h
+
+
+def test_create_job_new_mode_creates_customer_property_pool_and_job(client, engine):
+    r = client.post("/jobs/new", data={
+        "mode": "new", "title": "First service",
+        "customer_name": "New Customer", "customer_phone": "555-000-1111",
+        "customer_email": "newcust@example.com",
+        "new_label": "Home", "new_street": "10 Lagoon Dr", "new_city": "Coral Bay",
+        "new_state": "FL", "new_zip": "33000", "new_gate_code": "1234",
+        "new_frequency": "weekly", "new_weekday": "2",
+        "label": "Main pool", "kind": "pool", "shape": "rectangle",
+        "length_ft": "30", "width_ft": "15", "avg_depth_ft": "5",
+        "water_type": "chlorine", "surface": "plaster",
+        "job_type": "service", "rate_dollars": "60", "hours": "3"},
+        follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        c = s.scalars(select(models.Customer).where(models.Customer.name == "New Customer")).one()
+        assert c.phone == "555-000-1111" and c.email == "newcust@example.com"
+        p = s.scalars(select(models.Property).where(models.Property.customer_id == c.id)).one()
+        assert p.street == "10 Lagoon Dr" and p.city == "Coral Bay" and p.gate_code == "1234"
+        pool = s.scalars(select(models.Pool).where(models.Pool.property_id == p.id)).one()
+        assert pool.kind == "pool" and pool.gallons > 0
+        j = s.scalars(select(models.Job).where(models.Job.title == "First service")).one()
+        assert j.property_id == p.id
+        assert j.hours == 3.0 and j.labor_cents == 18000  # $60/hr x 3h
+
+
+def test_create_job_new_mode_blocked_without_manage_customers(client, engine, tech_client):
+    tech = tech_client(name="fieldtech")  # no manage_customers flag
+    r = tech.post("/jobs/new", data={
+        "mode": "new", "title": "Sneaky job",
+        "customer_name": "Should Not Exist"}, follow_redirects=False)
+    assert r.status_code == 400  # falls back to existing-mode with no property_id
+    with Session(engine) as s:
+        assert s.scalars(select(models.Customer).where(
+            models.Customer.name == "Should Not Exist")).first() is None
