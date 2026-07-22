@@ -555,6 +555,29 @@ def test_list_search_matches_phone(client, engine):
     assert "PhoneGuy" in body
 
 
+def test_list_search_excludes_deactivated_property_address(client, engine):
+    # Regression: the `q` search's EXISTS-over-properties subquery must only
+    # match ACTIVE properties, same as the sibling `city` filter. A customer
+    # kept active via a still-active property must not be surfaced by the
+    # stale address/city of a DEACTIVATED property.
+    cid = _mk_customer(client, engine, "Ghost Customer", city="Cocoa Beach")
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Old place", "street": "9999 Ghost Rd", "city": "Ghosttown",
+        "state": "FL", "zip": "32931", "frequency": "weekly", "weekday": "0"})
+    with Session(engine) as s:
+        pid = s.scalars(select(models.Property).where(
+            models.Property.city == "Ghosttown")).one().id
+    client.post(f"/properties/{pid}/deactivate")
+
+    # Searching by the inactive property's city or address must not match.
+    assert "Ghost Customer" not in client.get("/customers?q=Ghosttown").text
+    assert "Ghost Customer" not in client.get("/customers?q=9999+Ghost+Rd").text
+
+    # The customer is still active (via the other, active property) and
+    # remains findable by name.
+    assert "Ghost Customer" in client.get("/customers?q=Ghost+Customer").text
+
+
 def test_list_sort_recent(client, engine):
     _mk_customer(client, engine, "Older Co")
     _mk_customer(client, engine, "Newer Co")

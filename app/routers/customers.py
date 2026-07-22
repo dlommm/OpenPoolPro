@@ -239,7 +239,7 @@ def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
             C.name.ilike(needle),
             C.phone.ilike(needle),
             C.email.ilike(needle),
-            exists().where((P.customer_id == C.id) &
+            exists().where((P.customer_id == C.id) & P.active.is_(True) &
                            (P.address.ilike(needle) | P.city.ilike(needle))),
         ))
 
