@@ -50,6 +50,22 @@ def test_warm_coastal_hero_screens_render_with_signature(client, engine):
         assert "wc-horizon" in html, path
 
 
+def test_warm_coastal_customer_detail_has_custabs(client, engine):
+    """Customer detail keeps its wc- 360 hero AND gets the shared
+    Profile/Photos/Pool tab bar wired in the warm-coastal visual idiom."""
+    _set_theme(engine, "warm-coastal")
+    client.post("/customers/new", data={
+        "name": "Marlin House", "qb_display_name": "", "phone": "555-3030",
+        "email": "marlin@example.com", "notes": ""})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer)).one().id
+    body = client.get(f"/customers/{cid}").text
+    assert "wc-cust-hero" in body          # 360 hero marker preserved
+    for name in ("profile", "photos", "pool"):
+        assert f'data-custab-btn="{name}"' in body
+        assert f'data-custab="{name}"' in body
+
+
 def test_warm_coastal_today_preserves_progress_and_maps(client, engine):
     """Route hero keeps the load-bearing '<done> of <total> done' progress
     string and the Google-Maps fallback link that the app depends on."""

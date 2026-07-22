@@ -5,12 +5,20 @@
 
 <header class="pb-3 pt-2">
   <p class="page-eyebrow">Customer file</p>
+  <h1 class="page-title mt-0.5" style="font-size:24px">{{ c.name }}</h1>
   <svg class="wc-horizon" viewBox="0 0 130 12" preserveAspectRatio="none" aria-hidden="true">
     <path d="M1 8 C 12 2, 20 2, 30 7 S 48 12, 60 7 S 82 2, 94 7 S 118 11, 129 6"
           fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
   </svg>
 </header>
 
+<div class="mb-4 flex gap-4 border-b border-seam">
+  <button type="button" data-custab-btn="profile" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Profile</button>
+  <button type="button" data-custab-btn="photos" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Photos</button>
+  <button type="button" data-custab-btn="pool" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Pool</button>
+</div>
+
+<div data-custab="profile">
 {# ---- Customer 360 hero ---- #}
 <div class="wc-cust-hero mb-4 flex flex-wrap items-start gap-4">
   <span class="wc-cust-avatar">{{ c.name | initials }}</span>
@@ -64,6 +72,71 @@
 {% endif %}
 {% if c.notes %}<p class="card mb-4 bg-shallow/50 p-3 text-sm">{{ c.notes }}</p>{% endif %}
 
+{% if jobs %}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Open jobs</h2>
+<div class="mb-5 space-y-2">
+  {% for j in jobs %}<a href="/jobs/{{ j.id }}" class="card block p-3.5">{{ j.title }} <span class="text-sm text-mist">({{ j.status }})</span></a>{% endfor %}
+</div>
+{% endif %}
+
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Communication log</h2>
+{% if can_manage %}
+<form method="post" action="/customers/{{ c.id }}/comm/add" class="card mb-3 flex flex-wrap gap-2 p-3">
+  <select name="kind" class="field w-28 flex-none">
+    {% for k in ["call","email","text","note"] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+  </select>
+  <input name="note" placeholder="Note" class="field min-w-0 flex-1">
+  <button class="btn-secondary">Log</button>
+</form>
+{% endif %}
+
+{# ---- Activity timeline (date-only vs localized-instant logic preserved) ---- #}
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
+<ul class="timeline space-y-2">
+  {% for e in timeline %}
+  <li class="card flex items-start gap-2.5 p-3.5 text-sm">
+    {{ ui.icon(e.icon, "h-4 w-4 shrink-0 mt-0.5 text-pool") }}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-semibold">{{ e.title }}</span>
+        {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
+      </div>
+      {% if e.detail %}<div class="mt-0.5 text-mist">{{ e.detail }}</div>{% endif %}
+      <div class="mt-0.5 font-data text-xs text-mist">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
+    </div>
+  </li>
+  {% else %}
+  <li class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">No activity yet</p>
+    <p class="mt-1 text-sm text-mist">Visits, jobs, photos and notes will appear here once service begins.</p>
+  </li>
+  {% endfor %}
+</ul>
+</div>
+
+<div data-custab="photos" class="hidden">
+{% if photos or ptag %}
+<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
+<div class="mb-2 flex flex-wrap gap-2 text-sm">
+  <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
+  {% for pt in ["before", "after", "issue", "house"] %}
+  <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
+  {% endfor %}
+</div>
+<div class="mb-5 flex flex-wrap gap-2">
+  {% for ph, prop in photos %}
+  <div class="relative h-20 w-20">
+    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
+    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+  </div>
+  {% else %}
+  <p class="text-sm text-mist">No photos yet.</p>
+  {% endfor %}
+</div>
+{% endif %}
+</div>
+
+<div data-custab="pool" class="hidden">
 {# ---- Properties ---- #}
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
 <div class="rise mb-5 space-y-2">
@@ -139,65 +212,7 @@
      class="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-dashed border-seam py-2 text-sm text-mist">
     {{ ui.icon("plus", "h-4 w-4") }}Add property</a>
 </div>
-
-{% if jobs %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Open jobs</h2>
-<div class="mb-5 space-y-2">
-  {% for j in jobs %}<a href="/jobs/{{ j.id }}" class="card block p-3.5">{{ j.title }} <span class="text-sm text-mist">({{ j.status }})</span></a>{% endfor %}
 </div>
-{% endif %}
 
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Communication log</h2>
-{% if can_manage %}
-<form method="post" action="/customers/{{ c.id }}/comm/add" class="card mb-3 flex flex-wrap gap-2 p-3">
-  <select name="kind" class="field w-28 flex-none">
-    {% for k in ["call","email","text","note"] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
-  </select>
-  <input name="note" placeholder="Note" class="field min-w-0 flex-1">
-  <button class="btn-secondary">Log</button>
-</form>
-{% endif %}
-
-{% if photos or ptag %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
-<div class="mb-2 flex flex-wrap gap-2 text-sm">
-  <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
-  {% for pt in ["before", "after", "issue", "house"] %}
-  <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
-  {% endfor %}
-</div>
-<div class="mb-5 flex flex-wrap gap-2">
-  {% for ph, prop in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-  </div>
-  {% else %}
-  <p class="text-sm text-mist">No photos yet.</p>
-  {% endfor %}
-</div>
-{% endif %}
-
-{# ---- Activity timeline (date-only vs localized-instant logic preserved) ---- #}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
-<ul class="timeline space-y-2">
-  {% for e in timeline %}
-  <li class="card flex items-start gap-2.5 p-3.5 text-sm">
-    {{ ui.icon(e.icon, "h-4 w-4 shrink-0 mt-0.5 text-pool") }}
-    <div class="min-w-0 flex-1">
-      <div class="flex items-center justify-between gap-2">
-        <span class="font-semibold">{{ e.title }}</span>
-        {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
-      </div>
-      {% if e.detail %}<div class="mt-0.5 text-mist">{{ e.detail }}</div>{% endif %}
-      <div class="mt-0.5 font-data text-xs text-mist">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
-    </div>
-  </li>
-  {% else %}
-  <li class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No activity yet</p>
-    <p class="mt-1 text-sm text-mist">Visits, jobs, photos and notes will appear here once service begins.</p>
-  </li>
-  {% endfor %}
-</ul>
+{% include "_custabs.html" %}
 {% endblock %}
