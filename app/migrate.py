@@ -31,7 +31,10 @@ COLUMNS = {
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
         ("started_at", "DATETIME"),
         ("rule_id", "INTEGER REFERENCES maintenance_rules(id)"),
+        ("hours", "FLOAT DEFAULT 0.0"),
     ],
+    "job_templates": [("est_hours", "FLOAT DEFAULT 1.0")],
+    "job_template_prices": [("hours", "FLOAT DEFAULT 0.0")],
     "visits": [
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
         ("started_at", "DATETIME"),

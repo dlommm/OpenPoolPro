@@ -63,6 +63,35 @@ def service_type(prop: models.Property) -> str:
     return "pool"
 
 
+def default_labor_rate_cents(session) -> int:
+    """The owner's default labor rate ($/hr) in cents (setting `labor_rate_cents`)."""
+    try:
+        return int(models.get_setting(session, "labor_rate_cents", "18000") or 18000)
+    except (TypeError, ValueError):
+        return 18000
+
+
+def template_hours(template, pool_gallons: int) -> tuple[float | None, str]:
+    """Resolve a job template's estimated hours for a pool size, mirroring the
+    old price matrix but in hours. Returns (hours, status):
+      flat      -> no size matrix; use template.est_hours
+      matched   -> a size row fit; hours is that row's hours
+      unmatched -> matrix exists but no row fits; owner must enter hours
+    """
+    rows = [p for p in template.prices]
+    if not rows:
+        return (template.est_hours, "flat")
+    rows = sorted(rows, key=lambda r: (r.max_gallons is None, r.max_gallons or 0))
+    for r in rows:
+        if r.max_gallons is None or pool_gallons <= r.max_gallons:
+            return (r.hours, "matched")
+    return (None, "unmatched")
+
+
+def job_labor_cents(rate_cents: int, hours: float) -> int:
+    return round((rate_cents or 0) * (hours or 0))
+
+
 def effective_rate_cents(session, prop: models.Property) -> int:
     pools = [p for p in prop.pools if p.active]
     # Pool component: property override wins (legacy semantics), else pool-tier by

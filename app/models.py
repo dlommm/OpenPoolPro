@@ -237,6 +237,7 @@ class Job(Base):
     job_type: Mapped[str] = mapped_column(String(10), default="service")
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     rule_id: Mapped[int | None] = mapped_column(ForeignKey("maintenance_rules.id"), nullable=True)
+    hours: Mapped[float] = mapped_column(Float, default=0.0)
     property: Mapped[Property] = relationship()
     assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
@@ -334,6 +335,7 @@ class JobTemplate(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     job_type: Mapped[str] = mapped_column(String(10), default="service")
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
+    est_hours: Mapped[float] = mapped_column(Float, default=1.0)
     tasks: Mapped[list["JobTemplateTask"]] = relationship(
         back_populates="template", order_by="JobTemplateTask.position",
         cascade="all, delete-orphan")
@@ -351,6 +353,7 @@ class JobTemplatePrice(Base):
     label: Mapped[str] = mapped_column(String(60), default="")
     max_gallons: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = catch-all
     price_cents: Mapped[int] = mapped_column(Integer, default=0)
+    hours: Mapped[float] = mapped_column(Float, default=0.0)
     template: Mapped["JobTemplate"] = relationship(back_populates="prices")
 
 
