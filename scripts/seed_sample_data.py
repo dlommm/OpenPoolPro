@@ -50,10 +50,13 @@ def run() -> None:
         if not s.scalars(select(models.JobTemplate)).first():
             green = models.JobTemplate(title="Green-to-clean recovery",
                                        description="Algae bloom recovery",
-                                       job_type="service", labor_cents=15000)
+                                       job_type="service", labor_cents=15000,
+                                       est_hours=3.0)
             green.tasks = [models.JobTemplateTask(label=x, position=i) for i, x in enumerate(
                 ["Test water", "Brush walls & floor", "Add shock", "Add clarifier",
                  "Run filter 24h", "Vacuum to waste"])]
+            green.prices = [models.JobTemplatePrice(
+                label="Up to 20k gal", max_gallons=20000, price_cents=15000, hours=2.0)]
             filt = models.JobTemplate(title="Filter clean & inspect",
                                       description="Cartridge clean",
                                       job_type="repair", labor_cents=9500)
