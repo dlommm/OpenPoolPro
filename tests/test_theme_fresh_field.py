@@ -46,6 +46,18 @@ def test_fresh_field_theme_renders_all_hero_screens(client, engine):
         assert "jinja2" not in html.lower()
 
 
+def test_fresh_field_customer_detail_has_custabs(client, engine):
+    """Customer detail keeps its ff-cust-hero marker AND gets the shared
+    Profile/Photos/Pool tab bar wired in the fresh-field visual idiom."""
+    _activate_fresh_field(engine)
+    cid = _make_customer(client, engine)
+    body = client.get(f"/customers/{cid}").text
+    assert "ff-cust-hero" in body          # customer hero marker preserved
+    for name in ("profile", "photos", "pool"):
+        assert f'data-custab-btn="{name}"' in body
+        assert f'data-custab="{name}"' in body
+
+
 def test_fresh_field_chrome_and_money_gating(client, engine):
     _activate_fresh_field(engine)
 
