@@ -28,30 +28,62 @@
         {% endfor %}
       </select></label>
   </div>
-  <div class="grid grid-cols-3 gap-3">
+  <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Priority</span>
       <select name="priority" class="field">
         {% for pr in ["normal","high"] %}<option {{ "selected" if j and j.priority == pr }}>{{ pr }}</option>{% endfor %}
       </select></label>
-    {% if show_money %}
-    {% set labor_prefill = ('%.2f'|format(j.labor_cents / 100)) if j
-       else (('%.2f'|format(template_price_cents / 100)) if (template and price_status == 'matched' and template_price_cents is not none)
-       else (('%.2f'|format(template.labor_cents / 100)) if (template and price_status != 'unmatched') else '')) %}
-    <label class="block"><span class="field-label">Labor $</span>
-      <input inputmode="decimal" name="labor_dollars" value="{{ labor_prefill }}"
-             {{ 'required' if (template and price_status == 'unmatched') }}
-             class="field font-data"></label>
-    {% endif %}
     <label class="block"><span class="field-label">Date</span>
       <input type="date" name="scheduled_date" value="{{ j.scheduled_date or '' if j else '' }}"
              class="field font-data"></label>
   </div>
-  {% if show_money and template and price_status in ['matched', 'unmatched'] %}
-  <p class="text-sm {{ 'text-safety' if price_status == 'unmatched' else 'text-mist' }}">
-    {% if price_status == 'matched' %}Auto-priced ${{ '%.2f'|format(template_price_cents / 100) }} from the “{{ template.title }}” template for this pool size.
-    {% else %}This pool size isn't priced in the “{{ template.title }}” template — enter a price to create the job.{% endif %}
+  {% if show_money %}
+  {% set default_rate_dollars = '%.2f'|format(default_rate_cents / 100) %}
+  {% set rate_prefill = ('%.2f'|format((j.labor_cents / j.hours) / 100)) if (j and j.hours) else default_rate_dollars %}
+  {% set hours_prefill = ('%.2f'|format(j.hours)) if j
+     else (('%.2f'|format(resolved_hours)) if (template and hours_status in ['matched', 'flat'] and resolved_hours is not none) else '') %}
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="field-label">Rate $/hr</span>
+      <div class="money-in"><span>$</span>
+        <input inputmode="decimal" id="job_rate_dollars" name="rate_dollars" value="{{ rate_prefill }}"
+               class="field font-semibold"></div></label>
+    <label class="block"><span class="field-label">Hours</span>
+      <div class="relative flex items-center">
+        <input inputmode="decimal" id="job_hours" name="hours" value="{{ hours_prefill }}"
+               {{ 'required' if (template and hours_status == 'unmatched') }}
+               class="field pr-8 font-data font-semibold">
+        <span class="pointer-events-none absolute right-3 text-xs text-mist">hrs</span>
+      </div></label>
+  </div>
+  <div class="flex items-center justify-between rounded-lg bg-shallow/40 px-3 py-2">
+    <span class="text-[13px] font-medium text-mist">Labor total</span>
+    <span id="job_labor_total" class="money">$0.00</span>
+  </div>
+  {% endif %}
+  {% if show_money and template and hours_status in ['matched', 'unmatched'] %}
+  <p class="text-sm {{ 'text-safety' if hours_status == 'unmatched' else 'text-mist' }}">
+    {% if hours_status == 'matched' %}Auto-set {{ '%g'|format(resolved_hours) }} hrs from the “{{ template.title }}” template for this pool size.
+    {% else %}This pool size isn't priced in the “{{ template.title }}” template — enter hours to create the job.{% endif %}
   </p>
   {% endif %}
   <button class="btn-primary">Save</button>
 </form>
+{% if show_money %}
+<script>
+(function () {
+  var rateEl = document.getElementById("job_rate_dollars");
+  var hoursEl = document.getElementById("job_hours");
+  var totalEl = document.getElementById("job_labor_total");
+  if (!rateEl || !hoursEl || !totalEl) return;
+  function update() {
+    var rate = parseFloat(rateEl.value) || 0;
+    var hrs = parseFloat(hoursEl.value) || 0;
+    totalEl.textContent = "$" + (rate * hrs).toFixed(2);
+  }
+  rateEl.addEventListener("input", update);
+  hoursEl.addEventListener("input", update);
+  update();
+})();
+</script>
+{% endif %}
 {% endblock %}

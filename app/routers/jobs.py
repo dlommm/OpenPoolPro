@@ -12,7 +12,7 @@ from app.main import templates
 router = APIRouter()
 
 
-def _labor_cents(val: str) -> int:
+def _dollars_to_cents(val: str) -> int:
     try:
         return round(float(val or 0) * 100)
     except ValueError:
@@ -34,6 +34,16 @@ def _parse_int_tolerant(s: str) -> int | None:
         return None
     try:
         return int(s)
+    except ValueError:
+        return None
+
+
+def _parse_float_tolerant(s: str) -> float | None:
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
     except ValueError:
         return None
 
@@ -64,24 +74,26 @@ def new_job(request: Request, property_id: int | None = None, template: str = ""
                                     .order_by(models.User.name)).all()
     template_id = _parse_int_tolerant(template)  # missing/garbage template -> plain form
     tmpl = session.get(models.JobTemplate, template_id) if template_id is not None else None
-    price_cents, price_status = None, "flat"
+    default_rate_cents = rates.default_labor_rate_cents(session)
+    resolved_hours, hours_status = None, "flat"
     if tmpl is not None and property_id is not None:
         prop = session.get(models.Property, property_id)
         if prop is not None:
-            price_cents, price_status = rates.template_price_cents(
+            resolved_hours, hours_status = rates.template_hours(
                 tmpl, rates.largest_pool_gallons(prop))
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": None, "props": props, "selected": property_id,
          "assignees_all": assignees_all,
          "show_money": request.state.user.can("view_money"),
-         "template": tmpl, "template_price_cents": price_cents,
-         "price_status": price_status})
+         "template": tmpl, "default_rate_cents": default_rate_cents,
+         "resolved_hours": resolved_hours, "hours_status": hours_status})
 
 
 @router.post("/jobs/new")
 def create_job(request: Request, property_id: int = Form(...), title: str = Form(...),
                description: str = Form(""), priority: str = Form("normal"),
-               labor_dollars: str = Form(""), scheduled_date: str = Form(""),
+               rate_dollars: str = Form(""), hours: str = Form(""),
+               scheduled_date: str = Form(""),
                job_type: str = Form("service"), assigned_tech_id: str = Form(""),
                template_id: str = Form(""),
                session: Session = Depends(get_session)):
@@ -95,20 +107,26 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
     can_money = request.state.user.can("view_money")
     tmpl_id = _parse_int_tolerant(template_id)
     tmpl = session.get(models.JobTemplate, tmpl_id) if tmpl_id is not None else None
-    # Resolve template size-based pricing. If the template has a size matrix and the
-    # customer's pool matches a row, auto-set the price; if it matches none and the
-    # owner didn't enter a price, block the job until they do.
-    labor_cents = _labor_cents(labor_dollars) if can_money else 0
-    if tmpl is not None and can_money and not labor_dollars.strip():
-        price, status = rates.template_price_cents(tmpl, rates.largest_pool_gallons(prop))
-        if status == "matched":
-            labor_cents = price
+    rate_cents = (_dollars_to_cents(rate_dollars) if rate_dollars.strip()
+                  else rates.default_labor_rate_cents(session))
+    # Resolve hours: an explicit hours field wins; otherwise fall back to the
+    # template's estimated hours for this pool size. If the template has a size
+    # matrix and the customer's pool matches no row, block the job until the
+    # owner enters hours.
+    hrs = _parse_float_tolerant(hours)
+    if hrs is None and tmpl is not None:
+        h, status = rates.template_hours(tmpl, rates.largest_pool_gallons(prop))
+        if status in ("matched", "flat"):
+            hrs = h
         elif status == "unmatched":
             return HTMLResponse(
                 f"This pool size isn't priced in the “{tmpl.title}” template — "
-                "enter a price to create the job.", status_code=400)
+                "enter hours to create the job.", status_code=400)
+    if hrs is None:
+        hrs = 0
+    labor_cents = rates.job_labor_cents(rate_cents, hrs) if can_money else 0
     j = models.Job(property_id=property_id, title=title, description=description,
-                   priority=priority, labor_cents=labor_cents)
+                   priority=priority, labor_cents=labor_cents, hours=hrs)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
     if scheduled_date:
         j.scheduled_date = date.fromisoformat(scheduled_date)
@@ -137,16 +155,19 @@ def edit_job_form(request: Request, jid: int, session: Session = Depends(get_ses
                             .join(models.Customer).order_by(models.Customer.name)).all()
     assignees_all = session.scalars(select(models.User).where(models.User.active)
                                     .order_by(models.User.name)).all()
+    default_rate_cents = rates.default_labor_rate_cents(session)
     return templates.TemplateResponse(request, "jobs/form.html",
         {"j": j, "props": props, "selected": j.property_id,
          "assignees_all": assignees_all,
-         "show_money": request.state.user.can("view_money")})
+         "show_money": request.state.user.can("view_money"),
+         "template": None, "default_rate_cents": default_rate_cents,
+         "resolved_hours": None, "hours_status": "flat"})
 
 
 @router.post("/jobs/{jid}/edit")
 def edit_job(request: Request, jid: int, property_id: int = Form(...), title: str = Form(...),
              description: str = Form(""), priority: str = Form("normal"),
-             labor_dollars: str = Form(""), scheduled_date: str = Form(""),
+             rate_dollars: str = Form(""), hours: str = Form(""), scheduled_date: str = Form(""),
              job_type: str = Form("service"), assigned_tech_id: str = Form(""),
              session: Session = Depends(get_session)):
     # Validate property exists
@@ -161,7 +182,11 @@ def edit_job(request: Request, jid: int, property_id: int = Form(...), title: st
     j.property_id, j.title, j.description, j.priority = property_id, title, description, priority
     j.job_type, j.assigned_tech_id = job_type, assigned_id
     if request.state.user.can("view_money"):
-        j.labor_cents = _labor_cents(labor_dollars)
+        rate_cents = (_dollars_to_cents(rate_dollars) if rate_dollars.strip()
+                      else rates.default_labor_rate_cents(session))
+        hrs = _parse_float_tolerant(hours) or 0
+        j.hours = hrs
+        j.labor_cents = rates.job_labor_cents(rate_cents, hrs)
     j.scheduled_date = date.fromisoformat(scheduled_date) if scheduled_date else None
     if j.status != "done":
         j.status = "scheduled" if j.scheduled_date else "open"

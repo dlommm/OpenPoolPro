@@ -19,12 +19,12 @@ def test_job_lifecycle(client, engine):
     pid = prop(engine)
     r = client.post("/jobs/new", data={
         "property_id": str(pid), "title": "Filter clean", "description": "DE grids",
-        "priority": "high", "labor_dollars": "125", "scheduled_date": ""},
+        "priority": "high", "rate_dollars": "50", "hours": "2.5", "scheduled_date": ""},
         follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:
         j = s.scalars(select(models.Job)).one()
-        assert j.status == "open" and j.labor_cents == 12500
+        assert j.status == "open" and j.labor_cents == 12500 and j.hours == 2.5
     assert "Filter clean" in client.get("/jobs").text
     today = date.today()
     client.post(f"/jobs/{j.id}/schedule", data={"scheduled_date": str(today)})
@@ -42,12 +42,14 @@ def test_job_lifecycle(client, engine):
 def test_edit_never_undones_and_reopen(client, engine):
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "T", "description": "",
-                                   "priority": "normal", "labor_dollars": "50", "scheduled_date": ""})
+                                   "priority": "normal", "rate_dollars": "25", "hours": "2",
+                                   "scheduled_date": ""})
     with Session(engine) as s:
         jid = s.scalars(select(models.Job)).one().id
     client.post(f"/jobs/{jid}/complete")
     client.post(f"/jobs/{jid}/edit", data={"property_id": str(pid), "title": "T2", "description": "",
-                                           "priority": "normal", "labor_dollars": "60", "scheduled_date": ""})
+                                           "priority": "normal", "rate_dollars": "30", "hours": "2",
+                                           "scheduled_date": ""})
     with Session(engine) as s:
         j = s.get(models.Job, jid)
         assert j.status == "done" and j.title == "T2" and j.labor_cents == 6000
@@ -61,18 +63,20 @@ def test_high_priority_sorts_first(client, engine):
     pid = prop(engine)
     for pr, title in [("normal", "NormalJob"), ("high", "HighJob")]:
         client.post("/jobs/new", data={"property_id": str(pid), "title": title, "description": "",
-                                       "priority": pr, "labor_dollars": "", "scheduled_date": ""})
+                                       "priority": pr, "rate_dollars": "", "hours": "",
+                                       "scheduled_date": ""})
     html = client.get("/jobs").text
     assert html.index("HighJob") < html.index("NormalJob")
 
 
-def test_garbage_labor_dollars_defaults_zero(client, engine):
+def test_garbage_rate_dollars_defaults_zero(client, engine):
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "G", "description": "",
-                                   "priority": "normal", "labor_dollars": "abc", "scheduled_date": ""})
+                                   "priority": "normal", "rate_dollars": "abc", "hours": "3",
+                                   "scheduled_date": ""})
     with Session(engine) as s:
-        assert s.scalars(select(models.Job).where(
-            models.Job.title == "G")).one().labor_cents == 0
+        j = s.scalars(select(models.Job).where(models.Job.title == "G")).one()
+        assert j.labor_cents == 0 and j.hours == 3.0
 
 
 def test_job_start_and_times(client, engine):
@@ -80,7 +84,7 @@ def test_job_start_and_times(client, engine):
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "Timed",
                                    "description": "", "priority": "normal",
-                                   "labor_dollars": "", "scheduled_date": str(date.today()),
+                                   "rate_dollars": "", "scheduled_date": str(date.today()),
                                    "job_type": "service", "assigned_tech_id": ""})
     with Session(engine) as s:
         jid = s.scalars(select(models.Job).where(models.Job.title == "Timed")).one().id
@@ -108,7 +112,7 @@ def test_job_times_noop_keeps_completion_date(client, engine):
     last_week = (date.today() - timedelta(days=7)).isoformat()
     client.post("/jobs/new", data={"property_id": str(pid), "title": "Anchored",
                                    "description": "", "priority": "normal",
-                                   "labor_dollars": "", "scheduled_date": last_week,
+                                   "rate_dollars": "", "scheduled_date": last_week,
                                    "job_type": "service", "assigned_tech_id": ""})
     with Session(engine) as s:
         jid = s.scalars(select(models.Job).where(
@@ -132,7 +136,7 @@ def test_job_times_evening_utc_rollover(client, engine):
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "Evening",
                                    "description": "", "priority": "normal",
-                                   "labor_dollars": "", "scheduled_date": "",
+                                   "rate_dollars": "", "scheduled_date": "",
                                    "job_type": "service", "assigned_tech_id": ""})
     with Session(engine) as s:
         j = s.scalars(select(models.Job).where(models.Job.title == "Evening")).one()
@@ -153,7 +157,7 @@ def test_job_detail_shows_start_button_then_duration(client, engine):
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "BtnJob",
                                    "description": "", "priority": "normal",
-                                   "labor_dollars": "", "scheduled_date": str(date.today()),
+                                   "rate_dollars": "", "scheduled_date": str(date.today()),
                                    "job_type": "service", "assigned_tech_id": ""})
     with Session(engine) as s:
         jid = s.scalars(select(models.Job).where(models.Job.title == "BtnJob")).one().id
@@ -186,9 +190,85 @@ def test_create_job_from_template_seeds_tasks(client, engine):
         job = s.scalars(select(models.Job).where(models.Job.title == "Filter clean")).one()
         labels = [x.label for x in sorted(job.tasks, key=lambda z: z.position)]
         assert labels == ["Backwash", "Rinse"]
+        # No rate/hours posted -> default rate ($180/hr) x the template's flat est_hours (1.0)
+        assert job.hours == 1.0 and job.labor_cents == 18000
         jt = job.tasks[0]
         assert jt.done is False
     r2 = client.post(f"/jobs/{job.id}/tasks/{jt.id}/toggle", follow_redirects=False)
     assert r2.status_code == 303
     with Session(engine) as s:
         assert s.get(models.JobTask, jt.id).done is True
+
+
+def test_create_job_uses_default_rate_setting_with_explicit_hours(client, engine):
+    pid = prop(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "labor_rate_cents", "20000")  # $200/hr
+        s.commit()
+    r = client.post("/jobs/new", data={"property_id": str(pid), "title": "NoRate",
+                                       "description": "", "priority": "normal",
+                                       "rate_dollars": "", "hours": "3", "scheduled_date": ""},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "NoRate")).one()
+        assert j.hours == 3.0 and j.labor_cents == 60000  # $200/hr x 3h
+
+
+def test_create_job_rate_override(client, engine):
+    pid = prop(engine)
+    r = client.post("/jobs/new", data={"property_id": str(pid), "title": "Overridden",
+                                       "description": "", "priority": "normal",
+                                       "rate_dollars": "75", "hours": "2", "scheduled_date": ""},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "Overridden")).one()
+        assert j.hours == 2.0 and j.labor_cents == 15000  # $75/hr x 2h
+
+
+def _template_with_hours_matrix(engine):
+    with Session(engine) as s:
+        t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
+        t.prices = [models.JobTemplatePrice(label="Small", max_gallons=15000, hours=1.5)]
+        s.add(t); s.commit()
+        return t.id
+
+
+def _prop_with_pool(engine, gallons, name):
+    with Session(engine) as s:
+        c = models.Customer(name=name)
+        p = models.Property(customer=c)
+        s.add(p)
+        s.add(models.Pool(property=p, gallons=gallons, kind="pool"))
+        s.commit()
+        return p.id
+
+
+def test_create_job_template_size_matched_hours_priced(client, engine):
+    pid = _prop_with_pool(engine, 12000, "MatchCo")
+    tid = _template_with_hours_matrix(engine)
+    r = client.post("/jobs/new", data={"property_id": str(pid), "title": "Matched",
+                                       "job_type": "service", "template_id": str(tid),
+                                       "rate_dollars": "100"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "Matched")).one()
+        assert j.hours == 1.5 and j.labor_cents == 15000  # $100/hr x 1.5h
+
+
+def test_create_job_template_unmatched_blocks_unless_hours_given(client, engine):
+    pid = _prop_with_pool(engine, 40000, "TooBigCo")
+    tid = _template_with_hours_matrix(engine)
+    r = client.post("/jobs/new", data={"property_id": str(pid), "title": "TooBig",
+                                       "job_type": "service", "template_id": str(tid)},
+                    follow_redirects=False)
+    assert r.status_code == 400  # 40k matches no size row, no hours entered -> blocked
+    r2 = client.post("/jobs/new", data={"property_id": str(pid), "title": "TooBig2",
+                                        "job_type": "service", "template_id": str(tid),
+                                        "rate_dollars": "100", "hours": "4"},
+                     follow_redirects=False)
+    assert r2.status_code == 303  # entering hours lets it through
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job).where(models.Job.title == "TooBig2")).one()
+        assert j.hours == 4.0 and j.labor_cents == 40000
