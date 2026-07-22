@@ -9,7 +9,7 @@ from app.db import Base
 ROLE_VALUES = ("chlorine_liquid", "chlorine_granular", "chlorine_tab", "ph_up",
                "ph_down", "alkalinity_up", "stabilizer", "salt", "other")
 
-PHOTO_TAGS = ("before", "after", "issue")
+PHOTO_TAGS = ("before", "after", "issue", "house")
 
 
 def utcnow() -> datetime:
@@ -116,12 +116,12 @@ class Equipment(Base):
 class Photo(Base):
     __tablename__ = "photos"
     id: Mapped[int] = mapped_column(primary_key=True)
-    entity_type: Mapped[str] = mapped_column(String(10))  # pool|visit|job
+    entity_type: Mapped[str] = mapped_column(String(10))  # pool|visit|job|property
     entity_id: Mapped[int] = mapped_column(Integer)
     filename: Mapped[str] = mapped_column(String(200))
     thumb_filename: Mapped[str] = mapped_column(String(200))
     caption: Mapped[str] = mapped_column(String(200), default="")
-    tag: Mapped[str] = mapped_column(String(10), default="")  # before|after|issue|""
+    tag: Mapped[str] = mapped_column(String(10), default="")  # before|after|issue|house|""
     taken_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

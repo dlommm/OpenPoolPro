@@ -9,7 +9,7 @@ from app.db import get_session
 
 router = APIRouter()
 
-ALLOWED = {"pool", "visit", "job"}
+ALLOWED = {"pool", "visit", "job", "property"}
 
 
 @router.get("/photos/file/{photo_id}")

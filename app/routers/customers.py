@@ -61,8 +61,9 @@ def _parse_int_tolerant(s: str) -> int | None:
 
 def _customer_photos(session: Session, customer: "models.Customer"
                      ) -> list[tuple["models.Photo", "models.Property | None"]]:
-    """All photos reachable from a customer's properties (via visit/pool/job),
-    newest first, paired with the property they belong to (None if unresolved).
+    """All photos reachable from a customer's properties (via visit/pool/job,
+    plus photos uploaded directly against a property itself), newest first,
+    paired with the property they belong to (None if unresolved).
 
     Shared by `_timeline` (folds into the merged feed) and the customer-detail
     Photos section (filterable by tag via `?ptag=`).
@@ -87,6 +88,7 @@ def _customer_photos(session: Session, customer: "models.Customer"
         and_(models.Photo.entity_type == "visit", models.Photo.entity_id.in_(visit_prop_of.keys())),
         and_(models.Photo.entity_type == "pool", models.Photo.entity_id.in_(pool_prop_of.keys())),
         and_(models.Photo.entity_type == "job", models.Photo.entity_id.in_(job_prop_of.keys())),
+        and_(models.Photo.entity_type == "property", models.Photo.entity_id.in_(property_ids)),
     ))).all()
 
     out = []
@@ -95,6 +97,8 @@ def _customer_photos(session: Session, customer: "models.Customer"
             prop_id = visit_prop_of.get(ph.entity_id)
         elif ph.entity_type == "pool":
             prop_id = pool_prop_of.get(ph.entity_id)
+        elif ph.entity_type == "property":
+            prop_id = ph.entity_id
         else:
             prop_id = job_prop_of.get(ph.entity_id)
         out.append((ph, prop_by_id.get(prop_id)))

@@ -184,6 +184,26 @@ def test_visit_photo_tag_chip_renders_on_reload(client, engine):
     assert "<span class=\"tag absolute bottom-1 left-1\">issue</span>" in reloaded
 
 
+def test_property_photo_upload_allowed(client, engine):
+    with Session(engine) as s:
+        c = models.Customer(name="HouseCo")
+        p = models.Property(customer=c, label="Home")
+        s.add(p)
+        s.commit()
+        cid, pid = c.id, p.id
+
+    r = client.post(f"/photos/property/{pid}", data={"tag": "house"},
+                    files=[("files", ("front.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
+    assert r.status_code == 200
+    with Session(engine) as s:
+        ph = s.scalars(select(models.Photo)).one()
+        assert ph.entity_type == "property" and ph.entity_id == pid
+        assert ph.tag == "house"
+
+    detail = client.get(f"/customers/{cid}").text
+    assert f"/photos/file/{ph.id}" in detail
+
+
 def test_ptag_filter_tolerant_invalid_value_shows_all(client, engine):
     pool_id = _pool_id(client, engine)
     client.post(f"/photos/pool/{pool_id}", data={"tag": "before"},
