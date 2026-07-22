@@ -123,6 +123,55 @@
         </div>
         {% endfor %}
 
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Contract rates by pool size</h2>
+          <p class="mb-2 text-sm text-mist">Per-visit contract prices by the pool's size, used to prefill season contracts. Leave a size's Weekly price blank to remove that row.</p>
+          <form method="post" action="/settings/contract_rates">
+            <div class="overflow-x-auto">
+              <div class="min-w-[54rem]">
+                <div class="grid grid-cols-[1fr_5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_2.5rem] gap-2 px-1 pb-1 text-[11px] uppercase tracking-wide text-mist">
+                  <span>Label</span><span>Up to gal</span><span>Weekly</span><span>Open/Close</span><span>Green-to-Clean</span><span>Storm</span><span>Service call</span><span>Spa</span><span></span></div>
+                <div class="cr-body divide-y divide-seam/60">
+                  {% for r in contract_rates %}
+                  <div class="cr-row grid grid-cols-[1fr_5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_2.5rem] items-center gap-2 py-1.5">
+                    <input type="hidden" name="contract_rate_id" value="{{ r.id }}">
+                    <input name="label" value="{{ r.label }}" placeholder="Size" class="field">
+                    <input inputmode="numeric" name="max_gallons" value="{{ r.max_gallons or '' }}" placeholder="∞" class="field text-center font-data">
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="weekly_dollars" value="{{ '%.2f'|format(r.weekly_cents / 100) }}" class="field font-semibold"></div>
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="open_close_dollars" value="{{ '%.2f'|format(r.open_close_cents / 100) }}" class="field"></div>
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="green_clean_dollars" value="{{ '%.2f'|format(r.green_clean_cents / 100) }}" class="field"></div>
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="storm_dollars" value="{{ '%.2f'|format(r.storm_cents / 100) }}" class="field"></div>
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="service_call_dollars" value="{{ '%.2f'|format(r.service_call_cents / 100) }}" class="field"></div>
+                    <div class="money-in"><span>$</span><input inputmode="decimal" name="spa_dollars" value="{{ '%.2f'|format(r.spa_cents / 100) }}" class="field"></div>
+                    <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.cr-row');r.querySelector('input[name=weekly_dollars]').value='';r.style.display='none'">&times;</button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div class="cr-row-tmpl hidden grid grid-cols-[1fr_5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_2.5rem] items-center gap-2 py-1.5">
+                  <input type="hidden" name="contract_rate_id" value="">
+                  <input name="label" placeholder="Size" class="field">
+                  <input inputmode="numeric" name="max_gallons" placeholder="∞" class="field text-center font-data">
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="weekly_dollars" placeholder="0.00" class="field font-semibold"></div>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="open_close_dollars" placeholder="0.00" class="field"></div>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="green_clean_dollars" placeholder="0.00" class="field"></div>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="storm_dollars" placeholder="0.00" class="field"></div>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="service_call_dollars" placeholder="0.00" class="field"></div>
+                  <div class="money-in"><span>$</span><input inputmode="decimal" name="spa_dollars" placeholder="0.00" class="field"></div>
+                  <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.cr-row');r.querySelector('input[name=weekly_dollars]').value='';r.style.display='none'">&times;</button>
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2 border-t border-dashed border-seam pt-3">
+              <select class="field flex-1" onchange="crAddCommon(this)">
+                <option value="">Add common size…</option>
+                {% for o in size_opts["pool"] %}<option value="{{ o.label }}|{{ o.ref_gallons }}">{{ o.label }} · {{ "{:,}".format(o.ref_gallons) }} gal</option>{% endfor %}
+              </select>
+              <button type="button" class="btn-secondary whitespace-nowrap px-4" onclick="crAddRow(this)">+ Add custom</button>
+            </div>
+            <button class="btn-secondary mt-3 w-full">Save contract rates</button>
+          </form>
+        </div>
+
         <div class="card p-4">
           <h2 class="set-h">Chemical markup</h2>
           <form method="post" action="/settings/general" class="space-y-2">
@@ -464,6 +513,26 @@
     if (!sel.value) return;
     var parts = sel.value.split("|");
     opAddTier(sel, parts[0], parts[1]);
+    sel.selectedIndex = 0;
+  }
+  function crAddRow(el, label, gallons) {
+    var form = el.closest("form");
+    var tmpl = form.querySelector(".cr-row-tmpl");
+    var body = form.querySelector(".cr-body");
+    if (!tmpl || !body) return;
+    var row = tmpl.cloneNode(true);
+    row.classList.remove("cr-row-tmpl", "hidden");
+    row.classList.add("cr-row");
+    if (label) row.querySelector("[name=label]").value = label;
+    if (gallons) row.querySelector("[name=max_gallons]").value = gallons;
+    body.appendChild(row);
+    var price = row.querySelector("[name=weekly_dollars]");
+    if (price) price.focus();
+  }
+  function crAddCommon(sel) {
+    if (!sel.value) return;
+    var parts = sel.value.split("|");
+    crAddRow(sel, parts[0], parts[1]);
     sel.selectedIndex = 0;
   }
   var OPP_MARKUP = {{ global_markup|tojson }};

@@ -46,6 +46,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     spa_tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "spa").order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
+    contract_rates = session.scalars(select(models.ContractRate).order_by(
+        models.ContractRate.max_gallons.is_(None), models.ContractRate.max_gallons)).all()
     chems = session.scalars(select(models.Chemical).order_by(models.Chemical.name)).all()
     try:
         _gmarkup = float(models.get_setting(session, "chem_markup_percent", "0") or 0)
@@ -79,7 +81,8 @@ def settings_page(request: Request, rules_created: str | None = None,
                              .limit(50)).all()
     mail_sent_n, mail_failed_n = _parse_count(mail_sent), _parse_count(mail_failed)
     return templates.TemplateResponse(request, "settings/index.html", {
-        "tiers": tiers, "spa_tiers": spa_tiers, "chems": chems, "tasks": tasks, "job_templates": job_templates,
+        "tiers": tiers, "spa_tiers": spa_tiers, "contract_rates": contract_rates,
+        "chems": chems, "tasks": tasks, "job_templates": job_templates,
         "backups": backups,
         "crew": crew,
         "size_opts": sizes.presets_for_form(session),
@@ -178,6 +181,70 @@ async def save_tiers(request: Request, session: Session = Depends(get_session)):
 @router.post("/settings/spa_tiers")
 async def save_spa_tiers(request: Request, session: Session = Depends(get_session)):
     await _save_tiers_of_kind(request, session, "spa")
+    return RedirectResponse("/settings", status_code=303)
+
+
+# (dollar field name, cents field name) pairs, in the order the settings grid renders them.
+CONTRACT_RATE_DOLLAR_FIELDS = tuple(
+    (cents_field.removesuffix("_cents") + "_dollars", cents_field)
+    for cents_field in rates.CONTRACT_RATE_FIELDS
+)
+
+
+@router.post("/settings/contract_rates")
+async def save_contract_rates(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    ids = form.getlist("contract_rate_id")
+    max_gs = form.getlist("max_gallons")
+    labels = form.getlist("label")
+    dollar_lists = {dollar: form.getlist(dollar) for dollar, _cents in CONTRACT_RATE_DOLLAR_FIELDS}
+
+    def _at(lst: list[str], i: int) -> str:
+        return lst[i] if i < len(lst) else ""
+
+    changed = 0
+    for i, (rid, max_g) in enumerate(zip(ids, max_gs)):
+        label = _at(labels, i)
+        row = None
+        if rid:
+            try:
+                row = session.get(models.ContractRate, int(rid))
+            except ValueError:
+                continue
+            if row is None:
+                continue
+        weekly_raw = _at(dollar_lists["weekly_dollars"], i)
+        if not weekly_raw.strip():
+            if row is not None:
+                session.delete(row)
+                changed += 1
+            continue
+        try:
+            max_gallons = int(max_g) if max_g.strip() else None
+            cents = {}
+            for dollar_field, cents_field in CONTRACT_RATE_DOLLAR_FIELDS:
+                raw = _at(dollar_lists[dollar_field], i).strip()
+                cents[cents_field] = round(float(raw) * 100) if raw else 0
+        except ValueError:
+            continue  # garbage anywhere in this row: skip it rather than 500 or half-save
+        if row is None:
+            row = models.ContractRate()
+            changed += 1
+        else:
+            before = (row.max_gallons, row.label,
+                     tuple(getattr(row, cents_field) for _, cents_field in CONTRACT_RATE_DOLLAR_FIELDS))
+            after = (max_gallons, label,
+                    tuple(cents[cents_field] for _, cents_field in CONTRACT_RATE_DOLLAR_FIELDS))
+            if before != after:
+                changed += 1
+        row.max_gallons, row.label = max_gallons, label
+        for _, cents_field in CONTRACT_RATE_DOLLAR_FIELDS:
+            setattr(row, cents_field, cents[cents_field])
+        session.add(row)
+    if changed:
+        models.audit(session, request.state.user.id, "rates.change",
+                     detail=f"{changed} contract rate(s) changed")
+    session.commit()
     return RedirectResponse("/settings", status_code=303)
 
 
