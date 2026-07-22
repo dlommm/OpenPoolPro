@@ -21,7 +21,7 @@ def _seed_customer(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Beach house", "address": "44 Pelican Way", "gate_code": "1180",
+        "label": "Beach house", "street": "44 Pelican Way", "gate_code": "1180",
         "dog_note": "", "notes": "", "frequency": "weekly", "weekday": "1",
         "anchor_date": "", "rate_override_dollars": ""})
     return cid

@@ -12,7 +12,7 @@ def _seed(client, engine):
         from sqlalchemy import select
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Marina", "address": "9 Console Way", "gate_code": "11",
+        "label": "Marina", "street": "9 Console Way", "gate_code": "11",
         "dog_warning": "on", "dog_note": "Big dog",
         "notes": "", "frequency": "weekly", "weekday": str(date.today().weekday()),
         "anchor_date": "", "rate_override_dollars": "", "assigned_tech_id": ""})

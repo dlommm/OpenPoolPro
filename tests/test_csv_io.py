@@ -15,7 +15,7 @@ def _seed_full(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "1 Way", "gate_code": "77", "dog_note": "",
+        "label": "Home", "street": "1 Way", "gate_code": "77", "dog_note": "",
         "notes": "", "frequency": "biweekly", "weekday": "2", "anchor_date": "2026-07-08",
         "rate_override_dollars": "62.50", "assigned_tech_id": ""})
     with Session(engine) as s:
