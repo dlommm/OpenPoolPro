@@ -70,21 +70,11 @@ def _d(cents) -> str:
 
 
 def _logo_flowable():
-    """Best-effort company-logo Image flowable, or None on any failure."""
-    try:
-        import os
-
-        from app.routers.company import _logo_path
-
-        path = _logo_path()
-        if not os.path.isfile(path):
-            return None
-        img = Image(path)
-        img.drawHeight = 0.75 * inch
-        img.drawWidth = 0.75 * inch * (img.imageWidth / img.imageHeight)
-        return img
-    except Exception:
-        return None
+    """Best-effort company-logo Image flowable, or None on any failure.
+    Delegates to the shared, alpha-flattening helper so the logo is never
+    stretched (see app/pdf_logo.py)."""
+    from app.pdf_logo import logo_flowable
+    return logo_flowable()
 
 
 def _safe(value) -> str:
