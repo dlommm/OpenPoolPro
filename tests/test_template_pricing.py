@@ -34,7 +34,7 @@ def test_largest_pool_gallons():
     assert rates.largest_pool_gallons(p) == 20000  # largest active pool-kind (spa/inactive ignored)
 
 
-def test_save_template_prices(client, engine):
+def test_save_template_hours(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
     from app import models
@@ -43,14 +43,87 @@ def test_save_template_prices(client, engine):
         s.add(t); s.commit(); tid = t.id
     r = client.post(f"/settings/job_templates/{tid}/prices", data={
         "price_id": ["", ""], "label": ["Small", "Large"],
-        "max_gallons": ["15000", ""], "price_dollars": ["150", "250"]}, follow_redirects=False)
+        "max_gallons": ["15000", ""], "hours": ["1.5", "2.5"]}, follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:
         rows = s.scalars(select(models.JobTemplatePrice)
                          .where(models.JobTemplatePrice.job_template_id == tid)).all()
         by = {p.label: p for p in rows}
-        assert by["Small"].max_gallons == 15000 and by["Small"].price_cents == 15000
-        assert by["Large"].max_gallons is None and by["Large"].price_cents == 25000
+        assert by["Small"].max_gallons == 15000 and by["Small"].hours == 1.5
+        assert by["Large"].max_gallons is None and by["Large"].hours == 2.5
+
+
+def test_save_template_hours_blank_deletes_row(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    with Session(engine) as s:
+        t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
+        t.prices = [models.JobTemplatePrice(label="Small", max_gallons=15000, hours=1.5)]
+        s.add(t); s.commit(); tid, pid = t.id, t.prices[0].id
+    r = client.post(f"/settings/job_templates/{tid}/prices", data={
+        "price_id": [str(pid)], "label": ["Small"],
+        "max_gallons": ["15000"], "hours": [""]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        rows = s.scalars(select(models.JobTemplatePrice)
+                         .where(models.JobTemplatePrice.job_template_id == tid)).all()
+        assert rows == []
+
+
+def test_save_default_labor_rate(client, engine):
+    from sqlalchemy.orm import Session
+    from app import models
+    r = client.post("/settings/labor_rate", data={"labor_rate_dollars": "225.00"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "labor_rate_cents", "0") == "22500"
+
+
+def test_save_default_labor_rate_ignores_garbage(client, engine):
+    from sqlalchemy.orm import Session
+    from app import models
+    # seed a known value first
+    client.post("/settings/labor_rate", data={"labor_rate_dollars": "150"},
+                follow_redirects=False)
+    r = client.post("/settings/labor_rate", data={"labor_rate_dollars": "not-a-number"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        assert models.get_setting(s, "labor_rate_cents", "0") == "15000"  # unchanged
+
+
+def test_save_template_est_hours(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    r = client.post("/settings/job_templates", data={
+        "template_id": [""], "title": ["Filter clean"],
+        "description": ["Clean the filter"], "job_type": ["service"],
+        "labor_dollars": ["0"], "est_hours": ["2.5"],
+        "tasks_text": [""]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        t = s.scalars(select(models.JobTemplate)
+                      .where(models.JobTemplate.title == "Filter clean")).one()
+        assert t.est_hours == 2.5
+
+
+def test_save_template_est_hours_defaults_to_one_on_blank(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    r = client.post("/settings/job_templates", data={
+        "template_id": [""], "title": ["No hours given"],
+        "description": [""], "job_type": ["service"],
+        "labor_dollars": ["0"], "est_hours": [""],
+        "tasks_text": [""]}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        t = s.scalars(select(models.JobTemplate)
+                      .where(models.JobTemplate.title == "No hours given")).one()
+        assert t.est_hours == 1.0
 
 
 def _seed_prop_with_pool(engine, gallons, name):
@@ -107,4 +180,4 @@ def test_create_job_blocked_when_unmatched(client, engine):
 def test_template_prices_page_renders(client, engine):
     tid = _template_with_small_price(engine)
     html = client.get(f"/settings/job_templates/{tid}/prices").text
-    assert "Price by pool size" in html and "Add common size" in html
+    assert "Hours by pool size" in html and "Add common size" in html

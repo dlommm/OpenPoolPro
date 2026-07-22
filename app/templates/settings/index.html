@@ -136,6 +136,16 @@
           </form>
         </div>
 
+        <div class="card p-4">
+          <h2 class="set-h">Labor rate</h2>
+          <form method="post" action="/settings/labor_rate" class="space-y-2">
+            <label class="block"><span class="field-label">Default labor rate ($/hr)</span>
+              <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_rate_dollars" value="{{ labor_rate_dollars }}" class="field font-semibold"></div></label>
+            <p class="text-xs text-mist">Used with a job template's estimated hours to price hourly jobs.</p>
+            <button class="btn-secondary w-full">Save labor rate</button>
+          </form>
+        </div>
+
       </div>
     </section>
 
@@ -210,7 +220,7 @@
       <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Job templates</h2>
-          <p class="mb-4 text-sm text-mist">Reusable jobs with a checklist and optional size-based pricing — pick one when creating a job.</p>
+          <p class="mb-4 text-sm text-mist">Reusable jobs with a checklist, estimated hours, and optional size-based hours — pick one when creating a job.</p>
           <form method="post" action="/settings/job_templates" class="space-y-4">
             {% for t in job_templates %}
             <div class="space-y-3 rounded-xl border border-seam bg-tile/40 p-4">
@@ -224,6 +234,11 @@
                     <option value="repair" {{ "selected" if t.job_type == "repair" }}>Repair</option></select></label>
                 <label class="block w-28"><span class="field-label">Flat price</span>
                   <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" value="{{ '%.2f'|format(t.labor_cents / 100) }}" class="field font-semibold"></div></label>
+                <label class="block w-24"><span class="field-label">Est. hours</span>
+                  <div class="relative flex items-center">
+                    <input inputmode="decimal" name="est_hours" value="{{ '%.2f'|format(t.est_hours) }}" class="field pr-8 font-data font-semibold">
+                    <span class="pointer-events-none absolute right-3 text-xs text-mist">hrs</span>
+                  </div></label>
               </div>
               <label class="block"><span class="field-label">Description</span>
                 <input name="description" value="{{ t.description }}" placeholder="Short description" class="field"></label>
@@ -231,7 +246,7 @@
                 <textarea name="tasks_text" rows="3" class="field">{{ t.tasks | map(attribute='label') | join('\n') }}</textarea></label>
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs text-mist">Clear the name to delete</span>
-                <a href="/settings/job_templates/{{ t.id }}/prices" class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-seam px-3 text-sm font-medium text-pool hover:bg-shallow">Size prices{% if t.prices %} &middot; {{ t.prices|length }}{% endif %} &rarr;</a>
+                <a href="/settings/job_templates/{{ t.id }}/prices" class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-seam px-3 text-sm font-medium text-pool hover:bg-shallow">Size hours{% if t.prices %} &middot; {{ t.prices|length }}{% endif %} &rarr;</a>
               </div>
             </div>
             {% endfor %}
@@ -245,6 +260,11 @@
                   <select name="job_type" class="field"><option value="service">Service</option><option value="repair">Repair</option></select></label>
                 <label class="block w-28"><span class="field-label">Flat price</span>
                   <div class="money-in"><span>$</span><input inputmode="decimal" name="labor_dollars" placeholder="0.00" class="field"></div></label>
+                <label class="block w-24"><span class="field-label">Est. hours</span>
+                  <div class="relative flex items-center">
+                    <input inputmode="decimal" name="est_hours" placeholder="1.00" class="field pr-8 font-data">
+                    <span class="pointer-events-none absolute right-3 text-xs text-mist">hrs</span>
+                  </div></label>
               </div>
               <label class="block"><span class="field-label">Description</span>
                 <input name="description" placeholder="Short description" class="field"></label>

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, sizes
+from app import chem_presets, config, mailer, models, qbo, rates, sizes
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -88,6 +88,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "app_version": config.APP_VERSION,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
+        "labor_rate_dollars": "%.2f" % (rates.default_labor_rate_cents(session) / 100),
         "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
         "business_name": models.get_setting(session, "business_name", ""),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -180,6 +181,20 @@ async def save_spa_tiers(request: Request, session: Session = Depends(get_sessio
     return RedirectResponse("/settings", status_code=303)
 
 
+@router.post("/settings/labor_rate")
+async def save_labor_rate(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    raw = (form.get("labor_rate_dollars") or "").strip()
+    try:
+        dollars = float(raw)
+    except ValueError:
+        dollars = None
+    if dollars is not None and math.isfinite(dollars) and dollars >= 0:
+        models.set_setting(session, "labor_rate_cents", str(round(dollars * 100)))
+        session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
 @router.get("/settings/job_templates/{tid}/prices")
 def template_prices_page(request: Request, tid: int, session: Session = Depends(get_session)):
     t = get_or_404(session, models.JobTemplate, tid)
@@ -193,8 +208,8 @@ async def save_template_prices(request: Request, tid: int,
     t = get_or_404(session, models.JobTemplate, tid)
     form = await request.form()
     rows = zip(form.getlist("price_id"), form.getlist("label"),
-               form.getlist("max_gallons"), form.getlist("price_dollars"))
-    for pid, label, max_g, price in rows:
+               form.getlist("max_gallons"), form.getlist("hours"))
+    for pid, label, max_g, hours in rows:
         row = None
         if pid:
             try:
@@ -203,18 +218,18 @@ async def save_template_prices(request: Request, tid: int,
                 continue
             if row is None or row.job_template_id != t.id:
                 continue
-        if not (price or "").strip():
+        if not (hours or "").strip():
             if row is not None:
-                session.delete(row)  # blank price removes the row
+                session.delete(row)  # blank hours removes the row
             continue
         try:
-            price_cents = round(float(price) * 100)
+            hours_val = float(hours)
             max_gallons = int(max_g) if (max_g or "").strip() else None
         except ValueError:
             continue
         if row is None:
             row = models.JobTemplatePrice(job_template_id=t.id)
-        row.label, row.max_gallons, row.price_cents = label, max_gallons, price_cents
+        row.label, row.max_gallons, row.hours = label, max_gallons, hours_val
         session.add(row)
     session.commit()
     return RedirectResponse(f"/settings/job_templates/{tid}/prices", status_code=303)
@@ -337,6 +352,7 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
     descriptions = form.getlist("description")
     job_types = form.getlist("job_type")
     labors = form.getlist("labor_dollars")
+    est_hours_list = form.getlist("est_hours")
     tasks_texts = form.getlist("tasks_text")
 
     for i, (tid, title) in enumerate(zip(ids, titles)):
@@ -344,6 +360,13 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
         job_type = job_types[i] if i < len(job_types) else "service"
         job_type = job_type if job_type in ("service", "repair") else "service"
         labor = labors[i] if i < len(labors) else ""
+        est_hours_raw = est_hours_list[i] if i < len(est_hours_list) else ""
+        try:
+            est_hours = float(est_hours_raw) if est_hours_raw.strip() else 1.0
+        except ValueError:
+            est_hours = 1.0
+        if not (math.isfinite(est_hours) and est_hours >= 0):
+            est_hours = 1.0  # tolerant: garbage/negative/inf/nan falls back to 1.0
 
         if tid:
             try:
@@ -361,6 +384,7 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
                 continue
             t.title, t.description, t.job_type = title, description, job_type
             t.labor_cents = labor_cents
+            t.est_hours = est_hours
             t.tasks = [models.JobTemplateTask(label=lbl, position=k)
                        for k, lbl in enumerate(_parse_checklist(
                            tasks_texts[i] if i < len(tasks_texts) else ""))]
@@ -370,7 +394,8 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
             except ValueError:
                 continue
             tmpl = models.JobTemplate(title=title, description=description,
-                                      job_type=job_type, labor_cents=labor_cents)
+                                      job_type=job_type, labor_cents=labor_cents,
+                                      est_hours=est_hours)
             tmpl.tasks = [models.JobTemplateTask(label=lbl, position=k)
                           for k, lbl in enumerate(_parse_checklist(
                               tasks_texts[i] if i < len(tasks_texts) else ""))]
