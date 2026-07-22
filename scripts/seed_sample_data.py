@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import addresses, models
 from app.db import make_engine
 from app.rates import effective_rate_cents, gallons
 
@@ -63,29 +63,34 @@ def run() -> None:
             s.add_all([green, filt])
 
         # --- Demo customers / properties / pools ---
-        # (name, phone, email, address, frequency, poolspec, spaspec-or-None)
+        # (name, phone, email, street, city, state, zip, frequency, poolspec, spaspec-or-None)
         # spec = (label, shape, length_ft, width_ft, avg_depth_ft, water_type, surface, kind)
+        # Cities are spread across the Space Coast so the customers list's city
+        # filter/sort have real variety to demonstrate on a fresh install.
         demo = [
             ("Marcus & Lena Alvarez", "(239) 555-0111", "marcus.alvarez@example.com",
-             "88 Gulfshore Blvd", "weekly",
+             "88 Gulfshore Blvd", "Cocoa Beach", "FL", "32931", "weekly",
              ("Main pool", "rectangle", 32, 16, 5.0, "chlorine", "pebble", "pool"),
              ("Spa", "rectangle", 8, 8, 3.5, "chlorine", "tile", "spa")),
             ("Priya Nair", "(239) 555-0122", "priya.nair@example.com",
-             "17 Seagate Dr", "biweekly",
+             "17 Seagate Dr", "Melbourne", "FL", "32901", "biweekly",
              ("Backyard", "oval", 30, 15, 4.5, "salt", "plaster", "pool"), None),
             ("The Whitfield Estate", "(239) 555-0133", "estate@whitfield.example",
-             "5 Port Royal Ln", "weekly",
+             "5 Port Royal Ln", "Satellite Beach", "FL", "32937", "weekly",
              ("Lap pool", "rectangle", 40, 20, 5.5, "salt", "tile", "pool"), None),
             ("Dana Cole", "(239) 555-0144", "dana.cole@example.com",
-             "230 Banyan St", "weekly",
+             "230 Banyan St", "Merritt Island", "FL", "32952", "weekly",
              ("Above-ground", "round", 24, None, 4.33, "chlorine", "vinyl", "pool"), None),
         ]
         if not s.scalars(select(models.Customer)).first():
-            for name, phone, email, addr, freq, poolspec, spaspec in demo:
+            for name, phone, email, street, city, state, zip_, freq, poolspec, spaspec in demo:
                 cust = models.Customer(name=name, phone=phone, email=email,
                                        active=True, notify_email=True)
-                prop = models.Property(customer=cust, label="Home", address=addr,
-                                       frequency=freq, weekday=1, anchor_date=date.today())
+                prop = models.Property(
+                    customer=cust, label="Home",
+                    street=street, city=city, state=state, zip=zip_,
+                    address=addresses.compose_address(street, city, state, zip_),
+                    frequency=freq, weekday=1, anchor_date=date.today())
                 s.add(prop)
                 for spec in (poolspec, spaspec):
                     if not spec:
