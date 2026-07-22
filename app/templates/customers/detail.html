@@ -6,6 +6,14 @@
   {{ ui.page_header("Customer file", c.name) }}
   <a href="/customers/{{ c.id }}/edit" class="btn-secondary mt-2 shrink-0">Edit</a>
 </div>
+
+<div class="mb-4 flex gap-4 border-b border-seam">
+  <button type="button" data-custab-btn="profile" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Profile</button>
+  <button type="button" data-custab-btn="photos" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Photos</button>
+  <button type="button" data-custab-btn="pool" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Pool</button>
+</div>
+
+<div data-custab="profile">
 <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
   {% if c.phone %}<a href="tel:{{ c.phone }}" class="flex min-h-11 items-center gap-1.5 text-pool">{{ ui.icon("phone", "h-4 w-4") }}{{ c.phone }}</a>{% endif %}
   {% if c.email %}<a href="mailto:{{ c.email }}" class="flex min-h-11 items-center text-pool">{{ c.email }}</a>{% endif %}
@@ -45,7 +53,9 @@
   </form>
   {% endif %}
 </div>
+</div>
 
+<div data-custab="pool" class="hidden">
 <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
 <div class="rise mb-5 space-y-2">
   {% for p in props %}
@@ -120,7 +130,9 @@
      class="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-dashed border-seam py-2 text-sm text-mist">
     {{ ui.icon("plus", "h-4 w-4") }}Add property</a>
 </div>
+</div>
 
+<div data-custab="profile">
 {% if jobs %}
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Open jobs</h2>
 <div class="mb-5 space-y-2">
@@ -138,7 +150,9 @@
   <button class="btn-secondary">Log</button>
 </form>
 {% endif %}
+</div>
 
+<div data-custab="photos" class="hidden">
 {% if photos or ptag %}
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
@@ -158,7 +172,9 @@
   {% endfor %}
 </div>
 {% endif %}
+</div>
 
+<div data-custab="profile">
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
 <div class="space-y-2">
   {% for e in timeline %}
@@ -180,4 +196,7 @@
   </div>
   {% endfor %}
 </div>
+</div>
+
+{% include "_custabs.html" %}
 {% endblock %}

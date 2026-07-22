@@ -1,0 +1,24 @@
+{# Customer-detail tab toggle. Included by every customers/detail.html. Panels
+   carry data-custab="profile|photos|pool"; buttons carry data-custab-btn=…. #}
+<script>
+(function () {
+  var TABS = ["profile", "photos", "pool"];
+  function show(name) {
+    document.querySelectorAll("[data-custab]").forEach(function (p) {
+      p.classList.toggle("hidden", p.getAttribute("data-custab") !== name);
+    });
+    document.querySelectorAll("[data-custab-btn]").forEach(function (b) {
+      var on = b.getAttribute("data-custab-btn") === name;
+      b.classList.toggle("text-ink", on); b.classList.toggle("border-pool", on);
+      b.classList.toggle("text-mist", !on); b.classList.toggle("border-transparent", !on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
+  }
+  document.querySelectorAll("[data-custab-btn]").forEach(function (b) {
+    b.addEventListener("click", function () { show(b.getAttribute("data-custab-btn")); });
+  });
+  var initial = (location.hash || "").replace("#", "");
+  show(TABS.indexOf(initial) >= 0 ? initial : "profile");
+})();
+</script>
