@@ -51,6 +51,18 @@ def test_control_room_hero_screens_render(client, engine):
         assert "internalservererror" not in low.replace(" ", ""), f"{path}: 500 leaked"
 
 
+def test_control_room_customer_detail_has_custabs(client, engine):
+    """Customer detail keeps its cr- identity card AND gets the shared
+    Profile/Photos/Pool tab bar wired in the control-room visual idiom."""
+    _activate_control_room(engine)
+    cid = _seed_customer(client, engine)
+    body = client.get(f"/customers/{cid}").text
+    assert "cr-cust-id" in body            # identity card marker preserved
+    for name in ("profile", "photos", "pool"):
+        assert f'data-custab-btn="{name}"' in body
+        assert f'data-custab="{name}"' in body
+
+
 def test_control_room_route_signatures_and_maps_links(client, engine):
     """Route hero keeps the dispatch rail + Maps deep-links intact."""
     _activate_control_room(engine)
