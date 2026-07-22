@@ -7,7 +7,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
-from app import addresses, geocode, models
+from app import addresses, geocode, maps, models
 from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
@@ -332,6 +332,23 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     ptag = ptag if ptag in models.PHOTO_TAGS else ""  # tolerant: unknown -> all
     photos = [(ph, p) for ph, p in all_photos if not ptag or ph.tag == ptag]
 
+    # Per-property "find the house" photo for the location card: the most
+    # recent house-tagged photo uploaded directly against the property,
+    # falling back to the most recent property photo of any tag. all_photos
+    # is already newest-first, so the first match wins.
+    house_photos: dict[int, models.Photo] = {}
+    for p in props:
+        candidates = [ph for ph, prop in all_photos
+                     if prop is not None and prop.id == p.id and ph.entity_type == "property"]
+        house = next((ph for ph in candidates if ph.tag == "house"), None)
+        if house is None and candidates:
+            house = candidates[0]
+        if house is not None:
+            house_photos[p.id] = house
+
+    key = models.get_setting(session, "geoapify_key", "")
+    map_urls = {p.id: maps.static_map_url(p.latitude, p.longitude, key) for p in props}
+
     today = business_today()
     active_holds: dict[int, models.ServiceHold] = {}
     if props:
@@ -351,7 +368,8 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     return templates.TemplateResponse(request, "customers/detail.html",
         {"c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,
          "active_holds": active_holds, "lifetime_cents": lifetime_cents,
-         "photos": photos, "ptag": ptag,
+         "photos": photos, "ptag": ptag, "house_photos": house_photos,
+         "map_urls": map_urls, "geoapify_configured": bool(key),
          "show_money": user.can("view_money"),
          "can_manage": user.can("manage_customers")})
 

@@ -82,6 +82,43 @@
       {% if p.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ p.dog_note }}</span>{% endif %}
       {% if p.id in active_holds %}<span class="tag">On hold until {{ active_holds[p.id].resume_date or "further notice" }}</span>{% endif %}
     </div>
+    {% if p.active %}
+    {% set hp = house_photos.get(p.id) %}
+    <div class="mt-2 rounded-xl border border-seam bg-shallow/40 p-2.5">
+      <div class="flex gap-3">
+        {% if hp %}
+        <img src="/photos/file/{{ hp.id }}?thumb=1" alt="House photo — {{ p.label }}"
+             class="h-24 w-24 shrink-0 rounded-lg object-cover">
+        {% else %}
+        <div class="flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-seam text-center">
+          {{ ui.icon("camera", "h-4 w-4 text-mist") }}
+          <span class="text-[10px] leading-tight text-mist">No photo</span>
+        </div>
+        {% endif %}
+        <div class="min-w-0 flex-1 text-sm">
+          <div>{{ p.street }}</div>
+          <div class="text-mist">{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %} {{ p.zip }}</div>
+          <div class="mt-1.5 flex flex-wrap gap-1.5">
+            {% if p.gate_code %}<span class="tag">Gate {{ p.gate_code }}</span>{% endif %}
+            {% if p.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ p.dog_note }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% if not hp %}
+      <input type="file" accept="image/*" capture="environment" multiple name="files"
+             hx-post="/photos/property/{{ p.id }}" hx-encoding="multipart/form-data"
+             hx-include="#house-tag-{{ p.id }}" hx-trigger="change" class="field mt-2 text-xs"
+             aria-label="Add house photo">
+      <input type="hidden" id="house-tag-{{ p.id }}" name="tag" value="house">
+      {% endif %}
+      {% if map_urls[p.id] %}
+      <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" class="mt-2 h-24 w-full rounded-lg object-cover">
+      {% endif %}
+      <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
+         class="btn-secondary mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 text-sm font-semibold">
+        {{ ui.icon("pin", "h-4 w-4") }}Navigate</a>
+    </div>
+    {% endif %}
     {% if not p.active and can_manage %}
     <form method="post" action="/properties/{{ p.id }}/reactivate" class="mt-2">
       <button class="btn-secondary w-full">Reactivate property</button>

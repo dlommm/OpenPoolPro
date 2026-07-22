@@ -599,3 +599,14 @@ def test_list_pagination_controls(client, engine):
         _mk_customer(client, engine, f"Pager {i:03d}")
     body = client.get("/customers").text
     assert "page=2" in body                               # Next link present
+
+
+def test_detail_map_absent_without_key(client, engine):
+    cid = _mk_customer(client, engine, "NoMap Co", city="Cocoa Beach")
+    body = client.get(f"/customers/{cid}").text
+    assert "maps.geoapify.com" not in body
+
+
+def test_csp_allows_geoapify_images(client):
+    r = client.get("/customers")
+    assert "maps.geoapify.com" in r.headers["content-security-policy"]
