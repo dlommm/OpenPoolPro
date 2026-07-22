@@ -14,7 +14,7 @@ SECURITY_HEADERS = {
     "referrer-policy": "same-origin",
     "content-security-policy": (
         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
     ),
 }
 
