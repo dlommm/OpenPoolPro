@@ -282,12 +282,18 @@
       if (poolDepthEl) poolDepthEl.value = opt.dataset.avg_depth_ft || "";
       if (poolOverrideEl) poolOverrideEl.value = opt.dataset.ref_gallons || "";
       refreshNewGallonsPreview();
-      recomputeHours();
+      if (typeof recomputeHours === "function") recomputeHours();
     });
   }
   if (newPoolFields) {
-    newPoolFields.addEventListener("input", function () { refreshNewGallonsPreview(); recomputeHours(); });
-    newPoolFields.addEventListener("change", function () { refreshNewGallonsPreview(); recomputeHours(); });
+    newPoolFields.addEventListener("input", function () {
+      refreshNewGallonsPreview();
+      if (typeof recomputeHours === "function") recomputeHours();
+    });
+    newPoolFields.addEventListener("change", function () {
+      refreshNewGallonsPreview();
+      if (typeof recomputeHours === "function") recomputeHours();
+    });
   }
   refreshNewGallonsPreview();
 
@@ -296,10 +302,12 @@
   var titleEl = document.getElementById("job_title");
   var descEl = document.getElementById("job_description");
   var jobTypeEl = document.getElementById("job_type_select");
-  var rateEl = document.getElementById("job_rate_dollars");
   var hoursEl = document.getElementById("job_hours");
-  var totalEl = document.getElementById("job_labor_total");
   var hintEl = document.getElementById("job_hours_hint");
+
+  {% if show_money %}
+  var rateEl = document.getElementById("job_rate_dollars");
+  var totalEl = document.getElementById("job_labor_total");
 
   function updateLaborTotal() {
     if (!rateEl || !hoursEl || !totalEl) return;
@@ -350,6 +358,11 @@
     updateLaborTotal();
   }
 
+  if (rateEl) rateEl.addEventListener("input", updateLaborTotal);
+  if (hoursEl) hoursEl.addEventListener("input", updateLaborTotal);
+  updateLaborTotal();
+  {% endif %}
+
   if (templateSelect) {
     templateSelect.addEventListener("change", function () {
       var opt = templateSelect.selectedOptions[0];
@@ -358,12 +371,9 @@
         if (descEl) descEl.value = opt.dataset.description || "";
         if (jobTypeEl && opt.dataset.job_type) jobTypeEl.value = opt.dataset.job_type;
       }
-      recomputeHours();
+      if (typeof recomputeHours === "function") recomputeHours();
     });
   }
-  if (rateEl) rateEl.addEventListener("input", updateLaborTotal);
-  if (hoursEl) hoursEl.addEventListener("input", updateLaborTotal);
-  updateLaborTotal();
 })();
 </script>
 {% endblock %}

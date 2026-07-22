@@ -106,7 +106,7 @@ def test_job_form_hides_and_preserves_labor(client, tech_client, engine):
     _seed_customer(client)
     client.post("/jobs/new", data={"property_id": "1", "title": "Priced job",
                                    "description": "", "priority": "normal",
-                                   "labor_dollars": "425", "scheduled_date": "",
+                                   "rate_dollars": "425", "hours": "1", "scheduled_date": "",
                                    "job_type": "service", "assigned_tech_id": ""})
     with Session(engine) as s:
         jid = s.scalars(select(models.Job)).one().id

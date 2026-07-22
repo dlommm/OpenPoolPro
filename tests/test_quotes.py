@@ -261,13 +261,25 @@ def test_job_new_prefills_from_template(client, engine):
         s.commit()
         tid = t.id
 
-    html = client.get(f"/jobs/new?template={tid}").text
-    assert "Filter clean" in html and "DE grids" in html and "125.00" in html
+    # No ?template=: the dropdown always lists every template, carrying its
+    # data as data-* attributes for the client-side JS to apply on selection --
+    # but nothing is pre-selected.
+    html = client.get("/jobs/new").text
+    assert 'data-title="Filter clean"' in html
+    assert 'data-description="DE grids"' in html
+    assert 'data-job_type="repair"' in html
+    assert f'value="{tid}" selected' not in html
+
+    # ?template=<id>: same dropdown, but that option comes back pre-selected
+    # (new_job resolves ?template= to preselect it).
+    html_sel = client.get(f"/jobs/new?template={tid}").text
+    assert f'value="{tid}" selected' in html_sel
+    assert 'data-title="Filter clean"' in html_sel
 
     r = client.get("/jobs/new?template=abc")  # garbage template id: tolerant, plain form
     assert r.status_code == 200
-    assert "Filter clean" not in r.text
+    assert 'data-title="Filter clean"' in r.text  # dropdown still lists templates
 
     r2 = client.get("/jobs/new")  # missing template: plain form
     assert r2.status_code == 200
-    assert "Filter clean" not in r2.text
+    assert 'data-title="Filter clean"' in r2.text
