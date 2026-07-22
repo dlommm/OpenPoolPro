@@ -18,9 +18,20 @@ stages:
 test:
   stage: test
   image: python:3.12-slim
+  variables:
+    TZ: "America/New_York"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
+  before_script:
+    # The suite assumes the runner's clock is in the app's default business
+    # timezone (APP_TZ=America/New_York): several Today/route-sheet tests seed
+    # "today" via date.today() and one test asserts the ET->UTC evening
+    # rollover. python:3.12-slim ships no tz database, so date.today() would be
+    # UTC and those tests break on the UTC/ET date boundary. Install tzdata and
+    # anchor the clock to New York so date.today() matches business_today().
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends tzdata
+    - ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
   script:
     - pip install --no-cache-dir -r requirements.txt
     - python -m pytest -q
