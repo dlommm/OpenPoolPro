@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app import addresses, models
+from app import addresses, geocode, models
 from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
@@ -426,6 +426,14 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+    key = models.get_setting(session, "geoapify_key", "")
+    if key and p.address:
+        try:
+            coords = geocode.geocode(p.address, key)
+            if coords:
+                p.latitude, p.longitude = coords
+        except Exception:
+            pass
     session.add(p)
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
@@ -454,6 +462,14 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"),
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+    key = models.get_setting(session, "geoapify_key", "")
+    if key and p.address:
+        try:
+            coords = geocode.geocode(p.address, key)
+            if coords:
+                p.latitude, p.longitude = coords
+        except Exception:
+            pass
     session.commit()
     return RedirectResponse(f"/customers/{p.customer_id}", status_code=303)
 

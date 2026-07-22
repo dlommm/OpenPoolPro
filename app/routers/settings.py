@@ -98,6 +98,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "smtp_configured": mailer.smtp_configured(session),
         "smtp": {**mailer.smtp_settings(session),
                  "pass_set": bool(mailer.smtp_settings(session)["password"])},
+        "geoapify_configured": bool(models.get_setting(session, "geoapify_key", "")),
         "outbox": outbox,
         "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
                        and mail_failed_n is not None else None,
@@ -439,6 +440,16 @@ async def save_smtp(request: Request, session: Session = Depends(get_session)):
     pw = form.get("smtp_pass")  # write-only: only overwrite when a value is supplied
     if pw is not None and pw.strip():
         models.set_setting(session, "smtp_pass", pw)
+    session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/geoapify")
+async def save_geoapify(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    gk = form.get("geoapify_key")  # write-only: only overwrite when supplied
+    if gk is not None and gk.strip():
+        models.set_setting(session, "geoapify_key", gk.strip())
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

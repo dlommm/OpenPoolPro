@@ -466,3 +466,38 @@ def test_property_structured_address_composed(client, engine):
         p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
         assert p.city == "Cocoa Beach" and p.state == "FL"
         assert p.address == "12 Palm Ave, Cocoa Beach, FL 32931"
+
+
+def test_property_save_stores_geocode_when_key_set(client, engine, monkeypatch):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models, geocode
+    monkeypatch.setattr(geocode, "geocode", lambda text, key, **kw: (28.3, -80.6))
+    with Session(engine) as s:
+        models.set_setting(s, "geoapify_key", "TESTKEY"); s.commit()
+    client.post("/customers/new", data={"name": "Geo Co"})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == "Geo Co")).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "street": "1 A St", "city": "Cocoa Beach", "state": "FL",
+        "zip": "32931", "frequency": "weekly", "weekday": "0"})
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
+        assert p.latitude == 28.3 and p.longitude == -80.6
+
+
+def test_property_save_survives_geocode_failure(client, engine, monkeypatch):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models, geocode
+    def boom(text, key, **kw): raise RuntimeError("boom")
+    monkeypatch.setattr(geocode, "geocode", boom)
+    with Session(engine) as s:
+        models.set_setting(s, "geoapify_key", "TESTKEY"); s.commit()
+    client.post("/customers/new", data={"name": "Safe Co"})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == "Safe Co")).one().id
+    r = client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "street": "1 A St", "city": "Cocoa Beach", "state": "FL",
+        "zip": "32931", "frequency": "weekly", "weekday": "0"})
+    assert r.status_code in (200, 303)  # save did not blow up

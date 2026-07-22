@@ -368,6 +368,18 @@
         </div>
 
         <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Mapping (Geoapify)</h2>
+          {% if geoapify_configured %}<span class="tag mb-3 inline-flex border-pool bg-shallow">Configured</span>
+          {% else %}<span class="tag tag-safety mb-3 inline-flex">Not configured</span>{% endif %}
+          <form method="post" action="/settings/geoapify" class="space-y-2">
+            <label class="block"><span class="field-label">Geoapify API key {% if geoapify_configured %}<span class="font-normal normal-case text-mist">— saved, blank keeps it</span>{% endif %}</span>
+              <input type="password" name="geoapify_key" autocomplete="off" placeholder="{% if geoapify_configured %}••••••••{% endif %}" class="field"></label>
+            <p class="text-xs text-mist">Optional. When set, new and edited property addresses are geocoded automatically.</p>
+            <button class="btn-secondary w-full">Save mapping settings</button>
+          </form>
+        </div>
+
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Appearance</h2>
           <p class="mb-3 text-sm text-mist">Pick a theme — applies to the whole app, for everyone.</p>
           <form method="post" action="/settings/appearance" class="space-y-3">
