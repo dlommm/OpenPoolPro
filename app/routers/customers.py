@@ -1,8 +1,10 @@
+import math
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
 from app import addresses, geocode, models
@@ -16,6 +18,23 @@ from app.timefmt import from_local_hhmm
 router = APIRouter()
 
 COMM_KINDS = ("call", "email", "text", "note")
+PAGE_SIZE = 50
+
+
+def _parse_page(raw: str | None) -> int:
+    """Tolerant page parse: garbage or non-positive values fall back to 1."""
+    try:
+        p = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return p if p >= 1 else 1
+
+
+def _primary_property(customer: "models.Customer"):
+    """First ACTIVE property by id -- the customer's "primary" address for
+    the list view's city/frequency columns."""
+    active = [p for p in customer.properties if p.active]
+    return min(active, key=lambda p: p.id) if active else None
 
 
 def _cents(dollars: str) -> int | None:
@@ -206,18 +225,71 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
 
 @router.get("/customers")
 def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
+                   letter: str = "", city: str = "", sort: str = "", page: str = "",
                    session: Session = Depends(get_session)):
     show_inactive = show == "inactive"
-    stmt = select(models.Customer).where(
-        models.Customer.active == (not show_inactive)).order_by(models.Customer.name)
+    p = _parse_page(page)
+    C, P = models.Customer, models.Property
+
+    base = select(C).where(C.active == (not show_inactive))
+
     if q:
-        stmt = stmt.where(models.Customer.name.ilike(f"%{q}%"))
-    customers = session.scalars(stmt).all()
-    tag_needle = tag.strip().lower()
-    if tag_needle:
-        customers = [c for c in customers if tag_needle in (c.tags or [])]
+        needle = f"%{q}%"
+        base = base.where(or_(
+            C.name.ilike(needle),
+            C.phone.ilike(needle),
+            C.email.ilike(needle),
+            exists().where((P.customer_id == C.id) &
+                           (P.address.ilike(needle) | P.city.ilike(needle))),
+        ))
+
+    letter = (letter or "").strip()
+    if letter == "#":
+        base = base.where(func.substr(C.name, 1, 1).op("GLOB")("[^A-Za-z]*"))
+    elif len(letter) == 1 and letter.isalpha():
+        base = base.where(C.name.ilike(f"{letter}%"))
+
+    city = (city or "").strip()
+    if city:
+        base = base.where(exists().where(
+            (P.customer_id == C.id) & (P.active.is_(True)) & (P.city == city)))
+
+    tag = tag or ""
+    if tag.strip():
+        tag_cond = sqltext("json_each.value = :tagv").bindparams(tagv=tag.strip().lower())
+        base = base.where(exists(
+            select(1).select_from(func.json_each(C.tags)).where(tag_cond)))
+
+    total = session.scalar(select(func.count()).select_from(base.subquery())) or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+
+    sort = sort if sort in ("name", "city", "recent") else "name"
+    if sort == "recent":
+        base = base.order_by(C.created_at.desc(), C.name)
+    else:
+        base = base.order_by(C.name)  # "city" sort is applied in Python on the fetched page
+
+    customers = session.scalars(
+        base.offset((p - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
+
+    rows = []
+    for c in customers:
+        pp = _primary_property(c)
+        rows.append({"c": c, "city": pp.city if pp else "",
+                     "frequency": pp.frequency if pp else ""})
+    if sort == "city":
+        rows.sort(key=lambda r: (r["city"] == "", r["city"].lower(), r["c"].name.lower()))
+
+    cities = [row[0] for row in session.execute(
+        select(P.city).where(P.active.is_(True), P.city != "")
+        .distinct().order_by(P.city)).all()]
+
     return templates.TemplateResponse(request, "customers/list.html",
-        {"customers": customers, "q": q, "tag": tag, "show_inactive": show_inactive,
+        {"customers": [r["c"] for r in rows], "rows": rows,
+         "q": q, "tag": tag, "show_inactive": show_inactive,
+         "letter": letter, "city": city, "sort": sort, "cities": cities,
+         "page": p, "total_pages": total_pages, "has_next": total > p * PAGE_SIZE,
+         "has_prev": p > 1, "total": total,
          "can_manage": request.state.user.can("manage_customers")})
 
 

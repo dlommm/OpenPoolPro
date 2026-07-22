@@ -501,3 +501,62 @@ def test_property_save_survives_geocode_failure(client, engine, monkeypatch):
         "label": "Home", "street": "1 A St", "city": "Cocoa Beach", "state": "FL",
         "zip": "32931", "frequency": "weekly", "weekday": "0"})
     assert r.status_code in (200, 303)  # save did not blow up
+
+
+def _mk_customer(client, engine, name, city="", street="1 A St"):
+    client.post("/customers/new", data={"name": name})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == name)).one().id
+    if city:
+        client.post(f"/customers/{cid}/properties/new", data={
+            "label": "Home", "street": street, "city": city, "state": "FL",
+            "zip": "32931", "frequency": "weekly", "weekday": "0"})
+    return cid
+
+
+def test_list_letter_filter(client, engine):
+    _mk_customer(client, engine, "Alpha Co")
+    _mk_customer(client, engine, "Bravo Co")
+    body = client.get("/customers?letter=A").text
+    assert "Alpha Co" in body and "Bravo Co" not in body
+
+
+def test_list_city_filter(client, engine):
+    _mk_customer(client, engine, "Coco Co", city="Cocoa Beach")
+    _mk_customer(client, engine, "Melb Co", city="Melbourne")
+    body = client.get("/customers?city=Cocoa+Beach").text
+    assert "Coco Co" in body and "Melb Co" not in body
+
+
+def test_list_pagination(client, engine):
+    for i in range(60):
+        _mk_customer(client, engine, f"Cust {i:03d}")
+    page1 = client.get("/customers").text
+    page2 = client.get("/customers?page=2").text
+
+    # Default sort is by name; zero-padded names sort lexically = numerically,
+    # so page 1 (offset 0, PAGE_SIZE=50) holds Cust 000..049 and page 2 holds
+    # the remaining Cust 050..059.
+    assert "Cust 000" in page1
+    assert "Cust 049" in page1
+    assert "Cust 050" not in page1
+    assert "Cust 000" not in page2
+    assert "Cust 050" in page2
+    assert "Cust 059" in page2
+
+    # Each page is bounded by PAGE_SIZE and the two pages don't overlap.
+    assert page1.count("Cust ") == 50
+    assert page2.count("Cust ") == 10
+
+
+def test_list_search_matches_phone(client, engine):
+    client.post("/customers/new", data={"name": "PhoneGuy", "phone": "555-7777"})
+    body = client.get("/customers?q=7777").text
+    assert "PhoneGuy" in body
+
+
+def test_list_sort_recent(client, engine):
+    _mk_customer(client, engine, "Older Co")
+    _mk_customer(client, engine, "Newer Co")
+    body = client.get("/customers?sort=recent").text
+    assert body.index("Newer Co") < body.index("Older Co")
