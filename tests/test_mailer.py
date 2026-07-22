@@ -211,6 +211,51 @@ def test_send_message_skips_login_when_no_user(monkeypatch):
     assert events == [("connect", "smtp.example.com", 587, 15), ("send",)]
 
 
+def test_send_message_with_pdf_attachment(monkeypatch):
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(config, "SMTP_PORT", 587)
+    monkeypatch.setattr(config, "SMTP_USER", "user@example.com")
+    monkeypatch.setattr(config, "SMTP_PASS", "secret")
+    monkeypatch.setattr(config, "SMTP_FROM", "user@example.com")
+    monkeypatch.setattr(config, "SMTP_STARTTLS", True)
+
+    captured = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, msg):
+            captured["msg"] = msg
+
+    import smtplib
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+
+    mailer.send_message("dest@x.com", "Hello", "World",
+                         attachments=[(b"%PDF-1.4 fake pdf bytes", "contract.pdf")])
+
+    msg = captured["msg"]
+    assert msg.is_multipart()
+    parts = list(msg.iter_attachments())
+    assert len(parts) == 1
+    part = parts[0]
+    assert part.get_filename() == "contract.pdf"
+    assert part.get_content_type() == "application/pdf"
+    assert part.get_payload(decode=True) == b"%PDF-1.4 fake pdf bytes"
+
+
 def test_smtp_configured_reflects_host(monkeypatch):
     monkeypatch.setattr(config, "SMTP_HOST", "")
     assert mailer.smtp_configured() is False

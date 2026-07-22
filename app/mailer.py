@@ -56,9 +56,12 @@ def queue(session: Session, to_addr: str, subject: str, body: str,
     return row
 
 
-def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None) -> None:
+def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None,
+                  attachments: list[tuple[bytes, str]] | None = None) -> None:
     """The only function that touches smtplib -- tests monkeypatch this.
     `conf` is a resolved SMTP config (from smtp_settings); None -> env/config.
+    `attachments` is an optional list of (data, filename) pairs attached as
+    application/pdf parts; None -> no behavior change for existing callers.
     Raises on failure; never logs or surfaces credentials."""
     conf = conf or _config_conf()
     msg = EmailMessage()
@@ -66,6 +69,9 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
+    if attachments:
+        for data, name in attachments:
+            msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)
 
     with smtplib.SMTP(conf["host"], conf["port"], timeout=15) as smtp:
         if conf["starttls"]:
