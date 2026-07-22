@@ -143,7 +143,7 @@ def _template_with_small_price(engine):
     from app import models
     with Session(engine) as s:
         t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
-        t.prices = [models.JobTemplatePrice(label="Small", max_gallons=15000, price_cents=15000)]
+        t.prices = [models.JobTemplatePrice(label="Small", max_gallons=15000, hours=2.0)]
         s.add(t); s.commit()
         return t.id
 
@@ -152,6 +152,9 @@ def test_create_job_auto_prices_from_template(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
     from app import models
+    # Pin the default labor rate so the expected labor_cents is deterministic.
+    client.post("/settings/labor_rate", data={"labor_rate_dollars": "180.00"},
+               follow_redirects=False)
     pid = _seed_prop_with_pool(engine, 12000, "Match")
     tid = _template_with_small_price(engine)
     r = client.post("/jobs/new", data={"property_id": pid, "title": "Clean",
@@ -160,21 +163,30 @@ def test_create_job_auto_prices_from_template(client, engine):
     assert r.status_code == 303
     with Session(engine) as s:
         j = s.scalars(select(models.Job).where(models.Job.title == "Clean")).one()
-        assert j.labor_cents == 15000  # matched 12k <= 15k tier -> $150
+        assert j.hours == 2.0  # matched 12k <= 15k tier -> 2.0 hrs from the template
+        assert j.labor_cents == 36000  # $180/hr default rate * 2.0 hrs
 
 
 def test_create_job_blocked_when_unmatched(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models, rates
     pid = _seed_prop_with_pool(engine, 40000, "TooBig")
     tid = _template_with_small_price(engine)
     r = client.post("/jobs/new", data={"property_id": pid, "title": "BigClean",
                                         "job_type": "service", "template_id": str(tid)},
                     follow_redirects=False)
-    assert r.status_code == 400  # 40k matches no size row and no price entered -> blocked
-    # entering a price lets it through
+    assert r.status_code == 400  # 40k matches no size row and no hours entered -> blocked
+    # entering hours lets it through
     r2 = client.post("/jobs/new", data={"property_id": pid, "title": "BigClean2",
                                          "job_type": "service", "template_id": str(tid),
-                                         "labor_dollars": "300"}, follow_redirects=False)
+                                         "hours": "3"}, follow_redirects=False)
     assert r2.status_code == 303
+    with Session(engine) as s:
+        rate_cents = rates.default_labor_rate_cents(s)
+        j = s.scalars(select(models.Job).where(models.Job.title == "BigClean2")).one()
+        assert j.hours == 3.0
+        assert j.labor_cents == rate_cents * 3  # explicit hours override the unmatched template
 
 
 def test_template_prices_page_renders(client, engine):

@@ -112,9 +112,12 @@ def create_job(request: Request, property_id: int = Form(...), title: str = Form
     # Resolve hours: an explicit hours field wins; otherwise fall back to the
     # template's estimated hours for this pool size. If the template has a size
     # matrix and the customer's pool matches no row, block the job until the
-    # owner enters hours.
+    # owner enters hours. Only money users see the Rate/Hours fields on the
+    # form, so only money users get the template-hours resolution and the
+    # unmatched-400 — a non-money user (tech) has no field to satisfy it and
+    # must not be dead-ended; hours stays 0 for them (labor stays 0).
     hrs = _parse_float_tolerant(hours)
-    if hrs is None and tmpl is not None:
+    if hrs is None and tmpl is not None and can_money:
         h, status = rates.template_hours(tmpl, rates.largest_pool_gallons(prop))
         if status in ("matched", "flat"):
             hrs = h
