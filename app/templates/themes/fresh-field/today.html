@@ -97,7 +97,7 @@
 {% endif %}
 
 <div class="ff-section-label">
-  <span>Stops</span>
+  <span>Weekly service</span>
   <b>{{ total }} total{{ " · " ~ done ~ " done" if total }}</b>
 </div>
 
@@ -147,7 +147,11 @@
 </div>
 
 {% if jobs %}
-<div class="ff-jobs-line mt-5 mb-2">
+<div class="ff-section-label mt-5">
+  <span>Jobs</span>
+  <b>{{ jobs | length }} today</b>
+</div>
+<div class="ff-jobs-line mb-2">
   {{ ui.icon("jobs", "h-4 w-4") }}
   <span>Jobs today: <b>{{ jobs | length }}</b> — {{ jobs | map(attribute="title") | join(" · ") }}</span>
 </div>
