@@ -583,3 +583,19 @@ def test_list_sort_recent(client, engine):
     _mk_customer(client, engine, "Newer Co")
     body = client.get("/customers?sort=recent").text
     assert body.index("Newer Co") < body.index("Older Co")
+
+
+def test_list_renders_table_and_controls(client, engine):
+    _mk_customer(client, engine, "Table Co", city="Cocoa Beach")
+    body = client.get("/customers").text
+    assert "<table" in body
+    assert 'href="/customers?letter=A' in body            # A-Z rail
+    assert "Cocoa Beach" in body                          # city column + filter option
+    assert 'name="city"' in body or 'href="/customers?city=' in body
+
+
+def test_list_pagination_controls(client, engine):
+    for i in range(60):
+        _mk_customer(client, engine, f"Pager {i:03d}")
+    body = client.get("/customers").text
+    assert "page=2" in body                               # Next link present

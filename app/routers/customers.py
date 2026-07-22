@@ -285,7 +285,7 @@ def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
         .distinct().order_by(P.city)).all()]
 
     return templates.TemplateResponse(request, "customers/list.html",
-        {"customers": [r["c"] for r in rows], "rows": rows,
+        {"rows": rows,
          "q": q, "tag": tag, "show_inactive": show_inactive,
          "letter": letter, "city": city, "sort": sort, "cities": cities,
          "page": p, "total_pages": total_pages, "has_next": total > p * PAGE_SIZE,
