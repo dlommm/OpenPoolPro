@@ -284,6 +284,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import routes as routes_router
     app.include_router(routes_router.router)
 
+    from app.routers import contracts as contracts_router
+    app.include_router(contracts_router.router)
+
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
         from app.maintenance import run_nightly

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Contract{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header(customer.name, pool.label ~ " — " ~ contract.season_year ~ " Service Agreement") }}
+
+<p class="mb-4 flex flex-wrap items-center gap-1.5 font-data text-sm text-mist">
+  <span class="tag {{ 'tag-safety' if contract.status == 'void' }}">{{ contract.status }}</span>
+  <span>{{ prop.address }}</span>
+</p>
+
+{% if send_error %}
+<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+  Could not send: the customer has no email on file, or SMTP isn't configured in Settings.
+</div>
+{% endif %}
+{% if sign_error %}
+<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+  That file doesn't look like a PDF — try again.
+</div>
+{% endif %}
+
+<div class="card mb-4 p-4">
+  <h2 class="set-h">Season &amp; rates</h2>
+  {% if contract.status == "draft" %}
+  <form method="post" action="/contracts/{{ contract.id }}/edit" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <label class="block"><span class="field-label">Season year</span>
+      <input inputmode="numeric" name="season_year" value="{{ contract.season_year }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Weeks</span>
+      <input inputmode="numeric" name="weeks" value="{{ contract.weeks }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Open date</span>
+      <input type="date" name="open_date" value="{{ contract.open_date or '' }}" class="field font-data"></label>
+    <label class="block"><span class="field-label">Close date</span>
+      <input type="date" name="close_date" value="{{ contract.close_date or '' }}" class="field font-data"></label>
+
+    {% if show_money %}
+    <label class="block"><span class="field-label">Weekly</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="weekly_dollars" value="{{ '%.2f'|format(contract.weekly_cents / 100) }}" class="field font-semibold"></div></label>
+    <label class="block"><span class="field-label">Open/Close</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="open_close_dollars" value="{{ '%.2f'|format(contract.open_close_cents / 100) }}" class="field"></div></label>
+    <label class="block"><span class="field-label">Green-to-clean</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="green_clean_dollars" value="{{ '%.2f'|format(contract.green_clean_cents / 100) }}" class="field"></div></label>
+    <label class="block"><span class="field-label">Storm</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="storm_dollars" value="{{ '%.2f'|format(contract.storm_cents / 100) }}" class="field"></div></label>
+    <label class="block"><span class="field-label">Service call</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="service_call_dollars" value="{{ '%.2f'|format(contract.service_call_cents / 100) }}" class="field"></div></label>
+    {% if contract.includes_spa %}
+    <label class="block"><span class="field-label">Spa (per hour)</span>
+      <div class="money-in"><span>$</span><input inputmode="decimal" name="spa_dollars" value="{{ '%.2f'|format(contract.spa_cents / 100) }}" class="field"></div></label>
+    {% endif %}
+    {% endif %}
+
+    <div class="col-span-2 sm:col-span-4">
+      <button class="btn-secondary">Save changes</button>
+    </div>
+  </form>
+  {% else %}
+  <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+    <div><dt class="field-label">Season year</dt><dd class="font-data">{{ contract.season_year }}</dd></div>
+    <div><dt class="field-label">Weeks</dt><dd class="font-data">{{ contract.weeks }}</dd></div>
+    <div><dt class="field-label">Open date</dt><dd class="font-data">{{ contract.open_date or "—" }}</dd></div>
+    <div><dt class="field-label">Close date</dt><dd class="font-data">{{ contract.close_date or "—" }}</dd></div>
+    {% if show_money %}
+    <div><dt class="field-label">Weekly</dt><dd class="money">{{ contract.weekly_cents | dollars }}</dd></div>
+    <div><dt class="field-label">Open/Close</dt><dd class="money">{{ contract.open_close_cents | dollars }}</dd></div>
+    <div><dt class="field-label">Green-to-clean</dt><dd class="money">{{ contract.green_clean_cents | dollars }}</dd></div>
+    <div><dt class="field-label">Storm</dt><dd class="money">{{ contract.storm_cents | dollars }}</dd></div>
+    <div><dt class="field-label">Service call</dt><dd class="money">{{ contract.service_call_cents | dollars }}</dd></div>
+    {% if contract.includes_spa %}
+    <div><dt class="field-label">Spa (per hour)</dt><dd class="money">{{ contract.spa_cents | dollars }}</dd></div>
+    {% endif %}
+    {% endif %}
+  </dl>
+  {% endif %}
+</div>
+
+<div class="card p-4">
+  <h2 class="set-h">Documents &amp; workflow</h2>
+  <div class="flex flex-wrap gap-2">
+    {% if pdf_exists %}
+    <a href="/contracts/{{ contract.id }}/pdf" class="btn-secondary">View contract PDF</a>
+    {% endif %}
+    {% if signed_exists %}
+    <a href="/contracts/{{ contract.id }}/signed" class="btn-secondary">View signed PDF</a>
+    {% endif %}
+  </div>
+
+  <div class="mt-3 flex flex-wrap items-center gap-2">
+    {% if contract.status == "draft" %}
+    <form method="post" action="/contracts/{{ contract.id }}/approve">
+      <button class="btn-primary">Approve &amp; generate PDF</button>
+    </form>
+    {% endif %}
+
+    {% if contract.status == "approved" %}
+    <form method="post" action="/contracts/{{ contract.id }}/send">
+      <button class="btn-primary">Send to customer</button>
+    </form>
+    {% endif %}
+
+    {% if contract.status != "void" %}
+    <form method="post" action="/contracts/{{ contract.id }}/mark-signed" enctype="multipart/form-data"
+          class="flex flex-wrap items-center gap-2">
+      <input type="file" name="file" accept="application/pdf" required class="field">
+      <button class="btn-secondary">Upload signed PDF</button>
+    </form>
+
+    <form method="post" action="/contracts/{{ contract.id }}/void"
+          onsubmit="return confirm('Void this contract? This cannot be undone.')">
+      <button class="btn-danger">Void</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
