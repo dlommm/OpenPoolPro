@@ -25,7 +25,7 @@ def test_add_property_with_schedule_and_override(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     r = client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Beach house", "address": "1 Ocean Dr", "gate_code": "1234",
+        "label": "Beach house", "street": "1 Ocean Dr", "gate_code": "1234",
         "dog_warning": "on", "dog_note": "Big dog", "notes": "",
         "frequency": "biweekly", "weekday": "2", "anchor_date": "2026-07-08",
         "rate_override_dollars": "62.50"}, follow_redirects=False)
@@ -58,7 +58,7 @@ def test_deactivate_buttons_present_in_edit_forms(client, engine):
     assert f"/customers/{cid}/deactivate" in customer_html
 
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "1 Bay St", "gate_code": "", "dog_note": "",
+        "label": "Home", "street": "1 Bay St", "gate_code": "", "dog_note": "",
         "notes": "", "frequency": "weekly", "weekday": "0", "anchor_date": "",
         "rate_override_dollars": ""})
     with Session(engine) as s:
@@ -104,7 +104,7 @@ def test_missing_records_return_404(client):
                                                     "phone": "", "email": "", "notes": ""}).status_code == 404
     assert client.get("/customers/999/properties/new").status_code == 404
     assert client.post("/properties/999/edit", data={
-        "label": "H", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "H", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "",
         "rate_override_dollars": ""}).status_code == 404
 
@@ -117,7 +117,7 @@ def test_history_shows_duration(client, engine):
         cid = s.scalars(select(models.Customer).where(
             models.Customer.name == "DurCo")).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "",
         "rate_override_dollars": "", "assigned_tech_id": ""})
     with Session(engine) as s:
@@ -137,7 +137,7 @@ def test_timeline_renders_date_only_and_localized_instant_times(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer).where(models.Customer.name == "TZCo")).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "",
         "rate_override_dollars": "", "assigned_tech_id": ""})
     with Session(engine) as s:
@@ -179,7 +179,7 @@ def test_reactivate_property(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Cabana", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Cabana", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
     with Session(engine) as s:
         pid = s.scalars(select(models.Property)).one().id
@@ -242,7 +242,7 @@ def test_hold_create_validation_and_end_now(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
     with Session(engine) as s:
         pid = s.scalars(select(models.Property)).one().id
@@ -280,7 +280,7 @@ def test_checklist_add_deactivate_reorder_and_visit_form_override(client, engine
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "2026-07-13",
         "rate_override_dollars": ""})
     with Session(engine) as s:
@@ -327,7 +327,7 @@ def test_rules_crud_create_edit_tolerant_parse_and_deactivate(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
     with Session(engine) as s:
         pid = s.scalars(select(models.Property)).one().id
@@ -384,7 +384,7 @@ def test_customer_photos_section_ptag_filter(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
     client.post(f"/customers/{cid}/properties/new", data={
-        "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
+        "label": "Home", "street": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "0", "anchor_date": "", "rate_override_dollars": ""})
     with Session(engine) as s:
         pid = s.scalars(select(models.Property)).one().id
@@ -450,3 +450,19 @@ def test_property_spa_override_saved(client, engine):
     with Session(engine) as s:
         p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
         assert p.spa_rate_override_cents == 2500
+
+
+def test_property_structured_address_composed(client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
+    client.post("/customers/new", data={"name": "Addr Co"})
+    with Session(engine) as s:
+        cid = s.scalars(select(models.Customer).where(models.Customer.name == "Addr Co")).one().id
+    client.post(f"/customers/{cid}/properties/new", data={
+        "label": "Home", "street": "12 Palm Ave", "city": "Cocoa Beach",
+        "state": "FL", "zip": "32931", "frequency": "weekly", "weekday": "0"})
+    with Session(engine) as s:
+        p = s.scalars(select(models.Property).where(models.Property.customer_id == cid)).one()
+        assert p.city == "Cocoa Beach" and p.state == "FL"
+        assert p.address == "12 Palm Ave, Cocoa Beach, FL 32931"

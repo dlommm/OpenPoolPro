@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import addresses, models
 from app.db import get_session, get_or_404
 from app.deps import require_perm
 from app.main import templates
@@ -361,10 +361,12 @@ def _parse_tech_id(assigned_tech_id: str) -> int | None:
         return None
 
 
-def _apply_property(p: models.Property, label, address, gate_code, dog_warning,
+def _apply_property(p: models.Property, label, street, city, state, zip, gate_code, dog_warning,
                     dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
                     assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True):
-    p.label, p.address, p.gate_code, p.notes = label, address, gate_code, notes
+    p.label, p.gate_code, p.notes = label, gate_code, notes
+    p.street, p.city, p.state, p.zip = street.strip(), city.strip(), state.strip(), zip.strip()
+    p.address = addresses.compose_address(p.street, p.city, p.state, p.zip)
     p.dog_warning, p.dog_note = dog_warning, dog_note
     p.frequency, p.weekday = frequency, int(weekday)
     p.anchor_date = date.fromisoformat(anchor_date) if anchor_date else None
@@ -410,7 +412,8 @@ def new_property_form(request: Request, cid: int, session: Session = Depends(get
 
 @router.post("/customers/{cid}/properties/new")
 def create_property(cid: int, request: Request, label: str = Form("Home"),
-                    address: str = Form(""), gate_code: str = Form(""),
+                    street: str = Form(""), city: str = Form(""), state: str = Form(""),
+                    zip: str = Form(""), gate_code: str = Form(""),
                     dog_warning: bool = Form(False), dog_note: str = Form(""),
                     notes: str = Form(""), frequency: str = Form("weekly"),
                     weekday: int = Form(0), anchor_date: str = Form(""),
@@ -420,7 +423,7 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
                     session: Session = Depends(get_session),
                     user=Depends(require_perm("manage_customers"))):
     p = models.Property(customer_id=cid)
-    _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
+    _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     session.add(p)
@@ -437,8 +440,9 @@ def edit_property_form(request: Request, pid: int, session: Session = Depends(ge
 
 
 @router.post("/properties/{pid}/edit")
-def edit_property(pid: int, request: Request, label: str = Form("Home"), address: str = Form(""),
-                  gate_code: str = Form(""), dog_warning: bool = Form(False),
+def edit_property(pid: int, request: Request, label: str = Form("Home"),
+                  street: str = Form(""), city: str = Form(""), state: str = Form(""),
+                  zip: str = Form(""), gate_code: str = Form(""), dog_warning: bool = Form(False),
                   dog_note: str = Form(""), notes: str = Form(""),
                   frequency: str = Form("weekly"), weekday: int = Form(0),
                   anchor_date: str = Form(""), rate_override_dollars: str = Form(""),
@@ -447,7 +451,7 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"), address
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
     p = get_or_404(session, models.Property, pid)
-    _apply_property(p, label, address, gate_code, dog_warning, dog_note, notes,
+    _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
                     spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
     session.commit()

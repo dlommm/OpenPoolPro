@@ -5,8 +5,16 @@
 <form method="post" class="space-y-3">
   <label class="block"><span class="field-label">Label</span>
     <input name="label" value="{{ p.label if p else 'Home' }}" class="field"></label>
-  <label class="block"><span class="field-label">Address</span>
-    <input name="address" value="{{ p.address if p else '' }}" class="field"></label>
+  <label class="block"><span class="field-label">Street</span>
+    <input name="street" value="{{ p.street if p else '' }}" class="field"></label>
+  <label class="block"><span class="field-label">City</span>
+    <input name="city" value="{{ p.city if p else '' }}" class="field"></label>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block"><span class="field-label">State</span>
+      <input name="state" value="{{ p.state if p else '' }}" class="field"></label>
+    <label class="block"><span class="field-label">Zip</span>
+      <input name="zip" value="{{ p.zip if p else '' }}" class="field font-data"></label>
+  </div>
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Gate code</span>
       <input name="gate_code" value="{{ p.gate_code if p else '' }}" class="field font-data"></label>
