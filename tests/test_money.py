@@ -79,3 +79,24 @@ def test_money_page_tolerates_bad_ym_and_year_boundaries(client, engine):
     assert "/money?ym=2025-12" in html
     html = client.get("/money?ym=2026-12").text
     assert "/money?ym=2027-01" in html
+
+
+def test_month_rollup_tax(engine):
+    from app.db import Base
+    from app import seeds
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "sales_tax_enabled", "1")
+        seeds.seed_tax_rates(s)
+        c = models.Customer(name="Taxed Customer")
+        p = models.Property(customer=c, state="NJ")
+        s.add(p)
+        s.add(models.Visit(property=p, date=date(2026, 7, 6), status="done",
+                           rate_cents=5500, completed_at=datetime(2026, 7, 6, 10)))
+        s.commit()
+        rows = month_rollup(s, 2026, 7)
+        assert len(rows) == 1
+        r = rows[0]
+        assert r.tax_cents == 364
+        assert r.total_cents == 5500

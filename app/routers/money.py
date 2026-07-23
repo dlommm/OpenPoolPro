@@ -19,10 +19,13 @@ def money_page(request: Request, ym: str | None = None,
     rows = month_rollup(session, year, month)
     prev = f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
     nxt = f"{year + 1}-01" if month == 12 else f"{year}-{month + 1:02d}"
+    grand = sum(r.total_cents for r in rows)
+    grand_tax = sum(r.tax_cents for r in rows)
     return templates.TemplateResponse(request, "money.html", {
         "rows": rows, "year": year, "month": month,
         "ym": f"{year}-{month:02d}", "prev": prev, "next": nxt,
-        "grand": sum(r.total_cents for r in rows)})
+        "grand": grand, "grand_tax": grand_tax,
+        "grand_total": grand + grand_tax})
 
 
 @router.get("/money/export")

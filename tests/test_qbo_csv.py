@@ -31,6 +31,26 @@ def test_export_route_downloads(client, engine):
     assert "Bill Me LLC" in r.text
 
 
+def test_csv_golden_with_tax(engine):
+    from app.db import Base
+    from app import seeds
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    seed_month(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "sales_tax_enabled", "1")
+        seeds.seed_tax_rates(s)
+        p = s.scalars(select(models.Property)).one()
+        p.state = "NJ"
+        s.commit()
+        got = export_csv(s, 2026, 7)
+    lines = got.splitlines()
+    tax_lines = [ln for ln in lines if "Pool Service — Sales Tax" in ln]
+    # v1 (labor 5500 + chems 900) @ 6.625% = 424; v2 (labor 5500) = 364;
+    # job (labor 12500) = 828 -> summed 1616 cents = $16.16
+    assert tax_lines == ["Bill Me LLC,2026-07-31,Pool Service — Sales Tax,Sales tax Jul 2026,16.16"]
+
+
 def test_export_route_writes_export_qbo_audit_row(client, engine):
     seed_month(engine)
     with Session(engine) as s:

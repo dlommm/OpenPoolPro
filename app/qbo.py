@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, models
+from app import config, models, tax
 
 
 @dataclass
@@ -20,6 +20,7 @@ class CustomerMonth:
     jobs: list = field(default_factory=list)
     job_cents: int = 0
     total_cents: int = 0
+    tax_cents: int = 0
 
 
 def _month_range(year: int, month: int) -> tuple[date, date]:
@@ -62,6 +63,7 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
     except ValueError:
         markup = 0.0
     out: dict[int, CustomerMonth] = {}
+    enabled = tax.tax_enabled(session)
 
     def row(cust: models.Customer) -> CustomerMonth:
         return out.setdefault(cust.id, CustomerMonth(customer=cust))
@@ -71,11 +73,13 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         models.Visit.date >= first, models.Visit.date <= last)).all()
     for v in visits:
         r = row(v.property.customer)
-        r.labor_cents += v.rate_cents or 0
+        r.labor_cents += tax.effective_labor_cents(v)
         r.labor_visits += 1
         for vc in v.chemicals:
             r.chem_cost_cents += vc.total_cost_cents
             r.chem_billable_cents += billable_for_vc(vc, markup)
+        if enabled:
+            r.tax_cents += tax.visit_breakdown(session, v)["tax"]
 
     jobs = session.scalars(select(models.Job).where(
         models.Job.status == "done",
@@ -86,7 +90,9 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         if first <= _local_date(j.completed_at) <= last:
             r = row(j.property.customer)
             r.jobs.append(j)
-            r.job_cents += j.labor_cents
+            r.job_cents += tax.effective_labor_cents(j)
+            if enabled:
+                r.tax_cents += tax.job_breakdown(session, j)["tax"]
 
     rows = []
     for r in out.values():
@@ -115,4 +121,7 @@ def export_csv(session: Session, year: int, month: int) -> str:
         for j in r.jobs:
             w.writerow([name, _local_date(j.completed_at).isoformat(), "Pool Service — Job",
                         j.title, f"{j.labor_cents / 100:.2f}"])
+        if r.tax_cents:
+            w.writerow([name, last.isoformat(), "Pool Service — Sales Tax",
+                        f"Sales tax {first:%b %Y}", f"{r.tax_cents / 100:.2f}"])
     return buf.getvalue()
