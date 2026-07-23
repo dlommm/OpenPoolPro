@@ -168,10 +168,12 @@
 })();
 </script>
 
+{% if v.status == "due" %}
 <form method="post" action="/visit/{{ v.id }}/skip" class="mt-3 flex gap-2">
   <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">
   <button class="btn-secondary">Skip</button>
 </form>
+{% endif %}
 
 <script>
 document.addEventListener("click", function (e) {

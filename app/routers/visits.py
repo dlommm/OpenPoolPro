@@ -28,6 +28,9 @@ def _f(val: str) -> float | None:
     val = (val or "").strip()
     if not val:
         return None
+    # iOS/EU decimal keypads emit a comma; accept "1,5" as 1.5 so a chem dose
+    # or labor override isn't silently dropped (unbilled, not stocked-out).
+    val = val.replace(",", ".")
     try:
         f = float(val)
     except ValueError:
@@ -163,8 +166,14 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.resolved = True
     if request.state.user.can("mark_cash"):
         v.paid_cash = form.get("paid_cash") == "1"
-    v.rate_cents = effective_rate_cents(session, v.property)
-    v.tax_rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
+    # Freeze labor + tax rate ONCE, at first completion — same frozen-history
+    # contract as the per-chemical costs below and as invoicing.py promises
+    # ("Visit.rate_cents ... are read as-stored"). Re-completing to fix a typo
+    # must not silently re-price the visit at a rate that moved on since.
+    if v.rate_cents is None:
+        v.rate_cents = effective_rate_cents(session, v.property)
+    if v.tax_rate_ppm is None:
+        v.tax_rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
     _override = _f(form.get("labor_override_dollars"))
     if _override is not None and _override >= 0:
         override_cents = round(_override * 100)
@@ -219,6 +228,12 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
 async def skip(visit_id: int, request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
+    # Only a still-due stop may be skipped. Skipping a completed visit would
+    # flip it out of every revenue/invoice/analytics query (all filter
+    # status=="done") while its billed chemicals and inventory decrement stay
+    # — revenue vanishes, cost doesn't. Mirrors dismiss()'s due-only guard.
+    if v.status != "due":
+        return RedirectResponse("/", status_code=303)
     v.status = "skipped"
     v.completed_by_id = request.state.user.id
     reason = form.get("reason", "").strip()
