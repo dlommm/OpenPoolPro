@@ -60,3 +60,47 @@ def doc_tax_rate_ppm(session, doc) -> int:
         return frozen
     state = getattr(getattr(doc, "property", None), "state", None)
     return resolve_rate_ppm(session, state)
+
+
+def _flag(session, key: str) -> bool:
+    from app import models
+    return models.get_setting(session, key, "1") == "1"
+
+
+def effective_labor_cents(doc) -> int:
+    """Override if set, else the frozen labor (visits: rate_cents; jobs: labor_cents)."""
+    override = getattr(doc, "labor_override_cents", None)
+    if override is not None:
+        return override
+    if getattr(doc, "labor_cents", None) is not None:
+        return doc.labor_cents
+    return getattr(doc, "rate_cents", 0) or 0
+
+
+def chem_billable_cents(session, visit) -> int:
+    from app import models, qbo
+    try:
+        markup = float(models.get_setting(session, "chem_markup_percent", "0"))
+    except ValueError:
+        markup = 0.0
+    return sum(qbo.billable_for_vc(vc, markup) for vc in visit.chemicals)
+
+
+def visit_breakdown(session, visit) -> dict:
+    labor = effective_labor_cents(visit)
+    chems = chem_billable_cents(session, visit)
+    rate_ppm = doc_tax_rate_ppm(session, visit)
+    taxable = (labor if _flag(session, "tax_weekly") else 0) + \
+              (chems if _flag(session, "tax_chems") else 0)
+    t = tax_cents(taxable, rate_ppm)
+    return {"labor": labor, "chems": chems, "taxable": taxable,
+            "rate_ppm": rate_ppm, "tax": t, "total": labor + chems + t}
+
+
+def job_breakdown(session, job) -> dict:
+    labor = effective_labor_cents(job)
+    rate_ppm = doc_tax_rate_ppm(session, job)
+    taxable = labor if _flag(session, "tax_labor") else 0
+    t = tax_cents(taxable, rate_ppm)
+    return {"labor": labor, "taxable": taxable, "rate_ppm": rate_ppm,
+            "tax": t, "total": labor + t}
