@@ -233,8 +233,27 @@ def job_detail(request: Request, jid: int, session: Session = Depends(get_sessio
     j = get_or_404(session, models.Job, jid)
     photos = session.scalars(select(models.Photo).where(
         models.Photo.entity_type == "job", models.Photo.entity_id == jid)).all()
+    # Collect-price context (Task 11) -- the ONE sanctioned money-gate
+    # exception: the completer (INCLUDING a tech, who normally sees no
+    # money) needs the final customer PRICE to collect on this job. Jobs
+    # carry no chemicals, so this is simpler than the visit version (Task
+    # 10): service + tax only. Exposes PRICE ONLY -- never cost, never
+    # markup -- so it is deliberately NOT wrapped in show_money.
+    service_cents = j.labor_override_cents if j.labor_override_cents is not None else j.labor_cents
+    rate_ppm = tax.resolve_rate_ppm(session, j.property.state)
+    tax_labor = models.get_setting(session, "tax_labor", "1") == "1"
+    taxable = service_cents if tax_labor else 0
+    collect_tax_cents = tax.tax_cents(taxable, rate_ppm)
+    collect = {
+        "service_cents": service_cents,
+        "rate_ppm": rate_ppm,
+        "tax_labor": tax_labor,
+        "tax_cents": collect_tax_cents,
+        "total_cents": service_cents + collect_tax_cents,
+    }
     return templates.TemplateResponse(request, "jobs/detail.html",
-        {"j": j, "photos": photos, "show_money": request.state.user.can("view_money")})
+        {"j": j, "photos": photos, "show_money": request.state.user.can("view_money"),
+         "collect": collect})
 
 
 @router.get("/jobs/{jid}/edit")

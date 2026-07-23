@@ -60,8 +60,54 @@
   <button class="btn-secondary">Schedule</button>
 </form>
 <form method="post" action="/jobs/{{ j.id }}/complete">
+  <div class="card mb-2 p-3.5 space-y-2">
+    <h2 class="font-display text-lg font-bold uppercase tracking-wide">Amount to collect</h2>
+    <label class="block">
+      <span class="field-label">Service <span class="money">({{ collect.service_cents | dollars }} default)</span></span>
+      <div class="money-in"><span>$</span>
+        <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
+               value="{{ '%.2f'|format(collect.service_cents / 100) }}"
+               class="field font-data font-semibold"></div>
+    </label>
+    <div class="flex justify-between font-data text-sm text-mist">
+      <span>Tax</span><span id="collect-tax" class="money">{{ collect.tax_cents | dollars }}</span>
+    </div>
+    <div class="flex justify-between border-t border-seam pt-2 font-display text-lg font-bold uppercase tracking-wide">
+      <span>Collect</span><span id="collect-total" class="money">{{ collect.total_cents | dollars }}</span>
+    </div>
+  </div>
   <button class="btn-primary">Mark complete</button>
 </form>
+<script type="application/json" id="collect-data">{{ collect | tojson }}</script>
+<script>
+(function () {
+  var dataEl = document.getElementById("collect-data");
+  if (!dataEl) return;
+  var collect;
+  try { collect = JSON.parse(dataEl.textContent); } catch (e) { return; }
+  var serviceEl = document.getElementById("collect-service-input");
+  var taxEl = document.getElementById("collect-tax");
+  var totalEl = document.getElementById("collect-total");
+
+  function fmt(cents) { return "$" + (cents / 100).toFixed(2); }
+
+  function recompute() {
+    if (!serviceEl) return;
+    var service = parseFloat(serviceEl.value);
+    var serviceCents = (isFinite(service) && service >= 0) ? Math.round(service * 100) : 0;
+
+    var taxable = collect.tax_labor ? serviceCents : 0;
+    var taxCents = Math.round(taxable * collect.rate_ppm / 1000000);
+    var totalCents = serviceCents + taxCents;
+
+    if (taxEl) taxEl.textContent = fmt(taxCents);
+    if (totalEl) totalEl.textContent = fmt(totalCents);
+  }
+
+  if (serviceEl) serviceEl.addEventListener("input", recompute);
+  recompute();
+})();
+</script>
 {% endif %}
 
 <form method="post" action="/jobs/{{ j.id }}/times" class="mt-3 grid grid-cols-3 gap-2">
