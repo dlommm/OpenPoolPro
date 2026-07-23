@@ -750,9 +750,14 @@
 .cr-cust-id .bal .v { font-family: var(--font-data); font-size: 24px; font-weight: 700; color: var(--color-brass); line-height: 1; margin: 4px 0 0; }
 @media (max-width: 560px) { .cr-cust-id .bal { margin-left: 0; text-align: left; width: 100%; border-top: 1px solid var(--color-seam); padding-top: 12px; } }
 
-.cr-cust-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-top: 14px; align-items: start; }
-@media (max-width: 900px) { .cr-cust-grid { grid-template-columns: 1fr; } }
-.cr-stack { display: grid; gap: 14px; }
+/* minmax(0, …) on BOTH tracks: without the 0-floor, a track's implicit
+   min-content min-width lets wide/unbreakable left-column content (e.g. a
+   broken map image rendering its long alt text on one line) balloon its track
+   and crush the Activity column to ~1 char wide. The 0-floor lets tracks
+   shrink so the 1fr split holds regardless of content. */
+.cr-cust-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
+@media (max-width: 900px) { .cr-cust-grid { grid-template-columns: minmax(0, 1fr); } }
+.cr-stack { display: grid; gap: 14px; min-width: 0; }
 
 .cr-specrows { display: grid; gap: 0; }
 .cr-sr { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-seam); }
