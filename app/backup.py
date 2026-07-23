@@ -13,10 +13,16 @@ def run_backup(engine) -> str:
         os.makedirs(bdir, exist_ok=True)
         stamp = datetime.now(config.tz()).date().isoformat()
         path = os.path.join(bdir, f"app-{stamp}.db")
-        if os.path.exists(path):
-            os.remove(path)
+        # VACUUM INTO a temp path, then atomically rename into place. A process
+        # kill (deploy/restart) mid-vacuum otherwise leaves a truncated but
+        # valid-looking `app-<date>.db` that sits in the 14-day retention window
+        # and fails on restore. os.replace is atomic on the same filesystem.
+        tmp = path + ".tmp"
+        if os.path.exists(tmp):
+            os.remove(tmp)
         with engine.connect() as conn:
-            conn.execute(text("VACUUM INTO :p"), {"p": path})
+            conn.execute(text("VACUUM INTO :p"), {"p": tmp})
+        os.replace(tmp, path)
         backups = sorted(f for f in os.listdir(bdir)
                          if f.startswith("app-") and f.endswith(".db"))
         for old in backups[:-14]:
