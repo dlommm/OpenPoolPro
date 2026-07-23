@@ -494,6 +494,68 @@
 
   </div>
 </div>
+
+<section id="tax" class="card mt-4 p-4">
+  <h2 class="set-h">Sales Tax</h2>
+  <p class="mb-3 text-sm text-mist">Charge sales tax on invoices, based on the customer's state. Statewide base rates are bundled below — override any state where a local combined rate matters.</p>
+  <form method="post" action="/settings/tax" class="mb-4 space-y-3">
+    <div class="flex flex-wrap items-end gap-4">
+      <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="sales_tax_enabled" {{ "checked" if tax_enabled }} class="h-5 w-5"><span class="text-sm font-medium text-ink">Charge sales tax</span></label>
+      <label class="block w-32"><span class="field-label">Default rate</span>
+        <div class="relative flex items-center">
+          <input inputmode="decimal" name="sales_tax_default_pct" value="{{ tax_default_pct }}" class="field pr-8 font-data font-semibold">
+          <span class="pointer-events-none absolute right-3 font-data text-sm text-brass">%</span>
+        </div></label>
+    </div>
+    <div class="flex flex-wrap gap-4">
+      <label class="flex items-center gap-2"><input type="checkbox" name="tax_labor" {{ "checked" if tax_labor }} class="h-5 w-5"><span class="text-sm text-ink">Tax labor / service visits</span></label>
+      <label class="flex items-center gap-2"><input type="checkbox" name="tax_chems" {{ "checked" if tax_chems }} class="h-5 w-5"><span class="text-sm text-ink">Tax chemicals</span></label>
+      <label class="flex items-center gap-2"><input type="checkbox" name="tax_weekly" {{ "checked" if tax_weekly }} class="h-5 w-5"><span class="text-sm text-ink">Tax weekly service</span></label>
+    </div>
+    <p class="text-xs text-mist">The default rate applies when a customer's state isn't in the table below.</p>
+    <button class="btn-secondary w-full">Save sales tax settings</button>
+  </form>
+
+  <h3 class="mb-2 text-sm font-semibold text-ink">State rates</h3>
+  <div class="max-h-80 overflow-y-auto overflow-x-auto rounded-lg border border-seam">
+    <table class="w-full text-sm">
+      <thead class="sticky top-0 bg-tile"><tr class="border-b border-seam text-left text-mist">
+        <th class="py-2 pl-3 pr-2 font-medium">State</th>
+        <th class="py-2 pr-2 font-medium">Rate</th>
+        <th class="py-2 pr-3 font-medium"></th></tr></thead>
+      <tbody>
+        {% for state, pct, overridden in tax_rates %}
+        <tr class="border-b border-seam/60">
+          <td class="py-1.5 pl-3 pr-2 font-data font-semibold">
+            {{ state }}
+            {% if overridden %}<span class="tag border-pool bg-shallow ml-1">override</span>{% endif %}
+          </td>
+          <td class="py-1.5 pr-2">
+            <form method="post" action="/settings/tax/state" class="flex items-center gap-1">
+              <input type="hidden" name="state" value="{{ state }}">
+              <div class="relative flex items-center">
+                <input inputmode="decimal" name="pct" value="{{ pct }}" class="field w-20 pr-5 font-data">
+                <span class="pointer-events-none absolute right-2 text-xs text-mist">%</span>
+              </div>
+              <button class="btn-secondary whitespace-nowrap px-3 py-1 text-xs">Save</button>
+            </form>
+          </td>
+          <td class="py-1.5 pr-3">
+            {% if overridden %}
+            <form method="post" action="/settings/tax/state/{{ state }}/reset">
+              <button class="btn-secondary whitespace-nowrap px-3 py-1 text-xs">Reset</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="py-6 text-center text-mist">No state rates seeded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <script>
   function opAddTier(el, label, gallons) {
     var form = el.closest("form");

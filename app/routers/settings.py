@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, rates, sizes
+from app import chem_presets, config, mailer, models, qbo, rates, sizes, tax
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -106,7 +106,14 @@ def settings_page(request: Request, rules_created: str | None = None,
         "outbox": outbox,
         "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
                        and mail_failed_n is not None else None,
-        "mail_error": mail_error})
+        "mail_error": mail_error,
+        "tax_enabled": models.get_setting(session, "sales_tax_enabled", "0") == "1",
+        "tax_default_pct": tax.format_ppm(int(models.get_setting(session, "sales_tax_default_ppm", "0") or 0)),
+        "tax_labor": models.get_setting(session, "tax_labor", "1") == "1",
+        "tax_chems": models.get_setting(session, "tax_chems", "1") == "1",
+        "tax_weekly": models.get_setting(session, "tax_weekly", "1") == "1",
+        "tax_rates": [(r.state, tax.format_ppm(r.rate_ppm), r.overridden)
+                      for r in session.scalars(select(models.TaxRate).order_by(models.TaxRate.state)).all()]})
 
 
 @router.post("/settings/maintenance/run-now")
@@ -565,3 +572,37 @@ def flush_mail_now(session: Session = Depends(get_session)):
     sent, failed = mailer.flush_outbox(session)
     session.commit()
     return RedirectResponse(f"/settings?mail_sent={sent}&mail_failed={failed}", status_code=303)
+
+
+@router.post("/settings/tax")
+async def save_tax(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    models.set_setting(session, "sales_tax_enabled", "1" if form.get("sales_tax_enabled") == "on" else "0")
+    models.set_setting(session, "sales_tax_default_ppm", str(tax.parse_percent(form.get("sales_tax_default_pct", "0"))))
+    for key in ("tax_labor", "tax_chems", "tax_weekly"):
+        models.set_setting(session, key, "1" if form.get(key) == "on" else "0")
+    session.commit()
+    return RedirectResponse("/settings#tax", status_code=303)
+
+
+@router.post("/settings/tax/state")
+async def save_tax_state(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    state = (form.get("state") or "").strip().upper()[:2]
+    row = session.get(models.TaxRate, state)
+    if row is not None:
+        row.rate_ppm = tax.parse_percent(form.get("pct", "0"))
+        row.overridden = True
+        session.commit()
+    return RedirectResponse("/settings#tax", status_code=303)
+
+
+@router.post("/settings/tax/state/{state}/reset")
+def reset_tax_state(state: str, session: Session = Depends(get_session)):
+    from app.tax_data import STATE_SALES_TAX
+    row = session.get(models.TaxRate, state.upper())
+    if row is not None and state.upper() in STATE_SALES_TAX:
+        row.rate_ppm = tax.parse_percent(str(STATE_SALES_TAX[state.upper()]))
+        row.overridden = False
+        session.commit()
+    return RedirectResponse("/settings#tax", status_code=303)

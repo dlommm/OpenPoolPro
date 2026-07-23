@@ -7,6 +7,8 @@ ADMIN_ONLY = [
     ("post", "/settings/tasks"),
     ("post", "/settings/general"),
     ("post", "/settings/job_templates"),
+    ("post", "/settings/tax"),
+    ("post", "/settings/tax/state"),
 ]
 NEEDS_MANAGE = [
     ("get", "/customers/new"),
