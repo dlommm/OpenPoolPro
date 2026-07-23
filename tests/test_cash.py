@@ -10,9 +10,11 @@ from app.qbo import export_csv, month_rollup
 
 def _seed_cash_and_noncash(engine):
     """One customer paid entirely in cash (one visit), one customer paid
-    normally (one visit), and a third customer with one cash job + one
+    normally (one visit), a third customer with one cash job + one
     non-cash job -- covers both the aggregated-visit-line path and the
-    per-job-line path in export_csv."""
+    per-job-line path in export_csv -- and a fourth customer with a mix
+    of cash and non-cash visits, so the CSV labor line's visit count can
+    be checked against the non-cash-only count."""
     from app.db import Base
     from app import seeds
     Base.metadata.create_all(engine)
@@ -41,6 +43,19 @@ def _seed_cash_and_noncash(engine):
         s.add(models.Job(property=job_prop, title="Check Job", status="done",
                          labor_cents=7700, completed_at=datetime(2026, 7, 21, 9),
                          paid_cash=False))
+
+        mixed_cust = models.Customer(name="Mixed Customer", qb_display_name="Mixed Customer LLC")
+        mixed_prop = models.Property(customer=mixed_cust)
+        s.add(mixed_prop)
+        s.add(models.Visit(property=mixed_prop, date=date(2026, 7, 8), status="done",
+                           rate_cents=5000, completed_at=datetime(2026, 7, 8, 10),
+                           paid_cash=True))
+        s.add(models.Visit(property=mixed_prop, date=date(2026, 7, 15), status="done",
+                           rate_cents=5000, completed_at=datetime(2026, 7, 15, 10),
+                           paid_cash=False))
+        s.add(models.Visit(property=mixed_prop, date=date(2026, 7, 22), status="done",
+                           rate_cents=5000, completed_at=datetime(2026, 7, 22, 10),
+                           paid_cash=False))
         s.commit()
 
 
@@ -78,7 +93,26 @@ def test_month_rollup_still_includes_cash_for_money_page(engine):
         job_row = rows["Job Customer"]
         assert job_row.total_cents == 9900 + 7700   # both jobs counted for Money
         assert job_row.job_cents == 9900 + 7700
-        assert job_row.noncash_job_cents == 7700    # only the non-cash job feeds the CSV
+
+
+def test_csv_labor_line_visit_count_excludes_cash_visits(engine):
+    """Fix 1: for a customer with a mix of cash and non-cash done visits,
+    the CSV labor line's visit count must match the number of NON-cash
+    visits (whose dollars are what actually appear on that line), not the
+    total visit count."""
+    _seed_cash_and_noncash(engine)
+    with Session(engine) as s:
+        rows = {r.customer.name: r for r in month_rollup(s, 2026, 7)}
+        mixed_row = rows["Mixed Customer"]
+        assert mixed_row.labor_visits == 3          # total visits (incl. cash)
+        assert mixed_row.noncash_labor_visits == 2   # only the non-cash visits
+
+        got = export_csv(s, 2026, 7)
+    labor_line = next(ln for ln in got.splitlines() if "Mixed Customer" in ln
+                       and "Labor" in ln)
+    assert "2 visits Jul 2026" in labor_line
+    assert "3 visits" not in labor_line
+    assert "100.00" in labor_line  # 2 non-cash visits @ $50.00 each
 
 
 def _seed_customer(client):

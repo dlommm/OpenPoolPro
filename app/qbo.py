@@ -25,8 +25,8 @@ class CustomerMonth:
     # export ONLY. The plain accumulators above keep including cash items so
     # the Money page (and its total_cents) is unaffected by paid_cash.
     noncash_labor_cents: int = 0
+    noncash_labor_visits: int = 0
     noncash_chem_billable_cents: int = 0
-    noncash_job_cents: int = 0
     noncash_tax_cents: int = 0
 
 
@@ -94,6 +94,7 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
             r.tax_cents += visit_tax
         if not v.paid_cash:
             r.noncash_labor_cents += labor
+            r.noncash_labor_visits += 1
             r.noncash_chem_billable_cents += visit_chem_billable
             if enabled:
                 r.noncash_tax_cents += visit_tax
@@ -113,7 +114,6 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
             if enabled:
                 r.tax_cents += job_tax
             if not j.paid_cash:
-                r.noncash_job_cents += job_labor
                 if enabled:
                     r.noncash_tax_cents += job_tax
 
@@ -138,7 +138,7 @@ def export_csv(session: Session, year: int, month: int) -> str:
         # job_cents/tax_cents/total_cents, which feed the Money page.
         if r.noncash_labor_cents:
             w.writerow([name, last.isoformat(), "Pool Service — Labor",
-                        f"{r.labor_visits} visits {first:%b %Y}",
+                        f"{r.noncash_labor_visits} visits {first:%b %Y}",
                         f"{r.noncash_labor_cents / 100:.2f}"])
         if r.noncash_chem_billable_cents:
             w.writerow([name, last.isoformat(), "Pool Service — Chemicals",
