@@ -10,6 +10,7 @@ from app import models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
+from app.qbo import csv_safe
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -31,9 +32,13 @@ def export_customers(request: Request, session: Session = Depends(get_session)):
         c = p.customer
         pool = next((x for x in p.pools if x.active), None)
         tech = session.get(models.User, p.assigned_tech_id) if p.assigned_tech_id else None
+        # Free-text cells are formula-injection-neutralized; numeric/enum cells
+        # (rate, dimensions, weekday) are left raw so they re-import cleanly.
         w.writerow([
-            c.name, c.qb_display_name, c.phone, c.email, c.notes,
-            p.label, p.address, p.gate_code, p.dog_note, p.frequency, p.weekday,
+            csv_safe(c.name), csv_safe(c.qb_display_name), csv_safe(c.phone),
+            csv_safe(c.email), csv_safe(c.notes),
+            csv_safe(p.label), csv_safe(p.address), csv_safe(p.gate_code),
+            csv_safe(p.dog_note), p.frequency, p.weekday,
             f"{p.rate_override_cents / 100:.2f}" if p.rate_override_cents is not None else "",
             tech.username if tech else "",
             pool.shape if pool else "", pool.length_ft if pool else "",

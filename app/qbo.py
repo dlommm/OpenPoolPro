@@ -10,6 +10,23 @@ from sqlalchemy.orm import Session
 from app import config, models, tax
 
 
+def csv_safe(value) -> str:
+    """Neutralize spreadsheet formula injection in a free-TEXT cell.
+
+    Excel/Sheets execute a cell whose text starts with = + - @ (or a leading
+    tab/CR) as a formula on open, so a customer note like
+    ``=HYPERLINK("http://evil",...)`` would run on the owner's machine. Prefix
+    such a value with a literal apostrophe so it renders as text.
+
+    Only for free-text columns — never wrap numeric/amount/date cells, or a
+    negative amount ("-5.00") would gain a stray apostrophe and stop parsing.
+    """
+    s = "" if value is None else str(value)
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 @dataclass
 class CustomerMonth:
     customer: models.Customer
@@ -132,7 +149,7 @@ def export_csv(session: Session, year: int, month: int) -> str:
     w = csv.writer(buf)
     w.writerow(["Customer", "Service Date", "Product/Service", "Description", "Amount"])
     for r in month_rollup(session, year, month):
-        name = r.customer.qb_display_name or r.customer.name
+        name = csv_safe(r.customer.qb_display_name or r.customer.name)
         # Cash-marked items are deliberately excluded from the QuickBooks
         # export (below) but still counted in r.labor_cents/chem_billable_cents/
         # job_cents/tax_cents/total_cents, which feed the Money page.
@@ -148,7 +165,7 @@ def export_csv(session: Session, year: int, month: int) -> str:
             if j.paid_cash:
                 continue
             w.writerow([name, _local_date(j.completed_at).isoformat(), "Pool Service — Job",
-                        j.title, f"{tax.effective_labor_cents(j) / 100:.2f}"])
+                        csv_safe(j.title), f"{tax.effective_labor_cents(j) / 100:.2f}"])
         if r.noncash_tax_cents:
             w.writerow([name, last.isoformat(), "Pool Service — Sales Tax",
                         f"Sales tax {first:%b %Y}", f"{r.noncash_tax_cents / 100:.2f}"])
