@@ -9,6 +9,7 @@ ADMIN_ONLY = [
     ("post", "/settings/job_templates"),
     ("post", "/settings/tax"),
     ("post", "/settings/tax/state"),
+    ("post", "/settings/tax/state/NJ/reset"),
 ]
 NEEDS_MANAGE = [
     ("get", "/customers/new"),
@@ -85,8 +86,20 @@ def test_tech_can_still_work(client, tech_client):
     assert t.get("/jobs", follow_redirects=False).status_code == 200
 
 
-def test_money_hidden_from_rendered_html(client, tech_client):
+def test_money_hidden_from_rendered_html(client, tech_client, engine):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import models
     _seed_customer(client)
+    # Distinctive non-zero cost + markup: 137 cents cost would render as
+    # "$1.37" if the cost leaked. Billable price = round(137*1.5) = 206 ->
+    # "$2.06", which is distinct from the raw cost, so "Collect" showing a
+    # price can't be mistaken for the cost leaking.
+    with Session(engine) as s:
+        chem = s.scalars(select(models.Chemical)).first()
+        chem.cost_per_unit_cents = 137
+        chem.markup_percent = 50
+        s.commit()
     t = tech_client(name="nomoney")
     html = t.get("/customers/1").text
     assert "$" not in html          # no rates anywhere
@@ -94,6 +107,7 @@ def test_money_hidden_from_rendered_html(client, tech_client):
     visit_html = t.get("/visit/1/2026-07-13").text
     assert "/visit" in visit_html
     assert "Collect" in visit_html           # collect price IS shown to techs now
+    assert "1.37" not in visit_html          # raw chemical cost must never reach a tech
     assert "cost" not in visit_html.lower()  # but never chemical cost/markup
 
 
