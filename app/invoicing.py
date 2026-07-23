@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import config, models, qbo
+from app import config, models, qbo, tax
 from app.timefmt import to_local_hhmm
 
 
@@ -55,6 +55,8 @@ class InvoiceData:
     visits: list[VisitLine] = field(default_factory=list)
     chems: list[ChemLine] = field(default_factory=list)
     jobs: list[JobLine] = field(default_factory=list)
+    subtotal_cents: int = 0
+    tax_cents: int = 0
     total_cents: int = 0
     generated: datetime | None = None
 
@@ -104,7 +106,7 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
         for v in visit_rows:
             visits.append(VisitLine(date=v.date, label=v.property.label,
                                     duration_minutes=v.duration_minutes,
-                                    rate_cents=v.rate_cents or 0))
+                                    rate_cents=tax.effective_labor_cents(v)))
             for vc in v.chemicals:
                 billable = qbo.billable_for_vc(vc, markup)
                 bucket = chem_totals.setdefault(
@@ -132,12 +134,21 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
                 end = to_local_hhmm(j.completed_at)
                 times_display = f"{start}–{end}" if start and end else ""
                 jobs.append(JobLine(title=j.title, date=local_date,
-                                    times_display=times_display, labor_cents=j.labor_cents))
+                                    times_display=times_display,
+                                    labor_cents=tax.effective_labor_cents(j)))
     jobs.sort(key=lambda jl: jl.date)
 
-    total_cents = (sum(v.rate_cents for v in visits)
-                   + sum(c.billable_cents for c in chems)
-                   + sum(j.labor_cents for j in jobs))
+    subtotal_cents = (sum(v.rate_cents for v in visits)
+                      + sum(c.billable_cents for c in chems)
+                      + sum(j.labor_cents for j in jobs))
+
+    tax_total = 0
+    if tax.tax_enabled(session):
+        for v in (visit_rows if property_ids else []):
+            tax_total += tax.visit_breakdown(session, v)["tax"]
+        for j in (job_rows if property_ids else []):
+            if first <= qbo._local_date(j.completed_at) <= last:
+                tax_total += tax.job_breakdown(session, j)["tax"]
 
     return InvoiceData(
         company=company_info(session),
@@ -149,7 +160,9 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
         visits=visits,
         chems=chems,
         jobs=jobs,
-        total_cents=total_cents,
+        subtotal_cents=subtotal_cents,
+        tax_cents=tax_total,
+        total_cents=subtotal_cents + tax_total,
         generated=models.utcnow(),
     )
 
@@ -209,7 +222,8 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
         session.add(models.Invoice(
             number=number, customer_id=row.customer.id,
             period_year=year, period_month=month,
-            total_cents=row.total_cents, status="draft",
+            subtotal_cents=data.subtotal_cents, tax_cents=data.tax_cents,
+            total_cents=data.total_cents, status="draft",
             pdf_filename=filename))
         try:
             session.commit()

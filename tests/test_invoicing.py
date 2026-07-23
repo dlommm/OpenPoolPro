@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import invoicing, models, qbo
+from app import invoicing, models, qbo, seeds
 from tests.test_analytics import _fix
 
 
@@ -31,7 +31,9 @@ def test_invoice_data_matches_rollup(engine):
             cust = s.scalars(select(models.Customer).where(
                 models.Customer.name == name)).one()
             data = invoicing.invoice_data(s, cust, 2026, 7)
-            assert data.total_cents == row.total_cents
+            assert data.subtotal_cents == row.total_cents
+            assert data.tax_cents == 0
+            assert data.total_cents == data.subtotal_cents
         alpha = s.scalars(select(models.Customer).where(
             models.Customer.name == "Alpha")).one()
         d = invoicing.invoice_data(s, alpha, 2026, 7)
@@ -40,6 +42,46 @@ def test_invoice_data_matches_rollup(engine):
         assert len(d.chems) == 1 and d.chems[0].billable_cents == 1200
         assert d.period == "July 2026"
         assert any(j.labor_cents == 3000 for j in d.jobs)  # boundary job Jul 31 ET
+
+
+def test_invoice_data_tax_enabled(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "sales_tax_enabled", "1")
+        seeds.seed_tax_rates(s)
+        cust = models.Customer(name="Taxed Co")
+        prop = models.Property(customer=cust, state="NJ")
+        s.add_all([cust, prop])
+        s.flush()
+        s.add(models.Visit(property_id=prop.id, date=date(2026, 7, 10),
+                           status="done", rate_cents=5500))
+        s.commit()
+
+        data = invoicing.invoice_data(s, cust, 2026, 7)
+        assert data.subtotal_cents == 5500
+        assert data.tax_cents == 364
+        assert data.total_cents == 5864
+
+
+def test_invoice_data_tax_disabled(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        cust = models.Customer(name="Untaxed Co")
+        prop = models.Property(customer=cust, state="NJ")
+        s.add_all([cust, prop])
+        s.flush()
+        s.add(models.Visit(property_id=prop.id, date=date(2026, 7, 10),
+                           status="done", rate_cents=5500))
+        s.commit()
+
+        data = invoicing.invoice_data(s, cust, 2026, 7)
+        assert data.subtotal_cents == 5500
+        assert data.tax_cents == 0
+        assert data.total_cents == data.subtotal_cents
 
 
 def test_invoice_model_table(engine):
