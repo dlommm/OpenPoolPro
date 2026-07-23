@@ -13,6 +13,14 @@
  *   3. Bespoke hero classes prefixed `wc-` for the signature devices:
  *      the rising tide-line gauge, the hand-drawn horizon rule, and the
  *      warm pebble stop-cards with a soft left status band.
+ *   4. DARK counterpart palette (the light tokens above are the DEFAULT).
+ *      Reference implementation of the app-wide light/dark MODE mechanism
+ *      documented at the top of css/base.css — same hue family as the light
+ *      palette (teal pool, brass money, coral safety), re-tuned for a
+ *      warm-dark background. Only the two hardcoded (non-token) hero
+ *      gradients (.wc-tide, .wc-hero-rev) get their own dark-scoped
+ *      overrides; every other component already reads var(--color-*) /
+ *      var(--wc-*) and re-themes for free.
  *
  * RULES: no @theme block here (token names live in base.css); set token VALUES
  * under :root[data-theme="warm-coastal"]; bespoke classes stay `wc-`-prefixed.
@@ -538,4 +546,86 @@
     0%, 100% { transform: translateX(0); }
     50% { transform: translateX(-10px); }
   }
+}
+
+/* ============================================================
+   4. DARK COUNTERPART PALETTE
+   ============================================================
+   The block above is the LIGHT default. This section adds warm-coastal's
+   DARK tokens under the two selectors the app-wide mode mechanism uses
+   (see css/base.css header comment for the full convention):
+     - no override -> follow the device (`prefers-color-scheme: dark`)
+     - `data-mode="dark"` -> forced dark regardless of device
+   Both selectors get IDENTICAL values; duplicated rather than shared via
+   nesting since nothing else in this codebase uses native CSS nesting yet.
+   Same hue family as light (teal pool / brass money / coral safety),
+   re-tuned for contrast on a warm-charcoal background. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="warm-coastal"]:not([data-mode="light"]) {
+    --color-tile: #12201F;      /* warm charcoal page canvas */
+    --color-surface: #182A29;   /* pebble card surface, dark */
+    --color-ink: #EAF2EF;       /* off-white warm-mint ink (~14.7:1 on tile) */
+    --color-pool: #4FC1D6;      /* brightened aqua for dark legibility */
+    --color-pooldeep: #2E93A8;  /* pressed aqua */
+    --color-shallow: #1E3B39;   /* dark teal selection wash */
+    --color-brass: #E3AC4F;     /* brightened sun-gold money (~8.2:1 on tile) */
+    --color-safety: #FF8F73;    /* brightened coral alert (~7.5:1 on tile) */
+    --color-seam: #26403D;      /* warm-teal hairline */
+    --color-mist: #93A7A5;      /* warm sage secondary text (~6.6:1 on tile) */
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 30px -16px rgba(0, 0, 0, 0.6);
+
+    --wc-sand-deep: #2B4A45;
+    --wc-card-raised: #1F3634;
+    --wc-line-soft: #203836;
+    --wc-aqua-tint: #16302E;
+    --wc-done: #5FC4AC;
+    --wc-done-tint: #1B3A33;
+    --wc-upcoming: #8A7A63;
+    --wc-coral-deep: #E8735A;
+    --wc-coral-tint: #3A211B;
+    --wc-gold-deep: #C99A4A;
+    --wc-gold-tint: #3A2E17;
+    --wc-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 30px -16px rgba(0, 0, 0, 0.65);
+  }
+  /* Hardcoded (non-token) hero backgrounds need their own dark overrides. */
+  :root[data-theme="warm-coastal"]:not([data-mode="light"]) .wc-tide {
+    background: linear-gradient(180deg, #16302E, #0F211F);
+  }
+  :root[data-theme="warm-coastal"]:not([data-mode="light"]) .wc-hero-rev {
+    background: linear-gradient(135deg, #1B2A28, #17211D);
+  }
+}
+:root[data-theme="warm-coastal"][data-mode="dark"] {
+  --color-tile: #12201F;
+  --color-surface: #182A29;
+  --color-ink: #EAF2EF;
+  --color-pool: #4FC1D6;
+  --color-pooldeep: #2E93A8;
+  --color-shallow: #1E3B39;
+  --color-brass: #E3AC4F;
+  --color-safety: #FF8F73;
+  --color-seam: #26403D;
+  --color-mist: #93A7A5;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 30px -16px rgba(0, 0, 0, 0.6);
+
+  --wc-sand-deep: #2B4A45;
+  --wc-card-raised: #1F3634;
+  --wc-line-soft: #203836;
+  --wc-aqua-tint: #16302E;
+  --wc-done: #5FC4AC;
+  --wc-done-tint: #1B3A33;
+  --wc-upcoming: #8A7A63;
+  --wc-coral-deep: #E8735A;
+  --wc-coral-tint: #3A211B;
+  --wc-gold-deep: #C99A4A;
+  --wc-gold-tint: #3A2E17;
+  --wc-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 30px -16px rgba(0, 0, 0, 0.65);
+}
+:root[data-theme="warm-coastal"][data-mode="dark"] .wc-tide {
+  background: linear-gradient(180deg, #16302E, #0F211F);
+}
+:root[data-theme="warm-coastal"][data-mode="dark"] .wc-hero-rev {
+  background: linear-gradient(135deg, #1B2A28, #17211D);
 }

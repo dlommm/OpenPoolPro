@@ -9,6 +9,43 @@
  * Theme files (css/themes/*.css) set their own token values + scoped
  * component overrides + bespoke prefixed classes. They MUST NOT contain an
  * @theme block — @theme (token names + utility generation) lives ONLY here.
+ *
+ * ---------------------------------------------------------------------
+ * LIGHT/DARK MODE MECHANISM (Foundation-owned, applies to every theme)
+ * ---------------------------------------------------------------------
+ * `data-mode` on <html> is the MANUAL OVERRIDE, orthogonal to `data-theme`:
+ *   - absent      -> follow the device (`prefers-color-scheme`)
+ *   - "light"     -> force light
+ *   - "dark"      -> force dark
+ * A tiny inline no-flash script (in every base.html's <head>, before the
+ * app.css <link>) applies a stored `localStorage.mode` before first paint;
+ * a header toggle button (`[data-mode-toggle]`, wired up by the shared
+ * app/templates/_mode_toggle.html script) flips it at runtime.
+ *
+ * Each theme owns its OWN second palette and applies this exact selector
+ * pair to add it (see css/themes/warm-coastal.css for the reference
+ * implementation — a light-default theme adding its DARK counterpart):
+ *
+ *   @media (prefers-color-scheme: dark) {
+ *     :root[data-theme="X"]:not([data-mode="light"]) { --color-*: ...; }
+ *   }
+ *   :root[data-theme="X"][data-mode="dark"] { --color-*: ...; }
+ *
+ * A dark-DEFAULT theme (e.g. control-room, "COMMITTED DARK — no light
+ * mode" today) adding a LIGHT counterpart later MIRRORS this instead:
+ *
+ *   @media (prefers-color-scheme: light) {
+ *     :root[data-theme="X"]:not([data-mode="dark"]) { --color-*: ...; }
+ *   }
+ *   :root[data-theme="X"][data-mode="light"] { --color-*: ...; }
+ *
+ * Both selectors in a pair take IDENTICAL token values (duplicate the
+ * block, or share one via CSS nesting) — the two selectors only differ in
+ * how they decide light vs dark should apply (device preference vs an
+ * explicit user override), not in what the tokens resolve to. The
+ * `.mode-toggle` / `.mode-icon-*` rules below are the shared, theme-agnostic
+ * button chrome + icon-swap CSS; they use component tokens only so they
+ * inherit whichever theme + mode is active with zero per-theme overrides.
  */
 
 @theme {
@@ -182,6 +219,38 @@
     @apply pointer-events-none absolute left-3 font-data text-sm text-brass;
   }
   .money-in > input { @apply pl-7 font-data; }
+
+  /* ---- Light/dark MODE toggle: shared chrome, all themes (see the
+     mechanism doc at the top of this file). Token-based, so it inherits
+     whichever theme + mode is active with no per-theme CSS needed. ---- */
+  .mode-toggle {
+    @apply relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-seam transition active:scale-[0.94];
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .mode-toggle:hover {
+    background-color: var(--color-shallow);
+  }
+  .mode-toggle-row {
+    @apply flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium transition active:scale-[0.99];
+    color: var(--color-mist);
+  }
+  .mode-toggle-row:hover {
+    color: var(--color-ink);
+    background-color: var(--color-shallow);
+  }
+
+  /* Icon-swap: default to "moon" (tap for dark). Both the no-preference
+     default AND the mechanism's two override selectors flip to "sun"
+     (tap for light) once dark is the effective mode. */
+  .mode-icon { display: block; }
+  .mode-icon-sun { display: none; }
+  :root[data-mode="dark"] .mode-icon-sun { display: block; }
+  :root[data-mode="dark"] .mode-icon-moon { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-mode="light"]) .mode-icon-sun { display: block; }
+    :root:not([data-mode="light"]) .mode-icon-moon { display: none; }
+  }
 }
 
 /* ---------- Signature motion: waterline draw + card rise ---------- */

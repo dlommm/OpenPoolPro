@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#0E141B">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <script>(function(){try{var m=localStorage.getItem('mode');if(m==='light'||m==='dark')document.documentElement.setAttribute('data-mode',m);}catch(e){}})();</script>
   <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
   <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
   <title>{% block title %}OpenPoolPro{% endblock %}</title>
@@ -48,6 +49,11 @@
       {% endfor %}
     </div>
     <div class="mt-auto pt-4 text-sm text-mist">
+      <button type="button" data-mode-toggle class="mode-toggle-row mb-1" aria-label="Toggle light/dark">
+        {{ ui.icon("sun", "mode-icon mode-icon-sun h-4 w-4") }}
+        {{ ui.icon("moon", "mode-icon mode-icon-moon h-4 w-4") }}
+        <span>Light / dark</span>
+      </button>
       {% if u %}
       <a href="/account" class="cr-navlink mb-1 {{ 'is-active' if path == '/account' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
       {% if u.role == "admin" %}
@@ -70,6 +76,10 @@
           {% else %}<span class="inline-flex items-center gap-2"><img src="/static/brand/openpoolpro-mark.png" alt="" class="cr-brand-mark h-7 w-auto shrink-0"><span class="cr-brand">OpenPool<b>Pro</b></span></span>{% endif %}
         </span>
         <span class="flex items-center gap-2">
+          <button type="button" data-mode-toggle class="mode-toggle" aria-label="Toggle light/dark">
+            {{ ui.icon("sun", "mode-icon mode-icon-sun h-5 w-5") }}
+            {{ ui.icon("moon", "mode-icon mode-icon-moon h-5 w-5") }}
+          </button>
           <span id="sync-badge" class="cr-sync" hidden>0 waiting</span>
           <span class="relative flex h-11 w-11 items-center justify-center rounded-lg text-ink" aria-label="Menu">
             <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
@@ -135,6 +145,7 @@
     flushQueue();
   }
   </script>
+  {% include "_mode_toggle.html" %}
   {% include "_pwa.html" %}
 </body>
 </html>

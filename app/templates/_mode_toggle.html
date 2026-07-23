@@ -1,0 +1,27 @@
+{# Shared light/dark MODE toggle wiring — included once per base template.
+   Binds every [data-mode-toggle] button on the page (topbar + sidebar).
+   The no-flash script in <head> (see base.html) applies any stored mode
+   before first paint; this just flips it on click and persists it.
+   `preventDefault`/`stopPropagation` matter here: the topbar's toggle
+   button lives inside a native <details><summary>, and without them a
+   click would also toggle the mobile nav menu open/closed. #}
+<script>
+(function () {
+  var root = document.documentElement;
+  function effectiveMode() {
+    var m = root.getAttribute("data-mode");
+    if (m === "light" || m === "dark") return m;
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  function toggleMode(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    var next = effectiveMode() === "dark" ? "light" : "dark";
+    root.setAttribute("data-mode", next);
+    try { localStorage.setItem("mode", next); } catch (err) {}
+  }
+  var btns = document.querySelectorAll("[data-mode-toggle]");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", toggleMode);
+  }
+})();
+</script>
