@@ -78,6 +78,26 @@
   </form>
   {% endif %}
 </div>
+
+<!-- properties summary -->
+<h2 class="{{ ffh2 }}">Properties</h2>
+<div class="mb-5 space-y-2">
+  {% for p in props %}
+  <div class="card flex items-center justify-between gap-2 p-3 text-sm">
+    <div class="min-w-0">
+      <div class="font-semibold">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
+      <div class="mt-0.5 truncate text-mist">{% if p.address %}{{ p.address }}{% else %}{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %}{% endif %}</div>
+      <div class="mt-1 flex flex-wrap items-center gap-1.5">
+        <span class="tag">{{ p.frequency }}</span>
+        {% if show_money %}<span class="money">{{ rates[p.id] | dollars }}</span>/visit{% endif %}
+      </div>
+    </div>
+    <a href="/properties/{{ p.id }}/edit" class="min-h-11 shrink-0 text-sm text-pool">Edit</a>
+  </div>
+  {% else %}
+  <p class="text-sm text-mist">No properties yet.</p>
+  {% endfor %}
+</div>
 </div>
 
 <div data-custab="pool" class="hidden">

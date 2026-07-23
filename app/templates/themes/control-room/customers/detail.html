@@ -153,6 +153,28 @@
     </div>
 
     <div data-custab="profile">
+    {# ---- properties summary ---- #}
+    <div class="cr-panel">
+      <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Properties</h2></div>
+      <div class="cr-panel-bd space-y-2">
+        {% for p in props %}
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold text-ink">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
+            <div class="mt-0.5 truncate font-data text-xs text-mist">{% if p.address %}{{ p.address }}{% else %}{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %}{% endif %}</div>
+            <div class="mt-1.5 flex flex-wrap gap-1.5">
+              <span class="cr-chip">{{ p.frequency }}</span>
+              {% if show_money %}<span class="cr-chip am"><span class="money">{{ rates[p.id] | dollars }}</span>/visit</span>{% endif %}
+            </div>
+          </div>
+          <a href="/properties/{{ p.id }}/edit" class="min-h-11 shrink-0 font-data text-xs uppercase tracking-[0.08em] text-pool">Edit</a>
+        </div>
+        {% else %}
+        <p class="font-data text-xs text-mist">No properties yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+
     {# ---- tags ---- #}
     <div class="cr-panel">
       <div class="cr-panel-hd"><h2 class="cr-lbl"><span class="cr-tick"></span>Tags</h2></div>
