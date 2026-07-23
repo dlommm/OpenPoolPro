@@ -113,6 +113,11 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
             row.status = "sent"
             row.sent_at = models.utcnow()
             sent += 1
+        # Persist each row's outcome before the next external send. A crash (or
+        # a locked-DB commit failure) after N successful sends must not leave
+        # those N rows "pending" — the next flush would re-send them all to
+        # customers. Committing per row makes each send durably at-most-once.
+        session.commit()
     return (sent, failed)
 
 

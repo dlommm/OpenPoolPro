@@ -213,11 +213,6 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
         data.number = number
         pdf_bytes = invoice_pdf.render_invoice(data)
         filename = f"{number}.pdf"
-        path = os.path.join(_invoices_dir(), filename)
-        tmp_path = f"{path}.tmp"
-        with open(tmp_path, "wb") as f:
-            f.write(pdf_bytes)
-        os.replace(tmp_path, path)
 
         session.add(models.Invoice(
             number=number, customer_id=row.customer.id,
@@ -228,9 +223,19 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
         try:
             session.commit()
         except IntegrityError:
+            # Lost the concurrent next_number() race on this filename. Commit
+            # BEFORE writing the PDF (unlike before) so the loser never
+            # overwrites the winner's file at the shared INV-YYYY-NNNN.pdf path
+            # — invoice_regenerate writes-after-commit for this same reason.
             session.rollback()
             skipped += 1
             continue
+
+        path = os.path.join(_invoices_dir(), filename)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "wb") as f:
+            f.write(pdf_bytes)
+        os.replace(tmp_path, path)
         created += 1
 
     return created, skipped

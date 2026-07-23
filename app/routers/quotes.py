@@ -188,7 +188,10 @@ def convert_quote(qid: int, session: Session = Depends(get_session),
                      description="; ".join(line.description for line in lines),
                      labor_cents=sum(line.amount_cents for line in lines), job_type="service")
     session.add(job)
-    session.commit()
+    # One transaction: flush to get job.id, mark the quote converted, commit
+    # once. A crash between two separate commits used to leave an orphan Job
+    # with the quote still "accepted" (invitng a second convert / duplicate job).
+    session.flush()
     q.status, q.job_id = "converted", job.id
     session.commit()
     return RedirectResponse(f"/jobs/{job.id}", status_code=303)
@@ -201,7 +204,9 @@ def duplicate_quote(qid: int, session: Session = Depends(get_session),
     new_q = models.Quote(customer_id=q.customer_id, property_id=q.property_id,
                          title=f"{q.title} (copy)", notes=q.notes, status="draft", user_id=user.id)
     session.add(new_q)
-    session.commit()
+    # Flush for new_q.id, add the lines, commit once — a crash between the old
+    # two commits left a titled copy with no line items.
+    session.flush()
     for line in q.lines:
         session.add(models.QuoteLine(quote_id=new_q.id, description=line.description,
                                      amount_cents=line.amount_cents, sort_order=line.sort_order))
