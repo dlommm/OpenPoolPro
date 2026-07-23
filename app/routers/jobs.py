@@ -306,6 +306,8 @@ async def complete_job(jid: int, request: Request, session: Session = Depends(ge
             j.labor_override_cents = cents if cents >= 0 and cents != j.labor_cents else None
         except ValueError:
             j.labor_override_cents = None
+    else:
+        j.labor_override_cents = None
     session.commit()
     return RedirectResponse("/jobs", status_code=303)
 

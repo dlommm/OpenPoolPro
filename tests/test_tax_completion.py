@@ -67,3 +67,53 @@ def test_job_complete_freezes_tax_rate(client, engine):
         assert j.status == "done"
         assert j.tax_rate_ppm == 66250
         assert j.labor_override_cents == 27000
+
+
+def test_job_reopen_recomplete_without_override_clears(client, engine):
+    _seed(client)
+    _enable_nj(engine)
+    client.post("/jobs/new", data={"property_id": "1", "title": "J", "description": "",
+                                   "priority": "normal", "rate_dollars": "180", "hours": "1",
+                                   "scheduled_date": "", "job_type": "service",
+                                   "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    client.post(f"/jobs/{jid}/complete", data={"labor_override_dollars": "270"})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.labor_override_cents == 27000
+    client.post(f"/jobs/{jid}/reopen")
+    client.post(f"/jobs/{jid}/complete", data={})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.labor_override_cents is None
+
+
+def test_job_override_equal_base_stores_none(client, engine):
+    _seed(client)
+    _enable_nj(engine)
+    client.post("/jobs/new", data={"property_id": "1", "title": "J", "description": "",
+                                   "priority": "normal", "rate_dollars": "180", "hours": "1",
+                                   "scheduled_date": "", "job_type": "service",
+                                   "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    client.post(f"/jobs/{jid}/complete", data={"labor_override_dollars": "180"})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.labor_override_cents is None
+
+
+def test_job_negative_override_stores_none(client, engine):
+    _seed(client)
+    _enable_nj(engine)
+    client.post("/jobs/new", data={"property_id": "1", "title": "J", "description": "",
+                                   "priority": "normal", "rate_dollars": "180", "hours": "1",
+                                   "scheduled_date": "", "job_type": "service",
+                                   "assigned_tech_id": ""})
+    with Session(engine) as s:
+        jid = s.scalars(select(models.Job)).one().id
+    client.post(f"/jobs/{jid}/complete", data={"labor_override_dollars": "-5"})
+    with Session(engine) as s:
+        j = s.get(models.Job, jid)
+        assert j.labor_override_cents is None
