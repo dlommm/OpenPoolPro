@@ -6,7 +6,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, invoicing, models, qbo
+from app import config, invoicing, models, qbo, seeds
 from app.timefmt import to_local_date
 from tests.test_analytics import _fix
 
@@ -166,6 +166,43 @@ def test_regenerate_rerenders_same_number_and_updates_total(client, engine):
     # Atomic tmp+replace write must never leave a stray .tmp behind.
     invoices_dir = os.path.join(config.DATA_DIR, "invoices")
     assert not any(fn.endswith(".tmp") for fn in os.listdir(invoices_dir))
+
+
+def test_regenerate_refreshes_subtotal_and_tax_not_stale(client, engine):
+    """Regression: regenerate must refresh subtotal_cents/tax_cents, not just
+    total_cents, so enabling tax after the original generate doesn't leave
+    those two columns stale on the existing invoice row."""
+    with Session(engine) as s:
+        cust = models.Customer(name="Regen Tax Co")
+        prop = models.Property(customer=cust, state="NJ")
+        s.add_all([cust, prop])
+        s.flush()
+        s.add(models.Visit(property_id=prop.id, date=date(2026, 7, 10),
+                           status="done", rate_cents=5500))
+        s.commit()
+
+    r = _generate(client)
+    assert r.status_code == 303
+
+    with Session(engine) as s:
+        inv = s.scalars(select(models.Invoice).join(models.Customer).where(
+            models.Customer.name == "Regen Tax Co")).one()
+        iid = inv.id
+        assert inv.subtotal_cents == inv.total_cents == 5500
+        assert inv.tax_cents == 0
+
+    with Session(engine) as s:
+        models.set_setting(s, "sales_tax_enabled", "1")
+        seeds.seed_tax_rates(s)
+        s.commit()
+
+    r = client.post(f"/invoices/{iid}/regenerate", follow_redirects=False)
+    assert r.status_code == 303
+
+    with Session(engine) as s:
+        inv = s.get(models.Invoice, iid)
+        assert inv.tax_cents > 0
+        assert inv.total_cents == inv.subtotal_cents + inv.tax_cents
 
 
 def test_pdf_serve_200_and_404_missing(client, engine):

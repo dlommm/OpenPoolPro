@@ -108,6 +108,8 @@ def invoice_regenerate(request: Request, iid: int, session: Session = Depends(ge
     data.generated = inv.generated_at  # PDF date must match the committed row
     pdf_bytes = invoice_pdf.render_invoice(data)
     inv.total_cents = data.total_cents
+    inv.subtotal_cents = data.subtotal_cents
+    inv.tax_cents = data.tax_cents
     models.audit(session, request.state.user.id, "invoice.generated",
                  detail=f"regenerate {inv.number}")
     session.commit()
