@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 from sqlalchemy.orm import Session
 
-from app import config, contract_pdf, mailer, models, rates
+from app import config, contract_pdf, mailer, models, rates, tax
 from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.main import templates
@@ -157,7 +157,9 @@ def approve_contract(request: Request, cid: int, session: Session = Depends(get_
     prop = pool.property
     customer = prop.customer
     company = company_info(session)
-    pdf_bytes = contract_pdf.render_contract(contract, pool, prop, customer, company)
+    rate_ppm = tax.resolve_rate_ppm(session, prop.state)
+    pdf_bytes = contract_pdf.render_contract(contract, pool, prop, customer, company,
+                                              tax_rate_ppm=rate_ppm)
     _atomic_write(_pdf_path(contract), pdf_bytes)
 
     contract.pdf_filename = "contract.pdf"

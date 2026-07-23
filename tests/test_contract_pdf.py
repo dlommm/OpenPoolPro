@@ -123,3 +123,31 @@ def test_render_never_raises_on_missing_related_objects():
     contract = _contract()
     pdf_bytes = render_contract(contract, None, None, None, {})
     assert isinstance(pdf_bytes, bytes)
+
+
+def test_render_contract_default_tax_rate_omits_sales_tax_line():
+    """tax_rate_ppm defaults to 0: output must be byte-for-behavior identical
+    to before the parameter existed -- no computed Sales Tax line."""
+    contract = _contract()
+    pdf_bytes = render_contract(contract, _pool(), _prop(), _customer(), _company())
+    text = _text(pdf_bytes)
+    assert "Sales Tax" not in text
+    assert "incl. tax" not in text
+    assert "plus tax & chemicals" in text
+
+
+def test_render_contract_with_tax_rate_shows_computed_sales_tax():
+    """NJ property with tax enabled (6.625% -> 66250 ppm): the season total
+    (16 weeks x $50.00 = $800.00) must produce a concrete Sales Tax figure
+    of $53.00 and a season-incl-tax total of $853.00."""
+    contract = _contract()
+    prop = _prop(state="NJ")
+    pdf_bytes = render_contract(contract, _pool(), prop, _customer(), _company(),
+                                 tax_rate_ppm=66250)
+    text = _text(pdf_bytes)
+    assert "Sales Tax" in text
+    # season total = 16 * $50.00 = $800.00; tax = 800.00 * 0.06625 = $53.00
+    assert "53.00" in text
+    # season total incl. tax = $800.00 + $53.00 = $853.00
+    assert "853.00" in text
+    assert "incl. tax" in text

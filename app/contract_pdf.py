@@ -29,6 +29,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app import tax
+
 _STYLES = getSampleStyleSheet()
 
 _COMPANY_NAME_STYLE = ParagraphStyle(
@@ -127,7 +129,7 @@ def _parties_table(prop, customer) -> Table:
     return table
 
 
-def _rates_table(contract, company_name: str) -> list:
+def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
     """Service Rates section flowables (title + one Table)."""
     weekly = getattr(contract, "weekly_cents", 0) or 0
     open_close = getattr(contract, "open_close_cents", 0) or 0
@@ -139,11 +141,28 @@ def _rates_table(contract, company_name: str) -> list:
     season_total_cents = weeks * weekly
     half_open_close_cents = open_close / 2
 
+    if tax_rate_ppm:
+        season_tax_cents = tax.tax_cents(season_total_cents, tax_rate_ppm)
+        season_incl_tax_cents = season_total_cents + season_tax_cents
+        weekly_line = (
+            f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "
+            f"(plus chemicals)"
+        )
+    else:
+        weekly_line = (
+            f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "
+            "(plus tax & chemicals)"
+        )
+
     rows = [
         ["Openings & Closings",
          f"${_d(open_close)} plus tax (${half_open_close_cents / 100:,.2f} each)"],
-        [f"{weeks}-week pool service",
-         f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} (plus tax & chemicals)"],
+        [f"{weeks}-week pool service", weekly_line],
+    ]
+    if tax_rate_ppm:
+        rows.append(["Sales Tax", f"${_d(season_tax_cents)}"])
+        rows.append(["Season total incl. tax", f"${_d(season_incl_tax_cents)}"])
+    rows.extend([
         ["Additional weeks",
          f"Any additional weeks of service over the {weeks} weeks as discussed above, "
          "will be billed accordingly as per the contract, plus chemicals."],
@@ -154,7 +173,7 @@ def _rates_table(contract, company_name: str) -> list:
         ["Storm Cleanup",
          f"Storm, wind, or heavy debris cleanup will be billed at ${_d(storm)} per hour "
          "plus chemicals if required."],
-    ]
+    ])
 
     body = [[Paragraph(f"<b>{_safe(label)}</b>", _BODY_STYLE), Paragraph(_safe(text), _BODY_STYLE)]
             for label, text in rows]
@@ -171,11 +190,18 @@ def _rates_table(contract, company_name: str) -> list:
     return [Paragraph("Service Rates", _SECTION_HEADER_STYLE), table]
 
 
-def render_contract(contract, pool, prop, customer, company: dict) -> bytes:
+def render_contract(contract, pool, prop, customer, company: dict,
+                     tax_rate_ppm: int = 0) -> bytes:
     """Render one Contract to "Pool & Spa Service Agreement" PDF bytes.
 
     Never raises: any error assembling the story still yields best-effort
     bytes from an empty/partial document rather than propagating.
+
+    tax_rate_ppm defaults to 0 (tax off / not applicable), which renders
+    identically to before this parameter existed: prose "plus tax &
+    chemicals" only, no computed Sales Tax line. When truthy, a concrete
+    "Sales Tax" figure and a "Season total incl. tax" row are added to the
+    Service Rates table (see _rates_table).
     """
     buf = io.BytesIO()
     try:
@@ -229,7 +255,7 @@ def render_contract(contract, pool, prop, customer, company: dict) -> bytes:
             story.append(Paragraph("Spa Service", _SECTION_HEADER_STYLE))
             story.append(Paragraph(spa_text, _BODY_STYLE))
 
-        story.extend(_rates_table(contract, company_name))
+        story.extend(_rates_table(contract, company_name, tax_rate_ppm))
 
         story.append(Paragraph("Customer Requirements for Service", _SECTION_HEADER_STYLE))
         story.append(Paragraph(
