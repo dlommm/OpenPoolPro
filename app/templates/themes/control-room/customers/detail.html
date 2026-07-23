@@ -105,7 +105,14 @@
             <input type="hidden" id="cr-house-tag-{{ p.id }}" name="tag" value="house">
             {% endif %}
             {% if map_urls[p.id] %}
-            <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" class="mt-2 h-24 w-full rounded-md object-cover">
+            <div class="mt-2">
+              <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" loading="lazy"
+                   class="h-24 w-full rounded-md object-cover"
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+              <div class="h-24 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-seam text-center font-data text-[10px] uppercase tracking-[0.08em] text-mist" style="display:none">
+                <span>Map unavailable</span><span>Check Geoapify key in Settings</span>
+              </div>
+            </div>
             {% endif %}
             <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
                class="btn-secondary mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 font-data text-xs uppercase tracking-[0.08em]">

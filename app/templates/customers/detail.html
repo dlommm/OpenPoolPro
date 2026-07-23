@@ -121,7 +121,7 @@
       <input type="hidden" id="house-tag-{{ p.id }}" name="tag" value="house">
       {% endif %}
       {% if map_urls[p.id] %}
-      <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" class="mt-2 h-24 w-full rounded-lg object-cover">
+      <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" loading="lazy" class="mt-2 h-24 w-full rounded-lg object-cover" onerror="this.style.display='none'">
       {% endif %}
       <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
          class="btn-secondary mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 text-sm font-semibold">
