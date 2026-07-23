@@ -10,6 +10,10 @@ from app.db import get_session
 router = APIRouter()
 
 ALLOWED = {"pool", "visit", "job", "property"}
+# Cap raw upload bytes before decoding so a huge (or decompression-bomb) file
+# can't pin server memory. Field photos are re-encoded down to a 2000px JPEG,
+# so 20 MB of source is generous headroom.
+MAX_PHOTO_BYTES = 20 * 1024 * 1024
 
 
 @router.get("/photos/file/{photo_id}")
@@ -37,6 +41,10 @@ async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
     frags = []
     for f in files:
         data = await f.read()
+        if len(data) > MAX_PHOTO_BYTES:
+            frags.append(
+                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} too large (max 20 MB)</span>")
+            continue
         try:
             ph = photos_svc.save_photo(session, entity_type, entity_id, data, tag=tag)
             session.commit()

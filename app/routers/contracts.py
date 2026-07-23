@@ -210,6 +210,10 @@ async def mark_signed(request: Request, cid: int, file: UploadFile,
         raise HTTPException(status_code=400)
 
     data = await file.read()
+    # 25 MB cap on the signed PDF before it's written, matching the photo cap's
+    # rationale — an unbounded upload otherwise pins memory + disk.
+    if len(data) > 25 * 1024 * 1024:
+        return RedirectResponse(f"/contracts/{cid}?sign_error=1", status_code=303)
     if not data.startswith(b"%PDF"):
         return RedirectResponse(f"/contracts/{cid}?sign_error=1", status_code=303)
 
