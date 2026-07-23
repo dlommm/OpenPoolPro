@@ -51,6 +51,27 @@ def test_csv_golden_with_tax(engine):
     assert tax_lines == ["Bill Me LLC,2026-07-31,Pool Service — Sales Tax,Sales tax Jul 2026,16.16"]
 
 
+def test_csv_job_uses_effective_labor_not_frozen(engine):
+    from datetime import datetime
+    from app.db import Base
+    from app import seeds
+    Base.metadata.create_all(engine)
+    seeds.run(engine)
+    with Session(engine) as s:
+        c = models.Customer(name="Override Co", qb_display_name="Override Co LLC")
+        p = models.Property(customer=c)
+        s.add(p)
+        s.add(models.Job(property=p, title="Override job", status="done",
+                         labor_cents=18000, labor_override_cents=27000,
+                         completed_at=datetime(2026, 7, 20, 9)))
+        s.commit()
+        got = export_csv(s, 2026, 7)
+    job_lines = [ln for ln in got.splitlines() if "Override job" in ln]
+    assert len(job_lines) == 1
+    assert job_lines[0].endswith("270.00")
+    assert "180.00" not in job_lines[0]
+
+
 def test_export_route_writes_export_qbo_audit_row(client, engine):
     seed_month(engine)
     with Session(engine) as s:

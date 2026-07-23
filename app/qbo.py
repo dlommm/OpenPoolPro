@@ -120,7 +120,7 @@ def export_csv(session: Session, year: int, month: int) -> str:
                         f"{r.chem_billable_cents / 100:.2f}"])
         for j in r.jobs:
             w.writerow([name, _local_date(j.completed_at).isoformat(), "Pool Service — Job",
-                        j.title, f"{j.labor_cents / 100:.2f}"])
+                        j.title, f"{tax.effective_labor_cents(j) / 100:.2f}"])
         if r.tax_cents:
             w.writerow([name, last.isoformat(), "Pool Service — Sales Tax",
                         f"Sales tax {first:%b %Y}", f"{r.tax_cents / 100:.2f}"])
