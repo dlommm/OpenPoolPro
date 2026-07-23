@@ -58,8 +58,23 @@ def move(property_id: int = Form(...), from_date: date = Form(...),
             models.Visit.property_id == property_id,
             models.Visit.date == to_date)).first()
         if exists is None:
-            session.add(models.Visit(property_id=property_id, date=to_date,
-                                     status="due", original_date=from_date))
+            # Relocate an existing DUE row sitting at from_date (a stop the tech
+            # already opened via _get_or_create, or a prior move's landing row)
+            # rather than spawning a second row — two rows would render the
+            # property as due on both days and later surface as a phantom miss.
+            # Preserve an existing original_date (the chain root) so a chained
+            # move keeps suppressing the true origin day.
+            src = session.scalars(select(models.Visit).where(
+                models.Visit.property_id == property_id,
+                models.Visit.date == from_date,
+                models.Visit.status == "due")).first()
+            if src is not None:
+                if src.original_date is None:
+                    src.original_date = from_date
+                src.date = to_date
+            else:
+                session.add(models.Visit(property_id=property_id, date=to_date,
+                                         status="due", original_date=from_date))
     session.commit()
     start = from_date - timedelta(days=from_date.weekday())
     return RedirectResponse(f"/week?start={start}", status_code=303)

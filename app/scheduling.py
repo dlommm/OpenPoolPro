@@ -112,7 +112,11 @@ def stops_for_date(session: Session, d: date) -> list[Stop]:
     for p in props:
         eff = effective_tech_id(p.assigned_tech_id, absences)
         v = visits.get(p.id)
-        if v is not None and v.original_date != d:
+        # A leftover DUE row on a day this property was moved AWAY from
+        # (p.id in suppressed) must not render — otherwise the stop shows on
+        # both the origin and destination day. Completed/skipped rows are
+        # always shown (never suppressed) so real history is never hidden.
+        if v is not None and v.original_date != d and not (v.status == "due" and p.id in suppressed):
             stops.append(Stop(property=p, visit=v, status=v.status,
                               moved_in=v.original_date is not None, effective_tech_id=eff))
         elif is_due(p, d, held=p.id in held_ids) and p.id not in suppressed:
