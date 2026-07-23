@@ -3,6 +3,19 @@ from sqlalchemy import text
 
 from app import addresses
 
+# Indexes on hot, frequently-filtered columns. `Base.metadata.create_all` only
+# creates these on brand-new tables, so an already-provisioned database needs
+# them added explicitly. CREATE INDEX IF NOT EXISTS is idempotent and cheap.
+INDEXES = [
+    ("ix_visits_property_id", "visits", "property_id"),
+    ("ix_visits_date", "visits", "date"),
+    ("ix_visits_status", "visits", "status"),
+    ("ix_visits_original_date", "visits", "original_date"),
+    ("ix_photos_entity", "photos", "entity_type, entity_id"),
+    ("ix_jobs_status", "jobs", "status"),
+    ("ix_audit_log_at", "audit_log", "at"),
+]
+
 COLUMNS = {
     "users": [
         ("username", "VARCHAR(40)"),
@@ -90,3 +103,12 @@ def run(engine) -> None:
                     conn.execute(text(
                         "UPDATE properties SET street=:s, city=:c, state=:st, zip=:z WHERE id=:id"),
                         {"s": d["street"], "c": d["city"], "st": d["state"], "z": d["zip"], "id": pid})
+
+        # Backfill indexes on existing databases (new DBs get them via create_all).
+        # Only create an index once every column it references exists — a
+        # partially-migrated legacy table may not have them all yet.
+        for name, table, columns in INDEXES:
+            present = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            wanted = [c.strip() for c in columns.split(",")]
+            if present and all(c in present for c in wanted):
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))

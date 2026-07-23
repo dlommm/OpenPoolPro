@@ -1,7 +1,7 @@
 from builtins import property as builtin_property
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, select
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -115,6 +115,9 @@ class Equipment(Base):
 
 class Photo(Base):
     __tablename__ = "photos"
+    # Every photo lookup filters (entity_type, entity_id) — index it so visit
+    # forms / job details / customer galleries don't scan the whole table.
+    __table_args__ = (Index("ix_photos_entity", "entity_type", "entity_id"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     entity_type: Mapped[str] = mapped_column(String(10))  # pool|visit|job|property
     entity_id: Mapped[int] = mapped_column(Integer)
@@ -209,9 +212,9 @@ class Chemical(Base):
 class Visit(Base):
     __tablename__ = "visits"
     id: Mapped[int] = mapped_column(primary_key=True)
-    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
-    date: Mapped[date] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(8), default="due")  # due|done|skipped
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(8), default="due", index=True)  # due|done|skipped
     rate_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tax_rate_ppm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     labor_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -224,7 +227,7 @@ class Visit(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    original_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    original_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     paid_cash: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -270,7 +273,7 @@ class Job(Base):
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
     title: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(10), default="open")  # open|scheduled|done
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open|scheduled|done
     scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     priority: Mapped[str] = mapped_column(String(8), default="normal")
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
@@ -525,7 +528,7 @@ class BackupCode(Base):
 class AuditLog(Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(primary_key=True)
-    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     action: Mapped[str] = mapped_column(String(60))
     detail: Mapped[str] = mapped_column(Text, default="")
