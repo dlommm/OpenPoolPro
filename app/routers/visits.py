@@ -128,7 +128,7 @@ def visit_form(request: Request, property_id: int, visit_date: date,
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
         "photos": photos, "rate": effective_rate_cents(session, v.property),
         "existing": existing, "show_money": request.state.user.can("view_money"),
-        "collect": collect})
+        "collect": collect, "can_cash": request.state.user.can("mark_cash")})
 
 
 @router.post("/visit/{visit_id}/complete")
@@ -161,6 +161,8 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     # A visit completed without ever being opened keeps started_at=None (unknown), by design — duration stays None and analytics must tolerate it.
     v.completed_by_id = request.state.user.id
     v.resolved = True
+    if request.state.user.can("mark_cash"):
+        v.paid_cash = form.get("paid_cash") == "1"
     v.rate_cents = effective_rate_cents(session, v.property)
     v.tax_rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
     _override = _f(form.get("labor_override_dollars"))

@@ -16,7 +16,8 @@
       {% if not u.active %}<span class="tag tag-safety">disabled</span>{% endif %}
       {% if u.role == "tech" %}
         {% for flag, label in [("view_money", "money"), ("manage_customers", "customers"),
-                               ("can_repairs", "repairs"), ("view_all_routes", "all routes")] %}
+                               ("can_repairs", "repairs"), ("view_all_routes", "all routes"),
+                               ("mark_cash", "cash")] %}
           {% if u|attr(flag) %}<span class="tag">{{ label }}</span>{% endif %}
         {% endfor %}
       {% endif %}

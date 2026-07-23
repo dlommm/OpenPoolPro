@@ -253,7 +253,7 @@ def job_detail(request: Request, jid: int, session: Session = Depends(get_sessio
     }
     return templates.TemplateResponse(request, "jobs/detail.html",
         {"j": j, "photos": photos, "show_money": request.state.user.can("view_money"),
-         "collect": collect})
+         "collect": collect, "can_cash": request.state.user.can("mark_cash")})
 
 
 @router.get("/jobs/{jid}/edit")
@@ -317,6 +317,8 @@ async def complete_job(jid: int, request: Request, session: Session = Depends(ge
     form = await request.form()
     j.status, j.completed_at = "done", models.utcnow()
     j.completed_by_id = request.state.user.id
+    if request.state.user.can("mark_cash"):
+        j.paid_cash = form.get("paid_cash") == "1"
     j.tax_rate_ppm = tax.resolve_rate_ppm(session, j.property.state)
     raw = (form.get("labor_override_dollars") or "").strip()
     if raw:

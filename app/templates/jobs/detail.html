@@ -82,6 +82,12 @@
     <div class="flex justify-between border-t border-seam pt-2 font-display text-lg font-bold uppercase tracking-wide">
       <span>Collect</span><span id="collect-total" class="money">{{ collect.total_cents | dollars }}</span>
     </div>
+    {% if can_cash %}
+    <label class="flex min-h-11 items-center gap-2.5 pt-1">
+      <input type="checkbox" name="paid_cash" value="1" class="h-5 w-5"
+             {{ "checked" if j.paid_cash }}>
+      <span class="text-sm">Paid in cash (kept off QuickBooks export)</span></label>
+    {% endif %}
   </div>
   <button class="btn-primary">Mark complete</button>
 </form>

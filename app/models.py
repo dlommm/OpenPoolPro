@@ -227,6 +227,7 @@ class Visit(Base):
     original_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    paid_cash: Mapped[bool] = mapped_column(Boolean, default=False)
     property: Mapped[Property] = relationship()
     chemicals: Mapped[list["VisitChemical"]] = relationship(back_populates="visit")
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
@@ -283,6 +284,7 @@ class Job(Base):
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     rule_id: Mapped[int | None] = mapped_column(ForeignKey("maintenance_rules.id"), nullable=True)
     hours: Mapped[float] = mapped_column(Float, default=0.0)
+    paid_cash: Mapped[bool] = mapped_column(Boolean, default=False)
     property: Mapped[Property] = relationship()
     assigned_tech: Mapped["User | None"] = relationship(foreign_keys=[assigned_tech_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
@@ -433,11 +435,12 @@ class User(Base):
     manage_customers: Mapped[bool] = mapped_column(Boolean, default=False)
     can_repairs: Mapped[bool] = mapped_column(Boolean, default=False)
     view_all_routes: Mapped[bool] = mapped_column(Boolean, default=False)
+    mark_cash: Mapped[bool] = mapped_column(Boolean, default=False)
     totp_secret: Mapped[str | None] = mapped_column(String(200), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     session_epoch: Mapped[int] = mapped_column(Integer, default=0)
 
-    PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes")
+    PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes", "mark_cash")
 
     def can(self, flag: str) -> bool:
         if self.role == "admin":

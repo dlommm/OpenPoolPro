@@ -11,6 +11,7 @@ COLUMNS = {
         ("manage_customers", "BOOLEAN DEFAULT 0"),
         ("can_repairs", "BOOLEAN DEFAULT 0"),
         ("view_all_routes", "BOOLEAN DEFAULT 0"),
+        ("mark_cash", "BOOLEAN DEFAULT 0"),
         ("totp_secret", "VARCHAR(200)"),
         ("totp_enabled", "BOOLEAN DEFAULT 0"),
         ("session_epoch", "INTEGER DEFAULT 0"),
@@ -34,6 +35,7 @@ COLUMNS = {
         ("hours", "FLOAT DEFAULT 0.0"),
         ("tax_rate_ppm", "INTEGER"),
         ("labor_override_cents", "INTEGER"),
+        ("paid_cash", "BOOLEAN DEFAULT 0"),
     ],
     "job_templates": [("est_hours", "FLOAT DEFAULT 1.0")],
     "job_template_prices": [("hours", "FLOAT DEFAULT 0.0")],
@@ -42,6 +44,7 @@ COLUMNS = {
         ("started_at", "DATETIME"),
         ("tax_rate_ppm", "INTEGER"),
         ("labor_override_cents", "INTEGER"),
+        ("paid_cash", "BOOLEAN DEFAULT 0"),
     ],
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),
