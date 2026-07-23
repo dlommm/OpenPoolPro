@@ -508,7 +508,7 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--color-ink);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .cr-sc-name.done { color: var(--color-mist); text-decoration: line-through; text-decoration-color: var(--color-seam); }
 .cr-sc-addr {
@@ -520,7 +520,7 @@
   color: var(--color-pool);
   font-size: 13px;
   font-family: var(--font-data);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .cr-sc-addr svg { flex: none; opacity: 0.9; }
 .cr-sc-addr .go {
@@ -749,7 +749,7 @@
 .cr-sr { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-seam); }
 .cr-sr:last-child { border-bottom: none; }
 .cr-sr .k { font-family: var(--font-data); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-mist); padding-top: 1px; }
-.cr-sr .v { font-family: var(--font-data); font-size: 13px; color: var(--color-ink); letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.cr-sr .v { font-family: var(--font-data); font-size: 13px; color: var(--color-ink); letter-spacing: 0.01em; overflow-wrap: break-word; }
 .cr-sr .v em { font-style: normal; color: var(--color-pool); }
 
 .cr-chem { width: 100%; border-collapse: collapse; font-family: var(--font-data); }
@@ -772,7 +772,7 @@
 .cr-ev.cy .nd { border-color: var(--color-pool); background: rgba(34, 211, 238, 0.2); }
 .cr-ev.gn .nd { border-color: var(--cr-green); background: rgba(52, 211, 153, 0.2); }
 .cr-ev.am .nd { border-color: var(--color-brass); background: rgba(245, 158, 11, 0.2); }
-.cr-ev .tt { font-size: 13px; font-weight: 600; color: var(--color-ink); overflow-wrap: anywhere; }
+.cr-ev .tt { font-size: 13px; font-weight: 600; color: var(--color-ink); overflow-wrap: break-word; }
 .cr-ev .dd { font-family: var(--font-data); font-size: 10.5px; color: var(--color-mist); letter-spacing: 0.06em; margin-top: 2px; }
 
 /* ---- money ---- */
@@ -824,7 +824,7 @@
   min-height: 44px;
 }
 .cr-inv-item > summary::-webkit-details-marker { display: none; }
-.cr-inv-row .cx { font-weight: 600; color: var(--color-ink); overflow-wrap: anywhere; }
+.cr-inv-row .cx { font-weight: 600; color: var(--color-ink); overflow-wrap: break-word; }
 .cr-inv-row .amt { font-family: var(--font-data); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-brass); }
 .cr-inv-break {
   padding: 0 14px 13px 14px;

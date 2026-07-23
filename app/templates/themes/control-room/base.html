@@ -107,7 +107,7 @@
     </details>
   </header>
   {% endblock %}
-  <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-5xl lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
+  <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
   <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");

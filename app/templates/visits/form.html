@@ -15,9 +15,9 @@
 
   <div>
     <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Readings</h2>
-    <div class="grid grid-cols-5 gap-2">
-      {% for name, label in [("fc","FC"),("ph","pH"),("ta","TA"),("cya","CYA"),("salt","Salt")] %}
-      <label class="block text-center"><span class="field-label font-data">{{ label }}</span>
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+      {% for name, label in [("fc","Free Chlorine"),("ph","pH"),("ta","Total Alkalinity"),("cya","Cyanuric Acid"),("salt","Salt")] %}
+      <label class="block text-center"><span class="field-label font-data leading-tight">{{ label }}</span>
         <input inputmode="decimal" name="{{ name }}" value="{{ v|attr(name) if v|attr(name) is not none else '' }}"
                hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="input changed delay:400ms"
                class="field text-center font-data text-lg"></label>
