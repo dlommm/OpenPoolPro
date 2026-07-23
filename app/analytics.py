@@ -12,7 +12,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, qbo
+from app import models, qbo, tax
 from app.qbo import _local_date
 from app.rates import effective_rate_cents
 
@@ -139,14 +139,14 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
 
     for v in _done_visits(session, start, end):
         r = row(_week_key(v.date))
-        r.labor_cents += v.rate_cents or 0
+        r.labor_cents += tax.effective_labor_cents(v)
         for vc in v.chemicals:
             r.chem_cost_cents += vc.total_cost_cents
             r.chem_billable_cents += qbo.billable_for_vc(vc, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(_week_key(_local_date(j.completed_at)))
-        r.job_cents += j.labor_cents
+        r.job_cents += tax.effective_labor_cents(j)
 
     out = list(rows.values())
     for r in out:
@@ -167,14 +167,14 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
     for v in _done_visits(session, start, end):
         cust = v.property.customer
         r = row(cust)
-        r.labor_cents += v.rate_cents or 0
+        r.labor_cents += tax.effective_labor_cents(v)
         r.visit_count += 1
         for vc in v.chemicals:
             chem_billable[cust.id] += qbo.billable_for_vc(vc, markup)
 
     for j in _done_jobs(session, start, end):
         r = row(j.property.customer)
-        r.job_cents += j.labor_cents
+        r.job_cents += tax.effective_labor_cents(j)
 
     for cid, r in rows.items():
         r.chem_billable_cents = chem_billable.get(cid, 0)
@@ -195,7 +195,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
     for v in _done_visits(session, start, end):
         key = v.completed_by_id
         r = row(v.completed_by)
-        r.total_cents += v.rate_cents or 0
+        r.total_cents += tax.effective_labor_cents(v)
         r.visit_count += 1
         for vc in v.chemicals:
             chem_billable[key] += qbo.billable_for_vc(vc, markup)
@@ -206,7 +206,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
     for j in _done_jobs(session, start, end):
         key = j.completed_by_id
         r = row(j.completed_by)
-        r.total_cents += j.labor_cents
+        r.total_cents += tax.effective_labor_cents(j)
         r.job_count += 1
         dur = j.duration_minutes
         if dur is not None:
@@ -224,14 +224,14 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
 def revenue_by_job_type(session: Session, start: date, end: date) -> list[TypeRow]:
     markup = _markup(session)
     visits = _done_visits(session, start, end)
-    visit_labor = sum(v.rate_cents or 0 for v in visits)
+    visit_labor = sum(tax.effective_labor_cents(v) for v in visits)
     visit_chem_billable = sum(qbo.billable_for_vc(vc, markup)
                                for v in visits for vc in v.chemicals)
     visits_total = visit_labor + visit_chem_billable
 
     jobs = _done_jobs(session, start, end)
-    repairs_total = sum(j.labor_cents for j in jobs if j.job_type == "repair")
-    service_total = sum(j.labor_cents for j in jobs if j.job_type == "service")
+    repairs_total = sum(tax.effective_labor_cents(j) for j in jobs if j.job_type == "repair")
+    service_total = sum(tax.effective_labor_cents(j) for j in jobs if j.job_type == "service")
 
     return [
         TypeRow(label="Visits", total_cents=visits_total),
