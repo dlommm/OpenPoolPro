@@ -91,13 +91,20 @@
 
   function fmt(cents) { return "$" + (cents / 100).toFixed(2); }
 
+  function roundHalfEven(x) {
+    var f = Math.floor(x), d = x - f;
+    if (d < 0.5) return f;
+    if (d > 0.5) return f + 1;
+    return f % 2 === 0 ? f : f + 1;
+  }
+
   function recompute() {
     if (!serviceEl) return;
     var service = parseFloat(serviceEl.value);
     var serviceCents = (isFinite(service) && service >= 0) ? Math.round(service * 100) : 0;
 
     var taxable = collect.tax_labor ? serviceCents : 0;
-    var taxCents = Math.round(taxable * collect.rate_ppm / 1000000);
+    var taxCents = roundHalfEven(taxable * collect.rate_ppm / 1000000);
     var totalCents = serviceCents + taxCents;
 
     if (taxEl) taxEl.textContent = fmt(taxCents);
