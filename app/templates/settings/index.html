@@ -172,6 +172,21 @@
           </form>
         </div>
 
+        <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Business info on contracts &amp; invoices</h2>
+          <p class="mb-2 text-sm text-mist">Your company name and contact details as they print on generated contracts and invoices. This is the same company profile used across the app &mdash; nothing is hardcoded.</p>
+          <form method="post" action="/settings/company" class="grid gap-2 sm:grid-cols-2">
+            {% for key, ph in [("business_name","Business name"),("company_address","Address"),
+                               ("company_phone","Phone"),("company_email","Email"),
+                               ("company_license","License #")] %}
+            <label class="block text-sm{% if key in ('business_name','company_address') %} sm:col-span-2{% endif %}">
+              <span class="mb-1 block text-mist">{{ ph }}</span>
+              <input name="{{ key }}" value="{{ company[key] }}" placeholder="{{ ph }}" class="field"></label>
+            {% endfor %}
+            <button class="btn-secondary mt-1 w-full sm:col-span-2">Save business info</button>
+          </form>
+        </div>
+
         <div class="card p-4">
           <h2 class="set-h">Chemical markup</h2>
           <form method="post" action="/settings/general" class="space-y-2">
