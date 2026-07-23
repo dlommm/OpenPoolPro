@@ -142,26 +142,33 @@ def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
     half_open_close_cents = open_close / 2
 
     if tax_rate_ppm:
-        season_tax_cents = tax.tax_cents(season_total_cents, tax_rate_ppm)
-        season_incl_tax_cents = season_total_cents + season_tax_cents
+        # Tax the concrete fixed items: the weekly season total AND openings/closings.
+        taxable_total_cents = season_total_cents + open_close
+        total_tax_cents = tax.tax_cents(taxable_total_cents, tax_rate_ppm)
+        total_incl_tax_cents = taxable_total_cents + total_tax_cents
+        open_close_text = (
+            f"${_d(open_close)} (${half_open_close_cents / 100:,.2f} each)"
+        )
         weekly_line = (
             f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "
             f"(plus chemicals)"
         )
     else:
+        open_close_text = (
+            f"${_d(open_close)} plus tax (${half_open_close_cents / 100:,.2f} each)"
+        )
         weekly_line = (
             f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "
             "(plus tax & chemicals)"
         )
 
     rows = [
-        ["Openings & Closings",
-         f"${_d(open_close)} plus tax (${half_open_close_cents / 100:,.2f} each)"],
+        ["Openings & Closings", open_close_text],
         [f"{weeks}-week pool service", weekly_line],
     ]
     if tax_rate_ppm:
-        rows.append(["Sales Tax", f"${_d(season_tax_cents)}"])
-        rows.append(["Season total incl. tax", f"${_d(season_incl_tax_cents)}"])
+        rows.append(["Sales Tax", f"${_d(total_tax_cents)}"])
+        rows.append(["Total incl. tax", f"${_d(total_incl_tax_cents)}"])
     rows.extend([
         ["Additional weeks",
          f"Any additional weeks of service over the {weeks} weeks as discussed above, "

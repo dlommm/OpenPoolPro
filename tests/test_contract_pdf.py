@@ -137,17 +137,18 @@ def test_render_contract_default_tax_rate_omits_sales_tax_line():
 
 
 def test_render_contract_with_tax_rate_shows_computed_sales_tax():
-    """NJ property with tax enabled (6.625% -> 66250 ppm): the season total
-    (16 weeks x $50.00 = $800.00) must produce a concrete Sales Tax figure
-    of $53.00 and a season-incl-tax total of $853.00."""
+    """NJ property with tax enabled (6.625% -> 66250 ppm): the taxable total is
+    the weekly season (16 x $50.00 = $800.00) PLUS openings/closings ($200.00)
+    = $1,000.00, producing a concrete Sales Tax of $66.25 and a Total incl. tax
+    of $1,066.25."""
     contract = _contract()
     prop = _prop(state="NJ")
     pdf_bytes = render_contract(contract, _pool(), prop, _customer(), _company(),
                                  tax_rate_ppm=66250)
     text = _text(pdf_bytes)
     assert "Sales Tax" in text
-    # season total = 16 * $50.00 = $800.00; tax = 800.00 * 0.06625 = $53.00
-    assert "53.00" in text
-    # season total incl. tax = $800.00 + $53.00 = $853.00
-    assert "853.00" in text
+    # taxable = season $800.00 + open/close $200.00 = $1,000.00; tax = $66.25
+    assert "66.25" in text
+    # total incl. tax = $1,000.00 + $66.25 = $1,066.25
+    assert "1,066.25" in text
     assert "incl. tax" in text
