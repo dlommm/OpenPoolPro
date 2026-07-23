@@ -369,6 +369,14 @@ def reopen_job(jid: int, session: Session = Depends(get_session)):
     return RedirectResponse(f"/jobs/{jid}", status_code=303)
 
 
+@router.post("/jobs/{jid}/notes")
+def update_job_notes(jid: int, notes: str = Form(""), session: Session = Depends(get_session)):
+    j = get_or_404(session, models.Job, jid)
+    j.notes = notes
+    session.commit()
+    return RedirectResponse(f"/jobs/{jid}", status_code=303)
+
+
 @router.post("/jobs/{jid}/tasks/{tid}/toggle")
 def toggle_task(jid: int, tid: int, session: Session = Depends(get_session)):
     task = get_or_404(session, models.JobTask, tid)

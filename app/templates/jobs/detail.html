@@ -29,6 +29,13 @@
 </div>
 {% endif %}
 
+<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Notes</h2>
+<form method="post" action="/jobs/{{ j.id }}/notes" class="mb-4 space-y-2">
+  <textarea name="notes" rows="3" placeholder="Gate codes, dog warnings, anything the next tech should know…"
+            class="field w-full">{{ j.notes }}</textarea>
+  <button class="btn-secondary w-full">Save notes</button>
+</form>
+
 <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
   {% for ph in photos %}
   <div class="relative h-20 w-20">
