@@ -213,6 +213,8 @@ class Visit(Base):
     date: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(8), default="due")  # due|done|skipped
     rate_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tax_rate_ppm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    labor_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fc: Mapped[float | None] = mapped_column(Float, nullable=True)
     ph: Mapped[float | None] = mapped_column(Float, nullable=True)
     ta: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -271,6 +273,8 @@ class Job(Base):
     scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     priority: Mapped[str] = mapped_column(String(8), default="normal")
     labor_cents: Mapped[int] = mapped_column(Integer, default=0)
+    tax_rate_ppm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    labor_override_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -473,6 +477,8 @@ class Invoice(Base):
     period_year: Mapped[int] = mapped_column(Integer)
     period_month: Mapped[int] = mapped_column(Integer)
     total_cents: Mapped[int] = mapped_column(Integer)
+    subtotal_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tax_cents: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(8), default="draft")  # draft|sent|void
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     pdf_filename: Mapped[str] = mapped_column(String(200))
@@ -496,6 +502,13 @@ def set_setting(session, key: str, value: str) -> None:
         row.value = value
     else:
         session.add(Setting(key=key, value=value))
+
+
+class TaxRate(Base):
+    __tablename__ = "tax_rates"
+    state: Mapped[str] = mapped_column(String(2), primary_key=True)  # uppercase 2-letter
+    rate_ppm: Mapped[int] = mapped_column(Integer, default=0)
+    overridden: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class BackupCode(Base):

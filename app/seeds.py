@@ -90,6 +90,20 @@ ROLE_SEED = {
 }
 
 
+def seed_tax_rates(session: Session) -> None:
+    """Insert missing state rows; refresh non-overridden rows to bundled seed;
+    leave owner-overridden rows untouched."""
+    from app.tax import parse_percent
+    from app.tax_data import STATE_SALES_TAX
+    for state, pct in STATE_SALES_TAX.items():
+        seed_ppm = parse_percent(str(pct))
+        row = session.get(models.TaxRate, state)
+        if row is None:
+            session.add(models.TaxRate(state=state, rate_ppm=seed_ppm, overridden=False))
+        elif not row.overridden:
+            row.rate_ppm = seed_ppm
+
+
 def run(engine) -> None:
     with Session(engine) as s:
         if not s.scalars(select(models.Chemical)).first():
@@ -133,4 +147,5 @@ def run(engine) -> None:
         for chem in s.scalars(select(models.Chemical)).all():
             if chem.role == "other" and chem.name in ROLE_SEED:
                 chem.role, chem.strength_pct = ROLE_SEED[chem.name]
+        seed_tax_rates(s)
         s.commit()

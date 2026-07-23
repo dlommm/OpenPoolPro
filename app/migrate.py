@@ -32,12 +32,16 @@ COLUMNS = {
         ("started_at", "DATETIME"),
         ("rule_id", "INTEGER REFERENCES maintenance_rules(id)"),
         ("hours", "FLOAT DEFAULT 0.0"),
+        ("tax_rate_ppm", "INTEGER"),
+        ("labor_override_cents", "INTEGER"),
     ],
     "job_templates": [("est_hours", "FLOAT DEFAULT 1.0")],
     "job_template_prices": [("hours", "FLOAT DEFAULT 0.0")],
     "visits": [
         ("completed_by_id", "INTEGER REFERENCES users(id)"),
         ("started_at", "DATETIME"),
+        ("tax_rate_ppm", "INTEGER"),
+        ("labor_override_cents", "INTEGER"),
     ],
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),
@@ -53,6 +57,10 @@ COLUMNS = {
     "pools": [("kind", "VARCHAR(8) DEFAULT 'pool'"), ("gallons_override", "INTEGER")],
     "size_presets": [("ref_gallons", "INTEGER")],
     "rate_tiers": [("kind", "VARCHAR(8) DEFAULT 'pool'")],
+    "invoices": [
+        ("subtotal_cents", "INTEGER"),
+        ("tax_cents", "INTEGER DEFAULT 0"),
+    ],
 }
 
 
