@@ -176,11 +176,19 @@ def _jobs_section(data: invoicing.InvoiceData):
 
 
 def _total_table(data: invoicing.InvoiceData) -> Table:
-    table = Table([[Paragraph("<b>Total due</b>", _TABLE_HEADER_STYLE),
-                    Paragraph(f"<b>{_money(data.total_cents)}</b>", _TABLE_HEADER_STYLE)]],
-                   colWidths=[5 * inch, 1.5 * inch])
+    rows = []
+    tax = getattr(data, "tax_cents", 0) or 0
+    if tax:
+        subtotal = getattr(data, "subtotal_cents", data.total_cents - tax)
+        rows.append([Paragraph("Subtotal", _TABLE_CELL_STYLE),
+                     Paragraph(_money(subtotal), _TABLE_CELL_STYLE)])
+        rows.append([Paragraph("Sales Tax", _TABLE_CELL_STYLE),
+                     Paragraph(_money(tax), _TABLE_CELL_STYLE)])
+    rows.append([Paragraph("<b>Total due</b>", _TABLE_HEADER_STYLE),
+                 Paragraph(f"<b>{_money(data.total_cents)}</b>", _TABLE_HEADER_STYLE)])
+    table = Table(rows, colWidths=[5 * inch, 1.5 * inch])
     table.setStyle(TableStyle([
-        ("LINEABOVE", (0, 0), (-1, 0), 1, colors.black),
+        ("LINEABOVE", (0, len(rows) - 1), (-1, len(rows) - 1), 1, colors.black),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
     ]))
