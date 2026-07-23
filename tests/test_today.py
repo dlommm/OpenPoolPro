@@ -29,7 +29,7 @@ def test_today_lists_stops_and_jobs(client, engine):
     assert "Fix light" in html
     assert "0 of 1 done" in html
     assert "Weekly service" in html
-    assert "Jobs today" in html
+    assert "Service / Jobs today" in html
 
 
 def test_today_has_google_maps_fallback_link(client, engine):
