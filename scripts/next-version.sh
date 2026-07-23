@@ -29,7 +29,7 @@ bodies=$(git log "$range" --format='%B' 2>/dev/null || true)
 
 bump=none
 if printf '%s\n' "$subjects" | grep -qE '^[a-z]+(\([^)]+\))?!:' \
-   || printf '%s\n' "$bodies" | grep -qE 'BREAKING[ -]CHANGE'; then
+   || printf '%s\n' "$bodies" | grep -qE '^BREAKING[ -]CHANGE:'; then
   bump=major
 elif printf '%s\n' "$subjects" | grep -qE '^feat(\([^)]+\))?:'; then
   bump=minor

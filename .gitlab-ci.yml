@@ -20,6 +20,7 @@ test:
   image: python:3.12-slim
   variables:
     TZ: "America/New_York"
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
@@ -32,13 +33,23 @@ test:
     # anchor the clock to New York so date.today() matches business_today().
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends tzdata
     - ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
+  cache:
+    key:
+      files:
+        - requirements-dev.txt
+    paths:
+      - .cache/pip
   script:
-    - pip install --no-cache-dir -r requirements.txt
+    - pip install -r requirements-dev.txt
     - python -m pytest -q
 
 release:
   stage: release
   image: docker:27-cli
+  # Serialize releases: two quick merges to main otherwise run concurrent
+  # release jobs that compute the SAME version, race to push :latest, and one's
+  # duplicate-tag POST /releases 409s the pipeline red for already-shipped code.
+  resource_group: release
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   variables:
@@ -50,8 +61,10 @@ release:
     - eval "$(bash scripts/next-version.sh)"
     - echo "computed VERSION=$VERSION BUMP=$BUMP"
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
-    # Always refresh :latest (carries the baked APP_VERSION).
-    - docker build --build-arg APP_VERSION="$VERSION" -t "$CI_REGISTRY_IMAGE:latest" .
+    # Always refresh :latest (carries the baked APP_VERSION). --pull so base
+    # image security patches (python:3.12-slim) reach production instead of
+    # reusing a months-old cached base on the self-hosted runner.
+    - docker build --pull --build-arg APP_VERSION="$VERSION" -t "$CI_REGISTRY_IMAGE:latest" .
     - docker push "$CI_REGISTRY_IMAGE:latest"
     # On a real version bump: push the versioned image and create the tag + Release.
     # POST /releases with a `ref` creates the git tag `$VERSION` at this commit AND the

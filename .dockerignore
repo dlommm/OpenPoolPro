@@ -3,4 +3,13 @@
 data
 tests
 docs
+# A bare `__pycache__` only matches at the context root; `**/` catches the
+# nested ones (app/__pycache__ etc.) that COPY app ./app would otherwise ship.
 __pycache__
+**/__pycache__
+.pytest_cache
+assets
+.env
+.env.example
+.DS_Store
+*.pyc

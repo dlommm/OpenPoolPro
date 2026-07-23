@@ -3,7 +3,12 @@
 #
 # SETUP (do these before starting):
 #   1. Create the appdata folder:  /mnt/user/appdata/openpoolpro
-#   2. Edit APP_PASSWORD and SECRET_KEY below (both REQUIRED — container won't be safe with defaults).
+#      IMPORTANT: use a CACHE-ONLY (or cache-preferred) share, or point the
+#      volume at the disk directly (/mnt/cache/appdata/openpoolpro). SQLite in
+#      WAL mode corrupts on Unraid's /mnt/user FUSE layer once the mover runs —
+#      the same failure that bites Plex/Sonarr appdata.
+#   2. Edit APP_PASSWORD and SECRET_KEY below (both REQUIRED — the container now
+#      REFUSES TO START on the placeholder values, so this is not optional).
 #      Generate a SECRET_KEY on the Unraid terminal:  openssl rand -hex 32
 #   3. Adjust the host port (left side of 8000:8000) if 8000 is taken.
 #   4. Start the stack. Open the WebUI from the Unraid Docker tab.
@@ -24,7 +29,9 @@ services:
       - "8000:8000"                 # host:container — change the host side if 8000 is in use
 
     volumes:
-      - /mnt/user/appdata/openpoolpro:/data   # SQLite DB, uploaded logo, generated invoice PDFs
+      # Prefer a direct-disk path over the /mnt/user FUSE share for SQLite/WAL
+      # safety (see SETUP step 1):
+      - /mnt/cache/appdata/openpoolpro:/data   # SQLite DB, uploaded logo, generated invoice PDFs
 
     environment:
       # --- REQUIRED ---
@@ -36,8 +43,10 @@ services:
       TZ: "America/New_York"         # container OS timezone — keep the two in sync
       RUN_SCHEDULER: "1"             # run the background scheduler in this container
 
-      # --- Enable if you put OpenPoolPro behind an HTTPS reverse proxy (SWAG/NPM) ---
-      # COOKIE_SECURE: "1"
+      # --- Behind an HTTPS reverse proxy (SWAG/NPM): keep this ON so the 90-day
+      #     session cookie is marked Secure and never travels over plain HTTP.
+      #     Set to "0" ONLY if you access the app directly over http:// on the LAN. ---
+      COOKIE_SECURE: "1"
 
       # --- Optional: outbound email (invoices, notifications) ---
       # SMTP_HOST: "smtp.example.com"
