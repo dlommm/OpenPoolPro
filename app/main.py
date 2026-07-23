@@ -117,6 +117,11 @@ templates.env.globals["low_stock_count"] = _low_stock_count
 
 def create_app(engine=None) -> FastAPI:
     app = FastAPI(title="OpenPoolPro")
+    # A real boot builds its own file-backed engine; the test suite always
+    # injects an in-memory engine. Enforce secure secrets only on the former,
+    # so a deployment can never run on the shipped placeholder SECRET_KEY.
+    if engine is None:
+        config.validate_secrets()
     app.state.engine = engine or make_engine()
     Base.metadata.create_all(app.state.engine)
     from app import migrate
@@ -205,6 +210,16 @@ def create_app(engine=None) -> FastAPI:
 
     @app.get("/health")
     def health():
+        # Touch the database so the healthcheck fails when SQLite is locked,
+        # corrupt, or the /data volume didn't mount — otherwise the container
+        # reports "healthy" while every real request 500s.
+        from sqlalchemy import text as _text
+        try:
+            with app.state.engine.connect() as conn:
+                conn.execute(_text("SELECT 1"))
+        except Exception:
+            return Response('{"ok": false}', status_code=503,
+                            media_type="application/json")
         return {"ok": True}
 
     @app.get("/manifest.json", include_in_schema=False)
@@ -296,5 +311,13 @@ def create_app(engine=None) -> FastAPI:
                                     args=[app.state.engine])
         app.state.scheduler.add_job(mailer.flush_job, "interval", minutes=5,
                                     args=[app.state.engine])
+
+        @app.on_event("shutdown")
+        def _stop_scheduler():
+            # Stop APScheduler on SIGTERM (docker restart/redeploy) so a running
+            # backup or mailer flush finishes instead of being killed mid-write.
+            sched = getattr(app.state, "scheduler", None)
+            if sched is not None:
+                sched.shutdown(wait=True)
 
     return app
