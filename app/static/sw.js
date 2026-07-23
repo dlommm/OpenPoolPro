@@ -181,15 +181,27 @@ async function replay() {
   }
   entries.sort((a, b) => a.id - b.id);
   for (const entry of entries) {
+    let resp;
     try {
-      await fetch(entry.url, {
+      resp = await fetch(entry.url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: entry.body,
         credentials: "include",
       });
-      await queueDelete(entry.id);
     } catch (err) {
+      break;  // genuine network error — went offline again; keep this + the rest queued
+    }
+    // Only drop the entry on a real success. An expired/invalidated session
+    // (e.g. the owner ended sessions while a tech was offline) makes the auth
+    // middleware answer this POST with a 303 -> /login, which fetch follows to
+    // a 200 login page. Deleting on that would silently destroy the tech's
+    // completed-visit readings. Keep it queued (and stop) so it flushes once
+    // the tech logs back in; never delete on a redirect-to-login or non-2xx.
+    const finalPath = (() => { try { return new URL(resp.url).pathname; } catch { return ""; } })();
+    if (resp.ok && finalPath !== "/login") {
+      await queueDelete(entry.id);
+    } else {
       break;
     }
   }
