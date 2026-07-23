@@ -86,8 +86,74 @@
   <label class="block"><span class="field-label">Notes</span>
     <textarea name="notes" class="field min-h-24 py-2">{{ v.notes }}</textarea></label>
 
+  <div class="card p-3.5 space-y-2">
+    <h2 class="font-display text-lg font-bold uppercase tracking-wide">Amount to collect</h2>
+    <label class="block">
+      <span class="field-label">Service <span class="money">({{ collect.service_cents | dollars }} default)</span></span>
+      <div class="money-in"><span>$</span>
+        <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
+               value="{{ '%.2f'|format(collect.service_cents / 100) }}"
+               class="field font-data font-semibold"></div>
+    </label>
+    <div class="flex justify-between font-data text-sm text-mist">
+      <span>Chemicals</span><span id="collect-chems" class="money">{{ collect.chem_cents | dollars }}</span>
+    </div>
+    <div class="flex justify-between font-data text-sm text-mist">
+      <span>Tax</span><span id="collect-tax" class="money">{{ collect.tax_cents | dollars }}</span>
+    </div>
+    <div class="flex justify-between border-t border-seam pt-2 font-display text-lg font-bold uppercase tracking-wide">
+      <span>Collect</span><span id="collect-total" class="money">{{ collect.total_cents | dollars }}</span>
+    </div>
+  </div>
+
   <button class="btn-primary">Mark done</button>
 </form>
+
+<script type="application/json" id="collect-data">{{ collect | tojson }}</script>
+<script>
+(function () {
+  var dataEl = document.getElementById("collect-data");
+  if (!dataEl) return;
+  var collect;
+  try { collect = JSON.parse(dataEl.textContent); } catch (e) { return; }
+  var serviceEl = document.getElementById("collect-service-input");
+  var chemsEl = document.getElementById("collect-chems");
+  var taxEl = document.getElementById("collect-tax");
+  var totalEl = document.getElementById("collect-total");
+
+  function fmt(cents) { return "$" + (cents / 100).toFixed(2); }
+
+  function recompute() {
+    if (!serviceEl) return;
+    var service = parseFloat(serviceEl.value);
+    var serviceCents = (isFinite(service) && service >= 0) ? Math.round(service * 100) : 0;
+
+    var chemCents = 0;
+    document.querySelectorAll("[data-chem-input]").forEach(function (input) {
+      var amt = parseFloat(input.value);
+      if (!isFinite(amt) || amt <= 0) return;
+      var price = collect.chem_prices[input.dataset.chemInput];
+      if (price === undefined) return;
+      chemCents += price * amt;
+    });
+    chemCents = Math.round(chemCents);
+
+    var taxable = (collect.tax_weekly ? serviceCents : 0) + (collect.tax_chems ? chemCents : 0);
+    var taxCents = Math.round(taxable * collect.rate_ppm / 1000000);
+    var totalCents = serviceCents + chemCents + taxCents;
+
+    if (chemsEl) chemsEl.textContent = fmt(chemCents);
+    if (taxEl) taxEl.textContent = fmt(taxCents);
+    if (totalEl) totalEl.textContent = fmt(totalCents);
+  }
+
+  if (serviceEl) serviceEl.addEventListener("input", recompute);
+  document.querySelectorAll("[data-chem-input]").forEach(function (input) {
+    input.addEventListener("input", recompute);
+  });
+  recompute();
+})();
+</script>
 
 <form method="post" action="/visit/{{ v.id }}/skip" class="mt-3 flex gap-2">
   <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">

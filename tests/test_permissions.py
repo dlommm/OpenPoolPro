@@ -92,7 +92,9 @@ def test_money_hidden_from_rendered_html(client, tech_client):
     assert "$" not in html          # no rates anywhere
     assert 'href="/money"' not in html
     visit_html = t.get("/visit/1/2026-07-13").text
-    assert "/visit" in visit_html and "$" not in visit_html
+    assert "/visit" in visit_html
+    assert "Collect" in visit_html           # collect price IS shown to techs now
+    assert "cost" not in visit_html.lower()  # but never chemical cost/markup
 
 
 def test_admin_sees_money_everywhere(client):

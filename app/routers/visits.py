@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, mailer, models, tax
+from app import dosing, inventory, mailer, models, qbo, tax
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -89,10 +89,46 @@ def visit_form(request: Request, property_id: int, visit_date: date,
     photos = session.scalars(select(models.Photo).where(
         models.Photo.entity_type == "visit", models.Photo.entity_id == v.id)).all()
     existing = {vc.chemical_id: vc for vc in v.chemicals}
+    # Collect-price context (Task 10) -- the ONE sanctioned money-gate
+    # exception: the completer (INCLUDING a tech, who normally sees no
+    # money) needs the final customer PRICE to collect on this visit.
+    # Exposes PRICE ONLY -- never cost, never markup -- so it is deliberately
+    # NOT wrapped in show_money.
+    markup_s = models.get_setting(session, "chem_markup_percent", "0")
+    try:
+        markup = float(markup_s)
+    except ValueError:
+        markup = 0.0
+    service_cents = v.rate_cents if v.rate_cents is not None else effective_rate_cents(session, v.property)
+    if v.labor_override_cents is not None:
+        service_cents = v.labor_override_cents
+    chem_prices = {c.id: qbo.line_billable_cents(c.cost_per_unit_cents, qbo.effective_markup(c, markup))
+                   for c in chems}
+    tax_weekly = models.get_setting(session, "tax_weekly", "1") == "1"
+    tax_chems = models.get_setting(session, "tax_chems", "1") == "1"
+    # Initial preview totals (pre-JS render): sum the already-entered/prefilled
+    # chem amounts at current catalog prices, so the numbers on the page are
+    # correct even before the live-recompute JS runs.
+    chem_cents = sum(round(chem_prices.get(cid, 0) * vc.amount) for cid, vc in existing.items())
+    rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
+    taxable = (service_cents if tax_weekly else 0) + (chem_cents if tax_chems else 0)
+    collect_tax_cents = tax.tax_cents(taxable, rate_ppm)
+    collect = {
+        "service_cents": service_cents,
+        "chem_prices": chem_prices,
+        "chem_cents": chem_cents,
+        "tax_cents": collect_tax_cents,
+        "total_cents": service_cents + chem_cents + collect_tax_cents,
+        "rate_ppm": rate_ppm,
+        "tax_labor": models.get_setting(session, "tax_labor", "1") == "1",
+        "tax_chems": tax_chems,
+        "tax_weekly": tax_weekly,
+    }
     return templates.TemplateResponse(request, "visits/form.html", {
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
         "photos": photos, "rate": effective_rate_cents(session, v.property),
-        "existing": existing, "show_money": request.state.user.can("view_money")})
+        "existing": existing, "show_money": request.state.user.can("view_money"),
+        "collect": collect})
 
 
 @router.post("/visit/{visit_id}/complete")
