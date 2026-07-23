@@ -31,8 +31,8 @@
  *   }
  *   :root[data-theme="X"][data-mode="dark"] { --color-*: ...; }
  *
- * A dark-DEFAULT theme (e.g. control-room, "COMMITTED DARK — no light
- * mode" today) adding a LIGHT counterpart later MIRRORS this instead:
+ * A dark-DEFAULT theme (e.g. control-room — dark is its default palette)
+ * adding a LIGHT counterpart MIRRORS this instead:
  *
  *   @media (prefers-color-scheme: light) {
  *     :root[data-theme="X"]:not([data-mode="dark"]) { --color-*: ...; }

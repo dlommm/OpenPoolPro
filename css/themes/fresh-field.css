@@ -1,10 +1,16 @@
 /* fresh-field.css — Fresh-Field theme. OWNED BY THE FRESH-FIELD AGENT.
  *
- * Bright modern-SaaS field-ops direction. Light + dark (theme-aware): the
- * light tokens live under :root[data-theme="fresh-field"]; the dark variant
- * is applied via @media (prefers-color-scheme: dark) so dark follows the OS
- * (the real app has no manual light/dark toggle — data-theme carries the
- * THEME name, not light/dark).
+ * Bright modern-SaaS field-ops direction. Light-DEFAULT, with a DARK
+ * counterpart palette (section 2) that follows the app-wide light/dark MODE
+ * mechanism documented at the top of css/base.css:
+ *   - no override            -> follow the device (`prefers-color-scheme`)
+ *   - <html data-mode="dark"> -> forced dark regardless of device
+ *   - <html data-mode="light"> -> forced light regardless of device
+ * Section 2's @media block is GUARDED with `:not([data-mode="light"])` (so a
+ * user forcing light on a dark OS gets the light palette), and mirrored by an
+ * identical `[data-mode="dark"]` forced block (so the header toggle's forced
+ * dark works even on a light-OS device). Same hue family in both palettes
+ * (teal/aqua pool, green money, coral safety).
  *
  * RULES honored: no @theme block here (token NAMES live in css/base.css); this
  * file only sets token VALUES under the theme scope + theme-scoped component
@@ -66,10 +72,17 @@
 }
 
 /* ============================================================
-   2. ROLE TOKENS + ff- TOKENS  — DARK (follows the OS)
-   ============================================================ */
+   2. ROLE TOKENS + ff- TOKENS  — DARK
+   ============================================================
+   Guarded so a user forcing light overrides the device preference (see the
+   MODE mechanism doc in css/base.css). Both selectors below get IDENTICAL
+   token values — duplicated rather than shared via nesting, matching the
+   convention set by css/themes/warm-coastal.css section 4. --ff-aqua,
+   --ff-teal, --ff-mint, --ff-coral and --ff-grad are intentionally NOT
+   redefined here: their light values already clear WCAG AA on the dark
+   tile/surface (verified), so they carry over unchanged in both modes. */
 @media (prefers-color-scheme: dark) {
-  :root[data-theme="fresh-field"] {
+  :root[data-theme="fresh-field"]:not([data-mode="light"]) {
     --color-tile: #0B1220;
     --color-surface: #131C2B;
     --color-ink: #E6EDF3;
@@ -100,6 +113,37 @@
     --ff-shadow-lg: 0 22px 46px rgba(0, 0, 0, 0.55);
     --ff-glow-aqua: 0 0 0 4px rgba(6, 182, 212, 0.22);
   }
+}
+:root[data-theme="fresh-field"][data-mode="dark"] {
+  --color-tile: #0B1220;
+  --color-surface: #131C2B;
+  --color-ink: #E6EDF3;
+  --color-pool: #14B8A6;
+  --color-pooldeep: #0F766E;
+  --color-shallow: #12312C;
+  --color-brass: #10B981;
+  --color-safety: #FB7185;
+  --color-seam: #1E293B;
+  --color-mist: #94A3B8;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.40), 0 8px 20px rgba(0, 0, 0, 0.35);
+
+  --ff-money: #10B981;
+  --ff-surface-2: #0E1728;
+  --ff-ink-2: #A7BACE;
+  --ff-ink-3: #6B7F97;
+
+  --ff-tint-aqua: rgba(6, 182, 212, 0.16);
+  --ff-tint-mint: rgba(52, 211, 153, 0.16);
+  --ff-tint-coral: rgba(251, 113, 133, 0.18);
+  --ff-tint-slate: rgba(148, 163, 184, 0.10);
+
+  --ff-grad-soft: linear-gradient(120deg, rgba(6, 182, 212, 0.22), rgba(20, 184, 166, 0.20));
+
+  --ff-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --ff-shadow-md: 0 8px 20px rgba(0, 0, 0, 0.45);
+  --ff-shadow-lg: 0 22px 46px rgba(0, 0, 0, 0.55);
+  --ff-glow-aqua: 0 0 0 4px rgba(6, 182, 212, 0.22);
 }
 
 /* ============================================================

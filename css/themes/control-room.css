@@ -1,6 +1,13 @@
 /* control-room.css — Control-Room theme. OWNED BY THE CONTROL-ROOM AGENT.
  *
- * Dark, mono-forward operations console. COMMITTED DARK — no light mode.
+ * Dark, mono-forward operations console. DARK-DEFAULT, with a LIGHT
+ * counterpart palette (section 5) that follows the app-wide light/dark MODE
+ * mechanism documented at the top of css/base.css. Since dark is the
+ * default here, the light palette MIRRORS warm-coastal's pattern:
+ *   @media (prefers-color-scheme: light) {
+ *     :root[data-theme="control-room"]:not([data-mode="dark"]) { ... }
+ *   }
+ *   :root[data-theme="control-room"][data-mode="light"] { ... }
  * Structure:
  *   1. Role tokens + --color-surface + fonts + theme-only cr- tokens (scoped).
  *   2. Body chrome (graphite bg + subtle cyan/amber glows).
@@ -9,6 +16,8 @@
  *      stop, page-title/eyebrow, waterline.
  *   4. Bespoke `cr-`-prefixed classes for the 4 hero screens' signature
  *      devices (gauge ring, ticked rule, dispatch rail, panels, tables …).
+ *   5. LIGHT counterpart palette + light-mode overrides for every hardcoded
+ *      (non-token) dark color/gradient/glow used in sections 2-4.
  *
  * RULES: no @theme block here (token NAMES live in base.css); token VALUES are
  * set under :root[data-theme="control-room"]; bespoke classes stay cr-prefixed.
@@ -876,4 +885,368 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="control-room"] .cr-sync::before,
   :root[data-theme="control-room"] .is-next .cr-node { animation: none !important; }
+}
+
+/* ============================================================
+   5. LIGHT COUNTERPART PALETTE
+   ============================================================
+   The block above (sections 1-4) is the DARK default. This section adds
+   control-room's LIGHT tokens under the MIRRORED pair of selectors the
+   app-wide mode mechanism uses for a dark-default theme (see css/base.css
+   header comment for the full convention):
+     - no override -> follow the device (`prefers-color-scheme: light`)
+     - data-mode="light" -> forced light regardless of device
+   Both selectors in the pair get IDENTICAL values (duplicated, matching the
+   no-CSS-nesting convention set by warm-coastal's dark section). Same hue
+   family as dark (cyan pool, amber brass/money, rose safety, cr-green
+   done), deepened so text/borders/icon fills clear WCAG AA on a light
+   background — cyan #22D3EE, amber #F59E0B, rose #FB7185 and mint #34D399
+   are all too pale to use as TEXT on white/pale-slate, so the light
+   palette uses cyan-800 / amber-800 / rose-700 / emerald-700 equivalents
+   instead. Computed contrast (ink #0F172A / tile #EAEFF4 / surface #FFFFFF):
+   ink/tile 15.8:1, mist/tile 6.6:1, pool/tile 6.3:1, brass/tile 6.1:1,
+   safety/tile 5.4:1, cr-green/tile 4.7:1 (all >= 4.5:1 AA); brass (amber,
+   ~25 deg hue) and safety (crimson, ~345 deg hue) stay clearly distinct.
+
+   AUDIT: sections 2-4 use ~35 hardcoded (non-token) rgba()/hex tints, glows
+   and gradients keyed to the DARK accent hues (cyan 34,211,238 / amber
+   245,158,11 / rose 251,113,133 / green 52,211,153) for body chrome, hero
+   glows, chip/pill/badge/node tints, and the segmented progress bar. Every
+   one of them gets a light-mode override below, recolored to the deepened
+   light accent RGB triples (pool 21,94,117 / brass 146,64,14 / safety
+   190,18,60 / green 4,120,87) at the SAME alpha the dark rule used, so the
+   light theme never shows a leftover neon-on-dark tint. The two exceptions,
+   left intentionally unconverted:
+     - `.cr-fchip:hover` border-color (#31485c, a literal dark-slate hex,
+       not a themed rgba) gets a literal light-slate replacement instead.
+     - `@keyframes cr-ring` (the "next" stop's pulse ring) is a named
+       keyframe, not scoped per-theme-per-mode; recoloring it would need a
+       CSS-variable-driven box-shadow or a second keyframe name, which is a
+       structural change out of scope for a token-value slice. Left as the
+       bright dark-cyan pulse in both modes — a decorative animated glow,
+       harmless (if slightly less punchy) on a light background.
+   The gauge-ring conic-gradient (today.html's inline `style="background:
+   {{ ring }}"`) and the route-ops legend swatches (inline `style="background:
+   var(--cr-green)"` etc.) already read var(--color-pool)/var(--cr-green)/
+   var(--color-safety)/var(--color-tile) — token-driven, so they re-theme for
+   free with no template changes.
+   ============================================================ */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="control-room"]:not([data-mode="dark"]) {
+    --color-ink: #0F172A;       /* dark slate primary text */
+    --color-tile: #EAEFF4;      /* cool pale-slate page background */
+    --color-surface: #FFFFFF;   /* white card / panel background */
+    --color-pool: #155E75;      /* deepened cyan (~6.3:1 on tile) */
+    --color-pooldeep: #164E63;  /* pressed / hover, deeper still */
+    --color-shallow: #D9F0F5;   /* pale cyan selected wash */
+    --color-brass: #92400E;     /* deepened amber money (~6.1:1 on tile) */
+    --color-safety: #BE123C;    /* deepened rose/crimson warnings (~5.4:1) */
+    --color-seam: #DCE3EA;      /* light hairline borders */
+    --color-mist: #475569;      /* mid-slate secondary text (~6.6:1) */
+
+    --cr-panel-2: #ECF1F5;      /* sunken/inset panel, a shade off white */
+    --cr-green: #047857;        /* deepened positive/done (~4.7:1 on tile) */
+
+    /* Light cards read with soft ink-tinted shadow, not hairline-only. */
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 24px -16px rgba(15, 23, 42, 0.16);
+  }
+
+  /* ---- Body chrome: recolor the glows to the deepened light accents ---- */
+  :root[data-theme="control-room"]:not([data-mode="dark"]) body {
+    background:
+      radial-gradient(1200px 520px at 82% -8%, rgba(21, 94, 117, 0.06), transparent 60%),
+      radial-gradient(900px 480px at 6% 4%, rgba(146, 64, 14, 0.045), transparent 55%),
+      var(--color-tile);
+  }
+  /* Brandmark halo: was a light halo for a near-black sidebar; a light
+     sidebar needs a faint DARK halo instead to keep the mark from
+     disappearing into a white/pale background. */
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-brand-mark {
+    filter: drop-shadow(0 0 0.5px rgba(15, 23, 42, 0.30));
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-navlink.is-active {
+    background: rgba(21, 94, 117, 0.10);
+    border-color: rgba(21, 94, 117, 0.28);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-sync {
+    border-color: rgba(146, 64, 14, 0.4);
+    background: rgba(146, 64, 14, 0.08);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-sync::before {
+    box-shadow: 0 0 0 3px rgba(146, 64, 14, 0.18);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .tag-safety {
+    border-color: rgba(190, 18, 60, 0.4);
+    background-color: rgba(190, 18, 60, 0.08);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-gauge-ring::after {
+    box-shadow: 0 0 22px rgba(21, 94, 117, 0.12);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-alert {
+    border-color: rgba(190, 18, 60, 0.35);
+    background: rgba(190, 18, 60, 0.07);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-fchip:hover {
+    border-color: #A9B7C3;
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-fchip.is-active {
+    border-color: rgba(21, 94, 117, 0.45);
+    background: rgba(21, 94, 117, 0.10);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .is-done .cr-node {
+    background: rgba(4, 120, 87, 0.14);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .is-next .cr-node {
+    background: rgba(21, 94, 117, 0.16);
+    box-shadow: 0 0 0 4px rgba(21, 94, 117, 0.12);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .is-missed .cr-node {
+    background: rgba(190, 18, 60, 0.14);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-stop.is-next .cr-stopcard {
+    border-color: rgba(21, 94, 117, 0.35);
+    box-shadow: 0 0 0 1px rgba(21, 94, 117, 0.10);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-stop.is-missed .cr-stopcard {
+    border-color: rgba(190, 18, 60, 0.3);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-chip.gate {
+    border-color: rgba(21, 94, 117, 0.28);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-chip.dog {
+    border-color: rgba(146, 64, 14, 0.32);
+    background: rgba(146, 64, 14, 0.07);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-chip.job {
+    border-color: rgba(21, 94, 117, 0.28);
+    background: rgba(21, 94, 117, 0.06);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-chip.rose {
+    border-color: rgba(190, 18, 60, 0.35);
+    background: rgba(190, 18, 60, 0.07);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-chip.am {
+    border-color: rgba(146, 64, 14, 0.32);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-pill.done {
+    border-color: rgba(4, 120, 87, 0.35);
+    background: rgba(4, 120, 87, 0.08);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-pill.next {
+    border-color: rgba(21, 94, 117, 0.4);
+    background: rgba(21, 94, 117, 0.10);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-pill.missed {
+    border-color: rgba(190, 18, 60, 0.4);
+    background: rgba(190, 18, 60, 0.10);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-hero {
+    background:
+      radial-gradient(520px 220px at 88% -20%, rgba(146, 64, 14, 0.08), transparent 60%),
+      var(--color-surface);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-segbar span.done {
+    background: linear-gradient(180deg, rgba(4, 120, 87, 0.9), rgba(4, 120, 87, 0.6));
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-segbar span.next {
+    background: linear-gradient(180deg, rgba(21, 94, 117, 0.95), rgba(21, 94, 117, 0.6));
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-segbar span.miss {
+    background: linear-gradient(180deg, rgba(190, 18, 60, 0.9), rgba(190, 18, 60, 0.55));
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-bar b {
+    background: linear-gradient(90deg, rgba(21, 94, 117, 0.55), var(--color-pool));
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-arow.warn .ic {
+    border-color: rgba(146, 64, 14, 0.3);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-arow.rose .ic {
+    border-color: rgba(190, 18, 60, 0.3);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-cust-id {
+    background:
+      radial-gradient(480px 180px at 90% -30%, rgba(21, 94, 117, 0.07), transparent 60%),
+      var(--color-surface);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-avatar {
+    background: rgba(21, 94, 117, 0.10);
+    border: 1px solid rgba(21, 94, 117, 0.3);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-jobc {
+    border: 1px solid rgba(21, 94, 117, 0.22);
+    background: rgba(21, 94, 117, 0.05);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-ev.cy .nd {
+    background: rgba(21, 94, 117, 0.2);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-ev.gn .nd {
+    background: rgba(4, 120, 87, 0.2);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-ev.am .nd {
+    background: rgba(146, 64, 14, 0.2);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-badge.cy {
+    border-color: rgba(21, 94, 117, 0.35);
+    background: rgba(21, 94, 117, 0.08);
+  }
+  :root[data-theme="control-room"]:not([data-mode="dark"]) .cr-badge.am {
+    border-color: rgba(146, 64, 14, 0.35);
+    background: rgba(146, 64, 14, 0.08);
+  }
+}
+
+:root[data-theme="control-room"][data-mode="light"] {
+  --color-ink: #0F172A;
+  --color-tile: #EAEFF4;
+  --color-surface: #FFFFFF;
+  --color-pool: #155E75;
+  --color-pooldeep: #164E63;
+  --color-shallow: #D9F0F5;
+  --color-brass: #92400E;
+  --color-safety: #BE123C;
+  --color-seam: #DCE3EA;
+  --color-mist: #475569;
+
+  --cr-panel-2: #ECF1F5;
+  --cr-green: #047857;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 24px -16px rgba(15, 23, 42, 0.16);
+}
+:root[data-theme="control-room"][data-mode="light"] body {
+  background:
+    radial-gradient(1200px 520px at 82% -8%, rgba(21, 94, 117, 0.06), transparent 60%),
+    radial-gradient(900px 480px at 6% 4%, rgba(146, 64, 14, 0.045), transparent 55%),
+    var(--color-tile);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-brand-mark {
+  filter: drop-shadow(0 0 0.5px rgba(15, 23, 42, 0.30));
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-navlink.is-active {
+  background: rgba(21, 94, 117, 0.10);
+  border-color: rgba(21, 94, 117, 0.28);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-sync {
+  border-color: rgba(146, 64, 14, 0.4);
+  background: rgba(146, 64, 14, 0.08);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-sync::before {
+  box-shadow: 0 0 0 3px rgba(146, 64, 14, 0.18);
+}
+:root[data-theme="control-room"][data-mode="light"] .tag-safety {
+  border-color: rgba(190, 18, 60, 0.4);
+  background-color: rgba(190, 18, 60, 0.08);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-gauge-ring::after {
+  box-shadow: 0 0 22px rgba(21, 94, 117, 0.12);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-alert {
+  border-color: rgba(190, 18, 60, 0.35);
+  background: rgba(190, 18, 60, 0.07);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-fchip:hover {
+  border-color: #A9B7C3;
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-fchip.is-active {
+  border-color: rgba(21, 94, 117, 0.45);
+  background: rgba(21, 94, 117, 0.10);
+}
+:root[data-theme="control-room"][data-mode="light"] .is-done .cr-node {
+  background: rgba(4, 120, 87, 0.14);
+}
+:root[data-theme="control-room"][data-mode="light"] .is-next .cr-node {
+  background: rgba(21, 94, 117, 0.16);
+  box-shadow: 0 0 0 4px rgba(21, 94, 117, 0.12);
+}
+:root[data-theme="control-room"][data-mode="light"] .is-missed .cr-node {
+  background: rgba(190, 18, 60, 0.14);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-stop.is-next .cr-stopcard {
+  border-color: rgba(21, 94, 117, 0.35);
+  box-shadow: 0 0 0 1px rgba(21, 94, 117, 0.10);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-stop.is-missed .cr-stopcard {
+  border-color: rgba(190, 18, 60, 0.3);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-chip.gate {
+  border-color: rgba(21, 94, 117, 0.28);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-chip.dog {
+  border-color: rgba(146, 64, 14, 0.32);
+  background: rgba(146, 64, 14, 0.07);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-chip.job {
+  border-color: rgba(21, 94, 117, 0.28);
+  background: rgba(21, 94, 117, 0.06);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-chip.rose {
+  border-color: rgba(190, 18, 60, 0.35);
+  background: rgba(190, 18, 60, 0.07);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-chip.am {
+  border-color: rgba(146, 64, 14, 0.32);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-pill.done {
+  border-color: rgba(4, 120, 87, 0.35);
+  background: rgba(4, 120, 87, 0.08);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-pill.next {
+  border-color: rgba(21, 94, 117, 0.4);
+  background: rgba(21, 94, 117, 0.10);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-pill.missed {
+  border-color: rgba(190, 18, 60, 0.4);
+  background: rgba(190, 18, 60, 0.10);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-hero {
+  background:
+    radial-gradient(520px 220px at 88% -20%, rgba(146, 64, 14, 0.08), transparent 60%),
+    var(--color-surface);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-segbar span.done {
+  background: linear-gradient(180deg, rgba(4, 120, 87, 0.9), rgba(4, 120, 87, 0.6));
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-segbar span.next {
+  background: linear-gradient(180deg, rgba(21, 94, 117, 0.95), rgba(21, 94, 117, 0.6));
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-segbar span.miss {
+  background: linear-gradient(180deg, rgba(190, 18, 60, 0.9), rgba(190, 18, 60, 0.55));
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-bar b {
+  background: linear-gradient(90deg, rgba(21, 94, 117, 0.55), var(--color-pool));
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-arow.warn .ic {
+  border-color: rgba(146, 64, 14, 0.3);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-arow.rose .ic {
+  border-color: rgba(190, 18, 60, 0.3);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-cust-id {
+  background:
+    radial-gradient(480px 180px at 90% -30%, rgba(21, 94, 117, 0.07), transparent 60%),
+    var(--color-surface);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-avatar {
+  background: rgba(21, 94, 117, 0.10);
+  border: 1px solid rgba(21, 94, 117, 0.3);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-jobc {
+  border: 1px solid rgba(21, 94, 117, 0.22);
+  background: rgba(21, 94, 117, 0.05);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-ev.cy .nd {
+  background: rgba(21, 94, 117, 0.2);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-ev.gn .nd {
+  background: rgba(4, 120, 87, 0.2);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-ev.am .nd {
+  background: rgba(146, 64, 14, 0.2);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-badge.cy {
+  border-color: rgba(21, 94, 117, 0.35);
+  background: rgba(21, 94, 117, 0.08);
+}
+:root[data-theme="control-room"][data-mode="light"] .cr-badge.am {
+  border-color: rgba(146, 64, 14, 0.35);
+  background: rgba(146, 64, 14, 0.08);
 }
