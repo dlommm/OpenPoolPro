@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, rates, sizes
+from app import models, rates, sizes, tax
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.routers.customers import _apply_property
@@ -293,10 +293,19 @@ def schedule_job(jid: int, scheduled_date: date = Form(...),
 
 
 @router.post("/jobs/{jid}/complete")
-def complete_job(jid: int, request: Request, session: Session = Depends(get_session)):
+async def complete_job(jid: int, request: Request, session: Session = Depends(get_session)):
     j = get_or_404(session, models.Job, jid)
+    form = await request.form()
     j.status, j.completed_at = "done", models.utcnow()
     j.completed_by_id = request.state.user.id
+    j.tax_rate_ppm = tax.resolve_rate_ppm(session, j.property.state)
+    raw = (form.get("labor_override_dollars") or "").strip()
+    if raw:
+        try:
+            cents = round(float(raw) * 100)
+            j.labor_override_cents = cents if cents >= 0 and cents != j.labor_cents else None
+        except ValueError:
+            j.labor_override_cents = None
     session.commit()
     return RedirectResponse("/jobs", status_code=303)
 

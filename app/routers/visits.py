@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, mailer, models
+from app import dosing, inventory, mailer, models, tax
 from app.db import get_session, get_or_404
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -126,6 +126,13 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.completed_by_id = request.state.user.id
     v.resolved = True
     v.rate_cents = effective_rate_cents(session, v.property)
+    v.tax_rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
+    _override = _f(form.get("labor_override_dollars"))
+    if _override is not None and _override >= 0:
+        override_cents = round(_override * 100)
+        v.labor_override_cents = override_cents if override_cents != (v.rate_cents or 0) else None
+    else:
+        v.labor_override_cents = None
     # Preserve frozen history: a prior line's frozen unit cost must survive a
     # re-complete (e.g. fixing a pH typo) even if the catalog price moved on.
     # Only genuinely new lines freeze the current catalog cost.
