@@ -80,3 +80,36 @@ def test_custom_added_section_appears(engine):
         pdf = contract_pdf.render_contract(contract, pool, prop, customer, company, session=s)
     t = _pdf_text(pdf)
     assert "Cancellation Policy" in t and "30 days notice to Coastline Pools" in t
+
+
+# --- Task 4: editor save + preview routes ---------------------------------
+def test_save_persists_template_admin(client, engine):
+    r = client.post("/settings/contract/save", data={
+        "doc_title": "Service Agreement",
+        "kind": ["text", "rates", "signature"],
+        "title": ["Intro"],
+        "body": ["Welcome to {{company_name}}."],
+        "visible": ["on", "on"],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        tpl = get_template(s)
+        assert tpl["title"] == "Service Agreement"
+        assert tpl["blocks"][0] == {"kind": "text", "title": "Intro",
+                                    "body": "Welcome to {{company_name}}.", "when": None}
+        assert tpl["blocks"][1]["kind"] == "rates" and tpl["blocks"][1]["visible"] is True
+
+
+def test_save_requires_admin(tech_client):
+    c = tech_client("sam")
+    r = c.post("/settings/contract/save", data={"doc_title": "x", "kind": ["text"],
+               "title": ["T"], "body": ["b"], "visible": []}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_preview_resolves_tokens(client):
+    r = client.post("/settings/contract/preview", data={
+        "doc_title": "Agreement", "kind": ["text"], "title": ["Scope"],
+        "body": ["Billed at {{weekly_price}} by {{company_name}}."], "visible": []})
+    assert r.status_code == 200
+    assert "{{weekly_price}}" not in r.text and "Scope" in r.text

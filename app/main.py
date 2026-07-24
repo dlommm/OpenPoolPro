@@ -340,6 +340,9 @@ def create_app(engine=None) -> FastAPI:
     from app.routers import contracts as contracts_router
     app.include_router(contracts_router.router)
 
+    from app.routers import contract_template as contract_template_router
+    app.include_router(contract_template_router.router)
+
     if config.RUN_SCHEDULER:
         from app.backup import start_scheduler
         from app.maintenance import run_nightly
