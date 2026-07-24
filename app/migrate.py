@@ -1,7 +1,37 @@
 """Additive-only SQLite migrations, run at startup before seeds."""
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app import addresses
+
+
+def _dedupe_and_unique_visits(conn) -> None:
+    """A property has at most one visit per calendar date. The old /week/move
+    path could leave a duplicate 'due' row (double-billing risk). Collapse any
+    existing duplicates — keeping the most-complete row (done > skipped > due,
+    then a real completed_at, then newest id) — and add a UNIQUE index so the
+    invariant is enforced from here on (the get-or-create/move paths catch the
+    IntegrityError and re-select)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(visits)"))}
+    if not {"id", "property_id", "date", "status"} <= cols:
+        return
+    groups = conn.execute(text(
+        "SELECT property_id, date FROM visits GROUP BY property_id, date HAVING COUNT(*) > 1")).all()
+    for property_id, d in groups:
+        rows = conn.execute(text(
+            "SELECT id, status, completed_at FROM visits WHERE property_id=:p AND date=:d"),
+            {"p": property_id, "d": d}).all()
+
+        def rank(r):  # higher = keep
+            return ({"done": 2, "skipped": 1}.get(r[1], 0), 1 if r[2] is not None else 0, r[0])
+
+        losers = [r[0] for r in sorted(rows, key=rank, reverse=True)[1:]]
+        if losers:
+            conn.execute(text("DELETE FROM visit_chemicals WHERE visit_id IN :ids")
+                         .bindparams(bindparam("ids", expanding=True)), {"ids": losers})
+            conn.execute(text("DELETE FROM visits WHERE id IN :ids")
+                         .bindparams(bindparam("ids", expanding=True)), {"ids": losers})
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_visits_property_date ON visits (property_id, date)"))
 
 # Indexes on hot, frequently-filtered columns. `Base.metadata.create_all` only
 # creates these on brand-new tables, so an already-provisioned database needs
@@ -112,3 +142,5 @@ def run(engine) -> None:
             wanted = [c.strip() for c in columns.split(",")]
             if present and all(c in present for c in wanted):
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))
+
+        _dedupe_and_unique_visits(conn)

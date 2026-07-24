@@ -122,3 +122,41 @@ def test_migrate_adds_spa_columns(engine):
     assert "kind" in pool_cols
     assert "kind" in tier_cols
     assert "spa_rate_override_cents" in prop_cols
+
+
+def test_migrate_dedupes_duplicate_visits_and_enforces_uniqueness(engine):
+    from datetime import date
+    from sqlalchemy.exc import IntegrityError
+
+    # A pre-fix DB with two visits on the same (property_id, date): an empty
+    # leftover "due" row plus the real completed one.
+    with engine.begin() as conn:
+        # users must exist because migrate adds visits.completed_by_id REFERENCES
+        # users(id); real/create_all DBs always have it.
+        conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+        conn.execute(text(
+            "CREATE TABLE visits (id INTEGER PRIMARY KEY, property_id INTEGER, date DATE, "
+            "status VARCHAR(8), completed_at DATETIME)"))
+        conn.execute(text("CREATE TABLE visit_chemicals (id INTEGER PRIMARY KEY, visit_id INTEGER)"))
+        conn.execute(text("INSERT INTO visits (id, property_id, date, status, completed_at) "
+                          "VALUES (1, 7, '2026-07-13', 'due', NULL)"))
+        conn.execute(text("INSERT INTO visits (id, property_id, date, status, completed_at) "
+                          "VALUES (2, 7, '2026-07-13', 'done', '2026-07-13 15:00:00')"))
+        conn.execute(text("INSERT INTO visit_chemicals (id, visit_id) VALUES (1, 2)"))
+
+    migrate.run(engine)
+
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT id, status FROM visits WHERE property_id=7 AND date='2026-07-13'")).all()
+        assert len(rows) == 1 and rows[0][1] == "done"   # kept the completed one
+        # its chemical line survived
+        assert conn.execute(text("SELECT COUNT(*) FROM visit_chemicals")).scalar() == 1
+        # a further duplicate insert is now rejected by the unique index
+        try:
+            conn.execute(text("INSERT INTO visits (property_id, date, status) "
+                              "VALUES (7, '2026-07-13', 'due')"))
+            raised = False
+        except IntegrityError:
+            raised = True
+        assert raised

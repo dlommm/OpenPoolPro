@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import config, models
@@ -75,7 +76,12 @@ def move(property_id: int = Form(...), from_date: date = Form(...),
             else:
                 session.add(models.Visit(property_id=property_id, date=to_date,
                                          status="due", original_date=from_date))
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # A concurrent request already put a visit at to_date (unique on
+        # property_id+date). That's the intended end state — nothing to do.
+        session.rollback()
     start = from_date - timedelta(days=from_date.weekday())
     return RedirectResponse(f"/week?start={start}", status_code=303)
 

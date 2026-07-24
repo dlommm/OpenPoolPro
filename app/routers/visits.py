@@ -4,6 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import dosing, inventory, mailer, models, qbo, tax
@@ -20,7 +21,14 @@ def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
     if v is None:
         v = models.Visit(property_id=property_id, date=d, status="due")
         session.add(v)
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # Another request created this stop's row between our SELECT and
+            # INSERT (unique on property_id+date). Take theirs.
+            session.rollback()
+            v = session.scalars(select(models.Visit).where(
+                models.Visit.property_id == property_id, models.Visit.date == d)).first()
     return v
 
 
