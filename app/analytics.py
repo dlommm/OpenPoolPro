@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import models, qbo, tax
 from app.qbo import _local_date
@@ -91,22 +91,37 @@ def _markup(session) -> float:
     return m if m == m and m not in (float("inf"), float("-inf")) else 0.0
 
 
+# Eager-load the relationships every revenue aggregation walks (chemical lines +
+# their catalog row, property→customer, the completing tech) so a month of
+# visits is a handful of queries instead of one-per-visit N+1.
+_VISIT_LOADS = (
+    selectinload(models.Visit.chemicals).selectinload(models.VisitChemical.chemical),
+    selectinload(models.Visit.property).selectinload(models.Property.customer),
+    selectinload(models.Visit.completed_by),
+)
+_JOB_LOADS = (
+    selectinload(models.Job.property).selectinload(models.Property.customer),
+    selectinload(models.Job.completed_by),
+)
+
+
 def _done_visits(session, start, end):
     return session.scalars(select(models.Visit).where(
         models.Visit.status == "done",
-        models.Visit.date >= start, models.Visit.date <= end)).all()
+        models.Visit.date >= start, models.Visit.date <= end).options(*_VISIT_LOADS)).all()
 
 
 def _all_visits(session, start, end):
     return session.scalars(select(models.Visit).where(
-        models.Visit.date >= start, models.Visit.date <= end)).all()
+        models.Visit.date >= start, models.Visit.date <= end).options(*_VISIT_LOADS)).all()
 
 
 def _done_jobs(session, start, end):
     jobs = session.scalars(select(models.Job).where(
         models.Job.status == "done", models.Job.completed_at.is_not(None),
         models.Job.completed_at >= datetime.combine(start - timedelta(days=1), time.min),
-        models.Job.completed_at <= datetime.combine(end + timedelta(days=1), time.max))).all()
+        models.Job.completed_at <= datetime.combine(end + timedelta(days=1), time.max))
+        .options(*_JOB_LOADS)).all()
     return [j for j in jobs if start <= _local_date(j.completed_at) <= end]
 
 

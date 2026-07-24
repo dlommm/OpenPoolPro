@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy import text as sqltext
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import addresses, geocode, maps, models
 from app.db import get_session, get_or_404
@@ -130,7 +130,8 @@ def _timeline(session: Session, customer: "models.Customer", user: "models.User"
     if property_ids:
         visits = session.scalars(select(models.Visit).where(
             models.Visit.property_id.in_(property_ids),
-            models.Visit.status != "due")).all()
+            models.Visit.status != "due").options(
+                selectinload(models.Visit.chemicals))).all()
         for v in visits:
             if v.completed_at is not None:
                 at, date_only = v.completed_at, False

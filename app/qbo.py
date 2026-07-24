@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import config, models, tax
 
@@ -94,7 +94,9 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
 
     visits = session.scalars(select(models.Visit).where(
         models.Visit.status == "done",
-        models.Visit.date >= first, models.Visit.date <= last)).all()
+        models.Visit.date >= first, models.Visit.date <= last).options(
+            selectinload(models.Visit.chemicals).selectinload(models.VisitChemical.chemical),
+            selectinload(models.Visit.property).selectinload(models.Property.customer))).all()
     for v in visits:
         r = row(v.property.customer)
         labor = tax.effective_labor_cents(v)
@@ -120,7 +122,8 @@ def month_rollup(session: Session, year: int, month: int) -> list[CustomerMonth]
         models.Job.status == "done",
         models.Job.completed_at.is_not(None),
         models.Job.completed_at >= datetime.combine(first - timedelta(days=1), time.min),
-        models.Job.completed_at <= datetime.combine(last + timedelta(days=1), time.max))).all()
+        models.Job.completed_at <= datetime.combine(last + timedelta(days=1), time.max)).options(
+            selectinload(models.Job.property).selectinload(models.Property.customer))).all()
     for j in jobs:
         if first <= _local_date(j.completed_at) <= last:
             r = row(j.property.customer)

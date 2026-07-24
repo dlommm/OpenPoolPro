@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import models
 
@@ -107,7 +107,8 @@ def stops_for_date(session: Session, d: date) -> list[Stop]:
     held_ids = active_hold_map(session, d)
     absences = absence_map(session, d)
     stops: list[Stop] = []
-    props = session.scalars(select(models.Property).where(models.Property.active)).all()
+    props = session.scalars(select(models.Property).where(models.Property.active)
+                            .options(selectinload(models.Property.customer))).all()
     props = [p for p in props if p.customer.active]
     for p in props:
         eff = effective_tech_id(p.assigned_tech_id, absences)
