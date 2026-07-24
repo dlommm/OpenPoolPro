@@ -29,7 +29,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app import tax
+from app import contract_tokens, tax
+from app.contract_defaults import DEFAULT_TEMPLATE, get_template
 
 _STYLES = getSampleStyleSheet()
 
@@ -197,8 +198,24 @@ def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
     return [Paragraph("Service Rates", _SECTION_HEADER_STYLE), table]
 
 
+def _text_flowables(title: str, body: str) -> list:
+    """A resolved text block -> section header (if titled) + paragraphs/bullets.
+    Paragraphs split on blank lines; any line starting with "- " is a bullet."""
+    out = []
+    if title:
+        out.append(Paragraph(_safe(title), _SECTION_HEADER_STYLE))
+    for para in (body or "").split("\n\n"):
+        lines = [ln for ln in para.split("\n") if ln.strip()]
+        for ln in lines:
+            if ln.lstrip().startswith("- "):
+                out.append(Paragraph(f"&#8226; {_safe(ln.lstrip()[2:])}", _BULLET_STYLE))
+            else:
+                out.append(Paragraph(_safe(ln), _BODY_STYLE))
+    return out
+
+
 def render_contract(contract, pool, prop, customer, company: dict,
-                     tax_rate_ppm: int = 0) -> bytes:
+                     tax_rate_ppm: int = 0, session=None) -> bytes:
     """Render one Contract to "Pool & Spa Service Agreement" PDF bytes.
 
     Never raises: any error assembling the story still yields best-effort
@@ -214,125 +231,43 @@ def render_contract(contract, pool, prop, customer, company: dict,
     try:
         company = company or {}
         company_name = company.get("business_name") or ""
-        pool_label = getattr(pool, "label", "") if pool is not None else ""
+        template = get_template(session) if session is not None else DEFAULT_TEMPLATE
+        ctx = contract_tokens.resolve_tokens(contract, pool, prop, customer, company, tax_rate_ppm)
 
         doc = SimpleDocTemplate(buf, pagesize=letter,
                                  topMargin=0.6 * inch, bottomMargin=0.6 * inch,
                                  leftMargin=0.6 * inch, rightMargin=0.6 * inch)
 
         story = [_header_table(company), Spacer(1, 0.15 * inch)]
-        story.append(Paragraph("Pool &amp; Spa Service Agreement", _TITLE_STYLE))
-
-        intro = (
-            f"This Pool &amp; Spa Service Agreement (&#8220;Agreement&#8221;) is entered into "
-            f"between {_safe(company_name)} (&#8220;Service Provider&#8221;) and the "
-            f"undersigned Customer (&#8220;Client&#8221;) for swimming pool and/or spa "
-            f"maintenance services at the property listed below, covering the "
-            f"<b>{_safe(pool_label)}</b> pool."
-        )
-        story.append(Paragraph(intro, _BODY_STYLE))
-        story.append(Spacer(1, 0.1 * inch))
-        story.append(_parties_table(prop, customer))
-        story.append(Spacer(1, 0.05 * inch))
-
-        weekly = getattr(contract, "weekly_cents", 0) or 0
-        scope_text = (
-            f"{_safe(company_name)} will provide one (1) service visit per week on an "
-            "assigned service day. Services may include: testing pool water chemistry, "
-            "skimming and netting debris, vacuuming pool as needed, emptying skimmer and "
-            "pump baskets, cleaning automatic pool cleaner, backwashing filter when "
-            "necessary, brushing pool walls and tile when needed, inspecting filtration and "
-            "circulation systems, adding necessary chemicals to maintain proper water "
-            f"balance. All labor associated with these services is billed at a rate of "
-            f"<b>${_d(weekly)}/week</b>, plus the cost of any chemicals, materials or "
-            "additional services required."
-        )
-        story.append(Paragraph("Scope of Weekly Pool Service", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(scope_text, _BODY_STYLE))
-
-        if getattr(contract, "includes_spa", False):
-            spa = getattr(contract, "spa_cents", 0) or 0
-            spa_text = (
-                "Spa maintenance may include: vacuuming spa, cleaning strainer baskets and "
-                "filter cartridges, testing water chemistry and adding necessary chemicals. "
-                f"All labor associated with these services is billed at a rate of "
-                f"<b>${_d(spa)}/hour</b>, plus the cost of any chemicals, materials or "
-                "additional services required."
-            )
-            story.append(Paragraph("Spa Service", _SECTION_HEADER_STYLE))
-            story.append(Paragraph(spa_text, _BODY_STYLE))
-
-        story.extend(_rates_table(contract, company_name, tax_rate_ppm))
-
-        story.append(Paragraph("Customer Requirements for Service", _SECTION_HEADER_STYLE))
         story.append(Paragraph(
-            "To maintain safe and effective service, the Client agrees to the following:",
-            _BODY_STYLE))
-        for bullet in (
-            f"All chemicals must be purchased through {_safe(company_name)}.",
-            "Pools must use an automatic chlorinator, or salt system.",
-            "Pool filtration must run approximately 12 hours per day via timer or automation.",
-            "If pool access requires a gate key, lock code, or security access, it must be provided.",
-            "Pets must be secured on the day of service.",
-            "The pool water level must be maintained at normal operating level.",
-        ):
-            story.append(Paragraph(f"&#8226; {bullet}", _BULLET_STYLE))
-        story.append(Paragraph(
-            "Failure to meet these requirements may prevent service completion and may "
-            "still result in a service charge.", _BODY_STYLE))
+            _safe(contract_tokens.apply_tokens(template.get("title", ""), ctx)), _TITLE_STYLE))
 
-        story.append(Paragraph("Photo &amp; Marketing Release", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(
-            f"Client grants {_safe(company_name)} permission to photograph and/or record "
-            "the pool and surrounding areas for the purpose of documenting services and for "
-            "marketing, advertising, and promotional use (including social media and "
-            "website). No personal identifying information (such as address or client name) "
-            "will be disclosed without prior written consent.", _BODY_STYLE))
-
-        story.append(Paragraph("Payment Terms", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(
-            "Payment for services, chemicals, and materials is due upon invoice unless "
-            f"otherwise agreed in writing. {_safe(company_name)} reserves the right to "
-            "suspend or terminate service for non-payment.", _BODY_STYLE))
-
-        story.append(Paragraph("Equipment &amp; Liability Disclaimer", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(
-            f"Client acknowledges that {_safe(company_name)} does not manufacture pool "
-            "equipment and therefore cannot guarantee the performance of pumps, filters, "
-            f"heaters, plumbing, liners, or other equipment. {_safe(company_name)} is not "
-            "responsible for damage or service issues resulting from: equipment failure or "
-            "aging components, improper installation by others, acts of nature (storm, "
-            "flooding, lightning, debris, etc.), power outages or electrical issues, "
-            "improper filtration operation or low water level. Any repairs required will be "
-            "quoted separately.", _BODY_STYLE))
-
-        story.append(Paragraph("Access &amp; Missed Service", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(
-            "If service cannot be performed due to locked gates, pets, construction, unsafe "
-            "conditions, or denied access, the visit may be skipped or billed as a service "
-            "call. Service days may change due to weather, holidays, or operational "
-            "scheduling.", _BODY_STYLE))
-
-        story.append(Paragraph("Water Quality Disclaimer", _SECTION_HEADER_STYLE))
-        story.append(Paragraph(
-            f"While {_safe(company_name)} will make every reasonable effort to maintain "
-            "proper water quality, clarity, and algae prevention, these conditions cannot be "
-            "guaranteed in the event of equipment failure, adverse weather conditions, "
-            "improper filtration, or customer interference.", _BODY_STYLE))
-
-        story.append(Spacer(1, 0.2 * inch))
-        story.append(Paragraph(
-            "By signing below, the Client agrees to all terms and conditions of this "
-            "service agreement.", _BODY_STYLE))
-        story.append(Spacer(1, 0.15 * inch))
-        story.append(Paragraph(
-            "Client Signature: _______________________________ &nbsp;&nbsp; "
-            "Print Name: _______________________________ &nbsp;&nbsp; "
-            "Date: ___________", _SIGNATURE_STYLE))
-        story.append(Paragraph(
-            f"{_safe(company_name)} Representative: "
-            "_______________________________ &nbsp;&nbsp; Date: ___________",
-            _SIGNATURE_STYLE))
+        for block in template.get("blocks", []):
+            kind = block.get("kind")
+            if kind != "text" and block.get("visible") is False:
+                continue
+            if block.get("when") == "includes_spa" and not getattr(contract, "includes_spa", False):
+                continue
+            if kind == "text":
+                title = contract_tokens.apply_tokens(block.get("title", ""), ctx)
+                body = contract_tokens.apply_tokens(block.get("body", ""), ctx)
+                story.extend(_text_flowables(title, body))
+                story.append(Spacer(1, 0.06 * inch))
+            elif kind == "parties":
+                story.append(_parties_table(prop, customer))
+                story.append(Spacer(1, 0.05 * inch))
+            elif kind == "rates":
+                story.extend(_rates_table(contract, company_name, tax_rate_ppm))
+            elif kind == "signature":
+                story.append(Spacer(1, 0.15 * inch))
+                story.append(Paragraph(
+                    "Client Signature: _______________________________ &nbsp;&nbsp; "
+                    "Print Name: _______________________________ &nbsp;&nbsp; "
+                    "Date: ___________", _SIGNATURE_STYLE))
+                story.append(Paragraph(
+                    f"{_safe(company_name)} Representative: "
+                    "_______________________________ &nbsp;&nbsp; Date: ___________",
+                    _SIGNATURE_STYLE))
 
         story.append(Spacer(1, 0.3 * inch))
         story.append(Paragraph("Generated by OpenPoolPro", _FOOTER_STYLE))

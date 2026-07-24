@@ -159,7 +159,7 @@ def approve_contract(request: Request, cid: int, session: Session = Depends(get_
     company = company_info(session)
     rate_ppm = tax.resolve_rate_ppm(session, prop.state)
     pdf_bytes = contract_pdf.render_contract(contract, pool, prop, customer, company,
-                                              tax_rate_ppm=rate_ppm)
+                                              tax_rate_ppm=rate_ppm, session=session)
     _atomic_write(_pdf_path(contract), pdf_bytes)
 
     contract.pdf_filename = "contract.pdf"
