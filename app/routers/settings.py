@@ -113,7 +113,22 @@ def settings_page(request: Request, rules_created: str | None = None,
         "tax_chems": models.get_setting(session, "tax_chems", "1") == "1",
         "tax_weekly": models.get_setting(session, "tax_weekly", "1") == "1",
         "tax_rates": [(r.state, tax.format_ppm(r.rate_ppm), r.overridden)
-                      for r in session.scalars(select(models.TaxRate).order_by(models.TaxRate.state)).all()]})
+                      for r in session.scalars(select(models.TaxRate).order_by(models.TaxRate.state)).all()],
+        **_contract_tab_ctx(session)})
+
+
+def _contract_tab_ctx(session) -> dict:
+    """Context for the Settings 'Contract' tab: the stored template, the token
+    palette, and a preview rendered against the sample context."""
+    from app import contract_tokens
+    from app.contract_defaults import get_template
+    from app.routers.contract_template import sample_context, _preview_html
+    tpl = get_template(session)
+    return {
+        "contract_template": tpl,
+        "contract_tokens": contract_tokens.TOKENS,
+        "contract_preview_html": _preview_html(tpl, sample_context()),
+    }
 
 
 @router.post("/settings/maintenance/run-now")
