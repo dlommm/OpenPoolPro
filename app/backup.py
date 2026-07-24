@@ -1,10 +1,31 @@
 import os
+import subprocess
 from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import config, models
+
+
+def _sync_offbox(engine, bdir: str, path: str) -> None:
+    """Ship the fresh snapshot off the box via the operator-configured command
+    (BACKUP_SYNC_CMD). Best-effort: a sync failure is recorded to
+    last_backup_sync_error but never fails the backup itself, since the local
+    snapshot already succeeded."""
+    cmd = config.BACKUP_SYNC_CMD
+    if not cmd:
+        return
+    env = {**os.environ, "BACKUP_DIR": bdir, "BACKUP_FILE": path}
+    try:
+        subprocess.run(cmd, shell=True, env=env, check=True,
+                       capture_output=True, timeout=600)
+        err = ""
+    except Exception as e:
+        err = str(e)
+    with Session(engine) as s:
+        models.set_setting(s, "last_backup_sync_error", err)
+        s.commit()
 
 
 def run_backup(engine) -> str:
@@ -30,6 +51,7 @@ def run_backup(engine) -> str:
         with Session(engine) as s:
             models.set_setting(s, "last_backup_error", "")
             s.commit()
+        _sync_offbox(engine, bdir, path)
         return path
     except Exception as e:
         with Session(engine) as s:

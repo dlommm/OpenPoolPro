@@ -33,6 +33,11 @@ def validate_secrets() -> None:
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 TIMEZONE = os.environ.get("APP_TZ", "America/New_York")
 RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "0") == "1"
+# Optional shell command run after each successful nightly backup, so backups
+# can be shipped OFF the box (they otherwise sit on the same disk as the live
+# DB — one disk failure loses both). The command runs with BACKUP_DIR and
+# BACKUP_FILE in its environment; e.g. 'rclone copy "$BACKUP_FILE" remote:pool-backups'.
+BACKUP_SYNC_CMD = os.environ.get("BACKUP_SYNC_CMD", "")
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))

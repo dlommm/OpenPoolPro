@@ -11,14 +11,22 @@ RUN tailwindcss -i tailwind.css -o app.css --minify
 
 FROM python:3.12-slim
 WORKDIR /srv
+# gosu lets the entrypoint drop from root to an unprivileged user for the app
+# process (see docker-entrypoint.sh) after fixing /data ownership.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY scripts ./scripts
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 COPY --from=css /build/app.css ./app/static/app.css
 ARG APP_VERSION=dev
 ENV DATA_DIR=/data RUN_SCHEDULER=1 APP_VERSION=$APP_VERSION
 EXPOSE 8000
+ENTRYPOINT ["/docker-entrypoint.sh"]
 # Probe the DB-backed /health so an orchestrator sees "unhealthy" when SQLite is
 # locked/corrupt or /data failed to mount, not just when the process is down.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
