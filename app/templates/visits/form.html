@@ -76,11 +76,13 @@
       <option value="after">After</option>
       <option value="issue">Issue</option>
     </select>
+    {% call ui.upload("Take / upload photo", "camera") %}
     <input type="file" accept="image/*" capture="environment" multiple name="files"
            hx-post="/photos/visit/{{ v.id }}" hx-encoding="multipart/form-data"
            hx-include="#visit-photo-tag"
            hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change"
-           class="field">
+           class="upload-input">
+    {% endcall %}
   </div>
 
   <label class="block"><span class="field-label">Notes</span>

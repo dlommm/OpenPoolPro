@@ -6,7 +6,9 @@
 {% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
 <form method="post" enctype="multipart/form-data" class="card space-y-3 p-4">
   <p class="text-sm text-mist">One row per property. Columns are mapped on the next step — any spreadsheet export works. 5 MB max.</p>
-  <input type="file" name="file" accept=".csv,text/csv" required class="field pt-2">
+  {% call ui.upload("Choose CSV file", "document") %}
+  <input type="file" name="file" accept=".csv,text/csv" required class="upload-input">
+  {% endcall %}
   <button class="btn-primary">Upload and map columns</button>
 </form>
 {% endblock %}

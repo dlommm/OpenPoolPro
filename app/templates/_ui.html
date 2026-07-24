@@ -23,6 +23,10 @@
     <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/>
   {% elif name == "camera" %}
     <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>
+  {% elif name == "upload" %}
+    <path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>
+  {% elif name == "document" %}
+    <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h7"/>
   {% elif name == "check" %}
     <path d="M4 12.5l5 5L20 6.5"/>
   {% elif name == "chevron" %}
@@ -44,6 +48,22 @@
     <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>
   {% endif %}
 </svg>
+{% endmacro %}
+
+{# Styled file-upload control. Wraps a caller-provided <input type="file"> (which
+   keeps its own name/accept/hx-* attributes) in a labelled, tappable button so
+   uploads read as an obvious action instead of the browser's bare
+   "Choose file / No file chosen". The input should carry class="upload-input".
+   Usage:
+     {% call ui.upload("Take / upload photo", "camera") %}
+       <input type="file" ... class="upload-input">
+     {% endcall %} #}
+{% macro upload(label, icon_name="upload", cls="") %}
+<label class="upload-btn {{ cls }}">
+  {{ icon(icon_name, "h-5 w-5 shrink-0") }}
+  <span class="upload-btn-text">{{ label }}</span>
+  {{ caller() }}
+</label>
 {% endmacro %}
 
 {% macro page_header(eyebrow, title) %}

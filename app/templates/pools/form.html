@@ -156,10 +156,14 @@
   <option value="after">After</option>
   <option value="issue">Issue</option>
 </select>
+<div class="mb-4">
+{% call ui.upload("Take / upload photo", "camera") %}
 <input type="file" accept="image/*" capture="environment" multiple name="files"
        hx-post="/photos/pool/{{ pool.id }}" hx-encoding="multipart/form-data"
        hx-include="#pool-photo-tag"
-       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="field mb-4">
+       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
+{% endcall %}
+</div>
 
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Equipment</h2>
 <div class="mb-3 space-y-2">

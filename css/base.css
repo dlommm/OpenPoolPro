@@ -112,6 +112,27 @@
     @apply w-full min-h-11 rounded-lg border border-seam px-3 text-ink placeholder:text-mist/60 focus:border-pool;
     background-color: var(--color-surface);
   }
+
+  /* Styled file-upload button (see the ui.upload macro). Dashed border reads as
+     an upload target; the native input inside is visually hidden but still
+     drives the picker + any htmx auto-upload. Theme-agnostic via tokens. */
+  .upload-btn {
+    @apply flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-seam px-4 text-center font-medium text-ink transition active:scale-[0.98] hover:border-pool hover:text-pool;
+    background-color: var(--color-surface);
+  }
+  .upload-btn:focus-within {
+    @apply border-pool text-pool;
+    outline: 2px solid var(--color-pool);
+    outline-offset: 2px;
+  }
+  .upload-input {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap; border: 0;
+  }
   .field-label {
     @apply mb-1 block text-[13px] font-medium text-mist;
   }

@@ -50,10 +50,14 @@
   <option value="after">After</option>
   <option value="issue">Issue</option>
 </select>
+<div class="mb-4">
+{% call ui.upload("Take / upload photo", "camera") %}
 <input type="file" accept="image/*" capture="environment" multiple name="files"
        hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
        hx-include="#job-photo-tag"
-       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="field mb-4">
+       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
+{% endcall %}
+</div>
 
 {% if not j.started_at and j.status != "done" %}
 <form method="post" action="/jobs/{{ j.id }}/start">

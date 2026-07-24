@@ -113,11 +113,13 @@
         </div>
       </div>
       {% if not hp %}
+      {% call ui.upload("Take / upload photo", "camera", "mt-2") %}
       <input type="file" accept="image/*" capture="environment" multiple name="files"
              hx-post="/photos/property/{{ p.id }}" hx-encoding="multipart/form-data"
-             hx-include="#house-tag-{{ p.id }}" hx-trigger="change" class="field mt-2 text-xs"
+             hx-include="#house-tag-{{ p.id }}" hx-trigger="change" class="upload-input"
              hx-target="#housephoto-{{ p.id }}" hx-swap="afterbegin"
              aria-label="Add house photo">
+      {% endcall %}
       <input type="hidden" id="house-tag-{{ p.id }}" name="tag" value="house">
       {% endif %}
       {% if map_urls[p.id] %}
