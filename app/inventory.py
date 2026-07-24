@@ -7,7 +7,7 @@ only mutate in-memory ORM state / add pending rows.
 """
 import math
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app import models
@@ -28,7 +28,14 @@ def apply_visit_delta(session: Session, visit_id: int,
         chem = session.get(models.Chemical, chem_id)
         if chem is None:
             continue
-        chem.stock_qty -= delta
+        # Atomic decrement at the DB (stock_qty = stock_qty - delta) instead of
+        # an ORM read-modify-write, so two visit completions touching the same
+        # chemical concurrently can't lose one another's update. Refresh the
+        # in-memory value so callers reading chem.stock_qty see the new number.
+        session.execute(update(models.Chemical)
+                        .where(models.Chemical.id == chem_id)
+                        .values(stock_qty=models.Chemical.stock_qty - delta))
+        session.refresh(chem, ["stock_qty"])
 
 
 def _valid_quantity(quantity: float) -> bool:
