@@ -1,0 +1,104 @@
+{% import "_ui.html" as ui %}
+<div class="grid gap-4 lg:grid-cols-2 lg:items-start">
+  {# ---- editor ---- #}
+  <div class="card p-4">
+    <h2 class="set-h">Contract template</h2>
+    <p class="mb-3 text-sm text-mist">Edit the service agreement below. Click a field to drop it
+      into the text you're editing — it fills in from each customer's data when the contract is
+      generated. Start a line with <span class="font-data">- </span> for a bullet.</p>
+
+    <p class="field-label">Insert a field</p>
+    <div class="mb-3 flex flex-wrap gap-1">
+      {% for token, label, group in contract_tokens %}
+      <button type="button" class="tag" title="{{ label }} — {{ group }}"
+              onclick="ctInsertToken('{{ token }}')">{{ '{{' }}{{ token }}{{ '}}' }}</button>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="/settings/contract/save" id="ct-form" class="space-y-3">
+      <label class="block"><span class="field-label">Document title</span>
+        <input class="field" name="doc_title" value="{{ contract_template.title }}"></label>
+
+      <div id="ct-blocks" class="space-y-2">
+        {% for b in contract_template.blocks %}
+        <div class="card border-seam p-2.5" data-block>
+          <input type="hidden" name="kind" value="{{ b.kind }}">
+          {% if b.kind == "text" %}
+          <input class="field mb-1 font-semibold" name="title" value="{{ b.title }}"
+                 placeholder="Section heading (optional)" onfocus="ctFocus(this)">
+          <textarea class="field min-h-24 font-data text-sm" name="body" rows="4"
+                    onfocus="ctFocus(this)"
+                    placeholder="Body text — use fields above; start a line with &quot;- &quot; for a bullet">{{ b.body }}</textarea>
+          {% else %}
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-data text-xs uppercase tracking-wide text-mist">{{ b.kind }} block — auto-generated</span>
+            <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
+            <label class="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" {{ "checked" if b.get('visible', True) }} class="h-4 w-4"
+                     onchange="this.closest('[data-block]').querySelector('input[name=visible]').value = this.checked ? 'on' : 'off'"> Show</label>
+          </div>
+          {% endif %}
+          <div class="mt-2 flex gap-1.5">
+            <button type="button" class="btn-secondary px-3" title="Move up" onclick="ctMove(this,-1)">↑</button>
+            <button type="button" class="btn-secondary px-3" title="Move down" onclick="ctMove(this,1)">↓</button>
+            <button type="button" class="btn-secondary px-3 text-safety" onclick="ctDelete(this)">Delete</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary flex-1" onclick="ctAddSection()">+ Add section</button>
+        <button class="btn-primary flex-1">Save contract</button>
+      </div>
+    </form>
+  </div>
+
+  {# ---- live preview ---- #}
+  <div class="card p-4">
+    <h2 class="set-h">Live preview</h2>
+    <p class="mb-2 text-sm text-mist">Shown with sample data. Real contracts use each customer's info.</p>
+    <button type="button" class="btn-secondary mb-3"
+            hx-post="/settings/contract/preview" hx-include="#ct-form"
+            hx-target="#ct-preview" hx-swap="innerHTML">Refresh preview</button>
+    <div id="ct-preview" class="max-h-[36rem] overflow-y-auto rounded-lg border border-seam p-3">
+      {{ contract_preview_html | safe }}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var last = null;
+    window.ctFocus = function (el) { last = el; };
+    window.ctInsertToken = function (tok) {
+      var el = last || document.querySelector('#ct-blocks textarea');
+      if (!el) return;
+      var t = '{{ "{{" }}' + tok + '{{ "}}" }}';
+      var s = el.selectionStart != null ? el.selectionStart : el.value.length;
+      var e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+      el.value = el.value.slice(0, s) + t + el.value.slice(e);
+      el.focus(); el.selectionStart = el.selectionEnd = s + t.length;
+    };
+    window.ctMove = function (btn, dir) {
+      var b = btn.closest('[data-block]');
+      var sib = dir < 0 ? b.previousElementSibling : b.nextElementSibling;
+      if (!sib) return;
+      dir < 0 ? b.parentNode.insertBefore(b, sib) : b.parentNode.insertBefore(sib, b);
+    };
+    window.ctDelete = function (btn) { btn.closest('[data-block]').remove(); };
+    window.ctAddSection = function () {
+      var d = document.createElement('div');
+      d.className = 'card border-seam p-2.5'; d.setAttribute('data-block', '');
+      d.innerHTML =
+        '<input type="hidden" name="kind" value="text">' +
+        '<input class="field mb-1 font-semibold" name="title" placeholder="Section heading (optional)" onfocus="ctFocus(this)">' +
+        '<textarea class="field min-h-24 font-data text-sm" name="body" rows="4" onfocus="ctFocus(this)" placeholder="Body text"></textarea>' +
+        '<div class="mt-2 flex gap-1.5">' +
+        '<button type="button" class="btn-secondary px-3" onclick="ctMove(this,-1)">↑</button>' +
+        '<button type="button" class="btn-secondary px-3" onclick="ctMove(this,1)">↓</button>' +
+        '<button type="button" class="btn-secondary px-3 text-safety" onclick="ctDelete(this)">Delete</button></div>';
+      document.getElementById('ct-blocks').appendChild(d);
+    };
+  })();
+</script>

@@ -113,3 +113,13 @@ def test_preview_resolves_tokens(client):
         "body": ["Billed at {{weekly_price}} by {{company_name}}."], "visible": []})
     assert r.status_code == 200
     assert "{{weekly_price}}" not in r.text and "Scope" in r.text
+
+
+# --- Task 5: Contract tab renders on the Settings page --------------------
+def test_settings_page_has_contract_tab(client):
+    r = client.get("/settings")
+    assert r.status_code == 200
+    assert 'for="settab-contract"' in r.text          # nav tab present
+    assert 'data-tab="contract"' in r.text            # panel present
+    assert "/settings/contract/save" in r.text        # editor form
+    assert "weekly_price" in r.text                   # token palette present

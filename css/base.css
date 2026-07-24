@@ -209,14 +209,16 @@
   #settab-chemistry:checked ~ .tab-panels [data-tab="chemistry"],
   #settab-service:checked   ~ .tab-panels [data-tab="service"],
   #settab-crew:checked      ~ .tab-panels [data-tab="crew"],
-  #settab-system:checked    ~ .tab-panels [data-tab="system"] { display: block; }
+  #settab-system:checked    ~ .tab-panels [data-tab="system"],
+  #settab-contract:checked  ~ .tab-panels [data-tab="contract"] { display: block; }
 
   #settab-business:checked  ~ .tabnav label[for="settab-business"],
   #settab-pricing:checked   ~ .tabnav label[for="settab-pricing"],
   #settab-chemistry:checked ~ .tabnav label[for="settab-chemistry"],
   #settab-service:checked   ~ .tabnav label[for="settab-service"],
   #settab-crew:checked      ~ .tabnav label[for="settab-crew"],
-  #settab-system:checked    ~ .tabnav label[for="settab-system"] {
+  #settab-system:checked    ~ .tabnav label[for="settab-system"],
+  #settab-contract:checked  ~ .tabnav label[for="settab-contract"] {
     background-color: var(--color-pool);
     color: #fff;
   }
@@ -225,7 +227,8 @@
   #settab-chemistry:focus-visible ~ .tabnav label[for="settab-chemistry"],
   #settab-service:focus-visible   ~ .tabnav label[for="settab-service"],
   #settab-crew:focus-visible      ~ .tabnav label[for="settab-crew"],
-  #settab-system:focus-visible    ~ .tabnav label[for="settab-system"] {
+  #settab-system:focus-visible    ~ .tabnav label[for="settab-system"],
+  #settab-contract:focus-visible  ~ .tabnav label[for="settab-contract"] {
     outline: 2px solid var(--color-pool);
     outline-offset: 2px;
   }
