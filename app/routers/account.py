@@ -111,8 +111,15 @@ def change_password(request: Request, current_password: str = Form(""),
                      new_password: str = Form(""), new_password_confirm: str = Form(""),
                      session: Session = Depends(get_session)):
     user = session.get(models.User, request.state.user.id)
+    limiter = request.app.state.account_limiter
+    key = f"acct:{user.id}"
+    if limiter.locked(key):
+        ctx = _account_ctx(request, session, user,
+                           error="Too many attempts — try again in a few minutes")
+        return templates.TemplateResponse(request, "account.html", ctx)
 
     if not verify_password(current_password, user.password_hash):
+        limiter.fail(key)
         ctx = _account_ctx(request, session, user, error="Current password is incorrect")
         return templates.TemplateResponse(request, "account.html", ctx)
     if len(new_password) < 8:
@@ -123,6 +130,7 @@ def change_password(request: Request, current_password: str = Form(""),
         return templates.TemplateResponse(request, "account.html", ctx)
 
     user.password_hash = hash_password(new_password)
+    limiter.reset(key)
     _bump_epoch(request, user)
     models.audit(session, user.id, "auth.password_changed")
     session.commit()
@@ -179,9 +187,17 @@ def regenerate_backup_codes(request: Request, code: str = Form(""),
     if not user.totp_enabled:
         return RedirectResponse("/account", status_code=303)
 
+    limiter = request.app.state.account_limiter
+    key = f"acct:{user.id}"
+    if limiter.locked(key):
+        ctx = _account_ctx(request, session, user,
+                           error="Too many attempts -- try again in a few minutes")
+        return templates.TemplateResponse(request, "account.html", ctx)
     if not _verify_2fa_code(session, user, code):
+        limiter.fail(key)
         ctx = _account_ctx(request, session, user, error="Wrong code -- try again")
         return templates.TemplateResponse(request, "account.html", ctx)
+    limiter.reset(key)
 
     _clear_backup_codes(session, user.id)
     codes = security.make_backup_codes()
@@ -202,9 +218,17 @@ def disable_2fa(request: Request, code: str = Form(""),
     if not user.totp_enabled:
         return RedirectResponse("/account", status_code=303)
 
+    limiter = request.app.state.account_limiter
+    key = f"acct:{user.id}"
+    if limiter.locked(key):
+        ctx = _account_ctx(request, session, user,
+                           error="Too many attempts -- try again in a few minutes")
+        return templates.TemplateResponse(request, "account.html", ctx)
     if not _verify_2fa_code(session, user, code):
+        limiter.fail(key)
         ctx = _account_ctx(request, session, user, error="Wrong code -- try again")
         return templates.TemplateResponse(request, "account.html", ctx)
+    limiter.reset(key)
 
     user.totp_secret = None
     user.totp_enabled = False

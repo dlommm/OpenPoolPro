@@ -123,6 +123,12 @@ def create_app(engine=None) -> FastAPI:
     if engine is None:
         config.validate_secrets()
     app.state.engine = engine or make_engine()
+    # Rate limiter for sensitive already-authenticated account actions (password
+    # change, 2FA disable/regenerate) — a hijacked session shouldn't get
+    # unlimited guesses at the current password or a 6-digit TOTP. App-scoped
+    # (not a module singleton) so it never accumulates across the test suite.
+    from app import security as _security
+    app.state.account_limiter = _security.RateLimiter(max_fails=8, lock_seconds=900)
     Base.metadata.create_all(app.state.engine)
     from app import migrate
     migrate.run(app.state.engine)
@@ -167,6 +173,38 @@ def create_app(engine=None) -> FastAPI:
                 return RedirectResponse("/login", status_code=303)
             request.session["user_id"] = request.state.user.id  # rolling cookie
             request.session["epoch"] = request.state.user.session_epoch
+        return await call_next(request)
+
+    # CSRF defense-in-depth: reject state-changing requests whose Origin (or,
+    # if absent, Referer) is cross-site. Modern browsers send Origin on every
+    # unsafe-method request INCLUDING same-origin ones, so a genuine same-site
+    # POST carries Origin == host and passes, while a cross-site forged POST is
+    # blocked outright. When BOTH headers are absent (non-browser clients, the
+    # test suite) we fall through to the always-on SameSite=Lax cookie, which
+    # already blocks cross-site form POSTs — so this only ADDS protection and
+    # never breaks a legitimate flow.
+    from urllib.parse import urlparse as _urlparse
+
+    @app.middleware("http")
+    async def csrf_origin_guard(request, call_next):
+        if request.method not in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            # Compare HOSTNAMES only (ignore scheme/port), and accept the request
+            # if the source matches EITHER the Host header or X-Forwarded-Host —
+            # so a reverse proxy that rewrites Host can't 403 a legitimate form
+            # post. Absent Origin/Referer (non-browser clients) falls through to
+            # the always-on SameSite=Lax cookie. Fail-open by design: only a
+            # confidently cross-origin request is blocked.
+            expected = {h for h in (
+                _urlparse(f"//{request.headers.get('host','')}").hostname,
+                _urlparse(f"//{request.headers.get('x-forwarded-host','')}").hostname,
+            ) if h}
+            source = None
+            if request.headers.get("origin", "").strip() not in ("", "null"):
+                source = _urlparse(request.headers["origin"]).hostname
+            elif request.headers.get("referer"):
+                source = _urlparse(request.headers["referer"]).hostname
+            if source and expected and source not in expected:
+                return Response("cross-origin request blocked", status_code=403)
         return await call_next(request)
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
