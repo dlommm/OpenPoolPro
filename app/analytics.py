@@ -304,6 +304,32 @@ def visit_volume(session: Session, start: date, end: date) -> list[VolumeRow]:
     return sorted(rows.values(), key=lambda r: (r.iso_year, r.iso_week))
 
 
+def period_summary(session: Session, start: date, end: date) -> dict:
+    """Headline KPIs for the selected range, shown as tiles above the tabs.
+    Reuses the same aggregations as the tabs so every number reconciles."""
+    weeks = income_by_week(session, start, end)
+    revenue = sum(w.total_cents for w in weeks)
+    profit = sum(w.profit_cents for w in weeks)
+    chem_cost = sum(w.chem_cost_cents for w in weeks)
+
+    volume = visit_volume(session, start, end)
+    visits_done = sum(v.done for v in volume)
+
+    customers = revenue_by_customer(session, start, end)
+    top = customers[0] if customers else None
+
+    return {
+        "revenue_cents": revenue,
+        "profit_cents": profit,
+        "chem_cost_cents": chem_cost,
+        "visits_done": visits_done,
+        "avg_per_visit_cents": round(revenue / visits_done) if visits_done else 0,
+        "customer_count": len(customers),
+        "top_customer": top.customer.name if top else None,
+        "top_customer_cents": top.total_cents if top else 0,
+    }
+
+
 def rate_review(session: Session) -> list[RateReviewRow]:
     out: list[RateReviewRow] = []
     props = session.scalars(

@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import analytics, models
+from app import analytics, charts, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
@@ -103,6 +103,8 @@ def analytics_page(request: Request, tab: str = "income",
         ctx["too_large"] = True
         return templates.TemplateResponse(request, "analytics.html", ctx)
 
+    ctx["summary"] = analytics.period_summary(session, start_d, end_d)
+
     if tab == "income":
         rows = analytics.income_by_week(session, start_d, end_d)
         ctx["max_total"] = max((r.total_cents for r in rows), default=0)
@@ -120,7 +122,37 @@ def analytics_page(request: Request, tab: str = "income",
         rows = analytics.rate_review(session)
 
     ctx["rows"] = rows
+    ctx["chart"] = _build_chart(tab, rows)
     return templates.TemplateResponse(request, "analytics.html", ctx)
+
+
+def _build_chart(tab: str, rows) -> str | None:
+    """Inline-SVG chart for the tab (None for the rates ops tab)."""
+    if tab == "income":
+        return charts.bar_chart([(f"W{r.iso_week}", r.total_cents) for r in rows],
+                                kind="money", empty="No income in this range")
+    if tab == "customers":
+        return charts.hbar_chart([(r.customer.name, r.total_cents) for r in rows],
+                                 kind="money", empty="No customer revenue in this range")
+    if tab == "crew":
+        return charts.hbar_chart(
+            [((r.user.name if r.user else "Unattributed"), r.total_cents) for r in rows],
+            kind="money", empty="No crew activity in this range")
+    if tab == "types":
+        slices = [(r.label, r.total_cents) for r in rows]
+        donut = charts.donut_chart(slices, kind="money", empty="No job-type revenue")
+        leg = charts.legend(slices, kind="money")
+        return (f'<div class="flex flex-wrap items-center gap-6">'
+                f'<div class="shrink-0">{donut}</div>'
+                f'<div class="min-w-0 flex-1">{leg}</div></div>')
+    if tab == "chemicals":
+        ranked = sorted(rows, key=lambda r: r.margin_cents, reverse=True)
+        return charts.hbar_chart([(r.chemical.name, r.margin_cents) for r in ranked],
+                                 kind="money", empty="No chemical usage in this range")
+    if tab == "volume":
+        return charts.bar_chart([(f"W{r.iso_week}", r.done) for r in rows],
+                                kind="int", empty="No visit activity in this range")
+    return None
 
 
 def _format_cents(cents: int | None) -> str:
@@ -253,6 +285,70 @@ def analytics_export(request: Request, tab: str = "income",
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+def _resolve_range(start, end):
+    start_d, end_d = _parse_date(start), _parse_date(end)
+    if start_d is None or end_d is None:
+        start_d, end_d = _current_month()
+    elif start_d > end_d:
+        start_d, end_d = end_d, start_d
+    return start_d, end_d
+
+
+def _fetch_rows(tab: str, session, start_d, end_d):
+    fns = {
+        "income": lambda: analytics.income_by_week(session, start_d, end_d),
+        "customers": lambda: analytics.revenue_by_customer(session, start_d, end_d),
+        "crew": lambda: analytics.revenue_by_tech(session, start_d, end_d),
+        "types": lambda: analytics.revenue_by_job_type(session, start_d, end_d),
+        "chemicals": lambda: analytics.chem_margin(session, start_d, end_d),
+        "volume": lambda: analytics.visit_volume(session, start_d, end_d),
+        "rates": lambda: analytics.rate_review(session),
+    }
+    return fns[tab]()
+
+
+@router.get("/analytics/export.xlsx")
+def analytics_export_xlsx(request: Request, tab: str = "income", start: str | None = None,
+                          end: str | None = None, session: Session = Depends(get_session)):
+    from app import analytics_export
+    from fastapi.responses import Response
+    if tab not in TAB_LABELS:
+        raise HTTPException(status_code=404, detail=f"Unknown tab: {tab}")
+    start_d, end_d = _resolve_range(start, end)
+    if (end_d - start_d).days > MAX_SPAN_DAYS:
+        raise HTTPException(status_code=400, detail="Date range too large")
+    rows = _fetch_rows(tab, session, start_d, end_d)
+    summary = analytics.period_summary(session, start_d, end_d)
+    data = analytics_export.build_xlsx(TAB_LABELS[tab], start_d, end_d, summary, tab, rows)
+    models.audit(session, request.state.user.id, "export.analytics", detail=f"{tab} xlsx")
+    session.commit()
+    filename = f"analytics-{tab}-{start_d}-{end_d}.xlsx"
+    return Response(
+        data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
+@router.get("/analytics/export.pdf")
+def analytics_export_pdf(request: Request, tab: str = "income", start: str | None = None,
+                         end: str | None = None, session: Session = Depends(get_session)):
+    from app import analytics_export
+    from fastapi.responses import Response
+    if tab not in TAB_LABELS:
+        raise HTTPException(status_code=404, detail=f"Unknown tab: {tab}")
+    start_d, end_d = _resolve_range(start, end)
+    if (end_d - start_d).days > MAX_SPAN_DAYS:
+        raise HTTPException(status_code=400, detail="Date range too large")
+    rows = _fetch_rows(tab, session, start_d, end_d)
+    summary = analytics.period_summary(session, start_d, end_d)
+    data = analytics_export.build_pdf(TAB_LABELS[tab], start_d, end_d, summary, tab, rows)
+    models.audit(session, request.state.user.id, "export.analytics", detail=f"{tab} pdf")
+    session.commit()
+    filename = f"analytics-{tab}-{start_d}-{end_d}.pdf"
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
 # --- Rates tab ops: bulk raise preview/apply -------------------------------

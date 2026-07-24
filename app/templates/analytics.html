@@ -4,6 +4,40 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Business analytics", "Analytics") }}
 
+{% if summary and not too_large %}
+<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Revenue</p>
+    <p class="mt-1 font-data text-xl font-bold money">{{ summary.revenue_cents | dollars }}</p>
+  </div>
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Profit</p>
+    <p class="mt-1 font-data text-xl font-bold money">{{ summary.profit_cents | dollars }}</p>
+  </div>
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Visits done</p>
+    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.visits_done }}</p>
+  </div>
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Avg / visit</p>
+    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.avg_per_visit_cents | dollars }}</p>
+  </div>
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Customers</p>
+    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.customer_count }}</p>
+  </div>
+  <div class="card p-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Top customer</p>
+    {% if summary.top_customer %}
+    <p class="mt-1 truncate text-sm font-semibold text-ink" title="{{ summary.top_customer }}">{{ summary.top_customer }}</p>
+    <p class="font-data text-xs money">{{ summary.top_customer_cents | dollars }}</p>
+    {% else %}
+    <p class="mt-1 text-sm text-mist">—</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <form method="get" action="/analytics" class="mb-3 flex flex-wrap items-end gap-2">
   <input type="hidden" name="tab" value="{{ tab }}">
   <div>
@@ -38,8 +72,22 @@
 </div>
 {% else %}
 
-<div class="mb-3">
-  <a href="/analytics/export?tab={{ tab }}&start={{ start }}&end={{ end }}" class="btn-secondary">Export CSV</a>
+{% if chart %}
+<div class="card mb-4 p-4">
+  <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-mist">
+    {{ tab_labels[tab] }}{% if tab in ("income", "volume") %} by week{% elif tab in ("customers", "crew", "chemicals") %} ranked{% elif tab == "types" %} mix{% endif %}
+  </p>
+  {{ chart | safe }}
+</div>
+{% endif %}
+
+<div class="mb-3 flex flex-wrap gap-2">
+  <a href="/analytics/export?tab={{ tab }}&start={{ start }}&end={{ end }}"
+     class="btn-secondary flex-1 gap-1.5">{{ ui.icon("document", "h-4 w-4") }}Export CSV</a>
+  <a href="/analytics/export.xlsx?tab={{ tab }}&start={{ start }}&end={{ end }}"
+     class="btn-secondary flex-1 gap-1.5">{{ ui.icon("document", "h-4 w-4") }}Export Excel</a>
+  <a href="/analytics/export.pdf?tab={{ tab }}&start={{ start }}&end={{ end }}"
+     class="btn-secondary flex-1 gap-1.5">{{ ui.icon("document", "h-4 w-4") }}Export PDF</a>
 </div>
 
 <div class="overflow-x-auto">
