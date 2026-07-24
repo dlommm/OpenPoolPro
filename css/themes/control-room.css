@@ -778,7 +778,11 @@
 .cr-jobc .m { font-family: var(--font-data); font-size: 11px; color: var(--color-mist); margin-top: 4px; letter-spacing: 0.04em; }
 
 .cr-tl { position: relative; padding-left: 6px; }
-.cr-ev { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); padding-bottom: 14px; }
+/* padding-left (not a grid) reserves the 26px timeline gutter: the node dot and
+   the connector line are position:absolute so they never were grid items —
+   under grid-template-columns the lone in-flow content div fell into the 26px
+   first track and the text crushed to one char per line. */
+.cr-ev { position: relative; padding-left: 26px; padding-bottom: 14px; }
 .cr-ev:last-child { padding-bottom: 2px; }
 .cr-ev::after { content: ""; position: absolute; left: 5px; top: 16px; bottom: 0; width: 2px; background: var(--color-seam); }
 .cr-ev:last-child::after { display: none; }
