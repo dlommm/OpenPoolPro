@@ -25,11 +25,11 @@
   --color-tile: #F7FAFC;      /* page background */
   --color-surface: #FFFFFF;   /* card / panel background */
   --color-ink: #0F172A;       /* primary text */
-  --color-pool: #14B8A6;      /* primary action */
-  --color-pooldeep: #0D9488;  /* pressed / hover */
+  --color-pool: #0F766E;      /* primary action (AA ~4.5:1 — was #14B8A6 @ 2.49:1) */
+  --color-pooldeep: #0B5F59;  /* pressed / hover */
   --color-shallow: #E0F5F1;   /* selected wash */
-  --color-brass: #059669;     /* money ONLY */
-  --color-safety: #FB7185;    /* warnings ONLY */
+  --color-brass: #047857;     /* money ONLY (AA ~4.9:1 — was #059669 @ ~3.9:1) */
+  --color-safety: #E11D48;    /* warnings ONLY (AA ~4.6:1 — was #FB7185 @ 2.69:1) */
   --color-seam: #E2E8F0;      /* borders */
   --color-mist: #64748B;      /* secondary text */
 

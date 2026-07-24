@@ -34,11 +34,11 @@
   --color-tile: #F3EDE3;      /* warm sand / bone page canvas */
   --color-surface: #FBF7EF;   /* pebble card surface */
   --color-ink: #16303B;       /* deep marine navy ink */
-  --color-pool: #2B9EB3;      /* warm aqua primary action */
-  --color-pooldeep: #1F7C8C;  /* pressed aqua */
+  --color-pool: #16788D;      /* warm aqua primary action (AA ~4.5:1 on surface) */
+  --color-pooldeep: #115F6E;  /* pressed aqua */
   --color-shallow: #D6EAE6;   /* soft seafoam selection */
-  --color-brass: #C58A2E;     /* sun-gold money */
-  --color-safety: #E76F51;    /* coral alert */
+  --color-brass: #8F6114;     /* sun-gold money (AA ~4.6:1 — was #C58A2E @ 2.79:1) */
+  --color-safety: #B23A1E;    /* coral alert (AA ~4.6:1 — was #E76F51 @ 2.89:1) */
   --color-seam: #E4DBCC;      /* warm grout hairline */
   --color-mist: #5E6E70;      /* warm taupe secondary */
 
