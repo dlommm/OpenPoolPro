@@ -79,13 +79,23 @@ def _preview_html(tpl: dict, ctx: dict) -> str:
             body = contract_tokens.apply_tokens(block.get("body", ""), ctx)
             if title:
                 out.append(f'<h3 class="mt-3 font-semibold text-ink">{esc(title)}</h3>')
+            # Line-by-line, matching the PDF: consecutive "- " lines group into a
+            # <ul>; other lines are paragraphs. Handles blocks that mix an intro
+            # line with bullets (e.g. Customer Requirements).
             for para in body.split("\n\n"):
-                lines = [ln for ln in para.split("\n") if ln.strip()]
-                if lines and all(ln.lstrip().startswith("- ") for ln in lines):
-                    out.append("<ul class='ml-4 list-disc'>" +
-                               "".join(f"<li>{esc(ln.lstrip()[2:])}</li>" for ln in lines) + "</ul>")
-                elif para.strip():
-                    out.append(f'<p class="mt-1 text-sm">{esc(para)}</p>')
+                bullets = []
+                for ln in (l for l in para.split("\n") if l.strip()):
+                    if ln.lstrip().startswith("- "):
+                        bullets.append(ln.lstrip()[2:])
+                    else:
+                        if bullets:
+                            out.append("<ul class='ml-5 list-disc text-sm'>" +
+                                       "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
+                            bullets = []
+                        out.append(f'<p class="mt-1 text-sm">{esc(ln)}</p>')
+                if bullets:
+                    out.append("<ul class='ml-5 list-disc text-sm'>" +
+                               "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
         elif kind in _COMPUTED and block.get("visible", True):
             out.append(f'<p class="mt-3 rounded border border-dashed border-seam '
                        f'px-2 py-1 text-xs uppercase tracking-wide text-mist">[{esc(kind)} block]</p>')
