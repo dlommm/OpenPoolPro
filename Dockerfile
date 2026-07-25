@@ -33,4 +33,14 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
 # --proxy-headers so the app trusts X-Forwarded-* behind the reverse proxy and
 # records the real client IP (login audit / rate-limit keys) instead of the proxy's.
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+#
+# FORWARDED_ALLOW_IPS must name the reverse proxy, never "*". With "*", uvicorn
+# trusts the LEFTMOST X-Forwarded-For entry from ANY caller, so request.client.host
+# — and therefore the "ip:" login rate-limit key and every auth audit row — becomes
+# whatever the client types. An attacker rotates the header per request and the IP
+# limiter stops existing (only the per-username limit survives, so password spraying
+# across usernames is unlimited). Default here is the Docker bridge gateway; override
+# it to match your deployment, and keep port 8000 unpublished (or bound to 127.0.0.1)
+# so nothing can reach the app without traversing the proxy.
+ENV FORWARDED_ALLOW_IPS=172.17.0.1
+CMD ["sh", "-c", "exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"$FORWARDED_ALLOW_IPS\""]

@@ -48,6 +48,18 @@ def _parse_int_tolerant(s: str) -> int | None:
         return None
 
 
+def _parse_date_tolerant(s: str) -> date | None:
+    """Blank or malformed -> None. Every other date field in this app parses
+    tolerantly; a bare date.fromisoformat here turns a typo into a 500."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 def _parse_float_tolerant(s: str) -> float | None:
     s = (s or "").strip()
     if not s:
@@ -194,8 +206,9 @@ def create_job(request: Request, mode: str = Form("existing"),
     j = models.Job(property_id=pid, title=title, description=description,
                    priority=priority, labor_cents=labor_cents, hours=hrs)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
-    if scheduled_date:
-        j.scheduled_date = date.fromisoformat(scheduled_date)
+    parsed_scheduled = _parse_date_tolerant(scheduled_date)
+    if parsed_scheduled is not None:
+        j.scheduled_date = parsed_scheduled
         j.status = "scheduled"
     session.add(j)
     session.flush()  # assign j.id before attaching tasks
@@ -295,7 +308,7 @@ def edit_job(request: Request, jid: int, property_id: int = Form(...), title: st
         hrs = _parse_float_tolerant(hours) or 0
         j.hours = hrs
         j.labor_cents = rates.job_labor_cents(rate_cents, hrs)
-    j.scheduled_date = date.fromisoformat(scheduled_date) if scheduled_date else None
+    j.scheduled_date = _parse_date_tolerant(scheduled_date)
     if j.status != "done":
         j.status = "scheduled" if j.scheduled_date else "open"
     session.commit()
@@ -319,15 +332,24 @@ async def complete_job(jid: int, request: Request, session: Session = Depends(ge
     j.completed_by_id = request.state.user.id
     if request.state.user.can("mark_cash"):
         j.paid_cash = form.get("paid_cash") == "1"
-    j.tax_rate_ppm = tax.resolve_rate_ppm(session, j.property.state)
+    # Freeze the tax rate ONCE, at first completion — the same frozen-history
+    # contract visits already honour (app/routers/visits.py). Re-completing to
+    # fix a typo must not re-price the job at a rate that moved on since.
+    if j.tax_rate_ppm is None:
+        j.tax_rate_ppm = tax.resolve_rate_ppm(session, j.property.state)
+    # The override IS the amount billed, so only a money user may set it. The
+    # form hides the field from everyone else, but the endpoint has to enforce
+    # it too, or a hand-crafted POST re-prices the job.
     raw = (form.get("labor_override_dollars") or "").strip()
+    if not request.state.user.can("view_money"):
+        raw = ""
     if raw:
         try:
             cents = round(float(raw) * 100)
             j.labor_override_cents = cents if cents >= 0 and cents != j.labor_cents else None
         except ValueError:
             j.labor_override_cents = None
-    else:
+    elif request.state.user.can("view_money"):
         j.labor_override_cents = None
     session.commit()
     return RedirectResponse("/jobs", status_code=303)

@@ -9,6 +9,12 @@ from app import config, models
 MAX_LONG_EDGE = 2000
 THUMB_LONG_EDGE = 400
 
+# Pillow's own bomb guard only *warns* below 2x its default threshold, so a
+# ~1 MB flat-colour PNG at 13000x13700 passes the byte cap and still expands
+# to hundreds of MB on convert(). Cap the pixel count far below that: a phone
+# camera tops out around 50 MP, and everything is downscaled to 2000px anyway.
+Image.MAX_IMAGE_PIXELS = 40_000_000
+
 
 def _dir(entity_type: str, entity_id: int) -> str:
     d = os.path.join(config.DATA_DIR, "photos", entity_type, str(entity_id))

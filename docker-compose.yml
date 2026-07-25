@@ -2,11 +2,23 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      # Loopback-only. The app trusts X-Forwarded-* from the configured proxy,
+      # so anything that can reach this port directly can forge the client IP
+      # the login rate limiter and audit log key on. Put the reverse proxy in
+      # front; don't publish this on 0.0.0.0.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/data
     environment:
       APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       APP_TZ: ${APP_TZ:-America/New_York}
+      # Must match the address the reverse proxy connects from (see Dockerfile).
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    # Drop everything, then add back only what the entrypoint needs before it
+    # gosu's down to PUID:PGID (chown the data dir, then setuid/setgid).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped

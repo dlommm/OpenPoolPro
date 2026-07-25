@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import models, photos_svc
 from app.db import get_session
+from app.deps import require_perm
 
 router = APIRouter()
 
@@ -25,7 +26,11 @@ def serve(photo_id: int, thumb: int = 0, session: Session = Depends(get_session)
 
 
 @router.post("/photos/{photo_id}/delete", response_class=HTMLResponse)
-def delete(photo_id: int, session: Session = Depends(get_session)):
+def delete(photo_id: int, session: Session = Depends(get_session),
+           user=Depends(require_perm("manage_customers"))):
+    """Deleting is permanent — the row goes and both files are unlinked from
+    disk. Uploading stays open to any signed-in tech (capturing before/after
+    evidence is the job), but destroying that evidence is not."""
     photos_svc.delete_photo(session, photo_id)
     session.flush()
     session.commit()
@@ -40,6 +45,14 @@ async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
     tag = tag if tag in models.PHOTO_TAGS else ""  # tolerant: unknown/blank -> no tag
     frags = []
     for f in files:
+        # Check the size Starlette already recorded while spooling the part,
+        # BEFORE read() pulls the whole thing into one bytes object -- reading
+        # first means a multi-gigabyte part is fully resident in RAM by the
+        # time the cap is consulted, which is an OOM, not a rejection.
+        if (f.size or 0) > MAX_PHOTO_BYTES:
+            frags.append(
+                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} too large (max 20 MB)</span>")
+            continue
         data = await f.read()
         if len(data) > MAX_PHOTO_BYTES:
             frags.append(

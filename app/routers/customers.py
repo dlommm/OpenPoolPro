@@ -38,8 +38,17 @@ def _primary_property(customer: "models.Customer"):
 
 
 def _cents(dollars: str) -> int | None:
+    """Dollar string -> integer cents. Blank, malformed, or negative -> None
+    (no override). A bare float() here turned a typo into a 500, and a
+    negative rate override would flow straight into billing."""
     dollars = (dollars or "").strip().lstrip("$")
-    return None if dollars == "" else round(float(dollars) * 100)
+    if dollars == "":
+        return None
+    try:
+        value = round(float(dollars) * 100)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
 
 
 def _parse_date_tolerant(s: str) -> date | None:
@@ -474,8 +483,8 @@ def _apply_property(p: models.Property, label, street, city, state, zip, gate_co
     p.street, p.city, p.state, p.zip = street.strip(), city.strip(), state.strip(), zip.strip()
     p.address = addresses.compose_address(p.street, p.city, p.state, p.zip)
     p.dog_warning, p.dog_note = dog_warning, dog_note
-    p.frequency, p.weekday = frequency, int(weekday)
-    p.anchor_date = date.fromisoformat(anchor_date) if anchor_date else None
+    p.frequency, p.weekday = frequency, (_parse_int_tolerant(str(weekday)) or 0)
+    p.anchor_date = _parse_date_tolerant(anchor_date)
     if allow_rate:
         p.rate_override_cents = _cents(rate_override_dollars)
         p.spa_rate_override_cents = _cents(spa_rate_override_dollars)

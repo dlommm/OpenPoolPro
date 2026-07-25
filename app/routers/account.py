@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import config, models, security
-from app.auth_core import hash_password, verify_password
+from app.auth_core import MAX_PASSWORD_LEN, hash_password, verify_password
 from app.db import get_session
 from app.deps import current_user
 from app.main import templates
@@ -122,8 +122,9 @@ def change_password(request: Request, current_password: str = Form(""),
         limiter.fail(key)
         ctx = _account_ctx(request, session, user, error="Current password is incorrect")
         return templates.TemplateResponse(request, "account.html", ctx)
-    if len(new_password) < 8:
-        ctx = _account_ctx(request, session, user, error="New password must be 8+ characters")
+    if not 8 <= len(new_password) <= MAX_PASSWORD_LEN:
+        ctx = _account_ctx(request, session, user,
+                           error=f"New password must be 8–{MAX_PASSWORD_LEN} characters")
         return templates.TemplateResponse(request, "account.html", ctx)
     if new_password != new_password_confirm:
         ctx = _account_ctx(request, session, user, error="New passwords don't match")
@@ -138,10 +139,32 @@ def change_password(request: Request, current_password: str = Form(""),
 
 
 @router.post("/account/2fa/enable")
-def start_enroll(request: Request, session: Session = Depends(get_session)):
+def start_enroll(request: Request, current_password: str = Form(""),
+                  session: Session = Depends(get_session)):
+    """Begin TOTP enrollment. Requires the current password.
+
+    Turning 2FA ON is as security-sensitive as turning it off: confirming
+    enrollment binds an authenticator to the account and bumps the epoch,
+    evicting every other session. Without a password check, a hijacked
+    session alone could bind the attacker's authenticator and lock the real
+    owner out with no self-service recovery. This mirrors the step-up that
+    change_password and disable_2fa already require.
+    """
     user = session.get(models.User, request.state.user.id)
     if user.totp_enabled:
         return RedirectResponse("/account", status_code=303)
+
+    limiter = request.app.state.account_limiter
+    key = f"acct:{user.id}"
+    if limiter.locked(key):
+        ctx = _account_ctx(request, session, user,
+                           error="Too many attempts — try again in a few minutes")
+        return templates.TemplateResponse(request, "account.html", ctx)
+    if not verify_password(current_password, user.password_hash):
+        limiter.fail(key)
+        ctx = _account_ctx(request, session, user, error="Current password is incorrect")
+        return templates.TemplateResponse(request, "account.html", ctx)
+    limiter.reset(key)
 
     secret = security.new_totp_secret()
     token = security.sign_pending(config.SECRET_KEY,

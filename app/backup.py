@@ -22,7 +22,12 @@ def _sync_offbox(engine, bdir: str, path: str) -> None:
                        capture_output=True, timeout=600)
         err = ""
     except Exception as e:
-        err = str(e)
+        # Record the failure TYPE only, never str(e): CalledProcessError and
+        # TimeoutExpired both interpolate the full command line, which for a
+        # sync command like `rclone --sftp-pass=... ` would persist that
+        # credential into the DB and from there into every nightly snapshot.
+        rc = getattr(e, "returncode", None)
+        err = f"{type(e).__name__}" + (f" (exit {rc})" if rc is not None else "")
     with Session(engine) as s:
         models.set_setting(s, "last_backup_sync_error", err)
         s.commit()

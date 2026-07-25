@@ -68,7 +68,9 @@
   {% else %}
   <p class="mb-3 text-sm text-mist">Not enabled. Add an authenticator app for extra security at
     sign-in.</p>
-  <form method="post" action="/account/2fa/enable">
+  <form method="post" action="/account/2fa/enable" class="space-y-2">
+    <label class="block"><span class="field-label">Current password</span>
+      <input type="password" name="current_password" autocomplete="current-password" class="field"></label>
     <button class="btn-primary">Enable two-factor authentication</button>
   </form>
   {% endif %}

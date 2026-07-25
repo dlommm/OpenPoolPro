@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth_core import hash_password
+from app.auth_core import MAX_PASSWORD_LEN, hash_password
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import templates
@@ -82,9 +82,10 @@ async def create_user(request: Request, session: Session = Depends(get_session))
     if not username:
         return templates.TemplateResponse(request, "users/form.html",
             _user_form_context(None, error="Username is required"))
-    if len(password) < 8:
+    if not 8 <= len(password) <= MAX_PASSWORD_LEN:
         return templates.TemplateResponse(request, "users/form.html",
-            _user_form_context(None, error="Password must be 8+ characters"))
+            _user_form_context(None,
+                               error=f"Password must be 8–{MAX_PASSWORD_LEN} characters"))
     if session.scalars(select(models.User).where(models.User.username == username)).first():
         return templates.TemplateResponse(request, "users/form.html",
             _user_form_context(None, error=f'Username "{username}" is already taken'))
@@ -144,8 +145,9 @@ async def edit_user(request: Request, uid: int, session: Session = Depends(get_s
 def reset_password(request: Request, uid: int, password: str = Form(...),
                    session: Session = Depends(get_session)):
     u = get_or_404(session, models.User, uid)
-    if len(password) < 8:
-        return HTMLResponse("Password must be 8+ characters", status_code=400)
+    if not 8 <= len(password) <= MAX_PASSWORD_LEN:
+        return HTMLResponse(f"Password must be 8–{MAX_PASSWORD_LEN} characters",
+                            status_code=400)
     u.password_hash = hash_password(password)
     _bump_epoch(request, u)
     models.audit(session, request.state.user.id, "auth.password_changed",
@@ -166,8 +168,10 @@ def _toggle_active(request, session, uid, value):
         if others is None:
             return HTMLResponse("Can't disable the last active admin", status_code=400)
     u.active = value
-    if not value:
-        models.audit(session, me.id, "user.disabled", detail=f"{u.username!r} (id={u.id})")
+    # Restoring access is as audit-worthy as revoking it — logging only the
+    # disable left re-enables (including of a terminated employee) untraced.
+    models.audit(session, me.id, "user.enabled" if value else "user.disabled",
+                 detail=f"{u.username!r} (id={u.id})")
     session.commit()
     return RedirectResponse("/users", status_code=303)
 

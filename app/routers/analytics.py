@@ -11,6 +11,7 @@ from app import analytics, charts, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
+from app.qbo import csv_safe
 from app.routers.today import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -218,7 +219,7 @@ def analytics_export(request: Request, tab: str = "income",
         writer.writerow(["customer", "visits", "labor", "chemicals", "jobs", "total"])
         for r in rows:
             writer.writerow([
-                r.customer.name,
+                csv_safe(r.customer.name),
                 r.visit_count,
                 _format_cents(r.labor_cents),
                 _format_cents(r.chem_billable_cents),
@@ -228,7 +229,7 @@ def analytics_export(request: Request, tab: str = "income",
     elif tab == "crew":
         writer.writerow(["tech", "visits", "jobs", "minutes", "revenue", "revenue_per_hour"])
         for r in rows:
-            tech_name = r.user.name if r.user else "Unattributed"
+            tech_name = csv_safe(r.user.name if r.user else "Unattributed")
             writer.writerow([
                 tech_name,
                 r.visit_count,
@@ -241,16 +242,16 @@ def analytics_export(request: Request, tab: str = "income",
         writer.writerow(["type", "total"])
         for r in rows:
             writer.writerow([
-                r.label,
+                csv_safe(r.label),
                 _format_cents(r.total_cents),
             ])
     elif tab == "chemicals":
         writer.writerow(["chemical", "quantity", "unit", "cost", "billable", "margin"])
         for r in rows:
             writer.writerow([
-                r.chemical.name,
+                csv_safe(r.chemical.name),
                 f"{r.quantity:.2f}",
-                r.chemical.unit,
+                csv_safe(r.chemical.unit),
                 _format_cents(r.cost_cents),
                 _format_cents(r.billable_cents),
                 _format_cents(r.margin_cents),
@@ -268,8 +269,8 @@ def analytics_export(request: Request, tab: str = "income",
         writer.writerow(["customer", "property", "current", "tier", "delta"])
         for r in rows:
             writer.writerow([
-                r.property.customer.name,
-                r.property.label,
+                csv_safe(r.property.customer.name),
+                csv_safe(r.property.label),
                 _format_cents(r.current_cents),
                 _format_cents(r.tier_cents),
                 _format_cents(r.delta_cents),

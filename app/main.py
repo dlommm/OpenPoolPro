@@ -269,7 +269,8 @@ def create_app(engine=None) -> FastAPI:
         # Inject APP_VERSION into the cache names so sw.js's bytes change every
         # release -> the browser detects a new worker -> install/activate purges
         # old caches. Served no-cache so the version check isn't itself cached.
-        js = open("app/static/sw.js").read().replace("__APP_VERSION__", config.APP_VERSION)
+        with open("app/static/sw.js") as fh:
+            js = fh.read().replace("__APP_VERSION__", config.APP_VERSION)
         return Response(js, media_type="application/javascript",
                         headers={"Cache-Control": "no-cache"})
 

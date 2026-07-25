@@ -6,6 +6,8 @@ as integer cents everywhere and only divided to dollars at the render edge here.
 """
 import io
 
+from app.qbo import csv_safe
+
 
 def _d(cents) -> float:
     return round((cents or 0) / 100, 2)
@@ -13,6 +15,12 @@ def _d(cents) -> float:
 
 def table_for(tab: str, rows):
     """Return (headers, data_rows, chart) for a tab.
+
+    Every free-text cell (names, labels, units) goes through ``csv_safe`` —
+    openpyxl turns a string starting with "=" into a live formula, so an
+    operator-entered customer or chemical name would otherwise execute in the
+    owner's spreadsheet on open. Numeric cells stay raw so they keep their
+    money formatting.
 
     headers: list[str]; data_rows: list[list] (money already in dollar floats);
     chart: dict(kind='bar'|'pie'|None, title, labels, values, value_kind) — the
@@ -29,14 +37,14 @@ def table_for(tab: str, rows):
                  "values": [_d(r.total_cents) for r in rows]}
     elif tab == "customers":
         headers = ["Customer", "Visits", "Labor", "Chemicals", "Jobs", "Total"]
-        data = [[r.customer.name, r.visit_count, _d(r.labor_cents), _d(r.chem_billable_cents),
+        data = [[csv_safe(r.customer.name), r.visit_count, _d(r.labor_cents), _d(r.chem_billable_cents),
                  _d(r.job_cents), _d(r.total_cents)] for r in rows]
         top = rows[:10]
         chart = {"kind": "bar", "title": "Revenue by customer", "value_kind": "money",
                  "labels": [r.customer.name for r in top], "values": [_d(r.total_cents) for r in top]}
     elif tab == "crew":
         headers = ["Tech", "Visits", "Jobs", "Minutes", "Revenue", "Rev / hr"]
-        data = [[(r.user.name if r.user else "Unattributed"), r.visit_count, r.job_count,
+        data = [[csv_safe(r.user.name if r.user else "Unattributed"), r.visit_count, r.job_count,
                  r.total_minutes, _d(r.total_cents),
                  _d(r.revenue_per_hour_cents) if r.revenue_per_hour_cents is not None else ""]
                 for r in rows]
@@ -45,12 +53,13 @@ def table_for(tab: str, rows):
                  "values": [_d(r.total_cents) for r in rows]}
     elif tab == "types":
         headers = ["Type", "Total"]
-        data = [[r.label, _d(r.total_cents)] for r in rows]
+        data = [[csv_safe(r.label), _d(r.total_cents)] for r in rows]
         chart = {"kind": "pie", "title": "Job-type mix", "value_kind": "money",
                  "labels": [r.label for r in rows], "values": [_d(r.total_cents) for r in rows]}
     elif tab == "chemicals":
         headers = ["Chemical", "Quantity", "Unit", "Cost", "Billable", "Margin"]
-        data = [[r.chemical.name, round(r.quantity, 2), r.chemical.unit, _d(r.cost_cents),
+        data = [[csv_safe(r.chemical.name), round(r.quantity, 2), csv_safe(r.chemical.unit),
+                 _d(r.cost_cents),
                  _d(r.billable_cents), _d(r.margin_cents)] for r in rows]
         ranked = sorted(rows, key=lambda r: r.margin_cents, reverse=True)[:10]
         chart = {"kind": "bar", "title": "Margin by chemical", "value_kind": "money",
@@ -63,7 +72,8 @@ def table_for(tab: str, rows):
                  "labels": [f"W{r.iso_week}" for r in rows], "values": [r.done for r in rows]}
     else:  # rates
         headers = ["Customer", "Property", "Current", "Tier", "Delta"]
-        data = [[r.property.customer.name, r.property.label, _d(r.current_cents),
+        data = [[csv_safe(r.property.customer.name), csv_safe(r.property.label),
+                 _d(r.current_cents),
                  _d(r.tier_cents), _d(r.delta_cents)] for r in rows]
         chart = None
     return headers, data, chart
@@ -76,7 +86,7 @@ def _kpi_pairs(summary: dict) -> list[tuple[str, str]]:
         ("Visits done", str(summary["visits_done"])),
         ("Avg / visit", f"${_d(summary['avg_per_visit_cents']):,.2f}"),
         ("Customers", str(summary["customer_count"])),
-        ("Top customer", (summary["top_customer"] or "—")),
+        ("Top customer", csv_safe(summary["top_customer"] or "—")),
     ]
 
 

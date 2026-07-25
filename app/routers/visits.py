@@ -182,12 +182,18 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
         v.rate_cents = effective_rate_cents(session, v.property)
     if v.tax_rate_ppm is None:
         v.tax_rate_ppm = tax.resolve_rate_ppm(session, v.property.state)
-    _override = _f(form.get("labor_override_dollars"))
-    if _override is not None and _override >= 0:
-        override_cents = round(_override * 100)
-        v.labor_override_cents = override_cents if override_cents != (v.rate_cents or 0) else None
-    else:
-        v.labor_override_cents = None
+    # The override IS the amount billed for this visit, so only a money user
+    # may set it. The form hides the field from everyone else, but the
+    # endpoint has to enforce it too, or a hand-crafted POST re-prices the
+    # visit — and a non-money tech leaves whatever is already frozen alone.
+    if request.state.user.can("view_money"):
+        _override = _f(form.get("labor_override_dollars"))
+        if _override is not None and _override >= 0:
+            override_cents = round(_override * 100)
+            v.labor_override_cents = (override_cents
+                                      if override_cents != (v.rate_cents or 0) else None)
+        else:
+            v.labor_override_cents = None
     # Preserve frozen history: a prior line's frozen unit cost must survive a
     # re-complete (e.g. fixing a pH typo) even if the catalog price moved on.
     # Only genuinely new lines freeze the current catalog cost.

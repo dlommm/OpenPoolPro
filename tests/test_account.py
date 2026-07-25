@@ -30,11 +30,13 @@ def _audit_rows(engine, action: str) -> list:
         return s.scalars(select(models.AuditLog).where(models.AuditLog.action == action)).all()
 
 
-def _start_enroll(client) -> str:
-    """POST the enable-2FA button and return the freshly-generated secret,
+def _start_enroll(client, password: str = "testpass") -> str:
+    """POST the enable-2FA form and return the freshly-generated secret,
     decoded straight from the signed enroll cookie (rather than scraping
-    the rendered page) so tests aren't coupled to markup."""
-    r = client.post("/account/2fa/enable", follow_redirects=False)
+    the rendered page) so tests aren't coupled to markup. Enrollment is a
+    step-up action: it requires the current password."""
+    r = client.post("/account/2fa/enable", data={"current_password": password},
+                    follow_redirects=False)
     assert r.status_code == 303
     token = r.cookies["cpp_2fa_enroll"]
     payload = security.unsign_pending(config.SECRET_KEY, token, max_age=300)
@@ -42,9 +44,9 @@ def _start_enroll(client) -> str:
     return payload["secret"]
 
 
-def _enable_2fa(client) -> str:
+def _enable_2fa(client, password: str = "testpass") -> str:
     """Full self-service enroll flow -> returns the confirmed secret."""
-    secret = _start_enroll(client)
+    secret = _start_enroll(client, password)
     code = pyotp.TOTP(secret).now()
     r = client.post("/account/2fa/confirm", data={"code": code})
     assert r.status_code == 200 and "backup" in r.text.lower()
@@ -333,7 +335,7 @@ def _make_tech_with_2fa(client, engine, name="fieldtech", password="techpass"):
         uid = u.id
     tech = TestClient(create_app(engine=engine))
     tech.post("/login", data={"username": name, "password": password})
-    secret = _enable_2fa(tech)
+    secret = _enable_2fa(tech, password)
     return uid, tech, secret
 
 

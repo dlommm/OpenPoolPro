@@ -32,18 +32,20 @@ def export_customers(request: Request, session: Session = Depends(get_session)):
         c = p.customer
         pool = next((x for x in p.pools if x.active), None)
         tech = session.get(models.User, p.assigned_tech_id) if p.assigned_tech_id else None
-        # Free-text cells are formula-injection-neutralized; numeric/enum cells
-        # (rate, dimensions, weekday) are left raw so they re-import cleanly.
+        # Free-text cells are formula-injection-neutralized; genuinely numeric
+        # cells (rate, dimensions, weekday) are left raw so they re-import
+        # cleanly. frequency/username/water_type look enum-ish but nothing
+        # constrains them at the write side, so they get neutralized too.
         w.writerow([
             csv_safe(c.name), csv_safe(c.qb_display_name), csv_safe(c.phone),
             csv_safe(c.email), csv_safe(c.notes),
             csv_safe(p.label), csv_safe(p.address), csv_safe(p.gate_code),
-            csv_safe(p.dog_note), p.frequency, p.weekday,
+            csv_safe(p.dog_note), csv_safe(p.frequency), p.weekday,
             f"{p.rate_override_cents / 100:.2f}" if p.rate_override_cents is not None else "",
-            tech.username if tech else "",
-            pool.shape if pool else "", pool.length_ft if pool else "",
+            csv_safe(tech.username) if tech else "",
+            csv_safe(pool.shape) if pool else "", pool.length_ft if pool else "",
             (pool.width_ft if pool.width_ft is not None else "") if pool else "",
-            pool.avg_depth_ft if pool else "", pool.water_type if pool else "",
+            pool.avg_depth_ft if pool else "", csv_safe(pool.water_type) if pool else "",
         ])
     models.audit(session, request.state.user.id, "export.customers", detail=f"{len(props)} properties")
     session.commit()

@@ -26,7 +26,20 @@ services:
     restart: unless-stopped
 
     ports:
+      # Behind a reverse proxy (the recommended setup), bind loopback only:
+      #   - "127.0.0.1:8000:8000"
+      # The app trusts X-Forwarded-* from FORWARDED_ALLOW_IPS below, so anything
+      # able to reach this port directly can forge the client IP that the login
+      # rate limiter and the auth audit log key on. Publish on 0.0.0.0 ONLY for
+      # direct LAN access with no proxy in front.
       - "8000:8000"                 # host:container — change the host side if 8000 is in use
+
+    # Drop everything, then add back only what the entrypoint needs before it
+    # gosu's down to PUID:PGID (chown the data dir, then setuid/setgid).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
 
     volumes:
       # Prefer a direct-disk path over the /mnt/user FUSE share for SQLite/WAL
@@ -47,6 +60,12 @@ services:
       #     session cookie is marked Secure and never travels over plain HTTP.
       #     Set to "0" ONLY if you access the app directly over http:// on the LAN. ---
       COOKIE_SECURE: "1"
+
+      # --- Address the reverse proxy connects FROM. Must not be "*": with "*"
+      #     uvicorn trusts the leftmost X-Forwarded-For from any caller, so the
+      #     login rate-limit key and audit-log client IP become client-supplied
+      #     and IP-based brute-force protection stops working. ---
+      FORWARDED_ALLOW_IPS: "172.17.0.1"
 
       # --- Optional: outbound email (invoices, notifications) ---
       # SMTP_HOST: "smtp.example.com"
