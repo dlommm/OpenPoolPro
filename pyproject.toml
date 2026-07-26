@@ -1,2 +1,5 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "unit: pure-logic test that never builds the app or drives an HTTP client. `pytest -m unit` is the fast inner loop.",
+]

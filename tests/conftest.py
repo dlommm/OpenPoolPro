@@ -2,6 +2,31 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.config as config
+from app import auth_core
+
+# Bcrypt at production cost (~250 ms/hash) dominated this suite's runtime:
+# every `client` fixture rebuilds the app (seeds.run hashes APP_PASSWORD) and
+# then logs in (a verify), so 500+ tests each paid ~0.5 s of pure KDF.
+#
+# Mutate the shared CryptContext IN PLACE rather than rebinding it: app/security.py
+# does `from app.auth_core import pwd_context`, so a rebind would leave backup-code
+# hashing on the old context. The scheme stays bcrypt — only the work factor moves,
+# so every code path under test behaves identically.
+auth_core.pwd_context.update(bcrypt__rounds=4)
+
+_CLIENT_FIXTURES = {"client", "tech_client"}
+
+
+def pytest_collection_modifyitems(items):
+    """Auto-mark every test that never builds the app as `unit`.
+
+    Derived from the fixtures a test actually requests rather than a hand-kept
+    file list, so a new pure-logic test joins the fast subset for free and one
+    that grows an HTTP client drops out of it automatically.
+    """
+    for item in items:
+        if not _CLIENT_FIXTURES & set(getattr(item, "fixturenames", ())):
+            item.add_marker(pytest.mark.unit)
 
 
 @pytest.fixture

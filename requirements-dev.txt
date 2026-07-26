@@ -2,5 +2,6 @@
 # Dockerfile, which installs requirements.txt only). CI installs both.
 -r requirements.txt
 pytest>=8.0
+pytest-xdist>=3.5
 httpx>=0.27
 pytailwindcss>=0.2
