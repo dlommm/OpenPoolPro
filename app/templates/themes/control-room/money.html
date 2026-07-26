@@ -45,6 +45,7 @@
         <div class="line"><span>Labor ({{ r.labor_visits }} visit{{ "s" if r.labor_visits != 1 }})</span><span class="money">{{ r.labor_cents | dollars }}</span></div>
         <div class="line"><span>Chemicals (cost {{ r.chem_cost_cents | dollars }})</span><span class="money">{{ r.chem_billable_cents | dollars }}</span></div>
         {% for j in r.jobs %}<div class="line"><span>Job: {{ j.title }}</span><span class="money">{{ j.labor_cents | dollars }}</span></div>{% endfor %}
+        {% if grand_tax %}<div class="line"><span>Sales tax</span><span class="money">{{ r.tax_cents | dollars }}</span></div>{% endif %}
       </div>
     </details>
     {% endfor %}
@@ -62,6 +63,10 @@
     <div class="cr-billsum">
       <div class="b"><span class="k">Customers billed</span><span class="v">{{ rows | length }}</span></div>
       <div class="b"><span class="k">Total billable</span><span class="v am money">{{ grand | dollars }}</span></div>
+      {% if grand_tax %}
+      <div class="b"><span class="k">Sales tax</span><span class="v money">{{ grand_tax | dollars }}</span></div>
+      <div class="b"><span class="k">Grand total</span><span class="v am money">{{ grand_total | dollars }}</span></div>
+      {% endif %}
       <div class="sp"></div>
       <a href="/money/export?ym={{ ym }}" class="btn-primary" style="width:auto;min-width:220px">
         {{ ui.icon("chevron", "h-4 w-4 rotate-90") }}Export for QuickBooks</a>

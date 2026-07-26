@@ -73,6 +73,7 @@
 <form method="post" action="/jobs/{{ j.id }}/complete">
   <div class="card mb-2 p-3.5 space-y-2">
     <h2 class="font-display text-lg font-bold uppercase tracking-wide">Amount to collect</h2>
+    {% if show_money %}
     <label class="block">
       <span class="field-label">Service <span class="money">({{ collect.service_cents | dollars }} default)</span></span>
       <div class="money-in"><span>$</span>
@@ -80,6 +81,14 @@
                value="{{ '%.2f'|format(collect.service_cents / 100) }}"
                class="field font-data font-semibold"></div>
     </label>
+    {% else %}
+    {# The server discards labor_override_dollars without view_money — an editable
+       box here would let a tech grant a discount the billing never sees. #}
+    <div class="flex justify-between font-data text-sm text-mist">
+      <span>Service</span>
+      <span id="collect-service" class="money">{{ collect.service_cents | dollars }}</span>
+    </div>
+    {% endif %}
     <div class="flex justify-between font-data text-sm text-mist">
       <span>Tax</span><span id="collect-tax" class="money">{{ collect.tax_cents | dollars }}</span>
     </div>

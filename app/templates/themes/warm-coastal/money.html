@@ -37,6 +37,13 @@
   </div>
 </div>
 
+{% if grand_tax %}
+<div class="mb-4 space-y-0.5 font-data text-sm text-mist">
+  <div class="flex justify-between"><span>Sales tax</span><span class="money">{{ grand_tax | dollars }}</span></div>
+  <div class="flex justify-between font-semibold text-ink"><span>Grand total</span><span class="money">{{ grand_total | dollars }}</span></div>
+</div>
+{% endif %}
+
 {# ---- Per-customer billing rows ---- #}
 <div class="rise space-y-2">
   {% for r in rows %}
@@ -47,6 +54,7 @@
       <div class="flex justify-between"><span>Labor ({{ r.labor_visits }} visits)</span><span class="money">{{ r.labor_cents | dollars }}</span></div>
       <div class="flex justify-between"><span>Chemicals (cost {{ r.chem_cost_cents | dollars }})</span><span class="money">{{ r.chem_billable_cents | dollars }}</span></div>
       {% for j in r.jobs %}<div class="flex justify-between"><span>Job: {{ j.title }}</span><span class="money">{{ j.labor_cents | dollars }}</span></div>{% endfor %}
+      {% if grand_tax %}<div class="flex justify-between"><span>Sales tax</span><span class="money">{{ r.tax_cents | dollars }}</span></div>{% endif %}
     </div>
   </details>
   {% else %}
