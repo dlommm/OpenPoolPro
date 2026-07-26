@@ -16,6 +16,28 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 
 TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
 
+# Older than this and the nightly snapshot is presumed to have stopped running.
+BACKUP_STALE_HOURS = 36
+
+
+def _backup_is_stale(session) -> bool:
+    """True when the last successful backup is old (or never happened).
+
+    A backup that silently stops is indistinguishable from one that works until
+    the day it is needed, so the absence of a recent success has to be visible
+    on its own — not just the presence of an error.
+    """
+    from datetime import datetime, timedelta
+    stamp = models.get_setting(session, "last_backup_at", "")
+    if not stamp:
+        return True
+    try:
+        when = datetime.fromisoformat(stamp)
+    except ValueError:
+        return True
+    now = datetime.now(when.tzinfo) if when.tzinfo else datetime.now()
+    return (now - when) > timedelta(hours=BACKUP_STALE_HOURS)
+
 
 def _parse_count(s: str | None) -> int | None:
     if not s:
@@ -97,6 +119,12 @@ def settings_page(request: Request, rules_created: str | None = None,
         "business_name": models.get_setting(session, "business_name", ""),
         "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
+        # Off-box sync failing is the quiet one: the local snapshot succeeds, so
+        # nothing looks wrong while the only copy that survives a dead disk
+        # silently stops being made.
+        "backup_sync_error": models.get_setting(session, "last_backup_sync_error", ""),
+        "backup_at": models.get_setting(session, "last_backup_at", ""),
+        "backup_stale": _backup_is_stale(session),
         "role_values": models.ROLE_VALUES,
         "targets": targets,
         "rules_created": _parse_count(rules_created),

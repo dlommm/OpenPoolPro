@@ -13,6 +13,12 @@
 
 {# ---- global feedback banners (visible on any tab) ---- #}
 {% if backup_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
+{% if backup_sync_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+  Off-box backup sync failed ({{ backup_sync_error }}). The local snapshot succeeded, but the copy
+  that would survive a dead disk did not — check BACKUP_SYNC_CMD.</p>{% endif %}
+{% if backup_stale %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+  No successful backup in the last 36 hours{{ " (last: " ~ backup_at ~ ")" if backup_at }}.
+  A backup that has quietly stopped looks exactly like one that works, until you need it.</p>{% endif %}
 {% if rules_created is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
 {% if mail_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>{% endif %}
 {% if mail_result is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}

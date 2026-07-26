@@ -76,6 +76,79 @@ folder.
   the upgrade will have its pending cookie rejected; the 5-minute pending
   TTL self-heals, and affected users just restart the login.
 
+## Backup & restore
+
+Every night at 01:00 (business timezone) the app writes one **generation**
+into `data/backups/`:
+
+    app-YYYY-MM-DD.db        SQLite snapshot (VACUUM INTO — consistent, no WAL needed)
+    assets-YYYY-MM-DD.tar.gz photos/, invoices/, contracts/, branding/
+
+The two halves belong together: the database stores *filenames*, so a
+DB-only restore brings back visits whose photos and customer-signed
+contract PDFs are missing. Both are kept for 14 generations and pruned in
+step. If the box is off at 01:00 (night reboot, deploy), the next start
+takes the missed snapshot instead of skipping the night.
+
+The 14 generations sit on the same disk as the live database — set
+`BACKUP_SYNC_CMD` to also ship each one off the box, e.g.
+`rclone copy "$BACKUP_FILE" remote:pool-backups && rclone copy "$BACKUP_ASSETS_FILE" remote:pool-backups`.
+It runs with `BACKUP_DIR`, `BACKUP_FILE`, and `BACKUP_ASSETS_FILE` in its
+environment. Only the failure *type* is ever recorded, so a command with a
+password in it never lands in the database.
+
+### RESTORE
+
+Do these in order. **Never copy a snapshot over a running app** — the live
+`app.db-wal` will replay frames from the *old* database over the restored
+one and silently corrupt it. `scripts/restore.sh` handles this; use it.
+
+1. **Stop the app.** Nothing may hold `data/app.db` open.
+
+       docker compose stop            # or: docker stop openpoolpro (Unraid)
+
+2. **Pick a generation.** They are listed newest-first in Settings →
+   Backups, or on disk:
+
+       ls -1 data/backups
+
+3. **Run the restore.** With no arguments it takes the newest generation
+   and prompts before anything destructive:
+
+       ./scripts/restore.sh                          # newest
+       ./scripts/restore.sh 2026-07-01               # a specific date
+       ./scripts/restore.sh --yes --data-dir /mnt/cache/appdata/openpoolpro
+       ./scripts/restore.sh --help                   # all options
+
+   It refuses to run while the app is up, verifies the snapshot with
+   `PRAGMA integrity_check` *before* touching anything, moves the existing
+   `app.db` **and its `-wal`/`-shm` sidecars** aside to
+   `*.pre-restore-<timestamp>` (never deletes them), installs the snapshot,
+   re-checks integrity — rolling back if it fails — then restores the asset
+   archive, moving any replaced `photos/` `invoices/` `contracts/`
+   `branding/` aside the same way. It prints every step it took.
+
+   If the container name is not `openpoolpro`, pass `--container <name>` so
+   the "is it still running?" guard checks the right one.
+
+4. **Fix ownership** if you ran it as root on the host (Unraid does):
+
+       chown -R 99:100 /mnt/cache/appdata/openpoolpro   # your PUID:PGID
+
+5. **Start the app and verify.**
+
+       docker compose up -d
+
+   Open a customer, a visit photo, and a signed contract PDF before you
+   trust the restore.
+
+6. **Clean up** the `*.pre-restore-<timestamp>` leftovers once you are
+   satisfied — until then they are your way back.
+
+Restoring from a copy pulled off-box works the same way: put
+`app-<date>.db` and `assets-<date>.tar.gz` in a directory together and
+pass the path to the `.db` file.
+
 ## Email notifications
 
 Customers who opt in (a per-customer "Email visit notifications" checkbox

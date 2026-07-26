@@ -1,4 +1,5 @@
 import contextvars
+import logging
 import os
 
 from fastapi import FastAPI, Request
@@ -8,8 +9,10 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import BaseLoader, FileSystemLoader, TemplateNotFound
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, models, seeds, timefmt  # noqa: F401
+from app import config, models, observability, seeds, timefmt  # noqa: F401
 from app.db import Base, make_engine
+
+log = logging.getLogger("openpoolpro.app")
 
 # --- Multi-theme system --------------------------------------------------
 # The active theme for the current request/task. Set once per request in the
@@ -109,6 +112,12 @@ def _low_stock_count(request) -> int:
         with Session(request.app.state.engine) as s:
             return len(inventory_module.low_stock(s))
     except Exception:
+        # Still degrade to no badge, but say so: whatever breaks this query
+        # (locked/corrupt DB, a migration half-applied) is one step away from
+        # breaking real pages, and a badge that silently reads 0 looks
+        # identical to genuinely healthy stock.
+        log.warning("low-stock badge query failed; rendering without a badge",
+                    exc_info=True)
         return 0
 
 
@@ -116,6 +125,11 @@ templates.env.globals["low_stock_count"] = _low_stock_count
 
 
 def create_app(engine=None) -> FastAPI:
+    # First thing, so anything below (migrations, seeding, scheduler wiring)
+    # that fails during boot fails somewhere an operator can read.
+    observability.configure_logging()
+    log.info("OpenPoolPro %s starting (tz=%s, scheduler=%s)",
+             config.APP_VERSION, config.TIMEZONE, config.RUN_SCHEDULER)
     app = FastAPI(title="OpenPoolPro")
     # A real boot builds its own file-backed engine; the test suite always
     # injects an in-memory engine. Enforce secure secrets only on the former,
@@ -209,6 +223,16 @@ def create_app(engine=None) -> FastAPI:
 
     app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY,
                         max_age=60 * 60 * 24 * 90, https_only=config.COOKIE_SECURE)
+
+    # Registered here -- after SessionMiddleware, before security_headers -- so
+    # it lands just INSIDE the outermost layer. That position sees every
+    # exception raised below it (routers, require_auth's own DB lookup, the
+    # csrf guard, session decoding) and times the whole request, while leaving
+    # the ordering rules above and below it exactly as they were: it neither
+    # reads the session nor short-circuits, so nothing depends on where it sits
+    # relative to the auth/csrf pair. It observes only -- no response is
+    # touched and the exception is re-raised, so responses are unchanged.
+    app.middleware("http")(observability.request_logging_middleware())
 
     # Outermost middleware (registered last -- Starlette's add_middleware/
     # @app.middleware both prepend, so whatever is added last wraps
@@ -345,14 +369,32 @@ def create_app(engine=None) -> FastAPI:
     app.include_router(contract_template_router.router)
 
     if config.RUN_SCHEDULER:
-        from app.backup import start_scheduler
+        from app.backup import backup_if_stale, start_scheduler
         from app.maintenance import run_nightly
         from app import mailer
+        # Every job goes through logged_job: they run unattended at 1am with
+        # nobody watching, and an unwrapped failure leaves nothing behind but a
+        # line in a logger no one reads.
         app.state.scheduler = start_scheduler(app.state.engine)
-        app.state.scheduler.add_job(run_nightly, "cron", hour=1, minute=15,
+        # start_scheduler owns the SCHEDULE of the jobs it registers (the
+        # nightly backup), so re-point their funcs instead of re-registering
+        # them here -- duplicating "cron 1:00" in two modules is how the two
+        # drift apart. Wrapping whatever it registered also means a job added
+        # there later is logged without anyone remembering to come back here.
+        for job in app.state.scheduler.get_jobs():
+            job.modify(func=observability.logged_job(job.func, job.name))
+        app.state.scheduler.add_job(observability.logged_job(run_nightly),
+                                    "cron", hour=1, minute=15,
                                     args=[app.state.engine])
-        app.state.scheduler.add_job(mailer.flush_job, "interval", minutes=5,
+        app.state.scheduler.add_job(observability.logged_job(mailer.flush_job),
+                                    "interval", minutes=5,
                                     args=[app.state.engine])
+        # The scheduler is in-process and non-persistent: a box that was down at
+        # 01:00 (night deploy, Unraid reboot) silently skips that night and
+        # nothing notices, so "14 daily generations" can quietly become 14
+        # copies of one stale day. Never raises — a failure lands in
+        # last_backup_error rather than stopping the app from starting.
+        backup_if_stale(app.state.engine)
 
         @app.on_event("shutdown")
         def _stop_scheduler():

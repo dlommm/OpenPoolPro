@@ -250,12 +250,15 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     try:
         jobs = app.state.scheduler.get_jobs()
         assert len(jobs) == 3
-        funcs = {j.func for j in jobs}
+        # create_app registers every job through observability.logged_job, so
+        # the scheduled callable is the wrapper -- unwrap to identify the target.
+        funcs = {getattr(j.func, "__wrapped__", j.func) for j in jobs}
         assert run_backup in funcs
         assert run_nightly in funcs
         assert mailer.flush_job in funcs
 
-        mail_job = next(j for j in jobs if j.func is mailer.flush_job)
+        mail_job = next(j for j in jobs
+                        if getattr(j.func, "__wrapped__", None) is mailer.flush_job)
         assert tuple(mail_job.args) == (engine,)
         assert "interval" in str(mail_job.trigger) or "0:05:00" in str(mail_job.trigger)
     finally:
