@@ -44,6 +44,21 @@ INDEXES = [
     ("ix_photos_entity", "photos", "entity_type, entity_id"),
     ("ix_jobs_status", "jobs", "status"),
     ("ix_audit_log_at", "audit_log", "at"),
+    # SQLAlchemy does not index a ForeignKey column unless asked, so every one
+    # of these was a full table scan. visit_chemicals is the fastest-growing
+    # table in the schema (~2 rows per visit) and is scanned by every
+    # selectinload of Visit.chemicals — analytics, the QBO rollup, invoicing
+    # and the customer timeline all pay it repeatedly.
+    ("ix_visit_chemicals_visit_id", "visit_chemicals", "visit_id"),
+    ("ix_jobs_property_id", "jobs", "property_id"),
+    ("ix_jobs_completed_at", "jobs", "completed_at"),
+    ("ix_jobs_scheduled_date", "jobs", "scheduled_date"),
+    ("ix_properties_customer_id", "properties", "customer_id"),
+    ("ix_service_holds_property_start", "service_holds", "property_id, start_date"),
+    ("ix_audit_log_user_id", "audit_log", "user_id"),
+    ("ix_invoices_customer_period", "invoices", "customer_id, period_year, period_month"),
+    ("ix_comm_log_customer_id", "comm_log", "customer_id"),
+    ("ix_photos_taken_at", "photos", "taken_at"),
 ]
 
 COLUMNS = {

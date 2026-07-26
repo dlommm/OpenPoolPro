@@ -380,10 +380,8 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
 
     lifetime_cents = None
     if user.can("view_money"):
-        from app.analytics import revenue_by_customer
-        rows = revenue_by_customer(session, date(2000, 1, 1), today)
-        row = next((r for r in rows if r.customer.id == cid), None)
-        lifetime_cents = row.total_cents if row else 0
+        from app.analytics import lifetime_revenue_cents
+        lifetime_cents = lifetime_revenue_cents(session, cid)
 
     return templates.TemplateResponse(request, "customers/detail.html",
         {"c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,

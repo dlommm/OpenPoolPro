@@ -99,17 +99,89 @@ def effective_tech_id(assigned_id: int | None, absences: dict[int, int | None]) 
     return cover
 
 
-def stops_for_date(session: Session, d: date) -> list[Stop]:
-    visits = {v.property_id: v for v in _visits_on(session, d)}
+class ScheduleWindow:
+    """Every row the scheduler needs for a RANGE of dates, fetched once.
+
+    `stops_for_date` issues ~7 queries and materializes every active property
+    and customer. Callers that need consecutive days — the Week page (7 days),
+    `missed_stops` (14) and the dashboard (both) — were paying that per day, so
+    one Today render cost ~120 queries and ~9,000 ORM row loads. Loading the
+    window up front collapses that to a handful of queries and one property
+    scan; the per-day logic below is unchanged, it just reads from these maps
+    instead of the database.
+    """
+
+    def __init__(self, session: Session, start: date, end: date):
+        self.start, self.end = start, end
+
+        visits = session.scalars(select(models.Visit).where(
+            models.Visit.date >= start, models.Visit.date <= end)).all()
+        self._by_date: dict[date, dict[int, models.Visit]] = {}
+        for v in visits:
+            self._by_date.setdefault(v.date, {})[v.property_id] = v
+
+        moved = session.scalars(select(models.Visit).where(
+            models.Visit.original_date >= start,
+            models.Visit.original_date <= end)).all()
+        self._suppressed: dict[date, set[int]] = {}
+        for v in moved:
+            self._suppressed.setdefault(v.original_date, set()).add(v.property_id)
+
+        # A hold can cover any day in the window if it started on or before the
+        # last day and has not resumed before the first — same predicate as
+        # active_hold_map, widened to the range and evaluated per day below.
+        self._holds = [h for h in session.scalars(select(models.ServiceHold).where(
+            models.ServiceHold.start_date <= end)).all()
+            if h.resume_date is None or h.resume_date > start]
+
+        self._absences = session.scalars(select(models.TechAbsence).where(
+            models.TechAbsence.start_date <= end, models.TechAbsence.end_date >= start)
+            .order_by(models.TechAbsence.id)).all()
+
+        self.active_user_ids = {u.id for u in session.scalars(
+            select(models.User).where(models.User.active)).all()}
+
+        props = session.scalars(select(models.Property).where(models.Property.active)
+                                .options(selectinload(models.Property.customer))).all()
+        self.properties = [p for p in props if p.customer.active]
+
+    def visits_on(self, d: date) -> dict[int, models.Visit]:
+        return self._by_date.get(d, {})
+
+    def suppressed_on(self, d: date) -> set[int]:
+        return self._suppressed.get(d, set())
+
+    def held_on(self, d: date) -> set[int]:
+        return {h.property_id for h in self._holds
+                if h.start_date <= d and (h.resume_date is None or d < h.resume_date)}
+
+    def absences_on(self, d: date) -> dict[int, int | None]:
+        """Mirrors absence_map: later-created rows win, and a cover who is no
+        longer an active user resolves to unassigned."""
+        result: dict[int, int | None] = {}
+        for a in self._absences:
+            if not (a.start_date <= d <= a.end_date):
+                continue
+            cover = a.cover_tech_id
+            if cover is not None and cover not in self.active_user_ids:
+                cover = None
+            result[a.user_id] = cover
+        return result
+
+
+def stops_for_date(session: Session, d: date,
+                   window: "ScheduleWindow | None" = None) -> list[Stop]:
+    """Stops for one day. Pass a `ScheduleWindow` covering `d` to reuse rows
+    already fetched for a range instead of re-querying per day."""
+    if window is None:
+        window = ScheduleWindow(session, d, d)
+    visits = window.visits_on(d)
     # Suppressed: any property with a visit that has original_date == d (the visit moved away)
-    suppressed_visits = session.scalars(select(models.Visit).where(models.Visit.original_date == d)).all()
-    suppressed = {v.property_id for v in suppressed_visits}
-    held_ids = active_hold_map(session, d)
-    absences = absence_map(session, d)
+    suppressed = window.suppressed_on(d)
+    held_ids = window.held_on(d)
+    absences = window.absences_on(d)
     stops: list[Stop] = []
-    props = session.scalars(select(models.Property).where(models.Property.active)
-                            .options(selectinload(models.Property.customer))).all()
-    props = [p for p in props if p.customer.active]
+    props = window.properties
     for p in props:
         eff = effective_tech_id(p.assigned_tech_id, absences)
         v = visits.get(p.id)
@@ -218,12 +290,16 @@ def visible_to(user, assigned_tech_id, active_ids: set[int]) -> bool:
     return assigned_tech_id not in active_ids  # assignee disabled -> treat as unassigned
 
 
-def missed_stops(session: Session, today: date, lookback_days: int = 14) -> list[MissedStop]:
+def missed_stops(session: Session, today: date, lookback_days: int = 14,
+                 window: "ScheduleWindow | None" = None) -> list[MissedStop]:
     latest_unresolved: dict[int, MissedStop] = {}
+    earliest = today - timedelta(days=lookback_days)
+    if window is None:
+        window = ScheduleWindow(session, earliest, today)
     for i in range(1, lookback_days + 1):
         d = today - timedelta(days=i)
-        held_ids = active_hold_map(session, d)
-        for stop in stops_for_date(session, d):
+        held_ids = window.held_on(d)
+        for stop in stops_for_date(session, d, window=window):
             pid = stop.property.id
             if pid in latest_unresolved:
                 continue

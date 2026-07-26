@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import config, models
 from app.db import get_session, get_or_404
 from app.main import templates
-from app.scheduling import stops_for_date, visible_to
+from app.scheduling import ScheduleWindow, stops_for_date, visible_to
 
 router = APIRouter()
 
@@ -29,8 +29,11 @@ def week_page(request: Request, start: date | None = None, tech: int | None = No
         models.User.active).order_by(models.User.name)).all() if user.can("view_all_routes") else []
     tech_counts = Counter()
     day_stops = {}
+    # One window for the whole week: without it each of the 7 days re-queried
+    # every active property, hold and absence from scratch.
+    window = ScheduleWindow(session, days[0], days[-1])
     for d in days:
-        stops = stops_for_date(session, d)
+        stops = stops_for_date(session, d, window=window)
         if user.can("view_all_routes"):
             tech_counts.update(s.effective_tech_id for s in stops if s.effective_tech_id is not None)
         if not user.can("view_all_routes"):

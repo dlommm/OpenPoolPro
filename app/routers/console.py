@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,7 +10,8 @@ from app.deps import require_admin
 from app.maintenance import warranty_alerts
 from app.main import templates
 from app.routers.today import business_today
-from app.scheduling import missed_stops, stops_for_date, visible_to
+from app.scheduling import (ScheduleWindow, missed_stops, stops_for_date,
+                            visible_to)
 
 router = APIRouter()
 
@@ -18,8 +21,11 @@ def dashboard(request: Request, session: Session = Depends(get_session),
               user=Depends(require_admin)):
     d = business_today()
     rows = qbo.month_rollup(session, d.year, d.month)
-    stops = stops_for_date(session, d)
-    missed = missed_stops(session, d)
+    # Shared window for today plus the 14-day lookback — the dashboard was the
+    # heaviest page in the app, paying the full scheduler pass 15 times over.
+    window = ScheduleWindow(session, d - timedelta(days=14), d)
+    stops = stops_for_date(session, d, window=window)
+    missed = missed_stops(session, d, window=window)
     open_jobs = session.scalars(select(models.Job).where(
         models.Job.status == "open")).all()
     techs = session.scalars(select(models.User).where(

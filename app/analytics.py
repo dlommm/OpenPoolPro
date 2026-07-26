@@ -198,6 +198,48 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
     return sorted(rows.values(), key=lambda r: r.total_cents, reverse=True)
 
 
+def lifetime_revenue_cents(session: Session, customer_id: int) -> int:
+    """All-time billable total for ONE customer.
+
+    Applies exactly the rules `revenue_by_customer` does — frozen labor via
+    `tax.effective_labor_cents`, chemical lines through `qbo.billable_for_vc`
+    at the current markup — but scoped to this customer's properties, so the
+    two agree to the cent for any customer.
+
+    The customer-detail page previously got this number by calling
+    `revenue_by_customer(session, date(2000,1,1), today)` and discarding every
+    row but one. That materialized every done visit and job in the business
+    (plus chemical lines, catalog rows, properties, customers and techs) on
+    each page view, making the most-clicked drill-down the only page whose
+    cost grew with total lifetime history rather than a bounded window.
+    """
+    property_ids = session.scalars(select(models.Property.id).where(
+        models.Property.customer_id == customer_id)).all()
+    if not property_ids:
+        return 0
+
+    markup = _markup(session)
+    total = 0
+
+    visits = session.scalars(select(models.Visit).where(
+        models.Visit.property_id.in_(property_ids),
+        models.Visit.status == "done").options(
+            selectinload(models.Visit.chemicals))).all()
+    for v in visits:
+        total += tax.effective_labor_cents(v)
+        for vc in v.chemicals:
+            total += qbo.billable_for_vc(vc, markup)
+
+    jobs = session.scalars(select(models.Job).where(
+        models.Job.property_id.in_(property_ids),
+        models.Job.status == "done",
+        models.Job.completed_at.is_not(None))).all()
+    for j in jobs:
+        total += tax.effective_labor_cents(j)
+
+    return total
+
+
 def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
     markup = _markup(session)
     rows: dict[int | None, TechRow] = {}

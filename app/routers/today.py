@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app import config, models
 from app.db import get_session
 from app.main import templates
-from app.scheduling import missed_stops, stops_for_date, visible_to
+from app.scheduling import (ScheduleWindow, missed_stops, stops_for_date,
+                            visible_to)
 
 router = APIRouter()
 
@@ -43,8 +44,12 @@ def today_page(request: Request, tech: int | None = None,
                session: Session = Depends(get_session)):
     user = request.state.user
     d = business_today()
-    stops = stops_for_date(session, d)
-    missed = missed_stops(session, d)
+    # One window covers today AND the 14-day missed-stop lookback, so the two
+    # calls below share a single set of queries instead of each re-fetching
+    # every active property, hold and absence per day.
+    window = ScheduleWindow(session, d - timedelta(days=14), d)
+    stops = stops_for_date(session, d, window=window)
+    missed = missed_stops(session, d, window=window)
     jobs = session.scalars(
         select(models.Job).where(models.Job.status == "scheduled",
                                  models.Job.scheduled_date == d)).all()
