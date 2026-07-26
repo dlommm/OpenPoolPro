@@ -58,8 +58,14 @@ def test_body_omits_task_section_when_no_tasks_completed(client, engine):
         "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": ""})
     with Session(engine) as s:
         row = s.scalars(select(models.EmailOutbox)).one()
-        lines = row.body.splitlines()
-        assert lines == ["OpenPoolPro", "Home", "July 13, 2026", "Technician: Owner"]
+        body = row.body
+        # A visit with nothing recorded reports only who came and when: every
+        # optional section is omitted rather than rendered with an empty list.
+        assert "OpenPoolPro" in body
+        assert "Home — July 13, 2026" in body
+        assert "Technician: Owner" in body
+        for section in ("Water test:", "Chemicals added:", "Completed:", "Notes:"):
+            assert section not in body, f"empty {section!r} section was rendered"
 
 
 def test_honors_configured_business_name(client, engine):

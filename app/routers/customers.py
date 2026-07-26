@@ -561,6 +561,24 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
 
+@router.get("/properties/{pid}/water")
+def water_history(request: Request, pid: int, session: Session = Depends(get_session)):
+    """Chemistry trend for one property.
+
+    Deliberately its own page rather than a section of customers/detail.html:
+    that template has a per-theme override in each of the three themes, so
+    anything added there has to be written four times or it silently fails to
+    appear for most users. A new page has no override and renders everywhere.
+    """
+    from app import charts, water_history as wh
+
+    p = get_or_404(session, models.Property, pid)
+    series = wh.for_property(session, pid)
+    return templates.TemplateResponse(request, "customers/water_history.html", {
+        "prop": p, "c": p.customer, "series": series,
+        "charts": {s.key: charts.reading_chart(s) for s in series}})
+
+
 @router.get("/properties/{pid}/edit")
 def edit_property_form(request: Request, pid: int, session: Session = Depends(get_session),
                        user=Depends(require_perm("manage_customers"))):

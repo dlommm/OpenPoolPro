@@ -85,6 +85,7 @@
       </div>
     </div>
     <a href="/properties/{{ p.id }}/edit" class="min-h-11 shrink-0 text-sm text-pool">Edit</a>
+    <a href="/properties/{{ p.id }}/water" class="min-h-11 shrink-0 text-sm text-pool">Water</a>
   </div>
   {% else %}
   <p class="text-sm text-mist">No properties yet.</p>
@@ -164,6 +165,7 @@
     <div class="flex justify-between gap-2">
       <div class="font-semibold">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
       <a href="/properties/{{ p.id }}/edit" class="min-h-11 text-sm text-pool">Edit</a>
+    <a href="/properties/{{ p.id }}/water" class="min-h-11 text-sm text-pool">Water</a>
     </div>
     <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-mist">
       <span>{{ p.frequency }} · {{ ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][p.weekday] }}</span>

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Water history{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header(c.name, prop.label ~ " — water history") }}
+
+<p class="mb-4 text-sm text-mist">
+  Readings from the last {{ series[0].points | length if series else 0 }} serviced visits.
+  The shaded band is your target range; a red marker is a reading outside it.
+  <a href="/customers/{{ c.id }}" class="text-pool">Back to {{ c.name }}</a>
+</p>
+
+{% for s in series %}
+<div class="card mb-3 p-3.5">
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ s.label }}</h2>
+    <p class="font-data text-sm">
+      <span class="{{ 'text-safety font-semibold' if s.in_band is false }}">
+        {{ "%g" | format(s.latest) }}{{ " " ~ s.unit if s.unit }}
+      </span>
+      {% if s.target is not none %}
+      <span class="text-mist">· target {{ "%g" | format(s.target) }}</span>
+      {% endif %}
+      {% if s.in_band is false %}<span class="tag tag-safety ml-1">out of range</span>{% endif %}
+    </p>
+  </div>
+  <div class="mt-2">{{ charts[s.key] | safe }}</div>
+</div>
+{% else %}
+<div class="card p-6 text-center">
+  <p class="font-display text-xl font-bold uppercase tracking-wide">No readings yet</p>
+  <p class="mt-1 text-sm text-mist">
+    Chemistry readings logged on completed visits will chart here.</p>
+</div>
+{% endfor %}
+{% endblock %}

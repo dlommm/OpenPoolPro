@@ -220,3 +220,76 @@ def _empty(msg, height):
 def _truncate(s, n):
     s = str(s)
     return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def reading_chart(series, *, height=170):
+    """Water-chemistry trend with the target band drawn behind the line.
+
+    Unlike `line_chart`, the y-axis is the series' own range rather than a zero
+    baseline: plotted from zero, the entire meaningful range of pH is a few
+    pixels tall and every pool looks identical. The shaded band is the target
+    +/- the dosing deadband, so "is this pool drifting" is answerable at a
+    glance instead of by reading numbers.
+    """
+    points = list(series.points)
+    if not points:
+        return _empty("No readings yet", height)
+
+    w, pad_l, pad_r, pad_t, pad_b = 760, 44, 10, 12, 26
+    plot_w, plot_h = w - pad_l - pad_r, height - pad_t - pad_b
+    lo, hi = float(series.axis_lo), float(series.axis_hi)
+    span = (hi - lo) or 1.0
+
+    def y_of(v):
+        return pad_t + plot_h - ((float(v) - lo) / span) * plot_h
+
+    n = len(points)
+    xs = [pad_l + (i / (n - 1) if n > 1 else 0.5) * plot_w for i in range(n)]
+    ys = [y_of(v) for _, v in points]
+
+    parts = [f'<svg viewBox="0 0 {w} {height}" class="w-full" role="img" '
+             f'preserveAspectRatio="xMidYMid meet" style="max-height:{height}px" '
+             f'aria-label="{_esc(series.label)} over time">']
+
+    if series.band_lo is not None:
+        band_top, band_bottom = y_of(series.band_hi), y_of(series.band_lo)
+        parts.append(
+            f'<rect x="{pad_l}" y="{band_top:.1f}" width="{plot_w}" '
+            f'height="{max(1.0, band_bottom - band_top):.1f}" '
+            f'fill="var(--cr-green, #10b981)" opacity="0.12"/>')
+        ty = y_of(series.target)
+        parts.append(f'<line x1="{pad_l}" y1="{ty:.1f}" x2="{w - pad_r}" y2="{ty:.1f}" '
+                     f'stroke="var(--cr-green, #10b981)" stroke-width="1" '
+                     f'stroke-dasharray="4 3" opacity="0.8"/>')
+
+    for value in (hi, lo):
+        parts.append(
+            f'<text x="{pad_l - 6}" y="{y_of(value) + 4:.1f}" text-anchor="end" '
+            f'font-size="11" fill="var(--color-mist)">{_fmt_reading(value)}</text>')
+
+    d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in zip(xs, ys))
+    parts.append(f'<path d="{d}" fill="none" stroke="var(--color-pool)" '
+                 f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>')
+
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        value = points[i][1]
+        outside = (series.band_lo is not None
+                   and not (series.band_lo <= value <= series.band_hi))
+        colour = "var(--color-safety)" if outside else "var(--color-pool)"
+        parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" '
+                     f'fill="var(--color-surface)" stroke="{colour}" stroke-width="2"/>')
+
+    for i in (0, n - 1) if n > 1 else (0,):
+        anchor = "start" if i == 0 else "end"
+        parts.append(
+            f'<text x="{xs[i]:.1f}" y="{height - 4}" text-anchor="{anchor}" '
+            f'font-size="11" fill="var(--color-mist)">'
+            f'{_esc(points[i][0].strftime("%b %-d"))}</text>')
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _fmt_reading(v) -> str:
+    v = float(v)
+    return f"{v:.0f}" if abs(v) >= 100 or v == int(v) else f"{v:.1f}"

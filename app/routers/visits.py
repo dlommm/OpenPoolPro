@@ -15,6 +15,55 @@ from app.rates import effective_rate_cents
 router = APIRouter()
 
 
+def service_report(session, v, business: str, tech_name: str) -> str:
+    """The plain-text visit summary the homeowner receives.
+
+    Proof of work is what answers "did anyone actually come?", justifies a rate
+    increase, and settles a dispute — so it includes what was measured and what
+    was added, not just that somebody showed up. Everything here is already
+    captured on the visit; none of it was ever shown to the customer.
+
+    Deliberately excludes money: this goes out automatically on every visit,
+    and pricing conversations belong on the invoice, not in a service note.
+    """
+    from app import water_history
+
+    tgt = water_history.targets(session)
+    lines = [f"{business}", f"{v.property.label} — {v.date.strftime('%B %-d, %Y')}", ""]
+
+    readings = []
+    for key, label, unit, *_ in water_history.METRICS:
+        value = getattr(v, key, None)
+        if value is None:
+            continue
+        target = tgt.get(key)
+        suffix = f" (target {target:g})" if target is not None else ""
+        readings.append(f"  {label}: {value:g}{' ' + unit if unit else ''}{suffix}")
+    if readings:
+        lines += ["Water test:"] + readings + [""]
+
+    # Queried rather than read off v.chemicals: complete() inserts the new lines
+    # by visit_id, so the already-loaded relationship collection is stale at
+    # this point and would report the pre-save chemicals (or none at all).
+    session.flush()
+    added = session.scalars(select(models.VisitChemical).where(
+        models.VisitChemical.visit_id == v.id)).all()
+    if added:
+        lines.append("Chemicals added:")
+        for vc in added:
+            lines.append(f"  {vc.chemical.name}: {vc.amount:g} {vc.chemical.unit}")
+        lines.append("")
+
+    if v.tasks_done:
+        lines += ["Completed:"] + [f"  {t}" for t in v.tasks_done] + [""]
+
+    if v.notes:
+        lines += ["Notes:", f"  {v.notes}", ""]
+
+    lines.append(f"Technician: {tech_name}")
+    return "\n".join(lines)
+
+
 def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
     v = session.scalars(select(models.Visit).where(
         models.Visit.property_id == property_id, models.Visit.date == d)).first()
@@ -228,12 +277,9 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     customer = v.property.customer
     if customer.email and customer.notify_email:
         business = models.get_setting(session, "business_name", "OpenPoolPro") or "OpenPoolPro"
-        lines = [business, v.property.label, v.date.strftime("%B %-d, %Y")]
-        if v.tasks_done:
-            lines.extend(v.tasks_done)
-        lines.append(f"Technician: {request.state.user.name}")
         mailer.queue(session, customer.email, f"{business} — service visit completed",
-                    "\n".join(lines), customer_id=customer.id)
+                     service_report(session, v, business, request.state.user.name),
+                     customer_id=customer.id)
     session.commit()
     return RedirectResponse("/", status_code=303)
 
