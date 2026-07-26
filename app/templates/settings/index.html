@@ -78,6 +78,19 @@
             <button class="btn-secondary w-full">Save display name</button>
           </form>
         </div>
+
+        <div class="card p-4">
+          <h2 class="set-h">Payment terms</h2>
+          <form method="post" action="/settings/general" class="space-y-2">
+            <label class="block"><span class="field-label">Invoice due after (days)</span>
+              <input name="invoice_net_days" inputmode="numeric" value="{{ invoice_net_days }}"
+                     class="field font-data"></label>
+            <p class="text-xs text-mist">Counted from the end of the billing period, so a late
+              generation run doesn't quietly grant extra days. Sets the due dates and the aging
+              buckets on <a href="/ar" class="text-pool">Accounts receivable</a>.</p>
+            <button class="btn-secondary w-full">Save terms</button>
+          </form>
+        </div>
       </div>
     </section>
 

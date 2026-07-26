@@ -6,7 +6,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, rates, sizes, tax
+from app import (chem_presets, config, mailer, models, qbo, rates, receivables,
+                 sizes, tax)
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -94,6 +95,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "labor_rate_dollars": "%.2f" % (rates.default_labor_rate_cents(session) / 100),
         "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
         "business_name": models.get_setting(session, "business_name", ""),
+        "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
         "role_values": models.ROLE_VALUES,
         "targets": targets,
@@ -528,6 +530,16 @@ async def save_general(request: Request, session: Session = Depends(get_session)
         models.set_setting(session, "chem_markup_percent", markup)
     if "business_name" in form:
         models.set_setting(session, "business_name", form.get("business_name", ""))
+    if "invoice_net_days" in form:
+        # Garbage keeps the stored value rather than writing something that
+        # would push every due date somewhere nonsensical in the aging report.
+        raw = (form.get("invoice_net_days", "") or "").strip()
+        try:
+            days = int(raw)
+            if days >= 0:
+                models.set_setting(session, "invoice_net_days", str(days))
+        except ValueError:
+            pass
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

@@ -27,7 +27,29 @@
       <button class="btn-primary">Generate for {{ ym }}</button>
     </form>
     <a href="/invoices/batch.zip?ym={{ ym }}" class="btn-secondary">Download batch (.zip)</a>
+    {% if can_email %}
+    <form method="post" action="/invoices/email-batch"
+          onsubmit="return confirm('Email every draft invoice for {{ ym }} to its customer?')">
+      <input type="hidden" name="ym" value="{{ ym }}">
+      <button class="btn-secondary">Email all drafts</button>
+    </form>
+    {% endif %}
+    <a href="/ar" class="btn-secondary">Accounts receivable</a>
   </div>
+
+  {% if request.query_params.get("sent") %}
+  <p class="mt-3 text-sm text-mist">Emailed {{ request.query_params.get("sent") }} invoice(s);
+    {{ request.query_params.get("failed") }} failed.</p>
+  {% endif %}
+  {% if request.query_params.get("error") == "email" %}
+  <p class="mt-3 text-sm text-safety">No customer email address, or SMTP is not configured in Settings.</p>
+  {% elif request.query_params.get("error") == "pdf" %}
+  <p class="mt-3 text-sm text-safety">That invoice's PDF is missing — regenerate it first.</p>
+  {% elif request.query_params.get("error") == "send" %}
+  <p class="mt-3 text-sm text-safety">The mail server rejected the message. The invoice is still a draft.</p>
+  {% elif request.query_params.get("error") == "payment" %}
+  <p class="mt-3 text-sm text-safety">Enter a payment amount greater than zero.</p>
+  {% endif %}
 </div>
 
 <div class="overflow-x-auto">
@@ -38,6 +60,9 @@
       <th class="py-1.5 pr-3 font-medium">Customer</th>
       <th class="py-1.5 pr-3 font-medium">Period</th>
       <th class="py-1.5 pr-3 font-medium">Total</th>
+      <th class="py-1.5 pr-3 font-medium">Paid</th>
+      <th class="py-1.5 pr-3 font-medium">Balance</th>
+      <th class="py-1.5 pr-3 font-medium">Due</th>
       <th class="py-1.5 pr-3 font-medium">Status</th>
       <th class="py-1.5 pr-3 font-medium">Generated</th>
       <th class="py-1.5 font-medium">&nbsp;</th>
@@ -54,11 +79,40 @@
       <td class="py-1.5 pr-3 font-body">{{ inv.customer.name }}</td>
       <td class="py-1.5 pr-3 whitespace-nowrap">{{ "%04d-%02d" | format(inv.period_year, inv.period_month) }}</td>
       <td class="py-1.5 pr-3 money">{{ inv.total_cents | dollars }}</td>
-      <td class="py-1.5 pr-3"><span class="tag {{ 'tag-safety' if inv.status == 'void' }}">{{ inv.status }}</span></td>
+      <td class="py-1.5 pr-3 money">{{ inv.amount_paid_cents | dollars }}</td>
+      <td class="py-1.5 pr-3 money {{ 'text-safety' if inv.days_overdue(today) }}">
+        {{ inv.balance_cents | dollars }}</td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">
+        {{ inv.due_date or "—" }}
+        {% set od = inv.days_overdue(today) %}
+        {% if od %}<span class="tag tag-safety ml-1">{{ od }}d late</span>{% endif %}
+      </td>
+      <td class="py-1.5 pr-3">
+        <span class="tag {{ 'tag-safety' if inv.payment_state in ('void', 'unpaid') }}">{{ inv.payment_state }}</span>
+        {% if inv.status == "sent" %}<span class="tag ml-1">sent</span>{% endif %}
+      </td>
       <td class="py-1.5 pr-3 whitespace-nowrap">{{ inv.generated_at | local_date }}</td>
       <td class="py-1.5">
         <div class="flex flex-wrap items-center gap-1.5">
           <a href="/invoices/{{ inv.id }}/pdf" class="btn-secondary">PDF</a>
+          {% if inv.status != "void" and inv.balance_cents > 0 %}
+          <form method="post" action="/invoices/{{ inv.id }}/payments"
+                class="flex flex-wrap items-center gap-1">
+            <div class="money-in"><span>$</span>
+              <input class="field w-24 font-data" inputmode="decimal" name="amount_dollars"
+                     value="{{ '%.2f'|format(inv.balance_cents / 100) }}"
+                     aria-label="Payment amount for {{ inv.number }}"></div>
+            <select name="method" class="field w-24" aria-label="Payment method">
+              {% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <button class="btn-primary">Record payment</button>
+          </form>
+          {% endif %}
+          {% if can_email and inv.status != "void" %}
+          <form method="post" action="/invoices/{{ inv.id }}/email">
+            <button class="btn-secondary">Email</button>
+          </form>
+          {% endif %}
           {% if inv.status == "draft" %}
           <form method="post" action="/invoices/{{ inv.id }}/status">
             <input type="hidden" name="action" value="sent">
@@ -69,16 +123,31 @@
           <form method="post" action="/invoices/{{ inv.id }}/regenerate">
             <button class="btn-secondary">Regenerate</button>
           </form>
-          <form method="post" action="/invoices/{{ inv.id }}/status">
+          <form method="post" action="/invoices/{{ inv.id }}/status"
+                onsubmit="return confirm('Void invoice {{ inv.number }}? Voiding is permanent — the number is burned and cannot be reused.')">
             <input type="hidden" name="action" value="void">
             <button class="btn-danger">Void</button>
           </form>
           {% endif %}
         </div>
+        {% if inv.payments %}
+        <div class="mt-1 space-y-0.5 text-xs text-mist">
+          {% for p in inv.payments | sort(attribute="received_on") %}
+          <div class="flex items-center gap-1.5">
+            <span class="money">{{ p.amount_cents | dollars }}</span>
+            <span>{{ p.received_on }} · {{ p.method }}{{ " · " ~ p.reference if p.reference }}</span>
+            <form method="post" action="/payments/{{ p.id }}/delete"
+                  onsubmit="return confirm('Remove this {{ p.amount_cents | dollars }} payment?')">
+              <button class="text-safety" aria-label="Remove payment">&times;</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
+    <tr><td colspan="10" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
     {% endfor %}
   </tbody>
 </table>

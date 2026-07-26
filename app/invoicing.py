@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import config, models, qbo, tax
+from app import config, models, qbo, receivables, tax
 from app.timefmt import to_local_hhmm
 
 
@@ -198,6 +198,9 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
 
     created = 0
     skipped = 0
+    # Terms run from the END of the billing period, resolved once for the batch.
+    _, period_end = qbo._month_range(year, month)
+    net_days = receivables.default_net_days(session)
     for row in qbo.month_rollup(session, year, month):
         existing = session.scalars(select(models.Invoice).where(
             models.Invoice.customer_id == row.customer.id,
@@ -219,6 +222,10 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
             period_year=year, period_month=month,
             subtotal_cents=data.subtotal_cents, tax_cents=data.tax_cents,
             total_cents=data.total_cents, status="draft",
+            # Dated from the end of the billing period, not from whenever the
+            # owner got around to generating — otherwise a late run quietly
+            # grants the customer extra days and the aging report understates.
+            due_date=period_end + timedelta(days=net_days),
             pdf_filename=filename))
         try:
             session.commit()

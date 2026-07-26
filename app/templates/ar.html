@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Accounts receivable{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Money", "Accounts receivable") }}
+
+<p class="mb-4 font-data text-3xl font-semibold text-brass">
+  {{ totals.total_cents | dollars }}
+  <span class="font-body text-sm font-normal normal-case text-mist">
+    outstanding across {{ totals.customer_count }} customer{{ "s" if totals.customer_count != 1 }}</span>
+</p>
+
+<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+  {% for b in buckets %}
+  <div class="card p-3">
+    <div class="field-label">{{ b }}{{ "" if b == "Current" else " days" }}</div>
+    <div class="mt-0.5 font-data text-lg font-semibold
+                {{ 'text-safety' if b in ('61-90', '90+') and totals.buckets[b] }}">
+      {{ totals.buckets[b] | dollars }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if request.query_params.get("error") == "email" %}
+<p class="mb-3 text-sm text-safety">No customer email address, or SMTP is not configured in Settings.</p>
+{% elif request.query_params.get("error") == "payment" %}
+<p class="mb-3 text-sm text-safety">Enter a payment amount greater than zero.</p>
+{% endif %}
+
+<div class="rise space-y-2">
+  {% for row in rows %}
+  <details class="card p-3.5" {{ "open" if row.oldest_days > 60 }}>
+    <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-2 font-semibold">
+      <span class="flex items-center gap-2">
+        <a href="/customers/{{ row.customer.id }}" class="text-pool">{{ row.customer.name }}</a>
+        {% if row.oldest_days %}
+        <span class="tag tag-safety">{{ row.oldest_days }}d late</span>
+        {% endif %}
+      </span>
+      <span class="money">{{ row.balance_cents | dollars }}</span>
+    </summary>
+
+    <div class="mt-2 space-y-2 border-t border-seam pt-2">
+      {% for inv in row.invoices %}
+      {% set od = inv.days_overdue(today) %}
+      <div class="flex flex-wrap items-center justify-between gap-2 font-data text-sm">
+        <span>
+          <a href="/invoices/{{ inv.id }}/pdf" class="text-pool">{{ inv.number }}</a>
+          <span class="text-mist">
+            · due {{ inv.due_date or "—" }}
+            {% if od %}<span class="text-safety">({{ od }}d late)</span>{% endif %}
+            {% if inv.amount_paid_cents %}· {{ inv.amount_paid_cents | dollars }} paid{% endif %}
+          </span>
+        </span>
+        <span class="money">{{ inv.balance_cents | dollars }}</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <form method="post" action="/invoices/{{ inv.id }}/payments"
+              class="flex flex-wrap items-center gap-1">
+          <input type="hidden" name="back" value="ar">
+          <div class="money-in"><span>$</span>
+            <input class="field w-24 font-data" inputmode="decimal" name="amount_dollars"
+                   value="{{ '%.2f'|format(inv.balance_cents / 100) }}"
+                   aria-label="Payment amount for {{ inv.number }}"></div>
+          <input class="field w-32" type="date" name="received_on" value="{{ today }}"
+                 aria-label="Date received">
+          <select name="method" class="field w-24" aria-label="Payment method">
+            {% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+          </select>
+          <input class="field w-28" name="reference" placeholder="Check #"
+                 aria-label="Reference">
+          <button class="btn-primary">Record payment</button>
+        </form>
+        {% if can_email and od %}
+        <form method="post" action="/invoices/{{ inv.id }}/reminder">
+          <input type="hidden" name="back" value="ar">
+          <button class="btn-secondary">Send reminder</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% else %}
+  <div class="card p-6 text-center">
+    <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing outstanding</p>
+    <p class="mt-1 text-sm text-mist">Every generated invoice is paid in full.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="mt-4 text-sm text-mist">
+  Invoices are due {{ net_days }} days after the end of their billing period.
+  Change that in Settings &rarr; Business.
+</p>
+{% endblock %}

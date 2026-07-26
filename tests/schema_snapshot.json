@@ -106,12 +106,14 @@
   ],
   "invoices": [
     "customer_id",
+    "due_date",
     "generated_at",
     "id",
     "number",
     "pdf_filename",
     "period_month",
     "period_year",
+    "sent_at",
     "status",
     "subtotal_cents",
     "tax_cents",
@@ -177,6 +179,17 @@
     "next_due",
     "property_id",
     "title"
+  ],
+  "payments": [
+    "amount_cents",
+    "created_at",
+    "id",
+    "invoice_id",
+    "method",
+    "note",
+    "received_on",
+    "reference",
+    "user_id"
   ],
   "photos": [
     "caption",

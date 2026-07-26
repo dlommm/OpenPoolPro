@@ -485,10 +485,67 @@ class Invoice(Base):
     total_cents: Mapped[int] = mapped_column(Integer)
     subtotal_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tax_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # The SEND lifecycle only. Whether an invoice is paid is DERIVED from its
+    # payments (see amount_paid_cents / balance_cents) rather than stored here,
+    # so a stored status can never disagree with the money actually recorded.
     status: Mapped[str] = mapped_column(String(8), default="draft")  # draft|sent|void
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     pdf_filename: Mapped[str] = mapped_column(String(200))
     customer: Mapped[Customer] = relationship()
+    payments: Mapped[list["Payment"]] = relationship(
+        back_populates="invoice", cascade="all, delete-orphan")
+
+    @property
+    def amount_paid_cents(self) -> int:
+        return sum(p.amount_cents for p in self.payments)
+
+    @property
+    def balance_cents(self) -> int:
+        """What is still owed. Void invoices owe nothing."""
+        if self.status == "void":
+            return 0
+        return self.total_cents - self.amount_paid_cents
+
+    @property
+    def payment_state(self) -> str:
+        """unpaid | partial | paid | void — derived, never stored."""
+        if self.status == "void":
+            return "void"
+        paid = self.amount_paid_cents
+        if paid <= 0:
+            return "unpaid"
+        return "paid" if paid >= self.total_cents else "partial"
+
+    def days_overdue(self, today: date) -> int:
+        """0 when not yet due, fully paid, or void."""
+        if self.due_date is None or self.balance_cents <= 0:
+            return 0
+        return max(0, (today - self.due_date).days)
+
+
+PAYMENT_METHODS = ("check", "cash", "card", "ach", "other")
+
+
+class Payment(Base):
+    """Money actually received against an invoice.
+
+    Kept as rows rather than a paid flag so partial payments, a bounced check
+    backed out, and the audit question "when did this arrive and how?" all have
+    real answers.
+    """
+    __tablename__ = "payments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    received_on: Mapped[date] = mapped_column(Date)
+    method: Mapped[str] = mapped_column(String(10), default="check")
+    reference: Mapped[str] = mapped_column(String(60), default="")
+    note: Mapped[str] = mapped_column(String(200), default="")
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    invoice: Mapped[Invoice] = relationship(back_populates="payments")
 
 
 class Setting(Base):

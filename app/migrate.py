@@ -59,6 +59,7 @@ INDEXES = [
     ("ix_invoices_customer_period", "invoices", "customer_id, period_year, period_month"),
     ("ix_comm_log_customer_id", "comm_log", "customer_id"),
     ("ix_photos_taken_at", "photos", "taken_at"),
+    ("ix_payments_invoice_id", "payments", "invoice_id"),
 ]
 
 COLUMNS = {
@@ -121,6 +122,8 @@ COLUMNS = {
     "invoices": [
         ("subtotal_cents", "INTEGER"),
         ("tax_cents", "INTEGER DEFAULT 0"),
+        ("due_date", "DATE"),
+        ("sent_at", "DATETIME"),
     ],
 }
 
