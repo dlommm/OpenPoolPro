@@ -6,6 +6,21 @@ const CACHE = "cpp-static-" + VERSION;
 const PAGES_CACHE = "cpp-pages-" + VERSION;
 const QUEUE_DB = "cpp-queue";
 const QUEUE_STORE = "posts";
+// Entries the server has DEFINITIVELY rejected park here instead of staying at
+// the head of the FIFO. A 404/400/409/422 can never succeed on a retry, so
+// leaving it queued buried every completion behind it forever behind a silent
+// "3 waiting" badge. The full payload is kept -- a tech's readings are only
+// destroyed by an explicit, confirmed Discard from the queue screen.
+const FAILED_STORE = "failed";
+// v1 shipped with only QUEUE_STORE; the bump creates FAILED_STORE on upgrade.
+const QUEUE_DB_VERSION = 2;
+
+// Queued URL -> {label, page} for the queue screen. Written synchronously by
+// the `queue-hint` message the page sends immediately BEFORE submitting a
+// completion form, and read by the fetch handler in the same worker turn -- an
+// async IndexedDB write would lose that race. Losing a hint (worker restart) is
+// harmless: the queue screen falls back to the URL.
+const QUEUE_HINTS = {};
 
 const ASSETS = [
   "/static/htmx.min.js",
@@ -89,8 +104,22 @@ async function handleQueueablePost(req, url) {
     return await fetch(req);
   } catch (err) {
     const body = await bodyClone.text();
-    await queueAdd(url.pathname + url.search, body);
+    const hint = QUEUE_HINTS[url.pathname] || {};
+    delete QUEUE_HINTS[url.pathname];
+    await queueAdd(url.pathname + url.search, body, hint.page || refPath(req.referrer), hint.label || "");
     return Response.redirect("/?queued=1", 303);
+  }
+}
+
+// The queued URL only carries the VISIT id, but the page that submitted it is
+// /visit/<property>/<date> -- which is character-for-character the href the
+// Today page renders for that stop. Recording it is what lets the page overlay
+// a "pending sync" state on the right card without a server round-trip.
+function refPath(referrer) {
+  try {
+    return new URL(referrer).pathname;
+  } catch (err) {
+    return "";
   }
 }
 
@@ -114,15 +143,20 @@ async function handleNavigate(req) {
   }
 }
 
-// ---------- IndexedDB queue (cpp-queue / posts) ----------
+// ---------- IndexedDB queue (cpp-queue / posts + failed) ----------
 
 function openQueueDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(QUEUE_DB, 1);
+    const req = indexedDB.open(QUEUE_DB, QUEUE_DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      // Both guarded by `contains` so the v1 -> v2 upgrade of an installed app
+      // adds only the missing store and never touches queued work in `posts`.
       if (!db.objectStoreNames.contains(QUEUE_STORE)) {
         db.createObjectStore(QUEUE_STORE, { keyPath: "id", autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(FAILED_STORE)) {
+        db.createObjectStore(FAILED_STORE, { keyPath: "id", autoIncrement: true });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -130,48 +164,147 @@ function openQueueDB() {
   });
 }
 
-function queueAdd(url, body) {
+function storeAdd(store, record) {
   return openQueueDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(QUEUE_STORE, "readwrite");
-    tx.objectStore(QUEUE_STORE).add({ url, body, ts: Date.now() });
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).add(record);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   }));
+}
+
+function storeAll(store) {
+  return openQueueDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+function storeGet(store, id) {
+  return openQueueDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+function storeDelete(store, id) {
+  return openQueueDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+// `page` and `label` are queue-screen metadata only -- the replayed POST still
+// sends exactly the urlencoded body the form produced, unchanged.
+function queueAdd(url, body, page, label) {
+  return storeAdd(QUEUE_STORE, { url, body, page: page || "", label: label || "", ts: Date.now() });
 }
 
 function queueAll() {
-  return openQueueDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(QUEUE_STORE, "readonly");
-    const req = tx.objectStore(QUEUE_STORE).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
+  return storeAll(QUEUE_STORE);
 }
 
 function queueDelete(id) {
-  return openQueueDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(QUEUE_STORE, "readwrite");
-    tx.objectStore(QUEUE_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return storeDelete(QUEUE_STORE, id);
 }
 
-function queueCount() {
-  return openQueueDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(QUEUE_STORE, "readonly");
-    const req = tx.objectStore(QUEUE_STORE).count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
+function failedAll() {
+  return storeAll(FAILED_STORE);
 }
 
-// FIFO replay: posts each queued entry in enqueue order. Deletes the entry
-// on ANY HTTP response (2xx-5xx alike -- the server was reachable, so it's
-// no longer this queue's problem). Stops at the first network error (we
-// went offline again mid-flush) so it and every entry after it stay queued
-// in order for the next trigger. Always ends by telling every open client
-// the current count, whether or not anything actually replayed.
+// Park a definitively-rejected entry: payload intact, plus the status and the
+// moment it died so the queue screen can explain WHY it is not syncing.
+async function failEntry(entry, status) {
+  try {
+    await storeAdd(FAILED_STORE, {
+      url: entry.url,
+      body: entry.body,
+      page: entry.page || "",
+      label: entry.label || "",
+      ts: entry.ts,
+      status: status,
+      failed_at: Date.now(),
+    });
+  } catch (err) {
+    return;  // couldn't park it -- leave it queued rather than lose the readings
+  }
+  await queueDelete(entry.id);
+}
+
+// Retry puts the entry back at the TAIL, not the head: it already lost its place
+// in line, and everything that was stuck behind it has long since gone through.
+async function retryFailed(id) {
+  const entry = await storeGet(FAILED_STORE, id).catch(() => null);
+  if (entry) {
+    await queueAdd(entry.url, entry.body, entry.page, entry.label);
+    await storeDelete(FAILED_STORE, id).catch(() => {});
+  }
+  await replay();
+}
+
+async function discardFailed(id) {
+  await storeDelete(FAILED_STORE, id).catch(() => {});
+  await postQueueState();
+}
+
+// One message carries both the counts (badge) and the rows (queue screen), so
+// any client repaint is a single round trip. `count` keeps its original meaning
+// -- pending entries -- so an older page shell still shows a correct badge.
+// Bodies are deliberately NOT sent: the page has no use for them and they can
+// hold a customer's readings.
+async function postQueueState() {
+  const pending = await queueAll().catch(() => []);
+  const failed = await failedAll().catch(() => []);
+  pending.sort((a, b) => a.id - b.id);
+  failed.sort((a, b) => a.id - b.id);
+  const msg = {
+    type: "queue-count",
+    count: pending.length,
+    failed: failed.length,
+    pending: pending.map(describe),
+    failedEntries: failed.map(describe),
+  };
+  const clients = await self.clients.matchAll();
+  clients.forEach(client => client.postMessage(msg));
+}
+
+function describe(entry) {
+  return {
+    id: entry.id,
+    url: entry.url,
+    page: entry.page || "",
+    label: entry.label || "",
+    ts: entry.ts || 0,
+    status: entry.status || 0,
+    failed_at: entry.failed_at || 0,
+  };
+}
+
+// FIFO replay: posts each queued entry in enqueue order. Every response falls
+// into exactly one of three buckets, and the distinction matters because the
+// head of a FIFO gates everything behind it:
+//
+//   success    -> delete the entry and keep draining.
+//   retryable  -> STOP. A network error means we went offline again mid-flush;
+//                 a 5xx means the server is having a bad minute; a redirect to
+//                 /login means the session expired. All three can succeed on a
+//                 later trigger, and stopping preserves enqueue order.
+//   dead       -> a 4xx that is NOT the login redirect. 404 = the visit was
+//                 deleted while the tech was offline; 400/409/422 = the server
+//                 will reject this exact body every single time. Retrying it
+//                 forever cannot help and buries every completion behind it, so
+//                 it moves to the failed store (payload + status kept, visible
+//                 and retryable/discardable from the queue screen) and the
+//                 replay CONTINUES.
+//
+// Always ends by telling every open client the current queue state, whether or
+// not anything actually replayed.
 async function replay() {
   let entries = [];
   try {
@@ -192,22 +325,23 @@ async function replay() {
     } catch (err) {
       break;  // genuine network error — went offline again; keep this + the rest queued
     }
-    // Only drop the entry on a real success. An expired/invalidated session
-    // (e.g. the owner ended sessions while a tech was offline) makes the auth
-    // middleware answer this POST with a 303 -> /login, which fetch follows to
-    // a 200 login page. Deleting on that would silently destroy the tech's
-    // completed-visit readings. Keep it queued (and stop) so it flushes once
-    // the tech logs back in; never delete on a redirect-to-login or non-2xx.
+    // An expired/invalidated session (e.g. the owner ended sessions while a
+    // tech was offline) makes the auth middleware answer this POST with a
+    // 303 -> /login, which fetch follows to a 200 login page. Treating that as
+    // success would silently destroy the tech's completed-visit readings, and
+    // treating it as dead would do the same more slowly -- it is retryable, so
+    // it stays queued until the tech logs back in.
     const finalPath = (() => { try { return new URL(resp.url).pathname; } catch { return ""; } })();
-    if (resp.ok && finalPath !== "/login") {
+    const loginRedirect = finalPath === "/login";
+    if (resp.ok && !loginRedirect) {
       await queueDelete(entry.id);
+    } else if (loginRedirect || resp.status >= 500 || resp.status < 400) {
+      break;  // retryable — login redirect, server fault, or an odd non-2xx we won't gamble on
     } else {
-      break;
+      await failEntry(entry, resp.status);  // dead 4xx — park it, keep draining the rest
     }
   }
-  const count = await queueCount().catch(() => 0);
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => client.postMessage({ type: "queue-count", count }));
+  await postQueueState();
 }
 
 // Background Sync -- supported on Chrome/Android, NOT on iOS Safari. The
@@ -220,7 +354,20 @@ self.addEventListener("sync", e => {
 });
 
 self.addEventListener("message", e => {
-  if (e.data && e.data.type === "flush-queue") {
+  const data = e.data || {};
+  if (data.type === "flush-queue") {
     e.waitUntil(replay());
+  } else if (data.type === "queue-state") {
+    // The queue screen asking what's in here. Answering costs no network, so it
+    // works exactly the same offline -- which is the only time it matters.
+    e.waitUntil(postQueueState());
+  } else if (data.type === "queue-retry") {
+    e.waitUntil(retryFailed(data.id));
+  } else if (data.type === "queue-discard") {
+    e.waitUntil(discardFailed(data.id));
+  } else if (data.type === "queue-hint" && data.url) {
+    // Deliberately synchronous (see QUEUE_HINTS): the POST this describes hits
+    // the fetch handler in the very next turn.
+    QUEUE_HINTS[data.url] = { label: data.label || "", page: data.page || "" };
   }
 });

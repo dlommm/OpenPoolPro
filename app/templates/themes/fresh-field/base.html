@@ -64,7 +64,7 @@
       {% endif %}
       <div class="flex items-center gap-1.5 px-1">
         <span class="font-medium text-ink">{{ u.name }}</span>
-        <span id="sync-badge-desktop" class="ff-sync tag tag-safety ml-1" hidden>0 waiting</span>
+        <button type="button" id="sync-badge-desktop" class="ff-sync tag tag-safety ml-1" hidden data-sync-open>0 waiting</button>
       </div>
       {% endif %}
       <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
@@ -84,7 +84,7 @@
             {{ ui.icon("sun", "mode-icon mode-icon-sun h-5 w-5") }}
             {{ ui.icon("moon", "mode-icon mode-icon-moon h-5 w-5") }}
           </button>
-          <span id="sync-badge" class="ff-sync tag tag-safety" hidden>0 waiting</span>
+          <button type="button" id="sync-badge" class="ff-sync tag tag-safety" hidden data-sync-open>0 waiting</button>
           <span class="relative flex h-11 w-11 items-center justify-center rounded-lg" aria-label="Menu">
             <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
             <span class="hidden group-open:block">{{ ui.icon("plus", "h-6 w-6 rotate-45") }}</span>
@@ -124,33 +124,7 @@
   </header>
   {% endblock %}
   <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
-  <script>
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js");
-    var syncBadges = function () {
-      return [document.getElementById("sync-badge"), document.getElementById("sync-badge-desktop")]
-        .filter(Boolean);
-    };
-    var setSyncCount = function (count) {
-      syncBadges().forEach(function (badge) {
-        badge.textContent = count + " waiting";
-        badge.hidden = count <= 0;
-      });
-    };
-    navigator.serviceWorker.addEventListener("message", function (e) {
-      if (e.data && e.data.type === "queue-count") setSyncCount(e.data.count);
-    });
-    var flushQueue = function () {
-      navigator.serviceWorker.ready.then(function (reg) {
-        if (reg.active) reg.active.postMessage({type: "flush-queue"});
-      });
-    };
-    // iOS Safari has no Background Sync API -- reconnecting (`online`) and
-    // every page load are the real replay triggers on that platform.
-    window.addEventListener("online", flushQueue);
-    flushQueue();
-  }
-  </script>
+  {% include "_offline.html" %}
   {% include "_mode_toggle.html" %}
   {% include "_pwa.html" %}
 </body>

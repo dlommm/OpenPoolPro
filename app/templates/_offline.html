@@ -1,0 +1,447 @@
+{# Offline trust layer, shared by every base template (shared + all three themes).
+
+   Rendered INLINE on every page on purpose. The queue screen has to open while
+   the tech is offline, and a server-rendered /queue page would be a navigation
+   sw.js has never cached -- i.e. offline.html, the one moment it is needed. A
+   dialog living in the page shell is always there, needs no route, and needs no
+   network. Styles are hand-written (not Tailwind utilities) for the same reason
+   the _pwa.html partial does it: this must not depend on a CSS rebuild.
+
+   Owns three things sw.js cannot do on its own:
+     1. the queue screen (see + retry + discard what's stuck),
+     2. a visible failure for every htmx request (they were all silent),
+     3. the "pending sync" overlay on Today's stop cards, because a completion
+        queued offline redirects to a page served from PAGES_CACHE -- the
+        snapshot taken BEFORE the stop was completed, so it still reads as due.
+#}
+<style>
+  #toast-stack{position:fixed;left:0;right:0;bottom:0;z-index:70;display:flex;flex-direction:column;
+    align-items:center;gap:.4rem;padding:0 .75rem calc(.75rem + env(safe-area-inset-bottom));
+    pointer-events:none}
+  .toast{max-width:32rem;width:100%;border-radius:.6rem;padding:.6rem .8rem;font-size:.875rem;
+    line-height:1.3;font-weight:500;color:#fff;background:var(--color-ink,#16303B);
+    box-shadow:0 4px 18px rgba(0,0,0,.28);opacity:1;transform:translateY(0);
+    transition:opacity .25s ease,transform .25s ease;pointer-events:auto}
+  .toast-bad{background:var(--color-safety,#E76F51)}
+  .toast.out{opacity:0;transform:translateY(.5rem)}
+
+  .sync-sheet{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:center}
+  @media (min-width:640px){.sync-sheet{align-items:center}}
+  .sync-scrim{position:absolute;inset:0;background:rgba(11,42,51,.55)}
+  .sync-panel{position:relative;display:flex;flex-direction:column;width:100%;max-width:34rem;
+    max-height:min(82vh,44rem);overflow:hidden;background:var(--color-surface,#fff);
+    color:var(--color-ink,#16303B);border:1px solid var(--color-seam,#E4DBCC);
+    border-radius:.9rem .9rem 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.25)}
+  @media (min-width:640px){.sync-panel{border-radius:.9rem}}
+  .sync-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+    padding:.85rem 1rem;border-bottom:1px solid var(--color-seam,#E4DBCC)}
+  .sync-head h2{font-size:1rem;font-weight:700;letter-spacing:.01em}
+  .sync-x{min-width:2.75rem;min-height:2.75rem;font-size:1.5rem;line-height:1;
+    color:var(--color-mist,#5E6E70)}
+  .sync-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.75rem 1rem}
+  .sync-foot{display:flex;gap:.5rem;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom));
+    border-top:1px solid var(--color-seam,#E4DBCC)}
+  .sync-empty{padding:1.5rem .25rem;text-align:center;color:var(--color-mist,#5E6E70);font-size:.875rem}
+  .sync-group{margin:0 0 .35rem;font-size:.7rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.12em;color:var(--color-mist,#5E6E70)}
+  .sync-group+.sync-row{margin-top:0}
+  .sync-row{margin:.5rem 0;padding:.65rem .75rem;border:1px solid var(--color-seam,#E4DBCC);
+    border-radius:.6rem;background:var(--color-tile,#F3EDE3)}
+  .sync-row.is-failed{border-color:var(--color-safety,#E76F51);background:rgba(231,111,81,.08)}
+  .sync-name{font-weight:600;font-size:.9rem;line-height:1.3;word-break:break-word}
+  .sync-meta{margin-top:.15rem;font-size:.75rem;color:var(--color-mist,#5E6E70)}
+  .sync-why{margin-top:.35rem;font-size:.8rem;line-height:1.35;color:var(--color-safety,#E76F51);
+    font-weight:500}
+  .sync-acts{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.55rem}
+  .sync-btn{min-height:2.75rem;padding:0 .9rem;border-radius:.5rem;font-size:.85rem;font-weight:600;
+    border:1px solid var(--color-seam,#E4DBCC);background:var(--color-surface,#fff);
+    color:var(--color-ink,#16303B)}
+  .sync-btn-go{background:var(--color-pool,#2B9EB3);border-color:var(--color-pool,#2B9EB3);color:#fff}
+  .sync-btn-bad{border-color:var(--color-safety,#E76F51);color:var(--color-safety,#E76F51)}
+  .sync-btn-bad.is-armed{background:var(--color-safety,#E76F51);color:#fff}
+
+  [data-pending-sync]{position:relative;box-shadow:inset 3px 0 0 var(--color-pool,#2B9EB3)}
+  .pending-chip{display:inline-flex;align-items:center;gap:.25rem;margin-left:.4rem;padding:0 .4rem;
+    border-radius:.3rem;border:1px solid var(--color-pool,#2B9EB3);font-size:.68rem;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--color-pool,#2B9EB3);white-space:nowrap;
+    vertical-align:middle}
+  .pending-banner{display:block;width:100%;margin:0 0 .75rem;padding:.6rem .75rem;text-align:left;
+    border-radius:.6rem;border:1px solid var(--color-pool,#2B9EB3);
+    background:var(--color-shallow,#D6EAE6);color:var(--color-ink,#16303B);
+    font-size:.85rem;font-weight:600;line-height:1.35}
+  .photo-failed{display:inline-flex;align-items:center;height:5rem;padding:0 .6rem;border-radius:.5rem;
+    border:1px dashed var(--color-safety,#E76F51);background:rgba(231,111,81,.08);
+    color:var(--color-safety,#E76F51);font-size:.72rem;font-weight:700;line-height:1.2;
+    max-width:9rem;text-align:center}
+</style>
+<div id="toast-stack" role="status" aria-live="polite"></div>
+<div id="sync-sheet" class="sync-sheet" hidden>
+  <div class="sync-scrim" data-sync-close></div>
+  <div class="sync-panel" role="dialog" aria-modal="true" aria-labelledby="sync-sheet-title">
+    <div class="sync-head">
+      <h2 id="sync-sheet-title">Waiting to sync</h2>
+      <button type="button" class="sync-x" data-sync-close aria-label="Close">&times;</button>
+    </div>
+    <div id="sync-sheet-body" class="sync-body"></div>
+    <div class="sync-foot">
+      <button type="button" class="sync-btn sync-btn-go" data-sync-flush>Try to sync now</button>
+      <button type="button" class="sync-btn" data-sync-close>Close</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  // ---------- toasts ----------
+  // Never alert()/confirm(): a modal dialog freezes the page mid-route and a
+  // tech dismisses it reflexively without reading it. A toast is visible,
+  // non-blocking, and announced to VoiceOver via the container's role=status.
+  var stack = document.getElementById("toast-stack");
+  function toast(msg, kind) {
+    if (!stack) return;
+    var el = document.createElement("div");
+    el.className = "toast" + (kind ? " toast-" + kind : "");
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(function () { el.className += " out"; }, 6000);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 6400);
+  }
+
+  // ---------- htmx failures ----------
+  // Before this, EVERY htmx failure was silent: hx-post simply did nothing
+  // visible. htmx events bubble to document, so one listener covers every page.
+  document.addEventListener("htmx:sendError", function (e) {
+    reportHtmxFailure(e, "No connection — that didn't save.");
+  });
+  document.addEventListener("htmx:timeout", function (e) {
+    reportHtmxFailure(e, "Timed out — that didn't save.");
+  });
+  document.addEventListener("htmx:responseError", function (e) {
+    var xhr = e.detail && e.detail.xhr;
+    var status = xhr ? xhr.status : 0;
+    reportHtmxFailure(e, status === 413
+      ? "That file is too large to upload."
+      : "The server rejected that (error " + status + "). Nothing was saved.");
+  });
+
+  function reportHtmxFailure(e, msg) {
+    var elt = e.detail && e.detail.elt;
+    if (markPhotoFailure(elt, msg)) return;
+    toast(msg, "bad");
+  }
+
+  // The photo strip is the one hx-post sw.js deliberately does NOT queue (it's
+  // multipart, and a queued binary body is megabytes of a tech's storage). So a
+  // photo of a green pool taken with no signal is unrecoverable work unless the
+  // failure is obvious IN PLACE, next to the thumbnails that did upload.
+  function markPhotoFailure(elt, msg) {
+    var strip = document.getElementById("photo-strip");
+    if (!strip || !elt || !elt.getAttribute) return false;
+    var target = elt.getAttribute("hx-target") || "";
+    var post = elt.getAttribute("hx-post") || "";
+    if (target !== "#photo-strip" && post.indexOf("/photos/") !== 0) return false;
+    var chip = document.createElement("span");
+    chip.className = "photo-failed";
+    chip.textContent = "Not uploaded — retake when online";
+    strip.appendChild(chip);
+    toast("Photo not uploaded — " + msg, "bad");
+    return true;
+  }
+
+  if (!("serviceWorker" in navigator)) return;
+
+  // ---------- service worker channel ----------
+  navigator.serviceWorker.register("/sw.js");   // idempotent; _pwa.html re-registers to drive updates
+
+  var state = { count: 0, failedCount: 0, pending: [], failed: [] };
+  var sheet = document.getElementById("sync-sheet");
+  var sheetBody = document.getElementById("sync-sheet-body");
+
+  function send(msg) {
+    navigator.serviceWorker.ready.then(function (reg) {
+      var worker = reg.active || navigator.serviceWorker.controller;
+      if (worker) worker.postMessage(msg);
+    }).catch(function () {});
+  }
+
+  // Same, but posted in THIS turn rather than after a `ready` promise. Only the
+  // queue hint needs it: the POST it describes must not reach the worker first,
+  // and the controller is by definition the worker that will intercept it.
+  function sendNow(msg) {
+    var worker = navigator.serviceWorker.controller;
+    if (worker) worker.postMessage(msg);
+    else send(msg);
+  }
+
+  navigator.serviceWorker.addEventListener("message", function (e) {
+    var d = e.data;
+    if (!d || d.type !== "queue-count") return;
+    // Defensive defaults: a worker from the previous release sends only `count`.
+    state.count = typeof d.count === "number" ? d.count : 0;
+    state.failedCount = typeof d.failed === "number" ? d.failed : 0;
+    state.pending = d.pending || [];
+    state.failed = d.failedEntries || [];
+    paintBadges();
+    markPendingStops();
+    if (sheet && !sheet.hidden) renderSheet();
+  });
+
+  // ---------- badge ----------
+  function badges() {
+    return [document.getElementById("sync-badge"), document.getElementById("sync-badge-desktop")]
+      .filter(Boolean);
+  }
+  function paintBadges() {
+    var parts = [];
+    if (state.count > 0) parts.push(state.count + " waiting");
+    if (state.failedCount > 0) parts.push(state.failedCount + " failed");
+    var text = parts.join(" · ") || "0 waiting";
+    badges().forEach(function (badge) {
+      badge.textContent = text;
+      badge.hidden = (state.count + state.failedCount) <= 0;
+      badge.setAttribute("aria-label", text + " — open the sync queue");
+    });
+  }
+
+  // ---------- queue screen ----------
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+
+  function ago(ts) {
+    if (!ts) return "";
+    var mins = Math.round((Date.now() - ts) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + " min ago";
+    if (mins < 1440) return Math.round(mins / 60) + " hr ago";
+    return new Date(ts).toLocaleDateString();
+  }
+
+  // Best effort, in descending order of usefulness: the human label the page
+  // handed the worker at queue time, then the stop's own URL, then the raw
+  // queued path. Never blank -- an unidentifiable row is a row a tech can't act on.
+  // NB: none of the patterns in this file use an end-of-string anchor. That
+  // character is the dollar sign, and the money-privacy tests assert a tech's
+  // pages contain none of it — so exactness is checked by comparing the match
+  // length to the string length instead (see wholeMatch).
+  function wholeMatch(re, value) {
+    var m = re.exec(value || "");
+    return (m && m[0].length === (value || "").length) ? m : null;
+  }
+
+  function nameOf(entry) {
+    if (entry.label) return entry.label;
+    var stop = wholeMatch(/^\/visit\/(\d+)\/(\d{4}-\d{2}-\d{2})/, entry.page || "");
+    if (stop) return "Stop #" + stop[1] + " · " + stop[2];
+    var visit = /^\/visit\/(\d+)\//.exec(entry.url || "");
+    return visit ? "Visit #" + visit[1] : (entry.url || "Queued change");
+  }
+
+  var REASONS = {
+    400: "The server rejected this as invalid — it will never go through as-is.",
+    403: "You're not allowed to record that stop any more.",
+    404: "That stop no longer exists — it was deleted while you were offline.",
+    409: "That stop was already recorded by someone else.",
+    410: "That stop no longer exists.",
+    422: "Some of these readings aren't in a form the server accepts."
+  };
+  function reasonFor(status) {
+    return REASONS[status] || ("The server rejected this (error " + status + ").");
+  }
+
+  function pendingRow(entry) {
+    var row = el("div", "sync-row");
+    row.appendChild(el("div", "sync-name", nameOf(entry)));
+    row.appendChild(el("div", "sync-meta",
+      (entry.url.indexOf("/skip") > -1 ? "Skipped" : "Completed") + " " + ago(entry.ts) + " · waiting to send"));
+    return row;
+  }
+
+  function failedRow(entry) {
+    var row = el("div", "sync-row is-failed");
+    row.appendChild(el("div", "sync-name", nameOf(entry)));
+    row.appendChild(el("div", "sync-meta",
+      "Queued " + ago(entry.ts) + " · failed " + ago(entry.failed_at) + " · error " + entry.status));
+    row.appendChild(el("div", "sync-why", reasonFor(entry.status)));
+
+    var acts = el("div", "sync-acts");
+    var retry = el("button", "sync-btn", "Retry");
+    retry.type = "button";
+    retry.addEventListener("click", function () {
+      send({ type: "queue-retry", id: entry.id });
+      toast("Retrying " + nameOf(entry) + "…");
+    });
+    acts.appendChild(retry);
+
+    // Discard destroys a tech's work, so it is deliberately two taps with the
+    // second one visually armed. Not confirm() -- that blocks the whole page.
+    var discard = el("button", "sync-btn sync-btn-bad", "Discard");
+    discard.type = "button";
+    var armed = false, timer = null;
+    discard.addEventListener("click", function () {
+      if (!armed) {
+        armed = true;
+        discard.className = "sync-btn sync-btn-bad is-armed";
+        discard.textContent = "Tap again to discard";
+        timer = setTimeout(function () {
+          armed = false;
+          discard.className = "sync-btn sync-btn-bad";
+          discard.textContent = "Discard";
+        }, 5000);
+        return;
+      }
+      clearTimeout(timer);
+      send({ type: "queue-discard", id: entry.id });
+      toast("Discarded " + nameOf(entry) + " — that entry is gone for good.", "bad");
+    });
+    acts.appendChild(discard);
+    row.appendChild(acts);
+    return row;
+  }
+
+  function renderSheet() {
+    if (!sheetBody) return;
+    sheetBody.textContent = "";
+    if (!state.pending.length && !state.failed.length) {
+      sheetBody.appendChild(el("p", "sync-empty", "Everything is synced. Nothing is waiting."));
+      return;
+    }
+    if (state.failed.length) {
+      sheetBody.appendChild(el("p", "sync-group", "Needs your attention"));
+      state.failed.forEach(function (entry) { sheetBody.appendChild(failedRow(entry)); });
+    }
+    if (state.pending.length) {
+      sheetBody.appendChild(el("p", "sync-group", "Waiting to send"));
+      state.pending.forEach(function (entry) { sheetBody.appendChild(pendingRow(entry)); });
+    }
+  }
+
+  var returnFocusTo = null;
+  function openSheet() {
+    if (!sheet) return;
+    renderSheet();
+    returnFocusTo = document.activeElement;
+    sheet.hidden = false;
+    var x = sheet.querySelector(".sync-x");
+    if (x && x.focus) x.focus();
+    send({ type: "queue-state" });
+  }
+  function closeSheet() {
+    if (!sheet) return;
+    sheet.hidden = true;
+    if (returnFocusTo && returnFocusTo.focus) returnFocusTo.focus();
+    returnFocusTo = null;
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest("[data-sync-open]")) {
+      // The mobile badge sits inside a <summary>; without these the tap would
+      // also toggle the nav menu open behind the sheet.
+      e.preventDefault();
+      e.stopPropagation();
+      openSheet();
+      return;
+    }
+    if (t.closest("[data-sync-flush]")) {
+      e.preventDefault();
+      send({ type: "flush-queue" });
+      toast("Trying to sync…");
+      return;
+    }
+    if (t.closest("[data-sync-close]")) {
+      e.preventDefault();
+      closeSheet();
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && sheet && !sheet.hidden) closeSheet();
+  });
+
+  // ---------- "pending sync" overlay on stop cards ----------
+  // A completion queued offline redirects to /?queued=1, which sw.js answers
+  // from PAGES_CACHE -- the snapshot taken BEFORE the completion. The card
+  // therefore still reads as due, and the tech does the whole stop again. Each
+  // queued entry remembers the /visit/<property>/<date> page it came from,
+  // which is exactly the href Today renders for that stop.
+  function markPendingStops() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pending-sync]"), function (n) {
+      n.removeAttribute("data-pending-sync");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".pending-chip"), function (n) {
+      if (n.parentNode) n.parentNode.removeChild(n);
+    });
+
+    var seen = {}, marked = 0;
+    state.pending.forEach(function (entry) {
+      var page = entry.page || "";
+      // Only ever a whole, literal stop path -- keeps this out of selector-injection land.
+      if (!wholeMatch(/^\/visit\/\d+\/\d{4}-\d{2}-\d{2}/, page) || seen[page]) return;
+      seen[page] = true;
+      var links = document.querySelectorAll('a[href="' + page + '"]');
+      Array.prototype.forEach.call(links, function (link) {
+        var card = link.closest("li, article, .stop, .card") || link.parentElement;
+        if (!card || card.getAttribute("data-pending-sync")) return;
+        card.setAttribute("data-pending-sync", "1");
+        link.insertAdjacentElement("afterend", el("span", "pending-chip", "Pending sync"));
+        marked++;
+      });
+    });
+    paintPendingBanner(marked);
+  }
+
+  function paintPendingBanner(n) {
+    var banner = document.getElementById("pending-sync-banner");
+    if (!n) {
+      if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
+      return;
+    }
+    var main = document.querySelector("main");
+    if (!main) return;
+    if (!banner) {
+      banner = el("button", "pending-banner");
+      banner.type = "button";
+      banner.id = "pending-sync-banner";
+      banner.setAttribute("data-sync-open", "");
+      main.insertBefore(banner, main.firstChild);
+    }
+    banner.textContent = n === 1
+      ? "1 stop is done and waiting to sync — don't do it again. Tap to review."
+      : n + " stops are done and waiting to sync — don't do them again. Tap to review.";
+  }
+
+  // ---------- label hint ----------
+  // Captured from the visit page one turn before the POST reaches the worker,
+  // so the queue screen can say "Alice Ramos — Backyard" instead of "/visit/41/complete".
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.action) return;
+    var path;
+    try { path = new URL(form.action, location.href).pathname; } catch (err) { return; }
+    if (!wholeMatch(/^\/visit\/\d+\/(complete|skip)/, path)) return;
+    sendNow({ type: "queue-hint", url: path, page: location.pathname, label: visitLabel() });
+  }, true);
+
+  function visitLabel() {
+    var h1 = document.querySelector("h1");
+    var name = h1 ? (h1.textContent || "").trim() : "";
+    var header = h1 && h1.closest ? h1.closest("header") : null;
+    var sub = header ? header.nextElementSibling : null;
+    var detail = (sub && sub.tagName === "P") ? (sub.textContent || "").split("·")[0].trim() : "";
+    return detail ? name + " — " + detail : name;
+  }
+
+  // ---------- replay triggers ----------
+  // iOS Safari has no Background Sync API -- reconnecting (`online`) and every
+  // page load are the real triggers on that platform.
+  function flushQueue() { send({ type: "flush-queue" }); }
+  window.addEventListener("online", flushQueue);
+  flushQueue();
+  send({ type: "queue-state" });   // paint the badge/overlay even with nothing to flush
+})();
+</script>
