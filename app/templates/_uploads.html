@@ -1,0 +1,22 @@
+{# Filename feedback for styled upload buttons. Shared include like
+   _offline.html: this used to live inline in the SHARED base.html only —
+   which every production theme overrides — so under any real theme the
+   chosen filename was silently never reflected. Anything all four shells
+   need belongs in a shared partial, never inline in one base. #}
+<script>
+// Reflect the chosen filename on styled upload buttons that submit via a form
+// (logo, signed contract, CSV). htmx auto-upload inputs (hx-post) upload on
+// change and re-render, so they keep their action label.
+document.addEventListener("change", function (e) {
+  var input = e.target;
+  if (!input.classList || !input.classList.contains("upload-input")) return;
+  if (input.hasAttribute("hx-post")) return;
+  var btn = input.closest(".upload-btn");
+  var text = btn && btn.querySelector(".upload-btn-text");
+  if (text && input.files && input.files.length) {
+    text.textContent = input.files.length > 1
+      ? input.files.length + " files selected"
+      : input.files[0].name;
+  }
+});
+</script>

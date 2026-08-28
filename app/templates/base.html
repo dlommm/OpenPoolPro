@@ -123,23 +123,7 @@
   </header>
   {% endblock %}
   <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
-  <script>
-  // Reflect the chosen filename on styled upload buttons that submit via a form
-  // (logo, signed contract, CSV). htmx auto-upload inputs (hx-post) upload on
-  // change and re-render, so they keep their action label.
-  document.addEventListener("change", function (e) {
-    var input = e.target;
-    if (!input.classList || !input.classList.contains("upload-input")) return;
-    if (input.hasAttribute("hx-post")) return;
-    var btn = input.closest(".upload-btn");
-    var text = btn && btn.querySelector(".upload-btn-text");
-    if (text && input.files && input.files.length) {
-      text.textContent = input.files.length > 1
-        ? input.files.length + " files selected"
-        : input.files[0].name;
-    }
-  });
-  </script>
+  {% include "_uploads.html" %}
   {% include "_offline.html" %}
   {% include "_mode_toggle.html" %}
   {% include "_pwa.html" %}

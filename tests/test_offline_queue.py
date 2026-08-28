@@ -297,3 +297,12 @@ def test_pages_cache_is_cleared_on_sign_out():
     assert "resp.ok && !landedOnLogin" in nav
     partial = OFFLINE_PARTIAL.read_text()
     assert 'sendNow({ type: "clear-pages" })' in partial
+
+
+@pytest.mark.parametrize("base", BASES, ids=lambda p: p.parent.name)
+def test_every_base_template_ships_the_uploads_partial(base):
+    """The upload-filename script used to live inline in the SHARED base only —
+    which every production theme overrides — so under any real theme picking a
+    file gave no feedback. Shared behavior ships as a shared include, in all
+    four shells, like _offline.html."""
+    assert '{% include "_uploads.html" %}' in base.read_text()
