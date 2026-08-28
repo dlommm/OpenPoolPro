@@ -123,10 +123,25 @@ function refPath(referrer) {
   }
 }
 
+// PAGES_CACHE holds full rendered pages — customer details include gate
+// codes and dog notes, which must not stay readable offline on a lost or
+// shared phone after sign-out. Cleared on the logout POST (page message) and,
+// belt-and-braces, whenever a navigation lands on /login without asking for
+// it (session expired or ended remotely).
+function clearPagesCache() {
+  return caches.delete(PAGES_CACHE);
+}
+
 async function handleNavigate(req) {
   try {
     const resp = await fetch(req);
-    if (resp && resp.ok) {
+    const landedOnLogin = (() => {
+      try { return new URL(resp.url).pathname === "/login"; } catch { return false; }
+    })();
+    if (landedOnLogin && new URL(req.url).pathname !== "/login") {
+      clearPagesCache();
+    }
+    if (resp && resp.ok && !landedOnLogin) {
       const copy = resp.clone();
       caches.open(PAGES_CACHE).then(c => c.put(req, copy));
     }
@@ -386,6 +401,8 @@ self.addEventListener("message", e => {
     // The queue screen asking what's in here. Answering costs no network, so it
     // works exactly the same offline -- which is the only time it matters.
     e.waitUntil(postQueueState());
+  } else if (data.type === "clear-pages") {
+    e.waitUntil(clearPagesCache());
   } else if (data.type === "queue-retry") {
     e.waitUntil(retryFailed(data.id));
   } else if (data.type === "queue-discard") {

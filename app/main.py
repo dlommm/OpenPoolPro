@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse, Response
@@ -56,6 +57,32 @@ ROUTERS = (
 )
 
 
+
+def _acquire_single_instance_lock(app) -> None:
+    """Refuse to run two app processes against one data dir.
+
+    Correctness quietly assumes exactly ONE process: invoice numbering scans
+    for the max, the login rate limiter and 2FA one-time-nonce store are
+    in-process (N workers = N attempt budgets and replayable nonces — holes
+    the security audit specifically closed), and the APScheduler jobs would
+    duplicate. The Dockerfile runs a single uvicorn process, but nothing
+    stopped an operator adding --workers 4 or a second replica on the same
+    volume. An advisory flock, held for the process lifetime and released by
+    the OS on ANY exit (crash included), makes the invariant explicit."""
+    import fcntl
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    lock = open(os.path.join(config.DATA_DIR, ".instance.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise RuntimeError(
+            "Another OpenPoolPro process already holds this DATA_DIR. Run exactly "
+            "one (no `uvicorn --workers N`, no second container on this volume): "
+            "rate limiting, 2FA replay protection, invoice numbering, and the "
+            "scheduler are all single-process by design.") from None
+    app.state.instance_lock = lock  # keep the fd alive for the process lifetime
+
+
 def create_app(engine=None) -> FastAPI:
     # First thing, so anything below (migrations, seeding, scheduler wiring)
     # that fails during boot fails somewhere an operator can read.
@@ -68,6 +95,7 @@ def create_app(engine=None) -> FastAPI:
     # so a deployment can never run on the shipped placeholder SECRET_KEY.
     if engine is None:
         config.validate_secrets()
+        _acquire_single_instance_lock(app)
     app.state.engine = engine or make_engine()
     # Rate limiter for sensitive already-authenticated account actions (password
     # change, 2FA disable/regenerate) — a hijacked session shouldn't get
@@ -232,6 +260,12 @@ def create_app(engine=None) -> FastAPI:
         from fastapi.exception_handlers import http_exception_handler
         return await http_exception_handler(request, exc)
 
+    if not os.path.isfile("app/static/app.css"):
+        log.error(
+            "app/static/app.css is MISSING — every page will render unstyled. "
+            "It is a build artifact (gitignored): run `python scripts/build_css.py` "
+            "(the Docker image builds it automatically).")
+
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
     @app.get("/health")
@@ -246,7 +280,20 @@ def create_app(engine=None) -> FastAPI:
         except Exception:
             return Response('{"ok": false}', status_code=503,
                             media_type="application/json")
-        return {"ok": True}
+        # Ops fields, still 200: a dead scheduler or stale backups shouldn't
+        # restart-loop the container, but they were previously visible only as
+        # a Settings-page banner an operator had to go looking for — an uptime
+        # monitor can alert on these instead.
+        from app import backup as _backup
+        out = {"ok": True}
+        sched = getattr(app.state, "scheduler", None)
+        if sched is not None:
+            out["scheduler_running"] = bool(getattr(sched, "running", False))
+        age = _backup.newest_backup_age_hours()
+        if age is not None:
+            out["backup_age_hours"] = round(age, 1)
+            out["backup_fresh"] = age < 36
+        return out
 
     @app.get("/manifest.json", include_in_schema=False)
     def manifest():

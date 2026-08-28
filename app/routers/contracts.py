@@ -21,6 +21,7 @@ from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.templating import templates
+from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_perm("manage_customers"))])
 
@@ -76,7 +77,7 @@ def new_contract(pid: int, request: Request, session: Session = Depends(get_sess
     cents = snapshot or {field: 0 for field in rates.CONTRACT_RATE_FIELDS}
     includes_spa = any(p.active and p.kind == "spa" for p in prop.pools)
     contract = models.Contract(
-        pool_id=pool.id, season_year=date.today().year, weeks=16,
+        pool_id=pool.id, season_year=business_today().year, weeks=16,
         includes_spa=includes_spa, created_by_id=request.state.user.id,
         **cents,
     )

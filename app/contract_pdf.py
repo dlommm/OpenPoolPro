@@ -139,7 +139,10 @@ def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
     storm = getattr(contract, "storm_cents", 0) or 0
 
     season_total_cents = weeks * weekly
-    half_open_close_cents = open_close / 2
+    # Integer split, remainder on the first half: 2 x the displayed "each"
+    # amounts must reconcile to the stated total even for an odd-cent total
+    # (float division rendered '($61.73 each)' against a $123.45 total).
+    half_open_close_cents = open_close // 2 + (open_close % 2)
 
     if tax_rate_ppm:
         # Tax the concrete fixed items: the weekly season total AND openings/closings.
@@ -147,7 +150,7 @@ def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
         total_tax_cents = tax.tax_cents(taxable_total_cents, tax_rate_ppm)
         total_incl_tax_cents = taxable_total_cents + total_tax_cents
         open_close_text = (
-            f"${_d(open_close)} (${half_open_close_cents / 100:,.2f} each)"
+            f"${_d(open_close)} (${_d(half_open_close_cents)} each)"
         )
         weekly_line = (
             f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "
@@ -155,7 +158,7 @@ def _rates_table(contract, company_name: str, tax_rate_ppm: int = 0) -> list:
         )
     else:
         open_close_text = (
-            f"${_d(open_close)} plus tax (${half_open_close_cents / 100:,.2f} each)"
+            f"${_d(open_close)} plus tax (${_d(half_open_close_cents)} each)"
         )
         weekly_line = (
             f"{weeks} weeks x ${_d(weekly)}/week = ${_d(season_total_cents)} "

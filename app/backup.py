@@ -148,6 +148,15 @@ def run_backup(engine) -> str:
     try:
         bdir = os.path.join(config.DATA_DIR, "backups")
         os.makedirs(bdir, exist_ok=True)
+        # Any .tmp here is a dead crashed-run leftover (one process, one
+        # scheduler): reclaim it whatever date it carries — the previous
+        # same-path-only cleanup left sidecars from other days forever.
+        for stale in os.listdir(bdir):
+            if stale.endswith(".tmp"):
+                try:
+                    os.remove(os.path.join(bdir, stale))
+                except OSError:
+                    pass
         stamp = datetime.now(config.tz()).date().isoformat()
         path = os.path.join(bdir, f"app-{stamp}.db")
         # VACUUM INTO a temp path, then atomically rename into place. A process
@@ -174,11 +183,36 @@ def run_backup(engine) -> str:
         _sync_offbox(engine, bdir, path, assets)
         return path
     except Exception as e:
-        with Session(engine) as s:
-            models.set_setting(s, "last_backup_error", str(e))
-            models.set_setting(s, "last_backup_ok", "0")
-            s.commit()
+        try:
+            with Session(engine) as s:
+                models.set_setting(s, "last_backup_error", str(e))
+                models.set_setting(s, "last_backup_ok", "0")
+                s.commit()
+        except Exception:
+            # Disk-full / locked-DB failures usually break this write too;
+            # log instead of letting the recording error REPLACE the real one.
+            import logging
+            logging.getLogger("openpoolpro.backup").exception(
+                "backup failed AND the failure could not be recorded to settings")
         raise
+
+
+def newest_backup_age_hours() -> float | None:
+    """Age of the newest app-<date>.db snapshot in hours, or None when there
+    is none. mtime, not the last_backup_at setting: after a restore that
+    setting comes back from inside the snapshot and describes a run whose
+    output is not necessarily on this disk. Also surfaced by /health so an
+    uptime monitor can notice a silently-stopped scheduler."""
+    bdir = os.path.join(config.DATA_DIR, "backups")
+    try:
+        newest = max((os.path.getmtime(os.path.join(bdir, f))
+                      for f in os.listdir(bdir)
+                      if f.startswith("app-") and f.endswith(".db")), default=None)
+    except OSError:  # no backups dir yet: first boot, or a restored/empty data dir
+        return None
+    if newest is None:
+        return None
+    return (time.time() - newest) / 3600
 
 
 def backup_if_stale(engine, max_age_hours: float = 24.0) -> str | None:
@@ -193,17 +227,8 @@ def backup_if_stale(engine, max_age_hours: float = 24.0) -> str | None:
     last_backup_ok, and a full disk must not stop the app from starting.
     Returns the snapshot path when one was taken, else None.
     """
-    bdir = os.path.join(config.DATA_DIR, "backups")
-    try:
-        # mtime, not the last_backup_at setting: after a restore that setting
-        # comes back from inside the snapshot and describes a run whose output
-        # is not necessarily on this disk.
-        newest = max((os.path.getmtime(os.path.join(bdir, f))
-                      for f in os.listdir(bdir)
-                      if f.startswith("app-") and f.endswith(".db")), default=None)
-    except OSError:  # no backups dir yet: first boot, or a restored/empty data dir
-        newest = None
-    if newest is not None and (time.time() - newest) < max_age_hours * 3600:
+    age = newest_backup_age_hours()
+    if age is not None and age < max_age_hours:
         return None
     try:
         return run_backup(engine)

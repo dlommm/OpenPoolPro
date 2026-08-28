@@ -474,6 +474,12 @@
     if (!form || !form.action) return;
     var path;
     try { path = new URL(form.action, location.href).pathname; } catch (err) { return; }
+    if (path === "/logout") {
+      // Cached pages hold customer PII (gate codes); they must not survive
+      // sign-out on a shared or lost phone.
+      sendNow({ type: "clear-pages" });
+      return;
+    }
     if (!wholeMatch(/^\/visit\/\d+\/(complete|skip)/, path)) return;
     sendNow({ type: "queue-hint", url: path, page: location.pathname, label: visitLabel() });
   }, true);

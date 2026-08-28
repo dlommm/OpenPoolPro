@@ -21,7 +21,11 @@ auto-decrement from visit usage, and low-stock alerts.
 
     cp .env.example .env   # set APP_PASSWORD and SECRET_KEY
     docker compose up -d
-    # open http://<host>:8000 — first login is owner / your APP_PASSWORD
+    # Put a TLS reverse proxy in front — the compose file binds the app to
+    # 127.0.0.1:8000 ON PURPOSE (the app trusts X-Forwarded-* from the proxy),
+    # so it is NOT reachable from other machines directly. Point the proxy at
+    # 127.0.0.1:8000 and set FORWARDED_ALLOW_IPS to the proxy's address.
+    # First login is owner / your APP_PASSWORD
     # manage crew under Settings → Manage crew
     # change APP_PASSWORD in .env + restart to reset the owner login (recovery)
     # on iPhone: Share → Add to Home Screen

@@ -280,3 +280,20 @@ def test_pending_sync_overlay_is_wired_to_the_queued_pages(client):
     assert "pending-chip" in html
     assert "Pending sync" in html
     assert "don't do it again" in html or "don&#39;t do it again" in html
+
+
+def test_pages_cache_is_cleared_on_sign_out():
+    """PAGES_CACHE holds full rendered pages — customer details include gate
+    codes — so it must not survive sign-out on a shared or lost phone. The
+    logout form posts clear-pages, and any navigation that lands on /login
+    without asking for it (expired/remotely-ended session) clears too."""
+    src = sw_source()
+    handler = js_function_body(src, 'self.addEventListener("message"')
+    assert '"clear-pages"' in handler
+    assert "caches.delete(PAGES_CACHE)" in js_function_body(src, "function clearPagesCache()")
+    nav = js_function_body(src, "async function handleNavigate(")
+    assert "landedOnLogin" in nav and "clearPagesCache()" in nav
+    # ...and nothing may cache the login redirect page itself under the old URL.
+    assert "resp.ok && !landedOnLogin" in nav
+    partial = OFFLINE_PARTIAL.read_text()
+    assert 'sendNow({ type: "clear-pages" })' in partial
