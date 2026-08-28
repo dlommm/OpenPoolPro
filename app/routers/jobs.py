@@ -202,6 +202,13 @@ def create_job(request: Request, mode: str = Form("existing"),
                 "enter hours to create the job.", status_code=400)
     if hrs is None:
         hrs = 0
+    # Hours are a money field (they price the job together with the rate): the
+    # form hides Rate/Hours from non-money users and labor stays 0 for them,
+    # but a hand-crafted POST could still store `hours` the money side never
+    # entered — poisoning income-per-hour analytics. Mirror edit_job, which
+    # already refuses non-money rate/hours writes.
+    if not can_money:
+        hrs = 0
     labor_cents = rates.job_labor_cents(rate_cents, hrs) if can_money else 0
     j = models.Job(property_id=pid, title=title, description=description,
                    priority=priority, labor_cents=labor_cents, hours=hrs)

@@ -201,6 +201,25 @@ def test_money_tech_can_still_set_the_visit_labor_override(client, tech_client, 
         assert s.get(models.Visit, vid).labor_override_cents == 100
 
 
+def test_non_money_tech_cannot_smuggle_job_money_fields_on_create(client, tech_client, engine):
+    """Rate/Hours price the job; the form hides both from non-money users and
+    edit_job refuses their money writes — but create_job stored a hand-crafted
+    `hours` anyway (labor stayed 0, yet the hours poisoned income-per-hour
+    analytics). Both fields must be inert on create too."""
+    _, pid = _seed_property(engine)
+    t = tech_client(name="fieldtech2")
+    r = t.post("/jobs/new", data={"property_id": str(pid), "title": "Filter clean",
+                                  "description": "", "priority": "normal",
+                                  "rate_dollars": "425", "hours": "3", "scheduled_date": "",
+                                  "job_type": "service", "assigned_tech_id": ""},
+               follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        j = s.scalars(select(models.Job)).one()
+        assert j.hours == 0
+        assert j.labor_cents == 0
+
+
 def test_job_tax_rate_is_frozen_at_first_completion(client, engine):
     """Same frozen-history contract visits honour: re-completing to fix a typo
     must not re-price the job at a rate that moved on since."""
