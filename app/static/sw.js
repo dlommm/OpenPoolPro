@@ -269,6 +269,9 @@ async function postQueueState() {
     failed: failed.length,
     pending: pending.map(describe),
     failedEntries: failed.map(describe),
+    // "auth" when the last replay stopped on a redirect to /login — the page
+    // renders a "log back in" notice instead of a bare "waiting to send".
+    blocked: BLOCKED_AUTH ? "auth" : "",
   };
   const clients = await self.clients.matchAll();
   clients.forEach(client => client.postMessage(msg));
@@ -312,6 +315,11 @@ function describe(entry) {
 // receive the same completion twice. Overlapping callers share the run already
 // in flight instead.
 let REPLAY_INFLIGHT = null;
+// Sticky "the session died mid-replay" marker, reported to clients via
+// postQueueState as blocked:"auth" so the queue screen can say "log in" instead
+// of an eternal unexplained "waiting to send". Recomputed on every run: any
+// replay that gets past the login redirect clears it.
+let BLOCKED_AUTH = false;
 
 function replay() {
   if (!REPLAY_INFLIGHT) {
@@ -321,6 +329,7 @@ function replay() {
 }
 
 async function replayOnce() {
+  BLOCKED_AUTH = false;
   let entries = [];
   try {
     entries = await queueAll();
@@ -351,6 +360,7 @@ async function replayOnce() {
     if (resp.ok && !loginRedirect) {
       await queueDelete(entry.id);
     } else if (loginRedirect || resp.status >= 500 || resp.status < 400) {
+      if (loginRedirect) BLOCKED_AUTH = true;
       break;  // retryable — login redirect, server fault, or an odd non-2xx we won't gamble on
     } else {
       await failEntry(entry, resp.status);  // dead 4xx — park it, keep draining the rest

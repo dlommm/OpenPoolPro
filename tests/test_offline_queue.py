@@ -107,6 +107,24 @@ def test_replay_is_single_flight():
     assert src.count("replayOnce()") == 2  # the definition's callsite + this wrapper
 
 
+def test_replay_reports_auth_blocked_state():
+    """A replay stopped by the login redirect keeps every entry queued (the
+    readings are safe) — but the queue screen must then say 'log in', not show
+    an eternal unexplained 'waiting to send'. The worker sets a flag on the
+    login-redirect break, ships it as blocked:"auth" in the queue-state
+    message, and the page renders a login notice."""
+    src = sw_source()
+    body = js_function_body(src, "async function replayOnce()")
+    assert "BLOCKED_AUTH = true" in body
+    assert "BLOCKED_AUTH = false" in body, "flag must be recomputed on every run"
+    state = js_function_body(src, "async function postQueueState()")
+    assert "blocked:" in state
+    partial = OFFLINE_PARTIAL.read_text()
+    assert '"auth"' in partial
+    assert "Signed out" in partial
+    assert 'login.href = "/login"' in partial
+
+
 def test_failed_entries_keep_payload_status_and_timestamp():
     """A parked entry is not a deleted entry: the body a tech typed survives,
     plus the status and when it died so the queue screen can explain itself."""

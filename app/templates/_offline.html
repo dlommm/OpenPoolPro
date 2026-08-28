@@ -57,6 +57,7 @@
     border:1px solid var(--color-seam,#E4DBCC);background:var(--color-surface,#fff);
     color:var(--color-ink,#16303B)}
   .sync-btn-go{background:var(--color-pool,#2B9EB3);border-color:var(--color-pool,#2B9EB3);color:#fff}
+  a.sync-btn{display:inline-flex;align-items:center;text-decoration:none}
   .sync-btn-bad{border-color:var(--color-safety,#E76F51);color:var(--color-safety,#E76F51)}
   .sync-btn-bad.is-armed{background:var(--color-safety,#E76F51);color:#fff}
 
@@ -154,7 +155,7 @@
   // ---------- service worker channel ----------
   navigator.serviceWorker.register("/sw.js");   // idempotent; _pwa.html re-registers to drive updates
 
-  var state = { count: 0, failedCount: 0, pending: [], failed: [] };
+  var state = { count: 0, failedCount: 0, pending: [], failed: [], blocked: "" };
   var sheet = document.getElementById("sync-sheet");
   var sheetBody = document.getElementById("sync-sheet-body");
 
@@ -182,6 +183,7 @@
     state.failedCount = typeof d.failed === "number" ? d.failed : 0;
     state.pending = d.pending || [];
     state.failed = d.failedEntries || [];
+    state.blocked = d.blocked || "";
     paintBadges();
     markPendingStops();
     if (sheet && !sheet.hidden) renderSheet();
@@ -309,6 +311,22 @@
     if (!state.pending.length && !state.failed.length) {
       sheetBody.appendChild(el("p", "sync-empty", "Everything is synced. Nothing is waiting."));
       return;
+    }
+    // A session that expired mid-sync keeps every pending entry queued (the
+    // readings are safe) but nothing will send until the tech logs back in.
+    // Without this notice the sheet reads "waiting to send" forever with full
+    // signal and no hint that logging in is the fix.
+    if (state.blocked === "auth" && state.pending.length) {
+      var note = el("div", "sync-row is-failed");
+      note.appendChild(el("div", "sync-name", "Signed out"));
+      note.appendChild(el("div", "sync-why",
+        "You've been signed out, so these can't send. Your work is saved — log in and they'll go through."));
+      var noteActs = el("div", "sync-acts");
+      var login = el("a", "sync-btn sync-btn-go", "Log in");
+      login.href = "/login";
+      noteActs.appendChild(login);
+      note.appendChild(noteActs);
+      sheetBody.appendChild(note);
     }
     if (state.failed.length) {
       sheetBody.appendChild(el("p", "sync-group", "Needs your attention"));
