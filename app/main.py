@@ -144,8 +144,15 @@ def create_app(engine=None) -> FastAPI:
     from app import security as _security
     app.state.account_limiter = _security.RateLimiter(max_fails=8, lock_seconds=900)
     Base.metadata.create_all(app.state.engine)
-    from app import migrate
-    migrate.run(app.state.engine)
+    from app import backup, migrate
+    # Real boots snapshot the DB immediately before the first migration
+    # statement that would change it (migrations DELETE/UPDATE rows, and the
+    # nightly can be ~23h stale by upgrade time). Lazy on purpose: the common
+    # nothing-to-migrate boot never pays for it. Test boots (injected
+    # in-memory engine) have nothing worth vacuuming.
+    pre_snapshot = ((lambda: backup.pre_migration_backup(app.state.engine))
+                    if engine is None else None)
+    migrate.run(app.state.engine, before_change=pre_snapshot)
     seeds.run(app.state.engine)
 
     EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}

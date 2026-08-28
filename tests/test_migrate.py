@@ -160,3 +160,48 @@ def test_migrate_dedupes_duplicate_visits_and_enforces_uniqueness(engine):
         except IntegrityError:
             raised = True
         assert raised
+
+
+def test_before_change_fires_once_and_only_when_migrating(engine):
+    # A legacy DB with pending column adds: the hook fires exactly once, even
+    # though many ALTERs run. A second migrate.run finds nothing to do and
+    # must NOT fire — the common no-op boot never pays for a snapshot.
+    with engine.connect() as c:
+        c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(80), "
+                       "role VARCHAR(12), password_hash VARCHAR(200))"))
+        c.commit()
+    calls = []
+    migrate.run(engine, before_change=lambda: calls.append(1))
+    assert len(calls) == 1
+    migrate.run(engine, before_change=lambda: calls.append(2))
+    assert len(calls) == 1
+
+
+def test_pre_migration_snapshot_captures_the_pre_migration_state(tmp_path, monkeypatch):
+    """The point of the whole hook: when a migration is about to DELETE rows
+    (the duplicate-visit repair), the snapshot taken by before_change must
+    still contain them — it is the pre-image, not a copy of the result."""
+    import sqlite3
+
+    from app import backup, config
+    from app.db import make_engine
+
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    engine = make_engine(f"sqlite:///{tmp_path}/app.db")
+    with engine.begin() as c:
+        c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+        c.execute(text(
+            "CREATE TABLE visits (id INTEGER PRIMARY KEY, property_id INTEGER, date DATE, "
+            "status VARCHAR(8), completed_at DATETIME)"))
+        c.execute(text("CREATE TABLE visit_chemicals (id INTEGER PRIMARY KEY, visit_id INTEGER)"))
+        c.execute(text("INSERT INTO visits (id, property_id, date, status) "
+                       "VALUES (1, 7, '2026-07-13', 'due'), (2, 7, '2026-07-13', 'done')"))
+
+    migrate.run(engine, before_change=lambda: backup.pre_migration_backup(engine))
+
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM visits")).scalar() == 1  # repair ran
+    snaps = sorted((tmp_path / "backups").glob("pre-migrate-*.db"))
+    assert len(snaps) == 1
+    with sqlite3.connect(snaps[0]) as db:
+        assert db.execute("SELECT COUNT(*) FROM visits").fetchone()[0] == 2  # pre-image

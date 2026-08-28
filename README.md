@@ -90,6 +90,12 @@ contract PDFs are missing. Both are kept for 14 generations and pruned in
 step. If the box is off at 01:00 (night reboot, deploy), the next start
 takes the missed snapshot instead of skipping the night.
 
+Separately, any boot whose migration is about to actually change the
+database first writes a DB-only `pre-migrate-<timestamp>.db` snapshot
+(newest 3 kept) — the same-day pre-image for the upgrade itself, since the
+nightly can be almost a day old by then. Restore one like any snapshot by
+passing its path to `scripts/restore.sh` (with `--skip-assets`).
+
 The 14 generations sit on the same disk as the live database — set
 `BACKUP_SYNC_CMD` to also ship each one off the box, e.g.
 `rclone copy "$BACKUP_FILE" remote:pool-backups && rclone copy "$BACKUP_ASSETS_FILE" remote:pool-backups`.

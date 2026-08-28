@@ -4,7 +4,11 @@ from sqlalchemy import bindparam, text
 from app import addresses
 
 
-def _dedupe_and_unique_visits(conn) -> None:
+def _index_exists(conn, table: str, name: str) -> bool:
+    return any(r[1] == name for r in conn.execute(text(f"PRAGMA index_list({table})")))
+
+
+def _dedupe_and_unique_visits(conn, guard) -> None:
     """A property has at most one visit per calendar date. The old /week/move
     path could leave a duplicate 'due' row (double-billing risk). Collapse any
     existing duplicates — keeping the most-complete row (done > skipped > due,
@@ -26,12 +30,15 @@ def _dedupe_and_unique_visits(conn) -> None:
 
         losers = [r[0] for r in sorted(rows, key=rank, reverse=True)[1:]]
         if losers:
+            guard()
             conn.execute(text("DELETE FROM visit_chemicals WHERE visit_id IN :ids")
                          .bindparams(bindparam("ids", expanding=True)), {"ids": losers})
             conn.execute(text("DELETE FROM visits WHERE id IN :ids")
                          .bindparams(bindparam("ids", expanding=True)), {"ids": losers})
-    conn.execute(text(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_visits_property_date ON visits (property_id, date)"))
+    if not _index_exists(conn, "visits", "uq_visits_property_date"):
+        guard()
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_visits_property_date ON visits (property_id, date)"))
 
 # Indexes on hot, frequently-filtered columns. `Base.metadata.create_all` only
 # creates these on brand-new tables, so an already-provisioned database needs
@@ -128,7 +135,28 @@ COLUMNS = {
 }
 
 
-def run(engine) -> None:
+def run(engine, before_change=None) -> None:
+    """Apply pending migrations.
+
+    `before_change` is called AT MOST ONCE, immediately before the first
+    statement that would actually modify the database (ALTER TABLE, UPDATE,
+    DELETE, CREATE INDEX) — a boot with nothing to migrate never calls it.
+    create_app wires it to backup.pre_migration_backup on real boots: the
+    dedupe repairs above DELETE and UPDATE rows, and by upgrade time the
+    newest nightly snapshot can be ~23 hours stale, so a data-rewriting
+    migration with a bug would otherwise have no same-day pre-image. Any new
+    migration step added here must route its writes behind guard() the same
+    way, or it silently opts out of that protection.
+    """
+    fired = False
+
+    def guard():
+        nonlocal fired
+        if not fired:
+            fired = True
+            if before_change is not None:
+                before_change()
+
     with engine.begin() as conn:
         for table, cols in COLUMNS.items():
             existing = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
@@ -136,6 +164,7 @@ def run(engine) -> None:
                 continue
             for name, ddl in cols:
                 if name not in existing:
+                    guard()
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
         # Best-effort backfill of structured address from the legacy free-text
@@ -148,6 +177,7 @@ def run(engine) -> None:
             for pid, address in rows:
                 d = addresses.parse_address(address)
                 if d["street"]:
+                    guard()
                     conn.execute(text(
                         "UPDATE properties SET street=:s, city=:c, state=:st, zip=:z WHERE id=:id"),
                         {"s": d["street"], "c": d["city"], "st": d["state"], "z": d["zip"], "id": pid})
@@ -158,7 +188,9 @@ def run(engine) -> None:
         for name, table, columns in INDEXES:
             present = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
             wanted = [c.strip() for c in columns.split(",")]
-            if present and all(c in present for c in wanted):
-                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))
+            if (present and all(c in present for c in wanted)
+                    and not _index_exists(conn, table, name)):
+                guard()
+                conn.execute(text(f"CREATE INDEX {name} ON {table} ({columns})"))
 
-        _dedupe_and_unique_visits(conn)
+        _dedupe_and_unique_visits(conn, guard)

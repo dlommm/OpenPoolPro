@@ -50,12 +50,12 @@ def _sync_offbox(engine, bdir: str, path: str, assets: str | None = None) -> Non
         s.commit()
 
 
-def _prune(bdir: str, prefix: str, suffix: str) -> None:
-    """Keep the newest KEEP generations of one snapshot family. The names are
+def _prune(bdir: str, prefix: str, suffix: str, keep: int = KEEP) -> None:
+    """Keep the newest `keep` generations of one snapshot family. The names are
     date-stamped, so lexical order is chronological order."""
     names = sorted(f for f in os.listdir(bdir)
                    if f.startswith(prefix) and f.endswith(suffix))
-    for old in names[:-KEEP]:
+    for old in names[:-keep]:
         os.remove(os.path.join(bdir, old))
 
 
@@ -96,6 +96,52 @@ def archive_assets(bdir: str, stamp: str) -> str | None:
                     filter=_tar_filter)
     os.replace(tmp, path)
     return path
+
+
+# Pre-migration snapshots are an escape hatch, not an archive: enough to
+# survive one bad upgrade (and a retry or two), few enough to never crowd the
+# nightly retention.
+PRE_MIGRATE_KEEP = 3
+
+
+def pre_migration_backup(engine) -> str | None:
+    """DB-only snapshot taken by migrate.run immediately before its first real
+    change (see run(before_change=...)).
+
+    Exists because the nightly can be ~23 hours stale by upgrade time and
+    migrations DELETE/UPDATE rows (the visit and invoice dedupe repairs) — this
+    is the same-minute pre-image when a data-rewriting migration goes wrong.
+    DB only: migrations never touch photos/contracts, and the asset archive can
+    be tens of GB. Own filename family (pre-migrate-*, keep 3, timestamped to
+    the second so upgrade retries don't overwrite the one that matters) so it
+    never consumes an app-<date>.db retention slot — restore.sh restores it
+    like any snapshot by explicit path.
+
+    Called mid-migration-transaction, before that transaction's first write,
+    so the second connection's VACUUM INTO sees exactly the pre-migration
+    state. Never raises — a full disk must not stop the app from booting —
+    but a failure is logged loudly, unlike the settings-table route the
+    nightly uses (mid-migration is no time to write settings rows).
+    """
+    import logging
+    log = logging.getLogger("openpoolpro.backup")
+    try:
+        bdir = os.path.join(config.DATA_DIR, "backups")
+        os.makedirs(bdir, exist_ok=True)
+        stamp = datetime.now(config.tz()).strftime("%Y-%m-%dT%H%M%S")
+        path = os.path.join(bdir, f"pre-migrate-{stamp}.db")
+        tmp = path + ".tmp"
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        with engine.connect() as conn:
+            conn.execute(text("VACUUM INTO :p"), {"p": tmp})
+        os.replace(tmp, path)
+        _prune(bdir, "pre-migrate-", ".db", keep=PRE_MIGRATE_KEEP)
+        log.info("pre-migration snapshot: %s", path)
+        return path
+    except Exception:
+        log.exception("pre-migration snapshot FAILED — migration proceeds without one")
+        return None
 
 
 def run_backup(engine) -> str:
