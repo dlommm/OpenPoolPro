@@ -34,7 +34,7 @@ folder.
     python3.12 -m venv .venv && source .venv/bin/activate
     pip install -r requirements.txt
     python scripts/build_css.py
-    APP_PASSWORD=dev uvicorn app.main:create_app --factory --reload
+    APP_PASSWORD=dev COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
     pytest
 
 ## Security
@@ -64,13 +64,15 @@ folder.
   admins from Settings → Manage crew). Password changes and 2FA changes
   do the same automatically for every *other* session, while keeping the
   device that made the change signed in.
-- **Cookies:** session cookies are HttpOnly + SameSite=Lax always. Set
-  `COOKIE_SECURE=1` in `.env` when the app is served over HTTPS (e.g.
-  behind a reverse proxy with TLS) so cookies are also marked Secure —
-  leave it `0` for plain-HTTP local/LAN use.
+- **Cookies:** session cookies are HttpOnly + SameSite=Lax always, and
+  marked Secure (HTTPS-only) **by default** — correct for the documented
+  reverse-proxy-with-TLS setup. For a deliberately plain-HTTP local/LAN
+  deployment set `COOKIE_SECURE=0` in `.env` (without it, logins won't
+  stick over HTTP); the app logs a warning at boot when it's off.
 - **Response headers:** every response carries `X-Content-Type-Options:
   nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, and a
-  restrictive `Content-Security-Policy`.
+  restrictive `Content-Security-Policy`; when `COOKIE_SECURE` is on (the
+  default), `Strict-Transport-Security` pins browsers to HTTPS as well.
 - **Upgrading a live instance:** this release changes the pending-2FA
   cookie's purpose check, so any in-flight 2FA login started just before
   the upgrade will have its pending cookie rejected; the 5-minute pending

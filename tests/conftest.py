@@ -14,6 +14,12 @@ from app import auth_core
 # so every code path under test behaves identically.
 auth_core.pwd_context.update(bcrypt__rounds=4)
 
+# The TestClient speaks plain http://testserver, and httpx's cookie jar rightly
+# refuses to store Secure cookies from an insecure origin — under the
+# production default (COOKIE_SECURE=1) every login in the suite would silently
+# fail. Tests that assert Secure-flag behavior monkeypatch this back to True.
+config.COOKIE_SECURE = False
+
 _CLIENT_FIXTURES = {"client", "tech_client"}
 
 

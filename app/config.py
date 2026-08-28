@@ -30,7 +30,23 @@ def validate_secrets() -> None:
         raise RuntimeError(
             "Refusing to start with insecure configuration: " + "; ".join(problems)
             + ". Set SECRET_KEY (openssl rand -hex 32) and APP_PASSWORD in the environment.")
-COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+    if not COOKIE_SECURE:
+        # Warn, don't refuse: a plain-HTTP LAN box is a legitimate (if
+        # discouraged) self-hosted setup. But the operator must have CHOSEN it
+        # — the 90-day session cookie travels in cleartext on every request.
+        import logging
+        logging.getLogger("app.config").warning(
+            "COOKIE_SECURE=0: session cookies will be sent over plain HTTP. "
+            "Serve the app over HTTPS and remove COOKIE_SECURE=0 unless this "
+            "deployment is deliberately HTTP-only.")
+
+
+# Secure by default: browsers only send the session + pre-auth 2FA cookies
+# over HTTPS. The documented deployment is behind a TLS-terminating reverse
+# proxy, and a Secure-less 90-day cookie leaks in cleartext on any stray
+# http:// hit. Opt OUT (COOKIE_SECURE=0) only for a deliberately plain-HTTP
+# deployment or local dev in browsers that don't exempt http://localhost.
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "1") == "1"
 TIMEZONE = os.environ.get("APP_TZ", "America/New_York")
 RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "0") == "1"
 # Optional shell command run after each successful nightly backup, so backups

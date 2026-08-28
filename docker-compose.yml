@@ -15,6 +15,11 @@ services:
       APP_TZ: ${APP_TZ:-America/New_York}
       # Must match the address the reverse proxy connects from (see Dockerfile).
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # Session cookies are marked Secure (HTTPS-only) by default — correct for
+      # the documented TLS-reverse-proxy setup above. Set COOKIE_SECURE=0 in
+      # .env ONLY for a deliberately plain-HTTP deployment; logins won't stick
+      # over HTTP otherwise.
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
     # Drop everything, then add back only what the entrypoint needs before it
     # gosu's down to PUID:PGID (chown the data dir, then setuid/setgid).
     cap_drop: [ALL]

@@ -90,6 +90,35 @@ def test_exception_is_re_raised_so_the_response_is_unchanged(client):
     assert ok.headers["Cache-Control"] == "no-cache"
 
 
+def test_hsts_follows_cookie_secure(client, monkeypatch):
+    """HSTS must ship exactly when the deployment is HTTPS (COOKIE_SECURE is
+    the switch, set per-deployment): pinning a browser to HTTPS on a
+    deliberately plain-HTTP LAN box would brick the app in that browser for
+    180 days. The suite runs with COOKIE_SECURE=False (conftest), so the
+    default client must not see the header."""
+    import app.config as config
+
+    assert "Strict-Transport-Security" not in client.get("/").headers
+    monkeypatch.setattr(config, "COOKIE_SECURE", True)
+    assert client.get("/").headers["Strict-Transport-Security"] == "max-age=15552000"
+
+
+def test_cookie_secure_defaults_on(monkeypatch):
+    """Secure-by-default: with no COOKIE_SECURE in the environment the session
+    cookie must be HTTPS-only. An operator opts OUT for plain HTTP, never in."""
+    import importlib
+
+    import app.config as config
+
+    monkeypatch.delenv("COOKIE_SECURE", raising=False)
+    try:
+        assert importlib.reload(config).COOKIE_SECURE is True
+    finally:
+        # Re-apply the suite-wide plain-HTTP override the reload wiped out
+        # (see conftest.py) — without this every later login silently fails.
+        config.COOKIE_SECURE = False
+
+
 # --- slow requests --------------------------------------------------------
 
 def test_slow_request_logs_a_warning_with_the_duration(client, caplog, monkeypatch):

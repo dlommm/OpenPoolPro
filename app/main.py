@@ -252,6 +252,13 @@ def create_app(engine=None) -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
+        # Pin clients to HTTPS whenever the deployment is HTTPS (COOKIE_SECURE
+        # is the same switch): without HSTS, one http:// bookmark is a
+        # cleartext round trip before the redirect. 180 days, no
+        # includeSubDomains — a self-hoster's domain may carry unrelated
+        # plain-HTTP services this app must not break.
+        if config.COOKIE_SECURE:
+            response.headers["Strict-Transport-Security"] = "max-age=15552000"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
