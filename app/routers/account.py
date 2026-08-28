@@ -7,7 +7,7 @@ from app import config, models, security
 from app.auth_core import MAX_PASSWORD_LEN, hash_password, verify_password
 from app.db import get_session
 from app.deps import current_user
-from app.main import templates
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(current_user)])
 

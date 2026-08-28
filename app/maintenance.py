@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.timefmt import business_today
 
 OPEN_STATUSES = ("open", "scheduled")
 
@@ -80,7 +81,5 @@ def run_nightly(engine) -> int:
     """APScheduler entry point: opens its own session, mirrors
     app.backup.run_backup's engine-based wiring, and runs the rules engine
     against business-local "today"."""
-    from app.routers.today import business_today
-
     with Session(engine) as s:
         return run_maintenance_rules(s, business_today())

@@ -7,20 +7,12 @@ from sqlalchemy.orm import Session
 from app import models
 from app.db import get_session
 from app.deps import require_admin
-from app.main import templates
+from app.forms import parse_page
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 PAGE_SIZE = 100
-
-
-def _parse_page(raw: str | None) -> int:
-    """Tolerant page parse: garbage or non-positive values fall back to 1."""
-    try:
-        p = int(raw)
-    except (TypeError, ValueError):
-        return 1
-    return p if p >= 1 else 1
 
 
 def _parse_user_id(raw: str | None) -> int | None:
@@ -44,7 +36,7 @@ def audit_page(request: Request, action: str = "", user_id: str | None = None,
                page: str | None = None, session: Session = Depends(get_session)):
     action = (action or "").strip()
     uid = _parse_user_id(user_id)
-    p = _parse_page(page)
+    p = parse_page(page)
 
     filters = []
     if action:

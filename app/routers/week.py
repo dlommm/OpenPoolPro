@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from app import config, models
 from app.db import get_or_404, get_session
-from app.main import templates
 from app.scheduling import ScheduleWindow, stops_for_date, visible_to
+from app.templating import templates
 
 router = APIRouter()
 

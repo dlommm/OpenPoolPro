@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import config, models, security
 from app.auth_core import hash_password, verify_password
 from app.db import get_session
-from app.main import templates
+from app.templating import templates
 
 # Verified against when the username is unknown, so both failure paths pay
 # the same bcrypt cost (no timing-based username enumeration).

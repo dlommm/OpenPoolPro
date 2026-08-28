@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import models, rates, sizes, tax
 from app.db import get_or_404, get_session
-from app.main import templates
+from app.forms import parse_date_tolerant, parse_float_tolerant, parse_int_tolerant
 from app.routers.customers import _apply_property
 from app.routers.pools import _apply as _apply_pool
+from app.templating import templates
+from app.timefmt import business_today, from_local_hhmm, local_date
 
 router = APIRouter()
 
@@ -44,38 +46,6 @@ def _parse_assignee(assigned_tech_id: str) -> int | None:
         return None
 
 
-def _parse_int_tolerant(s: str) -> int | None:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return int(s)
-    except ValueError:
-        return None
-
-
-def _parse_date_tolerant(s: str) -> date | None:
-    """Blank or malformed -> None. Every other date field in this app parses
-    tolerantly; a bare date.fromisoformat here turns a typo into a 500."""
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        return None
-
-
-def _parse_float_tolerant(s: str) -> float | None:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
 def _eligible_assignees(session: Session, job_type: str):
     users = session.scalars(select(models.User).where(models.User.active)
                             .order_by(models.User.name)).all()
@@ -87,7 +57,7 @@ def _eligible_assignees(session: Session, job_type: str):
 @router.get("/jobs")
 def list_jobs(request: Request, status: str = "open", page: str = "",
               session: Session = Depends(get_session)):
-    p = max(1, _parse_int_tolerant(page) or 1)
+    p = max(1, parse_int_tolerant(page) or 1)
     base = select(models.Job).where(models.Job.status == status)
     total = session.scalar(select(func.count()).select_from(base.subquery())) or 0
     total_pages = max(1, math.ceil(total / PAGE_SIZE))
@@ -110,7 +80,7 @@ def new_job(request: Request, property_id: int | None = None, template: str = ""
                             .join(models.Customer).order_by(models.Customer.name)).all()
     assignees_all = session.scalars(select(models.User).where(models.User.active)
                                     .order_by(models.User.name)).all()
-    template_id = _parse_int_tolerant(template)  # missing/garbage template -> plain form
+    template_id = parse_int_tolerant(template)  # missing/garbage template -> plain form
     tmpl = session.get(models.JobTemplate, template_id) if template_id is not None else None
     default_rate_cents = rates.default_labor_rate_cents(session)
     resolved_hours, hours_status = None, "flat"
@@ -164,7 +134,7 @@ def create_job(request: Request, mode: str = Form("existing"),
         session.add(customer)
         session.flush()  # assign customer.id for the property FK
         new_prop = models.Property(customer_id=customer.id)
-        weekday = _parse_int_tolerant(new_weekday) or 0
+        weekday = parse_int_tolerant(new_weekday) or 0
         _apply_property(new_prop, new_label, new_street, new_city, new_state, new_zip,
                         new_gate_code, new_dog_warning, new_dog_note, "", new_frequency,
                         weekday, "", "", "", allow_rate=False)
@@ -186,7 +156,7 @@ def create_job(request: Request, mode: str = Form("existing"),
         session.flush()
         pid = new_prop.id
     else:
-        pid = _parse_int_tolerant(property_id)
+        pid = parse_int_tolerant(property_id)
         if pid is None:
             return HTMLResponse("Select a customer and property", status_code=400)
     prop = get_or_404(session, models.Property, pid)
@@ -196,7 +166,7 @@ def create_job(request: Request, mode: str = Form("existing"),
         if assigned_id not in eligible_ids:
             return HTMLResponse("That tech can't take this job type", status_code=400)
     can_money = request.state.user.can("view_money")
-    tmpl_id = _parse_int_tolerant(template_id)
+    tmpl_id = parse_int_tolerant(template_id)
     tmpl = session.get(models.JobTemplate, tmpl_id) if tmpl_id is not None else None
     rate_cents = (_dollars_to_cents(rate_dollars) if rate_dollars.strip()
                   else rates.default_labor_rate_cents(session))
@@ -207,7 +177,7 @@ def create_job(request: Request, mode: str = Form("existing"),
     # form, so only money users get the template-hours resolution and the
     # unmatched-400 — a non-money user (tech) has no field to satisfy it and
     # must not be dead-ended; hours stays 0 for them (labor stays 0).
-    hrs = _parse_float_tolerant(hours)
+    hrs = parse_float_tolerant(hours)
     if hrs is None and tmpl is not None and can_money:
         h, status = rates.template_hours(tmpl, rates.largest_pool_gallons(prop))
         if status in ("matched", "flat"):
@@ -229,7 +199,7 @@ def create_job(request: Request, mode: str = Form("existing"),
     j = models.Job(property_id=pid, title=title, description=description,
                    priority=priority, labor_cents=labor_cents, hours=hrs)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
-    parsed_scheduled = _parse_date_tolerant(scheduled_date)
+    parsed_scheduled = parse_date_tolerant(scheduled_date)
     if parsed_scheduled is not None:
         j.scheduled_date = parsed_scheduled
         j.status = "scheduled"
@@ -328,10 +298,10 @@ def edit_job(request: Request, jid: int, property_id: int = Form(...), title: st
     if request.state.user.can("view_money"):
         rate_cents = (_dollars_to_cents(rate_dollars) if rate_dollars.strip()
                       else rates.default_labor_rate_cents(session))
-        hrs = _parse_float_tolerant(hours) or 0
+        hrs = parse_float_tolerant(hours) or 0
         j.hours = hrs
         j.labor_cents = rates.job_labor_cents(rate_cents, hrs)
-    j.scheduled_date = _parse_date_tolerant(scheduled_date)
+    j.scheduled_date = parse_date_tolerant(scheduled_date)
     if j.status != "done":
         j.status = "scheduled" if j.scheduled_date else "open"
     session.commit()
@@ -389,8 +359,6 @@ def start_job(jid: int, session: Session = Depends(get_session)):
 
 @router.post("/jobs/{jid}/times")
 async def job_times(jid: int, request: Request, session: Session = Depends(get_session)):
-    from app.routers.today import business_today
-    from app.timefmt import from_local_hhmm, local_date
     j = get_or_404(session, models.Job, jid)
     form = await request.form()
     start_anchor = (local_date(j.started_at) if j.started_at

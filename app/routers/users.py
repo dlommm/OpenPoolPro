@@ -1,4 +1,3 @@
-from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -9,7 +8,8 @@ from app import models
 from app.auth_core import MAX_PASSWORD_LEN, hash_password
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.main import templates
+from app.forms import parse_date_tolerant, parse_int_tolerant
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -19,23 +19,6 @@ FLAGS = models.User.PERMISSION_FLAGS
 def _apply_flags(u: models.User, form) -> None:
     for f in FLAGS:
         setattr(u, f, form.get(f) == "on")
-
-
-def _parse_date_tolerant(s: str) -> date | None:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        return None
-
-
-def _parse_int_tolerant(s: str) -> int | None:
-    try:
-        return int((s or "").strip())
-    except ValueError:
-        return None
 
 
 def _user_form_context(u: models.User | None, session: Session | None = None,
@@ -233,8 +216,8 @@ async def create_absence(request: Request, uid: int, session: Session = Depends(
     end_raw = form.get("end_date") or ""
     cover_raw = form.get("cover_tech_id") or ""
     note = form.get("note") or ""
-    start = _parse_date_tolerant(start_raw)
-    end = _parse_date_tolerant(end_raw)
+    start = parse_date_tolerant(start_raw)
+    end = parse_date_tolerant(end_raw)
     error = None
     if start is None or end is None:
         error = "Enter valid start and end dates."
@@ -245,7 +228,7 @@ async def create_absence(request: Request, uid: int, session: Session = Depends(
             _user_form_context(u, session, absence_error=error, absence_start=start_raw,
                                absence_end=end_raw, absence_cover=cover_raw, absence_note=note),
             status_code=400)
-    cover_id = _parse_int_tolerant(cover_raw)
+    cover_id = parse_int_tolerant(cover_raw)
     if cover_id is not None:
         cover_user = session.get(models.User, cover_id)
         if cover_user is None or cover_user.id == uid or not cover_user.active:

@@ -35,7 +35,7 @@ def _drawn_image_sizes_in(pdf_bytes):
 
 def test_rgba_logo_is_not_stretched(tmp_path, monkeypatch):
     logo = _make_rgba_logo(tmp_path)
-    monkeypatch.setattr("app.routers.company._logo_path", lambda: logo)
+    monkeypatch.setattr("app.company.logo_path", lambda: logo)
     img = pdf_logo.logo_flowable()
     assert img is not None
     buf = io.BytesIO()
@@ -53,12 +53,12 @@ def test_logo_fits_within_the_box(tmp_path, monkeypatch):
     # A tall/narrow logo must be bounded by max_h, a wide one by max_w.
     p = tmp_path / "logo.png"
     PILImage.new("RGBA", (200, 1000), (0, 0, 0, 255)).save(p)  # very tall
-    monkeypatch.setattr("app.routers.company._logo_path", lambda: str(p))
+    monkeypatch.setattr("app.company.logo_path", lambda: str(p))
     img = pdf_logo.logo_flowable()
     w, h = img.wrap(6.5 * inch, 10 * inch)
     assert h <= 0.85 * inch + 1 and w <= 1.7 * inch + 1
 
 
 def test_missing_logo_returns_none(monkeypatch):
-    monkeypatch.setattr("app.routers.company._logo_path", lambda: "/nope/logo.png")
+    monkeypatch.setattr("app.company.logo_path", lambda: "/nope/logo.png")
     assert pdf_logo.logo_flowable() is None

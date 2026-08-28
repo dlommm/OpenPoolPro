@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.db import get_or_404, get_session
 from app.deps import require_perm
-from app.main import templates
 from app.scheduling import balance_moves, suggest_tech, weekday_load
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_perm("view_all_routes"))])
 

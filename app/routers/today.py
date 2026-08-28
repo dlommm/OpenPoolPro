@@ -1,20 +1,17 @@
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app import config, models
+from app import models
 from app.db import get_session
-from app.main import templates
 from app.scheduling import ScheduleWindow, missed_stops, stops_for_date, visible_to
+from app.templating import templates
+from app.timefmt import business_today
 
 router = APIRouter()
-
-
-def business_today() -> date:
-    return datetime.now(config.tz()).date()
 
 
 def _parse_backup_remaining(s: str | None) -> int | None:

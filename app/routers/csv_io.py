@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 from app import config, models
 from app.db import get_session
 from app.deps import require_admin
-from app.main import templates
 from app.qbo import csv_safe
 from app.rates import gallons
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 

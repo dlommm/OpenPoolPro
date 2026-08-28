@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 from app import analytics, charts, models
 from app.db import get_session
 from app.deps import require_admin
-from app.main import templates
 from app.qbo import csv_safe
-from app.routers.today import business_today
+from app.templating import templates
+from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 

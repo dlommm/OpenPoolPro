@@ -24,9 +24,9 @@ def logo_flowable(max_w: float = 1.7 * inch, max_h: float = 0.85 * inch):
     try:
         from PIL import Image as PILImage
 
-        from app.routers.company import _logo_path
+        from app.company import logo_path
 
-        path = _logo_path()
+        path = logo_path()
         if not os.path.isfile(path):
             return None
         pil = PILImage.open(path)

@@ -1,4 +1,3 @@
-from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,8 +7,9 @@ from sqlalchemy.orm import Session
 from app import models, sizes
 from app.db import get_or_404, get_session
 from app.deps import require_perm
-from app.main import templates
+from app.forms import parse_date_tolerant
 from app.rates import gallons
+from app.templating import templates
 
 router = APIRouter()
 
@@ -122,13 +122,6 @@ def deactivate_pool(pool_id: int, session: Session = Depends(get_session),
     return RedirectResponse(f"/customers/{pool.property.customer_id}", status_code=303)
 
 
-def _parse_date_tolerant(s: str) -> date | None:
-    try:
-        return date.fromisoformat(s) if s else None
-    except ValueError:
-        return None
-
-
 @router.post("/pools/{pool_id}/equipment/new")
 def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
                   model: str = Form(""), serial: str = Form(""),
@@ -139,8 +132,8 @@ def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
     get_or_404(session, models.Pool, pool_id)  # 404 before attaching equipment
     session.add(models.Equipment(
         pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
-        install_date=_parse_date_tolerant(install_date),
-        warranty_end=_parse_date_tolerant(warranty_end), notes=notes))
+        install_date=parse_date_tolerant(install_date),
+        warranty_end=parse_date_tolerant(warranty_end), notes=notes))
     session.commit()
     return RedirectResponse(f"/pools/{pool_id}/edit", status_code=303)
 

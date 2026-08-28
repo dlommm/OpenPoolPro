@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import inventory, models
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.main import templates
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 

@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax
+from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
+from app.templating import ALLOWED_THEMES, DEFAULT_THEME, templates
+from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -63,7 +65,6 @@ def settings_page(request: Request, rules_created: str | None = None,
                   mail_sent: str | None = None, mail_failed: str | None = None,
                   mail_error: str | None = None,
                   session: Session = Depends(get_session)):
-    from app.routers.company import company_info
     tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
         models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)).all()
     spa_tiers = session.scalars(select(models.RateTier).where(models.RateTier.kind == "spa").order_by(
@@ -163,7 +164,6 @@ def _contract_tab_ctx(session) -> dict:
 @router.post("/settings/maintenance/run-now")
 def run_maintenance_now(session: Session = Depends(get_session)):
     from app.maintenance import run_maintenance_rules
-    from app.routers.today import business_today
     created = run_maintenance_rules(session, business_today())
     return RedirectResponse(f"/settings?rules_created={created}", status_code=303)
 

@@ -8,23 +8,14 @@ from sqlalchemy.orm import Session
 from app import models
 from app.db import get_or_404, get_session
 from app.deps import require_perm
-from app.main import templates
+from app.forms import parse_int_tolerant
+from app.templating import templates
 
 router = APIRouter()
 
 QUOTE_STATUSES = ("draft", "sent", "accepted", "declined", "converted")
 # draft -> sent -> accepted|declined; anything else is an invalid transition (400).
 QUOTE_TRANSITIONS = {"draft": {"sent"}, "sent": {"accepted", "declined"}}
-
-
-def _parse_int_tolerant(s: str | None) -> int | None:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return int(s)
-    except ValueError:
-        return None
 
 
 def _cents_or_none(dollars: str | None) -> int | None:
@@ -88,7 +79,7 @@ PAGE_SIZE = 50
 def list_quotes(request: Request, status: str = "", page: str = "",
                 session: Session = Depends(get_session),
                 user=Depends(require_perm("manage_customers"))):
-    p = max(1, _parse_int_tolerant(page) or 1)
+    p = max(1, parse_int_tolerant(page) or 1)
     base = select(models.Quote)
     if status in QUOTE_STATUSES:  # tolerant: unknown/blank status shows everything
         base = base.where(models.Quote.status == status)
@@ -111,7 +102,7 @@ def list_quotes(request: Request, status: str = "", page: str = "",
 def new_quote_form(request: Request, customer_id: str = "", session: Session = Depends(get_session),
                    user=Depends(require_perm("manage_customers"))):
     ctx = _form_context(session)
-    ctx.update({"q": None, "selected_customer": _parse_int_tolerant(customer_id), "total_cents": 0,
+    ctx.update({"q": None, "selected_customer": parse_int_tolerant(customer_id), "total_cents": 0,
                "customer": None, "prop": None})
     return templates.TemplateResponse(request, "quotes/form.html", ctx)
 
@@ -120,11 +111,11 @@ def new_quote_form(request: Request, customer_id: str = "", session: Session = D
 async def create_quote(request: Request, session: Session = Depends(get_session),
                        user=Depends(require_perm("manage_customers"))):
     form = await request.form()
-    customer_id = _parse_int_tolerant(form.get("customer_id"))
+    customer_id = parse_int_tolerant(form.get("customer_id"))
     if customer_id is None:
         raise HTTPException(status_code=400, detail="A customer is required")
     get_or_404(session, models.Customer, customer_id)
-    property_id = _validated_property_id(session, _parse_int_tolerant(form.get("property_id")), customer_id)
+    property_id = _validated_property_id(session, parse_int_tolerant(form.get("property_id")), customer_id)
     q = models.Quote(customer_id=customer_id, property_id=property_id,
                      title=(form.get("title") or "").strip(), notes=form.get("notes", ""),
                      user_id=user.id)
@@ -155,11 +146,11 @@ async def edit_quote(qid: int, request: Request, session: Session = Depends(get_
     if q.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft quotes can be edited")
     form = await request.form()
-    customer_id = _parse_int_tolerant(form.get("customer_id"))
+    customer_id = parse_int_tolerant(form.get("customer_id"))
     if customer_id is not None:
         get_or_404(session, models.Customer, customer_id)
         q.customer_id = customer_id
-    q.property_id = _validated_property_id(session, _parse_int_tolerant(form.get("property_id")), q.customer_id)
+    q.property_id = _validated_property_id(session, parse_int_tolerant(form.get("property_id")), q.customer_id)
     title = (form.get("title") or "").strip()
     if title:
         q.title = title

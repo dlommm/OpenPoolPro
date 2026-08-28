@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 
 from app import dosing, inventory, mailer, models, qbo, tax
 from app.db import get_or_404, get_session
-from app.main import templates
 from app.rates import effective_rate_cents
+from app.templating import templates
+from app.timefmt import business_today, from_local_hhmm, local_date
 
 router = APIRouter()
 
@@ -131,8 +132,6 @@ def visit_doses(request: Request, visit_id: int,
 def visit_form(request: Request, property_id: int, visit_date: date,
                session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
-    # Local import avoids a circular import with app.routers.today.
-    from app.routers.today import business_today
     if v.status == "due" and v.started_at is None and business_today() >= v.date:
         v.started_at = models.utcnow()
         session.commit()
@@ -216,9 +215,6 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     v.tasks_done = form.getlist("tasks")
     v.notes = form.get("notes", "")
     v.status = "done"
-    from app.routers.today import business_today
-    from app.timefmt import from_local_hhmm, local_date
-
     # Product decision: times are minute-grained; an unedited prefilled form re-writing
     # started_at at minute precision is accepted (minutes are the billing/analytics grain).
     # Anchor each edit to the business-local date of the timestamp it edits

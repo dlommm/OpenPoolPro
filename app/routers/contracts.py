@@ -17,9 +17,10 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import config, contract_pdf, mailer, models, rates, tax
+from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_perm
-from app.main import templates
+from app.templating import templates
 
 router = APIRouter(dependencies=[Depends(require_perm("manage_customers"))])
 
@@ -146,7 +147,6 @@ async def edit_contract(request: Request, cid: int, session: Session = Depends(g
 
 @router.post("/contracts/{cid}/approve")
 def approve_contract(request: Request, cid: int, session: Session = Depends(get_session)):
-    from app.routers.company import company_info
 
     contract = get_or_404(session, models.Contract, cid)
     if contract.status != "draft":

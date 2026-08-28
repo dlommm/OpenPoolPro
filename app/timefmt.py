@@ -34,6 +34,14 @@ def local_date(dt: datetime) -> date:
     return to_local(dt).date()
 
 
+def business_today() -> date:
+    """Today's date in the business timezone — THE definition of "today" for
+    routes, visits, scheduling, and billing anchors. (It lived in
+    routers/today.py for a long time, which forced every other caller into a
+    function-level deferred import to dodge the router↔main import cycle.)"""
+    return datetime.now(config.tz()).date()
+
+
 def parse_ym(raw: str | None, default: tuple[int, int] | None = None) -> tuple[int, int]:
     """Tolerant "YYYY-M" -> (year, month) parser.
 
@@ -51,5 +59,5 @@ def parse_ym(raw: str | None, default: tuple[int, int] | None = None) -> tuple[i
             pass
     if default is not None:
         return default
-    today = datetime.now(config.tz())
+    today = business_today()
     return today.year, today.month

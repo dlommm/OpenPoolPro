@@ -1,5 +1,4 @@
 import math
-from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -8,12 +7,14 @@ from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session, selectinload
 
 from app import addresses, geocode, maps, models
+from app.analytics import lifetime_revenue_cents
 from app.db import get_or_404, get_session
 from app.deps import require_perm
-from app.main import templates
+from app.forms import cents, parse_date_tolerant, parse_int_tolerant, parse_page
 from app.rates import effective_rate_cents
 from app.scheduling import suggest_tech
-from app.timefmt import from_local_hhmm
+from app.templating import templates
+from app.timefmt import business_today, from_local_hhmm
 
 router = APIRouter()
 
@@ -21,51 +22,11 @@ COMM_KINDS = ("call", "email", "text", "note")
 PAGE_SIZE = 50
 
 
-def _parse_page(raw: str | None) -> int:
-    """Tolerant page parse: garbage or non-positive values fall back to 1."""
-    try:
-        p = int(raw)
-    except (TypeError, ValueError):
-        return 1
-    return p if p >= 1 else 1
-
-
 def _primary_property(customer: "models.Customer"):
     """First ACTIVE property by id -- the customer's "primary" address for
     the list view's city/frequency columns."""
     active = [p for p in customer.properties if p.active]
     return min(active, key=lambda p: p.id) if active else None
-
-
-def _cents(dollars: str) -> int | None:
-    """Dollar string -> integer cents. Blank, malformed, or negative -> None
-    (no override). A bare float() here turned a typo into a 500, and a
-    negative rate override would flow straight into billing."""
-    dollars = (dollars or "").strip().lstrip("$")
-    if dollars == "":
-        return None
-    try:
-        value = round(float(dollars) * 100)
-    except ValueError:
-        return None
-    return value if value >= 0 else None
-
-
-def _parse_date_tolerant(s: str) -> date | None:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        return None
-
-
-def _parse_int_tolerant(s: str) -> int | None:
-    try:
-        return int((s or "").strip())
-    except ValueError:
-        return None
 
 
 def _customer_photos(session: Session, customer: "models.Customer"
@@ -242,7 +203,7 @@ def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
                    letter: str = "", city: str = "", sort: str = "", page: str = "",
                    session: Session = Depends(get_session)):
     show_inactive = show == "inactive"
-    p = _parse_page(page)
+    p = parse_page(page)
     C, P = models.Customer, models.Property
 
     base = select(C).where(C.active == (not show_inactive))
@@ -328,7 +289,6 @@ def create_customer(name: str = Form(...), qb_display_name: str = Form(""),
 @router.get("/customers/{cid}")
 def customer_detail(request: Request, cid: int, ptag: str = "",
                     session: Session = Depends(get_session)):
-    from app.routers.today import business_today
     c = get_or_404(session, models.Customer, cid)
     user = request.state.user
     props = sorted(c.properties, key=lambda p: (not p.active, p.label))
@@ -380,7 +340,6 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
 
     lifetime_cents = None
     if user.can("view_money"):
-        from app.analytics import lifetime_revenue_cents
         lifetime_cents = lifetime_revenue_cents(session, cid)
 
     return templates.TemplateResponse(request, "customers/detail.html",
@@ -481,11 +440,11 @@ def _apply_property(p: models.Property, label, street, city, state, zip, gate_co
     p.street, p.city, p.state, p.zip = street.strip(), city.strip(), state.strip(), zip.strip()
     p.address = addresses.compose_address(p.street, p.city, p.state, p.zip)
     p.dog_warning, p.dog_note = dog_warning, dog_note
-    p.frequency, p.weekday = frequency, (_parse_int_tolerant(str(weekday)) or 0)
-    p.anchor_date = _parse_date_tolerant(anchor_date)
+    p.frequency, p.weekday = frequency, (parse_int_tolerant(str(weekday)) or 0)
+    p.anchor_date = parse_date_tolerant(anchor_date)
     if allow_rate:
-        p.rate_override_cents = _cents(rate_override_dollars)
-        p.spa_rate_override_cents = _cents(spa_rate_override_dollars)
+        p.rate_override_cents = cents(rate_override_dollars)
+        p.spa_rate_override_cents = cents(spa_rate_override_dollars)
     p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
 
 
@@ -511,7 +470,6 @@ def _active_techs(session: Session):
 
 def _property_form_context(session: Session, p: models.Property | None, customer: models.Customer,
                            user: models.User, suggested_tech: int | None = None, **extra) -> dict:
-    from app.routers.today import business_today
     ctx = {"p": p, "customer": customer, "techs": _active_techs(session),
            "suggested_tech": suggested_tech, "show_money": user.can("view_money"),
            "today": business_today(), "holds": [], "tasks": [], "rules": []}
@@ -635,10 +593,9 @@ def create_hold(pid: int, request: Request, start_date: str = Form(""),
                 resume_date: str = Form(""), reason: str = Form(""),
                 session: Session = Depends(get_session),
                 user=Depends(require_perm("manage_customers"))):
-    from app.routers.today import business_today
     p = get_or_404(session, models.Property, pid)
-    start = _parse_date_tolerant(start_date) or business_today()
-    resume = _parse_date_tolerant(resume_date)
+    start = parse_date_tolerant(start_date) or business_today()
+    resume = parse_date_tolerant(resume_date)
     if resume is not None and resume <= start:
         ctx = _property_form_context(session, p, p.customer, request.state.user,
             hold_error="Resume date must be after the start date.",
@@ -654,7 +611,6 @@ def create_hold(pid: int, request: Request, start_date: str = Form(""),
 @router.post("/properties/{pid}/holds/{hold_id}/end")
 def end_hold(pid: int, hold_id: int, session: Session = Depends(get_session),
             user=Depends(require_perm("manage_customers"))):
-    from app.routers.today import business_today
     h = get_or_404(session, models.ServiceHold, hold_id)
     if h.property_id != pid:
         raise HTTPException(status_code=404)
@@ -718,14 +674,13 @@ def create_rule(pid: int, title: str = Form(...), description: str = Form(""),
                lead_days: str = Form(""), next_due: str = Form(""),
                session: Session = Depends(get_session),
                user=Depends(require_perm("manage_customers"))):
-    from app.routers.today import business_today
     get_or_404(session, models.Property, pid)
     jt = job_type if job_type in ("service", "repair") else "service"
-    interval = _parse_int_tolerant(interval_weeks)
+    interval = parse_int_tolerant(interval_weeks)
     interval = interval if interval is not None and interval >= 1 else 4
-    lead = _parse_int_tolerant(lead_days)
+    lead = parse_int_tolerant(lead_days)
     lead = lead if lead is not None and lead >= 0 else 7
-    due = _parse_date_tolerant(next_due) or business_today()
+    due = parse_date_tolerant(next_due) or business_today()
     session.add(models.MaintenanceRule(
         property_id=pid, title=title, description=description, job_type=jt,
         interval_weeks=interval, lead_days=lead, next_due=due))
@@ -745,13 +700,13 @@ def edit_rule(pid: int, rule_id: int, title: str = Form(...), description: str =
     r.title, r.description = title, description
     if job_type in ("service", "repair"):
         r.job_type = job_type
-    interval = _parse_int_tolerant(interval_weeks)
+    interval = parse_int_tolerant(interval_weeks)
     if interval is not None and interval >= 1:
         r.interval_weeks = interval  # else: tolerant parse -- keep previous value
-    lead = _parse_int_tolerant(lead_days)
+    lead = parse_int_tolerant(lead_days)
     if lead is not None and lead >= 0:
         r.lead_days = lead  # else: tolerant parse -- keep previous value
-    due = _parse_date_tolerant(next_due)
+    due = parse_date_tolerant(next_due)
     if due is not None:
         r.next_due = due  # else: tolerant parse -- keep previous value
     session.commit()

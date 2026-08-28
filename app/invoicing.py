@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import config, models, qbo, receivables, tax
+from app.company import company_info
 from app.timefmt import to_local_hhmm
 
 
@@ -84,8 +85,6 @@ def invoice_data(session: Session, customer: models.Customer, year: int, month: 
     atomically rounded per VisitChemical line) so total_cents always equals
     that customer's month_rollup row total.
     """
-    from app.routers.company import company_info
-
     first, last = qbo._month_range(year, month)
     try:
         markup = float(models.get_setting(session, "chem_markup_percent", "0"))

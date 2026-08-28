@@ -9,11 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app import invoicing, mailer, models, receivables
+from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.main import templates
-from app.routers.today import business_today
-from app.timefmt import parse_ym
+from app.forms import cents
+from app.templating import templates
+from app.timefmt import business_today, parse_ym
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -22,19 +23,6 @@ STATUSES = ("draft", "sent", "void")
 
 def _pdf_path(inv: models.Invoice) -> str:
     return os.path.join(invoicing._invoices_dir(), inv.pdf_filename)
-
-
-def _cents(dollars: str) -> int | None:
-    """Dollar string -> integer cents. Blank/malformed/negative -> None, so a
-    typo is a rejected form rather than a 500 or a negative payment."""
-    text = (dollars or "").strip().lstrip("$").replace(",", "")
-    if not text:
-        return None
-    try:
-        value = round(float(text) * 100)
-    except ValueError:
-        return None
-    return value if value > 0 else None
 
 
 def _date_or_today(s: str) -> date:
@@ -59,7 +47,6 @@ def _back(where: str, inv: models.Invoice, error: str | None = None):
 
 
 def _company_name(session: Session) -> str:
-    from app.routers.company import company_info
     return company_info(session).get("name") or "Your pool service"
 
 
@@ -140,7 +127,7 @@ def record_payment(request: Request, iid: int, amount_dollars: str = Form(""),
                     reference: str = Form(""), note: str = Form(""),
                     back: str = Form(""), session: Session = Depends(get_session)):
     inv = get_or_404(session, models.Invoice, iid)
-    amount = _cents(amount_dollars)
+    amount = cents(amount_dollars, minimum=1)
     received = _date_or_today(received_on)
     payment = receivables.record_payment(
         session, inv, amount_cents=amount or 0, received_on=received, method=method,

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.db import get_session
 from app.deps import require_perm
-from app.main import templates
 from app.qbo import export_csv, month_rollup
+from app.templating import templates
 from app.timefmt import parse_ym
 
 router = APIRouter(dependencies=[Depends(require_perm("view_money"))])
