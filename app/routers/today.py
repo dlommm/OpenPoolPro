@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import config, models
 from app.db import get_session
@@ -52,7 +52,11 @@ def today_page(request: Request, tech: int | None = None,
     missed = missed_stops(session, d, window=window)
     jobs = session.scalars(
         select(models.Job).where(models.Job.status == "scheduled",
-                                 models.Job.scheduled_date == d)).all()
+                                 models.Job.scheduled_date == d)
+        # The card renders j.property.customer.name — eager-load both hops or
+        # the hottest page in the app lazy-loads 2 queries per scheduled job.
+        .options(selectinload(models.Job.property)
+                 .selectinload(models.Property.customer))).all()
     active_ids = {u.id for u in session.scalars(
         select(models.User).where(models.User.active)).all()}
     tech_counts = Counter(s.effective_tech_id for s in stops if s.effective_tech_id is not None)

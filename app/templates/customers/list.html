@@ -126,17 +126,8 @@
   </div>
 
   {% if rows %}
-  <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-mist">
-    <span>Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
-    <div class="flex gap-2">
-      {% if has_prev %}
-      <a class="btn-secondary" href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, tag=tag, show=show_inactive, page=page - 1) }}">Prev</a>
-      {% endif %}
-      {% if has_next %}
-      <a class="btn-secondary" href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, tag=tag, show=show_inactive, page=page + 1) }}">Next</a>
-      {% endif %}
-    </div>
-  </div>
+  {{ ui.pager(page, total_pages, total, "/customers",
+              qs(q=q, letter=letter, city=city, sort=sort, tag=tag, show=show_inactive)) }}
   {% endif %}
 
 </div>

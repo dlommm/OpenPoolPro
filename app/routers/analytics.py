@@ -104,21 +104,25 @@ def analytics_page(request: Request, tab: str = "income",
         ctx["too_large"] = True
         return templates.TemplateResponse(request, "analytics.html", ctx)
 
-    ctx["summary"] = analytics.period_summary(session, start_d, end_d)
+    # One materialization of the window, shared by the KPI tiles and the
+    # active tab — period_summary alone runs three aggregations, and each used
+    # to re-fetch the same rows.
+    data = analytics.load_period(session, start_d, end_d)
+    ctx["summary"] = analytics.period_summary(session, start_d, end_d, data)
 
     if tab == "income":
-        rows = analytics.income_by_week(session, start_d, end_d)
+        rows = analytics.income_by_week(session, start_d, end_d, data)
         ctx["max_total"] = max((r.total_cents for r in rows), default=0)
     elif tab == "customers":
-        rows = analytics.revenue_by_customer(session, start_d, end_d)
+        rows = analytics.revenue_by_customer(session, start_d, end_d, data)
     elif tab == "crew":
-        rows = analytics.revenue_by_tech(session, start_d, end_d)
+        rows = analytics.revenue_by_tech(session, start_d, end_d, data)
     elif tab == "types":
-        rows = analytics.revenue_by_job_type(session, start_d, end_d)
+        rows = analytics.revenue_by_job_type(session, start_d, end_d, data)
     elif tab == "chemicals":
-        rows = analytics.chem_margin(session, start_d, end_d)
+        rows = analytics.chem_margin(session, start_d, end_d, data)
     elif tab == "volume":
-        rows = analytics.visit_volume(session, start_d, end_d)
+        rows = analytics.visit_volume(session, start_d, end_d, data)
     else:  # rates
         rows = analytics.rate_review(session)
 
@@ -181,21 +185,7 @@ def analytics_export(request: Request, tab: str = "income",
     if (end_d - start_d).days > MAX_SPAN_DAYS:
         raise HTTPException(status_code=400, detail="Date range too large")
 
-    # Fetch data for the requested tab
-    if tab == "income":
-        rows = analytics.income_by_week(session, start_d, end_d)
-    elif tab == "customers":
-        rows = analytics.revenue_by_customer(session, start_d, end_d)
-    elif tab == "crew":
-        rows = analytics.revenue_by_tech(session, start_d, end_d)
-    elif tab == "types":
-        rows = analytics.revenue_by_job_type(session, start_d, end_d)
-    elif tab == "chemicals":
-        rows = analytics.chem_margin(session, start_d, end_d)
-    elif tab == "volume":
-        rows = analytics.visit_volume(session, start_d, end_d)
-    else:  # rates
-        rows = analytics.rate_review(session)
+    rows = _fetch_rows(tab, session, start_d, end_d)
 
     # Generate CSV
     output = io.StringIO()
@@ -297,15 +287,17 @@ def _resolve_range(start, end):
     return start_d, end_d
 
 
-def _fetch_rows(tab: str, session, start_d, end_d):
+def _fetch_rows(tab: str, session, start_d, end_d, data=None):
+    if tab == "rates":  # not range-bounded; skip the window fetch entirely
+        return analytics.rate_review(session)
+    data = data if data is not None else analytics.load_period(session, start_d, end_d)
     fns = {
-        "income": lambda: analytics.income_by_week(session, start_d, end_d),
-        "customers": lambda: analytics.revenue_by_customer(session, start_d, end_d),
-        "crew": lambda: analytics.revenue_by_tech(session, start_d, end_d),
-        "types": lambda: analytics.revenue_by_job_type(session, start_d, end_d),
-        "chemicals": lambda: analytics.chem_margin(session, start_d, end_d),
-        "volume": lambda: analytics.visit_volume(session, start_d, end_d),
-        "rates": lambda: analytics.rate_review(session),
+        "income": lambda: analytics.income_by_week(session, start_d, end_d, data),
+        "customers": lambda: analytics.revenue_by_customer(session, start_d, end_d, data),
+        "crew": lambda: analytics.revenue_by_tech(session, start_d, end_d, data),
+        "types": lambda: analytics.revenue_by_job_type(session, start_d, end_d, data),
+        "chemicals": lambda: analytics.chem_margin(session, start_d, end_d, data),
+        "volume": lambda: analytics.visit_volume(session, start_d, end_d, data),
     }
     return fns[tab]()
 
@@ -320,8 +312,10 @@ def analytics_export_xlsx(request: Request, tab: str = "income", start: str | No
     start_d, end_d = _resolve_range(start, end)
     if (end_d - start_d).days > MAX_SPAN_DAYS:
         raise HTTPException(status_code=400, detail="Date range too large")
-    rows = _fetch_rows(tab, session, start_d, end_d)
-    summary = analytics.period_summary(session, start_d, end_d)
+    # `window` (not `data`) — the exporter's byte payload below is `data`.
+    window = analytics.load_period(session, start_d, end_d)
+    rows = _fetch_rows(tab, session, start_d, end_d, window)
+    summary = analytics.period_summary(session, start_d, end_d, window)
     data = analytics_export.build_xlsx(TAB_LABELS[tab], start_d, end_d, summary, tab, rows)
     models.audit(session, request.state.user.id, "export.analytics", detail=f"{tab} xlsx")
     session.commit()
@@ -342,8 +336,10 @@ def analytics_export_pdf(request: Request, tab: str = "income", start: str | Non
     start_d, end_d = _resolve_range(start, end)
     if (end_d - start_d).days > MAX_SPAN_DAYS:
         raise HTTPException(status_code=400, detail="Date range too large")
-    rows = _fetch_rows(tab, session, start_d, end_d)
-    summary = analytics.period_summary(session, start_d, end_d)
+    # `window` (not `data`) — the exporter's byte payload below is `data`.
+    window = analytics.load_period(session, start_d, end_d)
+    rows = _fetch_rows(tab, session, start_d, end_d, window)
+    summary = analytics.period_summary(session, start_d, end_d, window)
     data = analytics_export.build_pdf(TAB_LABELS[tab], start_d, end_d, summary, tab, rows)
     models.audit(session, request.state.user.id, "export.analytics", detail=f"{tab} pdf")
     session.commit()

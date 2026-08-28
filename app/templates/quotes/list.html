@@ -40,4 +40,7 @@
   </tbody>
 </table>
 </div>
+{% if quotes %}
+{{ ui.pager(page, total_pages, total, "/quotes", ("status=" ~ (status | urlencode)) if status else "") }}
+{% endif %}
 {% endblock %}

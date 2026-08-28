@@ -272,3 +272,21 @@ def test_create_job_template_unmatched_blocks_unless_hours_given(client, engine)
     with Session(engine) as s:
         j = s.scalars(select(models.Job).where(models.Job.title == "TooBig2")).one()
         assert j.hours == 4.0 and j.labor_cents == 40000
+
+
+def test_done_jobs_list_paginates(client, engine):
+    # The done tab accumulates every job the business ever finished; it pages
+    # at 50 like the customers register (open/scheduled are bounded queues).
+    pid = prop(engine)
+    with Session(engine) as s:
+        for i in range(60):
+            s.add(models.Job(property_id=pid, title=f"Done {i:03d}", status="done",
+                             completed_at=models.utcnow()))
+        s.commit()
+    page1 = client.get("/jobs?status=done").text
+    page2 = client.get("/jobs?status=done&page=2").text
+    assert page1.count("Done ") == 50
+    assert page2.count("Done ") == 10
+    assert "Page 1 of 2" in page1 and "page=2" in page1
+    # Newest-first within equal priority, so page 1 is 059..010, page 2 009..000.
+    assert "Done 000" in page2 and "Done 000" not in page1

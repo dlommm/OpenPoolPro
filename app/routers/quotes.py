@@ -2,7 +2,7 @@ import math
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models
@@ -79,20 +79,32 @@ def _form_context(session: Session) -> dict:
     return {"customers": customers, "properties": properties, "job_templates": job_templates}
 
 
+# The quotes register accumulates every estimate ever written — page it like
+# the customers list does, same size.
+PAGE_SIZE = 50
+
+
 @router.get("/quotes")
-def list_quotes(request: Request, status: str = "", session: Session = Depends(get_session),
+def list_quotes(request: Request, status: str = "", page: str = "",
+                session: Session = Depends(get_session),
                 user=Depends(require_perm("manage_customers"))):
-    stmt = select(models.Quote).order_by(models.Quote.id.desc())
+    p = max(1, _parse_int_tolerant(page) or 1)
+    base = select(models.Quote)
     if status in QUOTE_STATUSES:  # tolerant: unknown/blank status shows everything
-        stmt = stmt.where(models.Quote.status == status)
-    quotes = session.scalars(stmt).all()
+        base = base.where(models.Quote.status == status)
+    total = session.scalar(select(func.count()).select_from(base.subquery())) or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+    quotes = session.scalars(base.order_by(models.Quote.id.desc())
+                             .offset((p - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
     totals = {q.id: sum(line.amount_cents for line in q.lines) for q in quotes}
     # Quote has no `customer` relationship (FK only) -- batch-resolve names for the register.
     customer_ids = {q.customer_id for q in quotes}
     customer_names = {c.id: c.name for c in session.scalars(
         select(models.Customer).where(models.Customer.id.in_(customer_ids))).all()} if customer_ids else {}
     return templates.TemplateResponse(request, "quotes/list.html",
-        {"quotes": quotes, "status": status, "totals": totals, "customer_names": customer_names})
+        {"quotes": quotes, "status": status, "totals": totals,
+         "page": p, "total_pages": total_pages, "total": total,
+         "customer_names": customer_names})
 
 
 @router.get("/quotes/new")

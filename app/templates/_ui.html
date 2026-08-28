@@ -66,6 +66,24 @@
 </label>
 {% endmacro %}
 
+{# Pagination footer shared by every paged register. `base_qs` is the page's
+   own filter query string WITHOUT the page param (may be ""); the macro
+   appends page=N itself. Mirrors the original customers pager markup. #}
+{% macro pager(page, total_pages, total, base_url, base_qs="") %}
+{% set sep = "&" if base_qs else "" %}
+<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-mist">
+  <span>Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
+  <div class="flex gap-2">
+    {% if page > 1 %}
+    <a class="btn-secondary" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page - 1 }}">Prev</a>
+    {% endif %}
+    {% if page < total_pages %}
+    <a class="btn-secondary" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page + 1 }}">Next</a>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
 {% macro page_header(eyebrow, title) %}
 <header class="pt-2 pb-3">
   <p class="page-eyebrow">{{ eyebrow }}</p>

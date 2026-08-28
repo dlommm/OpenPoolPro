@@ -283,3 +283,21 @@ def test_job_new_prefills_from_template(client, engine):
     r2 = client.get("/jobs/new")  # missing template: plain form
     assert r2.status_code == 200
     assert 'data-title="Filter clean"' in r2.text
+
+
+def test_quotes_list_paginates(client, engine):
+    from sqlalchemy.orm import Session
+
+    from app import models
+    with Session(engine) as s:
+        c = models.Customer(name="QuoteCo")
+        s.add(c)
+        s.flush()
+        for i in range(60):
+            s.add(models.Quote(customer_id=c.id, title=f"Quote {i:03d}"))
+        s.commit()
+    page1 = client.get("/quotes").text
+    page2 = client.get("/quotes?page=2").text
+    assert page1.count("Quote 0") == 50
+    assert page2.count("Quote 0") == 10
+    assert "Page 1 of 2" in page1 and "page=2" in page1

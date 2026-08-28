@@ -29,4 +29,7 @@
   </div>
   {% endfor %}
 </div>
+{% if jobs %}
+{{ ui.pager(page, total_pages, total, "/jobs", "status=" ~ (status | urlencode)) }}
+{% endif %}
 {% endblock %}

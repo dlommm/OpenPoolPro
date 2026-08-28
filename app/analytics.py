@@ -125,24 +125,51 @@ def _done_jobs(session, start, end):
     return [j for j in jobs if start <= _local_date(j.completed_at) <= end]
 
 
+@dataclass
+class PeriodData:
+    """One materialization of the range's rows, shared by every aggregation.
+
+    period_summary alone runs three aggregations, the page adds the active
+    tab's, and the export runs all seven — each used to re-fetch (and
+    re-hydrate, with triple selectinload) the very same visit/job window.
+    Fetch once via load_period and pass it in; every aggregation still accepts
+    (session, start, end) alone and fetches for itself, so direct calls and
+    existing tests are unaffected.
+    """
+    all_visits: list
+    done_visits: list
+    done_jobs: list
+
+
+def load_period(session: Session, start: date, end: date) -> PeriodData:
+    all_visits = _all_visits(session, start, end)
+    return PeriodData(all_visits=all_visits,
+                      done_visits=[v for v in all_visits if v.status == "done"],
+                      done_jobs=_done_jobs(session, start, end))
+
+
+def _data(session, start, end, data: "PeriodData | None") -> "PeriodData":
+    return data if data is not None else load_period(session, start, end)
+
+
 def _week_key(d: date) -> tuple[int, int]:
     iso = d.isocalendar()
     return (iso[0], iso[1])
 
 
-def _tier_for_gallons(session, gallons: int) -> int:
-    """Mirrors the tier ordering in app.rates.effective_rate_cents (max_gallons NULLs last)."""
-    tiers = session.scalars(
+def _pool_tiers(session) -> list["models.RateTier"]:
+    """Pool tiers in resolution order — mirrors app.rates.effective_rate_cents
+    (max_gallons NULLs last). Fetched once per rate_review call, not once per
+    property."""
+    return session.scalars(
         select(models.RateTier).where(models.RateTier.kind == "pool").order_by(
             models.RateTier.max_gallons.is_(None), models.RateTier.max_gallons)
     ).all()
-    for t in tiers:
-        if t.max_gallons is None or gallons <= t.max_gallons:
-            return t.rate_cents
-    return 0
 
 
-def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
+def income_by_week(session: Session, start: date, end: date,
+                   data: "PeriodData | None" = None) -> list[WeekRow]:
+    data = _data(session, start, end, data)
     markup = _markup(session)
     rows: dict[tuple[int, int], WeekRow] = {}
 
@@ -152,14 +179,14 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
             rows[key] = WeekRow(iso_year=y, iso_week=w, week_start_date=date.fromisocalendar(y, w, 1))
         return rows[key]
 
-    for v in _done_visits(session, start, end):
+    for v in data.done_visits:
         r = row(_week_key(v.date))
         r.labor_cents += tax.effective_labor_cents(v)
         for vc in v.chemicals:
             r.chem_cost_cents += vc.total_cost_cents
             r.chem_billable_cents += qbo.billable_for_vc(vc, markup)
 
-    for j in _done_jobs(session, start, end):
+    for j in data.done_jobs:
         r = row(_week_key(_local_date(j.completed_at)))
         r.job_cents += tax.effective_labor_cents(j)
 
@@ -171,7 +198,9 @@ def income_by_week(session: Session, start: date, end: date) -> list[WeekRow]:
     return out
 
 
-def revenue_by_customer(session: Session, start: date, end: date) -> list[CustomerRow]:
+def revenue_by_customer(session: Session, start: date, end: date,
+                        data: "PeriodData | None" = None) -> list[CustomerRow]:
+    data = _data(session, start, end, data)
     markup = _markup(session)
     rows: dict[int, CustomerRow] = {}
     chem_billable: dict[int, int] = defaultdict(int)
@@ -179,7 +208,7 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
     def row(cust: "models.Customer") -> CustomerRow:
         return rows.setdefault(cust.id, CustomerRow(customer=cust))
 
-    for v in _done_visits(session, start, end):
+    for v in data.done_visits:
         cust = v.property.customer
         r = row(cust)
         r.labor_cents += tax.effective_labor_cents(v)
@@ -187,7 +216,7 @@ def revenue_by_customer(session: Session, start: date, end: date) -> list[Custom
         for vc in v.chemicals:
             chem_billable[cust.id] += qbo.billable_for_vc(vc, markup)
 
-    for j in _done_jobs(session, start, end):
+    for j in data.done_jobs:
         r = row(j.property.customer)
         r.job_cents += tax.effective_labor_cents(j)
 
@@ -240,7 +269,9 @@ def lifetime_revenue_cents(session: Session, customer_id: int) -> int:
     return total
 
 
-def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
+def revenue_by_tech(session: Session, start: date, end: date,
+                    data: "PeriodData | None" = None) -> list[TechRow]:
+    data = _data(session, start, end, data)
     markup = _markup(session)
     rows: dict[int | None, TechRow] = {}
     chem_billable: dict[int | None, int] = defaultdict(int)
@@ -249,7 +280,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
         key = user.id if user is not None else None
         return rows.setdefault(key, TechRow(user=user))
 
-    for v in _done_visits(session, start, end):
+    for v in data.done_visits:
         key = v.completed_by_id
         r = row(v.completed_by)
         r.total_cents += tax.effective_labor_cents(v)
@@ -260,7 +291,7 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
         if dur is not None:
             r.total_minutes += dur
 
-    for j in _done_jobs(session, start, end):
+    for j in data.done_jobs:
         key = j.completed_by_id
         r = row(j.completed_by)
         r.total_cents += tax.effective_labor_cents(j)
@@ -278,15 +309,17 @@ def revenue_by_tech(session: Session, start: date, end: date) -> list[TechRow]:
     return sorted(rows.values(), key=lambda r: r.total_cents, reverse=True)
 
 
-def revenue_by_job_type(session: Session, start: date, end: date) -> list[TypeRow]:
+def revenue_by_job_type(session: Session, start: date, end: date,
+                        data: "PeriodData | None" = None) -> list[TypeRow]:
+    data = _data(session, start, end, data)
     markup = _markup(session)
-    visits = _done_visits(session, start, end)
+    visits = data.done_visits
     visit_labor = sum(tax.effective_labor_cents(v) for v in visits)
     visit_chem_billable = sum(qbo.billable_for_vc(vc, markup)
                                for v in visits for vc in v.chemicals)
     visits_total = visit_labor + visit_chem_billable
 
-    jobs = _done_jobs(session, start, end)
+    jobs = data.done_jobs
     repairs_total = sum(tax.effective_labor_cents(j) for j in jobs if j.job_type == "repair")
     service_total = sum(tax.effective_labor_cents(j) for j in jobs if j.job_type == "service")
 
@@ -297,16 +330,13 @@ def revenue_by_job_type(session: Session, start: date, end: date) -> list[TypeRo
     ]
 
 
-def chem_margin(session: Session, start: date, end: date) -> list[ChemRow]:
+def chem_margin(session: Session, start: date, end: date,
+                data: "PeriodData | None" = None) -> list[ChemRow]:
+    data = _data(session, start, end, data)
     markup = _markup(session)
-    visit_ids = select(models.Visit.id).where(
-        models.Visit.status == "done",
-        models.Visit.date >= start, models.Visit.date <= end)
-    vcs = session.scalars(select(models.VisitChemical).where(
-        models.VisitChemical.visit_id.in_(visit_ids))).all()
 
     rows: dict[int, ChemRow] = {}
-    for vc in vcs:
+    for vc in (vc for v in data.done_visits for vc in v.chemicals):
         r = rows.setdefault(vc.chemical_id, ChemRow(chemical=vc.chemical))
         r.quantity += vc.amount
         r.cost_cents += vc.total_cost_cents
@@ -318,7 +348,9 @@ def chem_margin(session: Session, start: date, end: date) -> list[ChemRow]:
     return sorted(rows.values(), key=lambda r: r.chemical.name)
 
 
-def visit_volume(session: Session, start: date, end: date) -> list[VolumeRow]:
+def visit_volume(session: Session, start: date, end: date,
+                 data: "PeriodData | None" = None) -> list[VolumeRow]:
+    data = _data(session, start, end, data)
     rows: dict[tuple[int, int], VolumeRow] = {}
     durations: dict[tuple[int, int], list[int]] = defaultdict(list)
 
@@ -328,7 +360,7 @@ def visit_volume(session: Session, start: date, end: date) -> list[VolumeRow]:
             rows[key] = VolumeRow(iso_year=y, iso_week=w, week_start_date=date.fromisocalendar(y, w, 1))
         return rows[key]
 
-    for v in _all_visits(session, start, end):
+    for v in data.all_visits:
         key = _week_key(v.date)
         r = row(key)
         if v.status == "done":
@@ -346,18 +378,20 @@ def visit_volume(session: Session, start: date, end: date) -> list[VolumeRow]:
     return sorted(rows.values(), key=lambda r: (r.iso_year, r.iso_week))
 
 
-def period_summary(session: Session, start: date, end: date) -> dict:
+def period_summary(session: Session, start: date, end: date,
+                   data: "PeriodData | None" = None) -> dict:
     """Headline KPIs for the selected range, shown as tiles above the tabs.
     Reuses the same aggregations as the tabs so every number reconciles."""
-    weeks = income_by_week(session, start, end)
+    data = _data(session, start, end, data)
+    weeks = income_by_week(session, start, end, data)
     revenue = sum(w.total_cents for w in weeks)
     profit = sum(w.profit_cents for w in weeks)
     chem_cost = sum(w.chem_cost_cents for w in weeks)
 
-    volume = visit_volume(session, start, end)
+    volume = visit_volume(session, start, end, data)
     visits_done = sum(v.done for v in volume)
 
-    customers = revenue_by_customer(session, start, end)
+    customers = revenue_by_customer(session, start, end, data)
     top = customers[0] if customers else None
 
     return {
@@ -374,9 +408,16 @@ def period_summary(session: Session, start: date, end: date) -> dict:
 
 def rate_review(session: Session) -> list[RateReviewRow]:
     out: list[RateReviewRow] = []
+    # Every property walks .customer and .pools — eager-load both, and resolve
+    # the tier ladder once, or this loop lazy-loads ~4 queries per property.
+    # (effective_rate_cents still queries the tiny tier table per property for
+    # its own resolution; the relationship N+1 was the real cost here.)
     props = session.scalars(
         select(models.Property).where(models.Property.active.is_(True))
+        .options(selectinload(models.Property.customer),
+                 selectinload(models.Property.pools))
     ).all()
+    tiers = _pool_tiers(session)
     for p in props:
         if not p.customer.active:
             continue
@@ -387,7 +428,8 @@ def rate_review(session: Session) -> list[RateReviewRow]:
         if not pool_pools:
             continue
         largest = max(pl.gallons for pl in pool_pools)
-        tier_cents = _tier_for_gallons(session, largest)
+        tier_cents = next((t.rate_cents for t in tiers
+                           if t.max_gallons is None or largest <= t.max_gallons), 0)
         current_cents = effective_rate_cents(session, p)
         if current_cents < tier_cents:
             out.append(RateReviewRow(property=p, current_cents=current_cents,

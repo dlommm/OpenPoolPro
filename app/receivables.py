@@ -8,7 +8,7 @@ disagree with the payments actually entered.
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app import models
@@ -49,13 +49,23 @@ def open_invoices(session: Session) -> list["models.Invoice"]:
     A draft invoice is deliberately included: the work is done and the money is
     owed whether or not the paperwork has been emailed yet — an AR report that
     only counted 'sent' would under-report what the business is owed.
+
+    The balance test runs SQL-side (total > COALESCE(SUM(payments), 0)) so
+    only invoices still carrying a balance are loaded and hydrated. The old
+    load-everything-filter-in-Python version materialized every non-void
+    invoice ever written — with payments and customer eager-loaded — to find
+    the handful still open, and the AR page pays that on every render.
     """
-    invoices = session.scalars(
+    paid = (select(func.coalesce(func.sum(models.Payment.amount_cents), 0))
+            .where(models.Payment.invoice_id == models.Invoice.id)
+            .correlate(models.Invoice)
+            .scalar_subquery())
+    open_ = session.scalars(
         select(models.Invoice)
-        .where(models.Invoice.status != "void")
+        .where(models.Invoice.status != "void",
+               models.Invoice.total_cents > paid)
         .options(selectinload(models.Invoice.payments),
                  selectinload(models.Invoice.customer))).all()
-    open_ = [inv for inv in invoices if inv.balance_cents > 0]
     # Nulls last so an invoice with no due date does not sort ahead of real
     # overdue ones; then by number for a stable order within a due date.
     return sorted(open_, key=lambda i: (i.due_date is None, i.due_date or date.max, i.number))

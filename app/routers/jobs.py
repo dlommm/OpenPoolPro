@@ -1,9 +1,10 @@
+import math
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app import models, rates, sizes, tax
 from app.db import get_session, get_or_404
@@ -12,6 +13,11 @@ from app.routers.customers import _apply_property
 from app.routers.pools import _apply as _apply_pool
 
 router = APIRouter()
+
+# The open/scheduled tabs are bounded working queues, but "done" accumulates
+# every job the business has ever finished — the register pages like the
+# customers list does, same size.
+PAGE_SIZE = 50
 
 
 def _template_size_rows(tmpl: "models.JobTemplate") -> list[dict]:
@@ -79,12 +85,22 @@ def _eligible_assignees(session: Session, job_type: str):
 
 
 @router.get("/jobs")
-def list_jobs(request: Request, status: str = "open",
+def list_jobs(request: Request, status: str = "open", page: str = "",
               session: Session = Depends(get_session)):
-    jobs = session.scalars(select(models.Job).where(models.Job.status == status)
-                           .order_by(models.Job.priority.asc(), models.Job.id.desc())).all()
+    p = max(1, _parse_int_tolerant(page) or 1)
+    base = select(models.Job).where(models.Job.status == status)
+    total = session.scalar(select(func.count()).select_from(base.subquery())) or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+    jobs = session.scalars(
+        base.order_by(models.Job.priority.asc(), models.Job.id.desc())
+        .offset((p - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+        # The card renders j.property.customer.name — eager-load both hops or
+        # every row on the page lazy-loads them individually.
+        .options(selectinload(models.Job.property)
+                 .selectinload(models.Property.customer))).all()
     return templates.TemplateResponse(request, "jobs/list.html",
-        {"jobs": jobs, "status": status, "show_money": request.state.user.can("view_money")})
+        {"jobs": jobs, "status": status, "page": p, "total_pages": total_pages,
+         "total": total, "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/jobs/new")
