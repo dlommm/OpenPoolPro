@@ -66,6 +66,7 @@ def test_visit_edit_raising_amount_decrements_only_difference(client, engine):
         assert s.get(models.Chemical, chem_id).stock_qty == 9.0
     client.post(f"/visit/{vid}/complete", data={
         "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "form_status": "done",
         "chem_id": [str(chem_id)], "chem_amount": ["1.5"]})
     with Session(engine) as s:
         # 1.0 -> 1.5 is a +0.5 delta: only the extra 0.5 comes off stock
@@ -84,6 +85,7 @@ def test_visit_edit_removing_line_restores_stock(client, engine):
         assert s.get(models.Chemical, chem_id).stock_qty == 8.0
     client.post(f"/visit/{vid}/complete", data={
         "fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
+        "form_status": "done",
         "chem_id": [], "chem_amount": []})
     with Session(engine) as s:
         assert s.get(models.Chemical, chem_id).stock_qty == 10.0  # fully restored
@@ -97,7 +99,9 @@ def test_visit_resave_identical_is_net_zero(client, engine):
     data = {"fc": "", "ph": "", "ta": "", "cya": "", "salt": "", "notes": "",
             "chem_id": [str(chem_id)], "chem_amount": ["2.0"]}
     client.post(f"/visit/{vid}/complete", data=data)
-    client.post(f"/visit/{vid}/complete", data=data)
+    # A deliberate resave (form re-rendered against the done visit) — without
+    # form_status this would be a stale replay and 409 before touching stock.
+    client.post(f"/visit/{vid}/complete", data={**data, "form_status": "done"})
     with Session(engine) as s:
         assert s.get(models.Chemical, chem_id).stock_qty == 8.0
 

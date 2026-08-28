@@ -62,7 +62,7 @@ def test_replay_parks_definitive_4xx_instead_of_breaking():
     """The whole bug in one assertion: the arm that handles a dead 4xx must
     hand the entry to the failed store, and must NOT be a `break` — otherwise
     the entry is still at the head of the FIFO on the next flush."""
-    body = js_function_body(sw_source(), "async function replay()")
+    body = js_function_body(sw_source(), "async function replayOnce()")
     assert "failEntry(" in body, "replay() no longer parks definitively-failed entries"
     # `failEntry` is the last arm of the if/else chain; nothing after it may bail
     # out of the loop, or the queue behind a dead entry stays buried.
@@ -75,10 +75,11 @@ def test_replay_still_breaks_on_network_error_and_5xx_and_login():
     A network error means we went offline again; a 5xx is a server blip; the
     login redirect means the session expired — none of them are the entry's
     fault and all three can succeed later."""
-    body = js_function_body(sw_source(), "async function replay()")
+    body = js_function_body(sw_source(), "async function replayOnce()")
     assert re.search(r"catch \(err\) \{\s*break;", body), \
         "a network error mid-flush must keep this entry and the rest queued"
-    assert re.search(r"else if \(loginRedirect \|\| resp\.status >= 500[^)]*\)\s*\{\s*break;", body), \
+    assert re.search(r"else if \(loginRedirect \|\| resp\.status >= 500[^)]*\)\s*\{\s*"
+                     r"(?:if \(loginRedirect\) BLOCKED_AUTH = true;\s*)?break;", body), \
         "login redirect / 5xx must remain retryable (break), not be parked as failed"
 
 
@@ -88,9 +89,22 @@ def test_login_redirect_guard_is_intact():
     a tech's readings, so success requires BOTH resp.ok and a non-login URL."""
     src = sw_source()
     assert 'finalPath === "/login"' in src
-    body = js_function_body(src, "async function replay()")
+    body = js_function_body(src, "async function replayOnce()")
     assert re.search(r"if \(resp\.ok && !loginRedirect\)\s*\{\s*await queueDelete", body), \
         "the queue entry must only be deleted on a real success, never on the login redirect"
+
+
+def test_replay_is_single_flight():
+    """replay is triggered from four places (activate, the flush-queue message,
+    Background Sync, retryFailed); two overlapping runs could each POST the head
+    entry before either deletes it — the server would receive the same
+    completion twice. Overlapping callers must share the run already in flight."""
+    src = sw_source()
+    wrapper = js_function_body(src, "function replay()")
+    assert "REPLAY_INFLIGHT" in wrapper
+    assert "replayOnce()" in wrapper
+    # Nothing may call replayOnce() directly and bypass the latch.
+    assert src.count("replayOnce()") == 2  # the definition's callsite + this wrapper
 
 
 def test_failed_entries_keep_payload_status_and_timestamp():

@@ -6,6 +6,10 @@
 <p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }}{% if show_money %} · <span class="money">{{ rate | dollars }}</span>/visit{% endif %}</p>
 
 <form method="post" action="/visit/{{ v.id }}/complete" class="space-y-5">
+  {# Status as of when this form was RENDERED. complete() compares it to the
+     visit's current status and 409s on mismatch, so a completion queued
+     offline and replayed days later can't silently overwrite a newer record. #}
+  <input type="hidden" name="form_status" value="{{ v.status }}">
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Started</span>
       <input type="time" name="started_hhmm" value="{{ v.started_at | hhmm }}" class="field font-data"></label>

@@ -118,10 +118,12 @@ def test_recomplete_new_chem_line_freezes_current_cost(client, engine):
     with Session(engine) as s:
         s.get(models.Chemical, other_id).cost_per_unit_cents = 350
         s.commit()
-    # Re-complete adding a brand-new line for `other` alongside the existing one.
+    # Re-complete (form re-rendered against the done visit, so it carries
+    # form_status="done") adding a brand-new line for `other`.
     client.post(f"/visit/{vid}/complete", data={
         "fc": "", "ph": "", "ta": "", "cya": "", "salt": "",
-        "notes": "", "chem_id": [str(chem_id), str(other_id)],
+        "notes": "", "form_status": "done",
+        "chem_id": [str(chem_id), str(other_id)],
         "chem_amount": ["1.0", "2.0"]})
     with Session(engine) as s:
         by_chem = {vc.chemical_id: vc for vc in s.scalars(select(models.VisitChemical)).all()}
@@ -169,17 +171,15 @@ def test_visit_autostamp_on_due_day_only(client, engine):
 
 
 def test_double_complete_identical_form_pins_stock_cost_and_email(client, engine):
-    # P9 Task 5 idempotency pin: sw.js's offline queue replays a queued
-    # visit-complete POST by re-sending the IDENTICAL urlencoded body. This
-    # pins the full triple that replay must not corrupt: frozen chem costs
-    # unchanged, exactly one VisitChemical row (not a duplicate), and stock
-    # decremented net ONCE (the P7 delta logic makes an unchanged resend a
-    # no-op on stock). The notification queue is NOT idempotent by design --
-    # each POST re-runs the whole complete flow and queues its own email row
-    # (see tests/test_notifications.py's
-    # test_double_post_identical_form_queues_one_row_per_post_without_error)
-    # -- pinned again here explicitly, alongside the invariants it's coupled
-    # to under the same replay, per the P9 plan's execution notes.
+    # Replay pin: sw.js's offline queue replays a queued visit-complete POST by
+    # re-sending the IDENTICAL urlencoded body — which carries the visit's
+    # status as of form render ("due", or no form_status field at all). The
+    # visit is done by the time the duplicate lands, so the replay must 409 and
+    # change NOTHING: frozen chem costs unchanged, exactly one VisitChemical
+    # row, stock decremented net once, and exactly one notification row (the
+    # duplicate email per replay was a real customer-facing bug — see
+    # tests/test_notifications.py's
+    # test_replayed_double_post_gets_409_and_emails_the_customer_once).
     pid, chem_id = seed(engine)
     with Session(engine) as s:
         c = s.get(models.Property, pid).customer
@@ -210,21 +210,39 @@ def test_double_complete_identical_form_pins_stock_cost_and_email(client, engine
         s.get(models.Chemical, chem_id).cost_per_unit_cents = 999
         s.commit()
 
-    # Replay: the exact same urlencoded body, posted again.
+    # Replay: the exact same urlencoded body, posted again — rejected whole.
     r2 = client.post(f"/visit/{vid}/complete", data=data, follow_redirects=False)
-    assert r2.status_code == 303
+    assert r2.status_code == 409
     with Session(engine) as s:
         vcs = s.scalars(select(models.VisitChemical)).all()
         assert len(vcs) == 1  # exactly one VisitChemical row set, not two
         assert vcs[0].unit_cost_cents_frozen == 450  # frozen cost unchanged
         assert vcs[0].total_cost_cents == 1125
         stock_after_second = s.get(models.Chemical, chem_id).stock_qty
-        # delta logic: identical prior/new amounts net to zero on the resend
-        # -- stock was decremented net ONCE overall, not twice.
         assert stock_after_second == stock_after_first == 97.5
-        # Accepted spec behavior (not idempotency): the second POST queues
-        # its OWN notification row.
-        assert len(s.scalars(select(models.EmailOutbox)).all()) == 2
+        # The homeowner got exactly ONE "visit completed" email, not one per replay.
+        assert len(s.scalars(select(models.EmailOutbox)).all()) == 1
+
+
+def test_stale_offline_replay_cannot_overwrite_a_skip(client, engine):
+    # A completion queued offline Monday and replayed Wednesday — after the
+    # office skipped the stop with a reason — must not overwrite the skip.
+    # Before the form_status guard this was silent last-writer-wins: readings,
+    # notes, and completed_by all replaced with no trace.
+    pid, _ = seed(engine)
+    client.get(f"/visit/{pid}/2026-07-13")
+    with Session(engine) as s:
+        vid = s.scalars(select(models.Visit)).one().id
+    client.post(f"/visit/{vid}/skip", data={"reason": "gate locked"})
+    r = client.post(f"/visit/{vid}/complete", data={
+        "fc": "3.5", "ph": "7.6", "ta": "", "cya": "", "salt": "",
+        "notes": "queued while offline"}, follow_redirects=False)
+    assert r.status_code == 409
+    with Session(engine) as s:
+        v = s.get(models.Visit, vid)
+        assert v.status == "skipped"
+        assert "gate locked" in (v.notes or "")
+        assert v.fc is None  # the stale readings were not applied
 
 
 def test_complete_with_edited_times(client, engine):

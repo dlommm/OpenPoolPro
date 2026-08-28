@@ -119,11 +119,12 @@ def test_dismiss_queues_no_row(client, engine):
         assert s.scalars(select(models.EmailOutbox)).all() == []
 
 
-def test_double_post_identical_form_queues_one_row_per_post_without_error(client, engine):
-    # Offline-replay double-POST case: replay re-posts the identical form.
-    # Each POST re-runs the whole complete flow, so each queues its own row
-    # (acceptable per spec) -- what matters is neither POST errors and each
-    # adds exactly one new row.
+def test_replayed_double_post_gets_409_and_emails_the_customer_once(client, engine):
+    # Offline-replay double-POST case: the queue re-posts the identical form
+    # (which carries form_status="due", or no field at all for entries queued
+    # before the guard shipped — both mean "filled against a due stop"). The
+    # visit is already done by then, so the replay must 409 instead of applying
+    # — and the homeowner must NOT get a second "visit completed" email.
     pid, _ = seed(engine)
     _open(client, pid)
     vid = _vid(engine)
@@ -134,9 +135,28 @@ def test_double_post_identical_form_queues_one_row_per_post_without_error(client
     with Session(engine) as s:
         assert len(s.scalars(select(models.EmailOutbox)).all()) == 1
     r2 = client.post(f"/visit/{vid}/complete", data=data, follow_redirects=False)
-    assert r2.status_code == 303
+    assert r2.status_code == 409
     with Session(engine) as s:
-        assert len(s.scalars(select(models.EmailOutbox)).all()) == 2
+        assert len(s.scalars(select(models.EmailOutbox)).all()) == 1
+
+
+def test_deliberate_recomplete_applies_but_does_not_reemail(client, engine):
+    # Fixing a pH typo re-renders the form against the DONE visit, so it posts
+    # form_status="done": the edit applies, but the homeowner already got their
+    # service report and must not get another.
+    pid, _ = seed(engine)
+    _open(client, pid)
+    vid = _vid(engine)
+    client.post(f"/visit/{vid}/complete", data={
+        "fc": "3.5", "ph": "9.9", "ta": "", "cya": "", "salt": "", "notes": ""})
+    r = client.post(f"/visit/{vid}/complete", data={
+        "fc": "3.5", "ph": "7.6", "ta": "", "cya": "", "salt": "", "notes": "",
+        "form_status": "done"}, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        v = s.get(models.Visit, vid)
+        assert v.ph == 7.6
+        assert len(s.scalars(select(models.EmailOutbox)).all()) == 1
 
 
 def test_blank_business_name_setting_falls_back_in_subject(client, engine):

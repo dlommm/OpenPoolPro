@@ -305,7 +305,22 @@ function describe(entry) {
 //
 // Always ends by telling every open client the current queue state, whether or
 // not anything actually replayed.
-async function replay() {
+//
+// Single-flight latch: replay is triggered from four places (activate, the
+// flush-queue message, Background Sync, retryFailed) and two overlapping runs
+// could each POST the head entry before either deletes it — the server would
+// receive the same completion twice. Overlapping callers share the run already
+// in flight instead.
+let REPLAY_INFLIGHT = null;
+
+function replay() {
+  if (!REPLAY_INFLIGHT) {
+    REPLAY_INFLIGHT = replayOnce().finally(() => { REPLAY_INFLIGHT = null; });
+  }
+  return REPLAY_INFLIGHT;
+}
+
+async function replayOnce() {
   let entries = [];
   try {
     entries = await queueAll();

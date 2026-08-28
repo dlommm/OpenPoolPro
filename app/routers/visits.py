@@ -2,7 +2,7 @@ import math
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -195,6 +195,22 @@ def visit_form(request: Request, property_id: int, visit_date: date,
 async def complete(visit_id: int, request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
+    # Optimistic-state guard against stale offline replays. The form carries
+    # the visit's status as of when it was RENDERED (form_status); a completion
+    # queued offline and replayed days later — after someone else completed or
+    # skipped this stop — would otherwise silently overwrite the newer record
+    # (readings, notes, chem lines, completed_by). A mismatch gets a 409, which
+    # sw.js parks in the failed store where the queue screen explains it
+    # ("already recorded by someone else") and offers retry/discard. A missing
+    # field (an entry queued before this guard shipped) means the form was
+    # filled against a due stop, so it defaults to "due"; a fresh interactive
+    # re-complete (typo fix) renders with the current status and still matches.
+    form_status = (form.get("form_status") or "due").strip()
+    if v.status != form_status:
+        return PlainTextResponse(
+            "This stop was updated after this form was loaded — open it again to make changes.",
+            status_code=409)
+    was_due = v.status == "due"
     v.fc, v.ph = _f(form.get("fc")), _f(form.get("ph"))
     v.ta, v.cya, v.salt = _f(form.get("ta")), _f(form.get("cya")), _f(form.get("salt"))
     v.tasks_done = form.getlist("tasks")
@@ -275,7 +291,12 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
         new_stock[chem.id] = new_stock.get(chem.id, 0.0) + amount
     inventory.apply_visit_delta(session, v.id, prior_stock, new_stock)
     customer = v.property.customer
-    if customer.email and customer.notify_email:
+    # Email only on the due→done transition. A re-complete (fixing a pH typo)
+    # must not spam the homeowner with a second "visit completed"; nor may an
+    # offline replay whose success response was lost mid-network — the retry
+    # arrives against an already-done visit and either 409s above or, matching,
+    # is a deliberate edit that still shouldn't re-send.
+    if was_due and customer.email and customer.notify_email:
         business = models.get_setting(session, "business_name", "OpenPoolPro") or "OpenPoolPro"
         mailer.queue(session, customer.email, f"{business} — service visit completed",
                      service_report(session, v, business, request.state.user.name),
