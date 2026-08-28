@@ -7,7 +7,7 @@ from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 from app import contract_pdf, models
-from app.contract_defaults import DEFAULT_TEMPLATE, get_template, TEMPLATE_KEY
+from app.contract_defaults import DEFAULT_TEMPLATE, TEMPLATE_KEY, get_template
 from app.db import Base
 
 

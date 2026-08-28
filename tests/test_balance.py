@@ -228,7 +228,7 @@ def test_zero_techs_page_renders_without_buttons(client, engine):
 
 
 def test_week_page_links_to_balance_only_when_techs_visible(client, engine, tech_client):
-    sam = _tech(engine, "samW")
+    _tech(engine, "samW")
     admin_html = client.get("/week").text
     assert '/routes/balance' in admin_html
     t = tech_client(name="bareweek")

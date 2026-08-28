@@ -8,8 +8,8 @@ import io
 
 import pyotp
 import pytest
-from PIL import Image
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

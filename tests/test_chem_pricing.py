@@ -20,6 +20,7 @@ def test_per_item_markup_helper():
 def test_save_chemicals_persists_markup(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     r = client.post("/settings/chemicals", data={
         "chem_id": [""], "name": ["Special sauce"], "unit": ["gal"],

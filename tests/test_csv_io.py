@@ -53,7 +53,6 @@ def test_export_writes_export_customers_audit_row(client, engine):
         assert rows[0].user_id == owner_id
 
 
-import io as _io
 
 
 CSV_GOOD = """name,phone,addr,day,shape,len,wid,depth

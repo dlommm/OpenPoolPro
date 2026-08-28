@@ -77,7 +77,7 @@ def test_property_form_smart_default(client, engine):
             models.Customer.name == "NewGuy")).one().id
     html = client.get(f"/customers/{cid}/properties/new").text
     assert 'name="assigned_tech_id"' in html
-    r = client.post(f"/customers/{cid}/properties/new", data={
+    client.post(f"/customers/{cid}/properties/new", data={
         "label": "Home", "address": "", "gate_code": "", "dog_note": "", "notes": "",
         "frequency": "weekly", "weekday": "2", "anchor_date": "",
         "rate_override_dollars": "", "assigned_tech_id": str(sam)})

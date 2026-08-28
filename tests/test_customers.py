@@ -437,8 +437,9 @@ def test_notify_email_toggle_persists(client, engine):
 
 
 def test_property_spa_override_saved(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Cara")
@@ -455,6 +456,7 @@ def test_property_spa_override_saved(client, engine):
 def test_property_structured_address_composed(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     client.post("/customers/new", data={"name": "Addr Co"})
     with Session(engine) as s:
@@ -471,7 +473,8 @@ def test_property_structured_address_composed(client, engine):
 def test_property_save_stores_geocode_when_key_set(client, engine, monkeypatch):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
-    from app import models, geocode
+
+    from app import geocode, models
     monkeypatch.setattr(geocode, "geocode", lambda text, key, **kw: (28.3, -80.6))
     with Session(engine) as s:
         models.set_setting(s, "geoapify_key", "TESTKEY"); s.commit()
@@ -489,7 +492,8 @@ def test_property_save_stores_geocode_when_key_set(client, engine, monkeypatch):
 def test_property_save_survives_geocode_failure(client, engine, monkeypatch):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
-    from app import models, geocode
+
+    from app import geocode, models
     def boom(text, key, **kw): raise RuntimeError("boom")
     monkeypatch.setattr(geocode, "geocode", boom)
     with Session(engine) as s:
@@ -506,7 +510,8 @@ def test_property_save_survives_geocode_failure(client, engine, monkeypatch):
 def test_edit_does_not_regeocode_when_address_unchanged(client, engine, monkeypatch):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
-    from app import models, geocode
+
+    from app import geocode, models
 
     calls = {"n": 0}
 
@@ -662,6 +667,7 @@ def test_csp_allows_geoapify_images(client):
 def test_detail_shows_map_and_navigate_with_key_and_coords(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     cid = _mk_customer(client, engine, "Map Co", city="Cocoa Beach")
     with Session(engine) as s:

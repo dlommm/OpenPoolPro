@@ -33,8 +33,9 @@ def test_sidebar_and_topbar_coexist(client):
 
 
 def test_login_page_has_no_sidebar_offset(client, engine, monkeypatch):
-    import app.config as config
     from fastapi.testclient import TestClient
+
+    import app.config as config
     from app.main import create_app
     monkeypatch.setattr(config, "APP_PASSWORD", "x-unused-1")
     c = TestClient(create_app(engine=engine))

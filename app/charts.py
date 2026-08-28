@@ -131,7 +131,7 @@ def donut_chart(slices, *, kind="money", size=220, empty="No data"):
     parts = [f'<svg viewBox="0 0 {size} {size}" role="img" '
              f'style="width:{size}px;height:{size}px;max-width:100%">']
     a0 = -math.pi / 2  # start at top
-    for i, (label, v) in enumerate(slices):
+    for i, (_label, v) in enumerate(slices):
         frac = v / total
         a1 = a0 + frac * 2 * math.pi
         large = 1 if frac > 0.5 else 0

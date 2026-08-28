@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app import models, rates, sizes, tax
-from app.db import get_session, get_or_404
+from app.db import get_or_404, get_session
 from app.main import templates
 from app.routers.customers import _apply_property
 from app.routers.pools import _apply as _apply_pool
@@ -389,8 +389,8 @@ def start_job(jid: int, session: Session = Depends(get_session)):
 
 @router.post("/jobs/{jid}/times")
 async def job_times(jid: int, request: Request, session: Session = Depends(get_session)):
-    from app.timefmt import from_local_hhmm, local_date
     from app.routers.today import business_today
+    from app.timefmt import from_local_hhmm, local_date
     j = get_or_404(session, models.Job, jid)
     form = await request.form()
     start_anchor = (local_date(j.started_at) if j.started_at

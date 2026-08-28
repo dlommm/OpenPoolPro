@@ -8,12 +8,11 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.routers.today import business_today
-
 from app import invoicing, mailer, models, receivables
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import templates
+from app.routers.today import business_today
 from app.timefmt import parse_ym
 
 router = APIRouter(dependencies=[Depends(require_admin)])

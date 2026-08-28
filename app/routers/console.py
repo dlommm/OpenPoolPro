@@ -7,11 +7,10 @@ from sqlalchemy.orm import Session
 from app import inventory, models, qbo
 from app.db import get_session
 from app.deps import require_admin
-from app.maintenance import warranty_alerts
 from app.main import templates
+from app.maintenance import warranty_alerts
 from app.routers.today import business_today
-from app.scheduling import (ScheduleWindow, missed_stops, stops_for_date,
-                            visible_to)
+from app.scheduling import ScheduleWindow, missed_stops, stops_for_date, visible_to
 
 router = APIRouter()
 

@@ -305,8 +305,9 @@ def _fetch_rows(tab: str, session, start_d, end_d, data=None):
 @router.get("/analytics/export.xlsx")
 def analytics_export_xlsx(request: Request, tab: str = "income", start: str | None = None,
                           end: str | None = None, session: Session = Depends(get_session)):
-    from app import analytics_export
     from fastapi.responses import Response
+
+    from app import analytics_export
     if tab not in TAB_LABELS:
         raise HTTPException(status_code=404, detail=f"Unknown tab: {tab}")
     start_d, end_d = _resolve_range(start, end)
@@ -329,8 +330,9 @@ def analytics_export_xlsx(request: Request, tab: str = "income", start: str | No
 @router.get("/analytics/export.pdf")
 def analytics_export_pdf(request: Request, tab: str = "income", start: str | None = None,
                          end: str | None = None, session: Session = Depends(get_session)):
-    from app import analytics_export
     from fastapi.responses import Response
+
+    from app import analytics_export
     if tab not in TAB_LABELS:
         raise HTTPException(status_code=404, detail=f"Unknown tab: {tab}")
     start_d, end_d = _resolve_range(start, end)

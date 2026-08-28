@@ -1,7 +1,7 @@
 from builtins import property as builtin_property
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, select, text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -13,8 +13,8 @@ PHOTO_TAGS = ("before", "after", "issue", "house")
 
 
 def utcnow() -> datetime:
-	"""Naive UTC now — replacement for deprecated datetime.utcnow()."""
-	return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Naive UTC now — replacement for deprecated datetime.utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def normalize_tags(raw: str) -> list[str]:

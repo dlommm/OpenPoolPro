@@ -11,7 +11,6 @@ These tests render the same URL under every theme and assert the figures
 appear in all of them.
 """
 import pytest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models

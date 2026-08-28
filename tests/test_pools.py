@@ -118,8 +118,9 @@ def test_missing_form_fields_return_400_not_500(client, engine):
 
 
 def test_create_spa_pool_sets_kind(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Ann")
@@ -137,8 +138,9 @@ def test_create_spa_pool_sets_kind(client, engine):
 
 
 def test_new_pool_prefills_from_size_preset(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Bob")
@@ -153,8 +155,9 @@ def test_new_pool_prefills_from_size_preset(client, engine):
 
 
 def test_pool_gallons_override_wins(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Ovr")
@@ -172,8 +175,9 @@ def test_pool_gallons_override_wins(client, engine):
 
 
 def test_size_presets_seeded(engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models, seeds
     from app.db import Base
     Base.metadata.create_all(engine)

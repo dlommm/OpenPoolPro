@@ -50,7 +50,7 @@ def test_repair_assignee_filtered_by_capability(client, engine, tech_client):
     _seed(client, engine)
     tech_client(name="cleaner")                 # no can_repairs
     tech_client(name="fixer", can_repairs=True)
-    html = client.get("/jobs/new").text
+    client.get("/jobs/new")
     # both appear for default service type rendering; capability filtering is
     # enforced server-side on POST for repairs:
     with Session(engine) as s:

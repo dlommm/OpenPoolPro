@@ -11,6 +11,7 @@ def test_get_session_dependency_injects(engine, monkeypatch, tmp_path):
     from fastapi import Depends
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import Session
+
     from app.db import get_session
     from app.main import create_app
 

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app import models, seeds, tax
+from app import models, seeds
 
 
 def test_save_tax_general(client, engine):

@@ -1,6 +1,7 @@
-from app import rates, models
-from app.db import Base
 from sqlalchemy.orm import Session
+
+from app import models, rates
+from app.db import Base
 
 
 def _tmpl(**kw):

@@ -17,7 +17,8 @@ BASE = os.environ.get("APP_URL", "http://localhost:8000")
 PASSWORD = os.environ.get("APP_PASSWORD", "coastline-demo")
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
-SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/money", "/settings", "/account", "/audit", "/inventory", "/routes/balance"]
+SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/money", "/settings",
+           "/account", "/audit", "/inventory", "/routes/balance"]
 
 # Per-theme expected computed styles. THEME selects which theme is active
 # (set it via the Settings control or `set_setting` before running); the map
@@ -43,12 +44,14 @@ CHECKS = """
   const body = getComputedStyle(document.body);
   const probs = [];
   if (!body.fontFamily.includes(exp.body_font)) probs.push("body font not " + exp.body_font + ": " + body.fontFamily);
-  if (body.backgroundColor !== exp.body_bg) probs.push("bg not tile (want " + exp.body_bg + "): " + body.backgroundColor);
+  if (body.backgroundColor !== exp.body_bg)
+    probs.push("bg not tile (want " + exp.body_bg + "): " + body.backgroundColor);
   const topbar = document.querySelector("#topbar");
   if (!topbar) probs.push("topbar missing");
   else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
   const h1 = document.querySelector("h1");
-  if (h1 && !getComputedStyle(h1).fontFamily.includes(exp.display_font)) probs.push("h1 not display font (want " + exp.display_font + ")");
+  if (h1 && !getComputedStyle(h1).fontFamily.includes(exp.display_font))
+    probs.push("h1 not display font (want " + exp.display_font + ")");
   return probs;
 }
 """

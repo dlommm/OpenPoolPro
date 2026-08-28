@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.db import get_session, get_or_404
+from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.main import templates
 

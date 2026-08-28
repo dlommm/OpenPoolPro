@@ -107,6 +107,7 @@ def test_job_start_and_times(client, engine):
 
 def test_job_times_noop_keeps_completion_date(client, engine):
     from datetime import date, timedelta
+
     from app.timefmt import local_date, to_local_hhmm
     pid = prop(engine)
     last_week = (date.today() - timedelta(days=7)).isoformat()
@@ -132,7 +133,7 @@ def test_job_times_noop_keeps_completion_date(client, engine):
 
 def test_job_times_evening_utc_rollover(client, engine):
     from datetime import datetime
-    from app.timefmt import local_date
+
     pid = prop(engine)
     client.post("/jobs/new", data={"property_id": str(pid), "title": "Evening",
                                    "description": "", "priority": "normal",
@@ -170,8 +171,9 @@ def test_job_detail_shows_start_button_then_duration(client, engine):
 
 
 def test_create_job_from_template_seeds_tasks(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Eve")

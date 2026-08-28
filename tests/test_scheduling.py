@@ -2,7 +2,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app import models, seeds
+from app import models
 from app.scheduling import is_due, missed_stops, stops_for_date
 
 

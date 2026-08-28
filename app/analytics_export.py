@@ -176,18 +176,13 @@ def build_xlsx(tab_label: str, start, end, summary: dict, tab: str, rows) -> byt
 def build_pdf(tab_label: str, start, end, summary: dict, tab: str, rows) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
-    from reportlab.graphics.shapes import Drawing
-    from reportlab.graphics.charts.barcharts import VerticalBarChart
-    from reportlab.graphics.charts.piecharts import Pie
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                    TableStyle)
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     headers, data, chart = table_for(tab, rows)
     styles = getSampleStyleSheet()
     accent = colors.HexColor("#16788D")
-    brass = colors.HexColor("#8f6114")
     title_style = ParagraphStyle("t", parent=styles["Title"], textColor=accent, fontSize=18)
     sub = ParagraphStyle("s", parent=styles["Normal"], textColor=colors.grey, fontSize=9)
 
@@ -248,9 +243,9 @@ def _pdf_cell(value, header):
 
 
 def _pdf_chart(chart, accent):
-    from reportlab.graphics.shapes import Drawing, String
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.piecharts import Pie
+    from reportlab.graphics.shapes import Drawing, String
     from reportlab.lib import colors
 
     labels = [str(x) for x in chart["labels"]][:10]

@@ -7,8 +7,8 @@ from tests.test_money import seed_month
 
 
 def test_csv_golden(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     seed_month(engine)
@@ -32,8 +32,8 @@ def test_export_route_downloads(client, engine):
 
 
 def test_csv_golden_with_tax(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     seed_month(engine)
@@ -53,8 +53,9 @@ def test_csv_golden_with_tax(engine):
 
 def test_csv_job_uses_effective_labor_not_frozen(engine):
     from datetime import datetime
-    from app.db import Base
+
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:

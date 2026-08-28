@@ -4,10 +4,9 @@ Paid-ness is DERIVED from Payment rows rather than stored on the invoice, so
 these tests pin that the derivation is right and that nothing can produce a
 balance that disagrees with the money recorded.
 """
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models, receivables

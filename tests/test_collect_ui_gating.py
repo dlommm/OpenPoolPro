@@ -7,9 +7,7 @@ live-update the total as the tech typed, so a tech without the permission could
 and leave the visit billing full rate — a silent cash/billing mismatch the owner
 only finds at reconciliation.
 """
-from datetime import date
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models

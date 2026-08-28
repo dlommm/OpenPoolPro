@@ -1,16 +1,21 @@
 import csv
 import io
+import json
+import os
+import re
+import uuid
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import config, models
 from app.db import get_session
 from app.deps import require_admin
 from app.main import templates
 from app.qbo import csv_safe
+from app.rates import gallons
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -52,17 +57,6 @@ def export_customers(request: Request, session: Session = Depends(get_session)):
     return PlainTextResponse(buf.getvalue(), media_type="text/csv", headers={
         "Content-Disposition": "attachment; filename=customers.csv"})
 
-
-import json
-import os
-import re
-import uuid
-
-from fastapi import UploadFile
-from fastapi.responses import HTMLResponse
-
-from app import config
-from app.rates import gallons
 
 TARGETS = ["customer_name", "qb_display_name", "phone", "email", "customer_notes",
            "property_label", "address", "gate_code", "dog_note", "frequency",
@@ -150,15 +144,19 @@ def _validate(session, payload, mapping):
     for n, row in enumerate(payload["rows"], start=2):
         name = val(row, "customer_name")
         if not name:
-            out.append((n, row, "error", "customer_name is empty")); continue
+            out.append((n, row, "error", "customer_name is empty"))
+            continue
         if name in existing or name in seen_in_file:
-            out.append((n, row, "skip", "duplicate customer name")); continue
+            out.append((n, row, "skip", "duplicate customer name"))
+            continue
         wd = val(row, "weekday")
         if wd and (not wd.isdigit() or not 0 <= int(wd) <= 6):
-            out.append((n, row, "error", f"weekday must be 0-6, got {wd!r}")); continue
+            out.append((n, row, "error", f"weekday must be 0-6, got {wd!r}"))
+            continue
         freq = val(row, "frequency")
         if freq and freq not in ("weekly", "biweekly", "every4weeks", "none"):
-            out.append((n, row, "error", f"unknown frequency {freq!r}")); continue
+            out.append((n, row, "error", f"unknown frequency {freq!r}"))
+            continue
         shape = val(row, "pool_shape")
         if shape:
             try:
@@ -166,7 +164,8 @@ def _validate(session, payload, mapping):
                         float(val(row, "width_ft") or 0) or None,
                         float(val(row, "avg_depth_ft") or 0))
             except (ValueError, TypeError):
-                out.append((n, row, "error", "pool dimensions invalid")); continue
+                out.append((n, row, "error", "pool dimensions invalid"))
+                continue
         seen_in_file.add(name)
         out.append((n, row, "ok", ""))
     return out, idx
@@ -207,7 +206,7 @@ async def import_commit(request: Request, token: str,
         return row[i].strip() if i is not None and i < len(row) else ""
 
     created = skipped = 0
-    for n, row, status, why in results:
+    for _n, row, status, _why in results:
         if status == "skip":
             skipped += 1
             continue

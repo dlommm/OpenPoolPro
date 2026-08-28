@@ -9,8 +9,8 @@ from app import analytics, models, seeds
 def _fix(engine):
     """Two customers, one tech, visits across two ISO weeks + month boundary,
     chems with markup, one repair job with duration, business-tz edge job."""
-    from app.db import Base
     from app.auth_core import hash_password
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:

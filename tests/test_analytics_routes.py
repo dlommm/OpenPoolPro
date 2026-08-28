@@ -392,8 +392,9 @@ def test_apply_writes_rates_bulk_raise_audit_row(client, engine):
 
 
 def test_bulk_raise_bumps_spa_overrides_and_spa_tiers(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name="Dee")

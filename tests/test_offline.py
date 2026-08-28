@@ -3,9 +3,9 @@ JS, so these tests pin the server-visible contract only -- the sw.js text
 markers a client-side/manual check depends on, the static offline fallback
 being reachable anonymously, the base.html sync-badge/flush-queue wiring,
 and the queued-banner query param on the Today page."""
-import app.config as config
 from fastapi.testclient import TestClient
 
+import app.config as config
 from app.main import create_app
 
 

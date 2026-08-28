@@ -35,8 +35,8 @@ def test_render_full_invoice(engine, client):
 
 
 def test_render_empty_sections_no_crash(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:

@@ -45,6 +45,7 @@ def test_username_case_insensitive(engine, monkeypatch):
 
 def test_disabled_user_cut_off(engine, monkeypatch):
     from sqlalchemy import select
+
     from app import models
     c = make_client(engine, monkeypatch)
     login(c)

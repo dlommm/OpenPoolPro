@@ -8,7 +8,6 @@ what the per-day path did, and pin the query count so the N+1 cannot creep back.
 """
 from datetime import date, timedelta
 
-import pytest
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 

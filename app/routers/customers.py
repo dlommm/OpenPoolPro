@@ -8,7 +8,7 @@ from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session, selectinload
 
 from app import addresses, geocode, maps, models
-from app.db import get_session, get_or_404
+from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.main import templates
 from app.rates import effective_rate_cents
@@ -570,7 +570,8 @@ def water_history(request: Request, pid: int, session: Session = Depends(get_ses
     anything added there has to be written four times or it silently fails to
     appear for most users. A new page has no override and renders everywhere.
     """
-    from app import charts, water_history as wh
+    from app import charts
+    from app import water_history as wh
 
     p = get_or_404(session, models.Property, pid)
     series = wh.for_property(session, pid)

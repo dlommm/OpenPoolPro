@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import dosing, inventory, mailer, models, qbo, tax
-from app.db import get_session, get_or_404
+from app.db import get_or_404, get_session
 from app.main import templates
 from app.rates import effective_rate_cents
 
@@ -234,7 +234,8 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
         v.completed_at = ended
     elif v.completed_at is None:
         v.completed_at = models.utcnow()
-    # A visit completed without ever being opened keeps started_at=None (unknown), by design — duration stays None and analytics must tolerate it.
+    # A visit completed without ever being opened keeps started_at=None
+    # (unknown), by design — duration stays None and analytics must tolerate it.
     v.completed_by_id = request.state.user.id
     v.resolved = True
     if request.state.user.can("mark_cash"):

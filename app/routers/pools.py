@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models, sizes
-from app.db import get_session, get_or_404
+from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.main import templates
 from app.rates import gallons
@@ -136,7 +136,7 @@ def add_equipment(pool_id: int, kind: str = Form("pump"), brand: str = Form(""),
                   notes: str = Form(""),
                   session: Session = Depends(get_session),
                   user=Depends(require_perm("manage_customers"))):
-    pool = get_or_404(session, models.Pool, pool_id)
+    get_or_404(session, models.Pool, pool_id)  # 404 before attaching equipment
     session.add(models.Equipment(
         pool_id=pool_id, kind=kind, brand=brand, model=model, serial=serial,
         install_date=_parse_date_tolerant(install_date),

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -41,7 +41,7 @@ def test_dashboard_shows_equipment_warranty_added_via_form(client, engine):
     # the dashboard's warranty card through the real write path (not just
     # the warranty_alerts() function in isolation).
     from sqlalchemy import select
-    cid = _seed(client, engine)
+    _seed(client, engine)
     with Session(engine) as s:
         pid = s.scalars(select(models.Property)).one().id
     client.post(f"/properties/{pid}/pools/new", data={

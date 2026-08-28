@@ -40,8 +40,8 @@ def test_parse_empty():
     assert addresses.parse_address("") == {"street": "", "city": "", "state": "", "zip": ""}
 
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app import migrate, models
 from app.db import Base
 

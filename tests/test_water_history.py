@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import charts, mailer, models, water_history
+from app import charts, models, water_history
 from app.main import ALLOWED_THEMES
 
 

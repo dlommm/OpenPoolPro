@@ -56,6 +56,7 @@ def client(engine, monkeypatch, tmp_path):
 def tech_client(engine, client):
     """Factory: tech_client(name='sam', **flags) -> logged-in TestClient for that tech."""
     from sqlalchemy.orm import Session
+
     from app import models
     from app.auth_core import hash_password
     from app.main import create_app

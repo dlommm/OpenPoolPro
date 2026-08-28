@@ -31,8 +31,8 @@ def seed_month(engine):
 
 
 def test_month_rollup(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     seed_month(engine)
@@ -56,8 +56,8 @@ def test_money_page(client, engine):
 
 
 def test_job_month_boundary_uses_business_tz(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:
@@ -82,8 +82,8 @@ def test_money_page_tolerates_bad_ym_and_year_boundaries(client, engine):
 
 
 def test_month_rollup_tax(engine):
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:

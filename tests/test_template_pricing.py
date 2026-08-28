@@ -37,6 +37,7 @@ def test_largest_pool_gallons():
 def test_save_template_hours(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
@@ -56,6 +57,7 @@ def test_save_template_hours(client, engine):
 def test_save_template_hours_blank_deletes_row(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
@@ -73,6 +75,7 @@ def test_save_template_hours_blank_deletes_row(client, engine):
 
 def test_save_default_labor_rate(client, engine):
     from sqlalchemy.orm import Session
+
     from app import models
     r = client.post("/settings/labor_rate", data={"labor_rate_dollars": "225.00"},
                     follow_redirects=False)
@@ -83,6 +86,7 @@ def test_save_default_labor_rate(client, engine):
 
 def test_save_default_labor_rate_ignores_garbage(client, engine):
     from sqlalchemy.orm import Session
+
     from app import models
     # seed a known value first
     client.post("/settings/labor_rate", data={"labor_rate_dollars": "150"},
@@ -97,6 +101,7 @@ def test_save_default_labor_rate_ignores_garbage(client, engine):
 def test_save_template_est_hours(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     r = client.post("/settings/job_templates", data={
         "template_id": [""], "title": ["Filter clean"],
@@ -113,6 +118,7 @@ def test_save_template_est_hours(client, engine):
 def test_save_template_est_hours_defaults_to_one_on_blank(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     r = client.post("/settings/job_templates", data={
         "template_id": [""], "title": ["No hours given"],
@@ -128,6 +134,7 @@ def test_save_template_est_hours_defaults_to_one_on_blank(client, engine):
 
 def _seed_prop_with_pool(engine, gallons, name):
     from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         c = models.Customer(name=name)
@@ -140,6 +147,7 @@ def _seed_prop_with_pool(engine, gallons, name):
 
 def _template_with_small_price(engine):
     from sqlalchemy.orm import Session
+
     from app import models
     with Session(engine) as s:
         t = models.JobTemplate(title="Green clean", job_type="service", labor_cents=0)
@@ -151,6 +159,7 @@ def _template_with_small_price(engine):
 def test_create_job_auto_prices_from_template(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     # Pin the default labor rate so the expected labor_cents is deterministic.
     client.post("/settings/labor_rate", data={"labor_rate_dollars": "180.00"},
@@ -170,6 +179,7 @@ def test_create_job_auto_prices_from_template(client, engine):
 def test_create_job_blocked_when_unmatched(client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models, rates
     pid = _seed_prop_with_pool(engine, 40000, "TooBig")
     tid = _template_with_small_price(engine)

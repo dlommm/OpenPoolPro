@@ -6,8 +6,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import (chem_presets, config, mailer, models, qbo, rates, receivables,
-                 sizes, tax)
+from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax
 from app.db import get_or_404, get_session
 from app.deps import require_admin
 from app.main import ALLOWED_THEMES, DEFAULT_THEME, templates
@@ -152,7 +151,7 @@ def _contract_tab_ctx(session) -> dict:
     palette, and a preview rendered against the sample context."""
     from app import contract_tokens
     from app.contract_defaults import get_template
-    from app.routers.contract_template import sample_context, _preview_html
+    from app.routers.contract_template import _preview_html, sample_context
     tpl = get_template(session)
     return {
         "contract_template": tpl,

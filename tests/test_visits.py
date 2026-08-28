@@ -149,7 +149,6 @@ def test_negative_and_garbage_chem_lines_ignored(client, engine):
 
 
 def test_visit_autostamp_on_due_day_only(client, engine):
-    from datetime import timedelta
     pid, _ = seed(engine)
     past = "2026-07-13"
     client.get(f"/visit/{pid}/{past}")

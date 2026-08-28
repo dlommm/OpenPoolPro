@@ -265,6 +265,7 @@ def test_smtp_configured_reflects_host(monkeypatch):
 
 def test_save_smtp_settings_via_ui(client, engine):
     from sqlalchemy.orm import Session
+
     from app import mailer
     r = client.post("/settings/smtp", data={
         "smtp_host": "smtp.test.com", "smtp_port": "465", "smtp_user": "me@test.com",

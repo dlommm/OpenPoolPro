@@ -9,8 +9,8 @@ def test_chem_presets_valid_roles():
 
 
 def test_add_from_library_creates_chemical(client, engine):
-    from sqlalchemy.orm import Session
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
     r = client.post("/settings/chemicals/add-from-library",
                     data={"preset_name": "Cal-hypo shock"}, follow_redirects=False)
     assert r.status_code == 303

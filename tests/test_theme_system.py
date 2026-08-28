@@ -50,7 +50,7 @@ def test_missing_template_raises(tmp_path):
     try:
         try:
             env.get_template("nope.html")
-            assert False, "expected TemplateNotFound"
+            raise AssertionError("expected TemplateNotFound")
         except jinja2.TemplateNotFound:
             pass
     finally:

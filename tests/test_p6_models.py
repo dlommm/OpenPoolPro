@@ -153,7 +153,7 @@ def test_job_template_model_defaults(engine):
 def test_customer_tags_column_default(engine):
     Base.metadata.create_all(engine)
     with Session(engine) as s:
-        cust = _make_customer(s)
+        _make_customer(s)
         row = s.scalars(select(models.Customer)).one()
         assert row.tags == []
         row.tags = ["pool", "vip"]

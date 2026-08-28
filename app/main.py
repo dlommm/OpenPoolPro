@@ -2,7 +2,7 @@ import contextvars
 import logging
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -270,10 +270,9 @@ def create_app(engine=None) -> FastAPI:
             response.headers["Cache-Control"] = "no-cache"
         return response
 
+    from fastapi.exceptions import RequestValidationError
     from fastapi.responses import RedirectResponse as _RR
     from starlette.exceptions import HTTPException as StarletteHTTPException
-
-    from fastapi.exceptions import RequestValidationError
 
     @app.exception_handler(RequestValidationError)
     async def validation_exc(request, exc):
@@ -402,9 +401,9 @@ def create_app(engine=None) -> FastAPI:
     app.include_router(contract_template_router.router)
 
     if config.RUN_SCHEDULER:
+        from app import mailer
         from app.backup import backup_if_stale, start_scheduler
         from app.maintenance import run_nightly
-        from app import mailer
         # Every job goes through logged_job: they run unattended at 1am with
         # nobody watching, and an unwrapped failure leaves nothing behind but a
         # line in a logger no one reads.

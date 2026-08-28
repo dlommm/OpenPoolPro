@@ -89,6 +89,7 @@ def test_tech_can_still_work(client, tech_client):
 def test_money_hidden_from_rendered_html(client, tech_client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     _seed_customer(client)
     # Distinctive non-zero cost + markup: 137 cents cost would render as
@@ -120,6 +121,7 @@ def test_admin_sees_money_everywhere(client):
 def test_job_form_hides_and_preserves_labor(client, tech_client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     _seed_customer(client)
     client.post("/jobs/new", data={"property_id": "1", "title": "Priced job",
@@ -152,8 +154,8 @@ def test_gallons_preview_gated_and_money_scoped(client, tech_client):
 
 
 def test_property_form_rate_hidden_and_preserved(client, tech_client, engine):
-    from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     _seed_customer(client)
     client.post("/properties/1/edit", data={
@@ -175,6 +177,7 @@ def test_property_form_rate_hidden_and_preserved(client, tech_client, engine):
 def test_create_job_labor_zeroed_for_bare_tech(client, tech_client, engine):
     from sqlalchemy import select
     from sqlalchemy.orm import Session
+
     from app import models
     _seed_customer(client)
     t = tech_client(name="laborless")

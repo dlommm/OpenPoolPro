@@ -1,6 +1,6 @@
 import pytest
 
-from app.dosing import Dose, recommend
+from app.dosing import recommend
 
 
 class Chem:

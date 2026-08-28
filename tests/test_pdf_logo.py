@@ -8,8 +8,8 @@ tests render a doc with the logo and measure the actual drawn image transform.
 import io
 import re
 
-from pypdf import PdfReader
 from PIL import Image as PILImage
+from pypdf import PdfReader
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate

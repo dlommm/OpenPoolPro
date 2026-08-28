@@ -109,6 +109,7 @@ def test_rate_changes_table_created_fresh(engine):
 
 def test_migrate_adds_spa_columns(engine):
     from sqlalchemy import text
+
     from app import migrate
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE pools (id INTEGER PRIMARY KEY)"))
@@ -125,7 +126,6 @@ def test_migrate_adds_spa_columns(engine):
 
 
 def test_migrate_dedupes_duplicate_visits_and_enforces_uniqueness(engine):
-    from datetime import date
     from sqlalchemy.exc import IntegrityError
 
     # A pre-fix DB with two visits on the same (property_id, date): an empty

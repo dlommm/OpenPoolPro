@@ -15,8 +15,8 @@ def _seed_cash_and_noncash(engine):
     per-job-line path in export_csv -- and a fourth customer with a mix
     of cash and non-cash visits, so the CSV labor line's visit count can
     be checked against the non-cash-only count."""
-    from app.db import Base
     from app import seeds
+    from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
     with Session(engine) as s:

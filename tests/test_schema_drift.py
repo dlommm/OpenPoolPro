@@ -17,8 +17,10 @@ import pathlib
 import pytest
 from sqlalchemy import inspect
 
-from app import migrate
-from app import models  # noqa: F401  -- registers every table on Base.metadata
+from app import (
+    migrate,
+    models,  # noqa: F401  -- registers every table on Base.metadata
+)
 from app.db import Base, make_engine
 
 SNAPSHOT_PATH = pathlib.Path(__file__).parent / "schema_snapshot.json"

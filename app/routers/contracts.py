@@ -14,7 +14,6 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
-
 from sqlalchemy.orm import Session
 
 from app import config, contract_pdf, mailer, models, rates, tax
