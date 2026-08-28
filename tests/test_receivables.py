@@ -154,13 +154,16 @@ def test_by_customer_rolls_up_and_buckets(engine):
         c = models.Customer(name="Acme", active=True)
         s.add(c)
         s.flush()
-        # current, 45 days late, 120 days late
+        # current, 45 days late, 120 days late — one billing period each
+        # (uq_invoices_customer_period_live allows only one live invoice per
+        # customer per period; the buckets only care about due_date anyway).
         for n, (total, due) in enumerate([
                 (10000, date(2026, 9, 20)),
                 (20000, date(2026, 7, 18)),
                 (30000, date(2026, 5, 4))]):
             s.add(models.Invoice(number=f"INV-2026-000{n}", customer_id=c.id,
-                                 period_year=2026, period_month=6, total_cents=total,
+                                 period_year=2026, period_month=due.month,
+                                 total_cents=total,
                                  tax_cents=0, status="sent", due_date=due,
                                  pdf_filename="x.pdf"))
         s.commit()

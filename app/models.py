@@ -1,7 +1,7 @@
 from builtins import property as builtin_property
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, select
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, select, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -477,6 +477,14 @@ class RateChange(Base):
 
 class Invoice(Base):
     __tablename__ = "invoices"
+    # At most one LIVE invoice per customer per billing period. generate_month's
+    # existing-invoice check races when two admins generate concurrently; this
+    # index turns the loser's commit into an IntegrityError (caught and counted
+    # as skipped) instead of a second bill for the same month. Void invoices are
+    # excluded so re-generating after a void still works.
+    __table_args__ = (Index("uq_invoices_customer_period_live",
+                            "customer_id", "period_year", "period_month",
+                            unique=True, sqlite_where=text("status != 'void'")),)
     id: Mapped[int] = mapped_column(primary_key=True)
     number: Mapped[str] = mapped_column(String(20), unique=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))

@@ -40,6 +40,50 @@ def _dedupe_and_unique_visits(conn, guard) -> None:
         conn.execute(text(
             "CREATE UNIQUE INDEX uq_visits_property_date ON visits (property_id, date)"))
 
+def _dedupe_and_unique_invoice_period(conn, guard) -> None:
+    """A customer has at most one live (non-void) invoice per billing period.
+    generate_month's exists-check and its commit are separated by PDF
+    rendering, so two concurrent generates could both pass the check and
+    double-bill a customer. Void any duplicates already created by that race —
+    keeping the row the business actually used (has payments > was sent >
+    oldest id); voiding (not deleting) preserves the number, PDF and any
+    attached payments for audit — then add a partial UNIQUE index so the
+    invariant is enforced from here on (generate_month catches the
+    IntegrityError and counts the loser as skipped)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(invoices)"))}
+    if not {"id", "customer_id", "period_year", "period_month", "status"} <= cols:
+        return
+    # payments always exists alongside invoices after create_all, but a bare
+    # migrate.run on a legacy dump may predate it — rank without it then.
+    has_payments = bool({r[1] for r in conn.execute(text("PRAGMA table_info(payments)"))})
+    paid_expr = ("COALESCE((SELECT SUM(p.amount_cents) FROM payments p "
+                 "WHERE p.invoice_id = i.id), 0)" if has_payments else "0")
+    groups = conn.execute(text(
+        "SELECT customer_id, period_year, period_month FROM invoices "
+        "WHERE status != 'void' "
+        "GROUP BY customer_id, period_year, period_month HAVING COUNT(*) > 1")).all()
+    for customer_id, year, month in groups:
+        rows = conn.execute(text(
+            f"SELECT i.id, i.status, {paid_expr} "
+            "FROM invoices i WHERE i.customer_id=:c AND i.period_year=:y "
+            "AND i.period_month=:m AND i.status != 'void'"),
+            {"c": customer_id, "y": year, "m": month}).all()
+
+        def rank(r):  # higher = keep
+            return (1 if r[2] > 0 else 0, 1 if r[1] == "sent" else 0, -r[0])
+
+        losers = [r[0] for r in sorted(rows, key=rank, reverse=True)[1:]]
+        if losers:
+            guard()
+            conn.execute(text("UPDATE invoices SET status='void' WHERE id IN :ids")
+                         .bindparams(bindparam("ids", expanding=True)), {"ids": losers})
+    if not _index_exists(conn, "invoices", "uq_invoices_customer_period_live"):
+        guard()
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_invoices_customer_period_live "
+            "ON invoices (customer_id, period_year, period_month) WHERE status != 'void'"))
+
+
 # Indexes on hot, frequently-filtered columns. `Base.metadata.create_all` only
 # creates these on brand-new tables, so an already-provisioned database needs
 # them added explicitly. CREATE INDEX IF NOT EXISTS is idempotent and cheap.
@@ -194,3 +238,4 @@ def run(engine, before_change=None) -> None:
                 conn.execute(text(f"CREATE INDEX {name} ON {table} ({columns})"))
 
         _dedupe_and_unique_visits(conn, guard)
+        _dedupe_and_unique_invoice_period(conn, guard)

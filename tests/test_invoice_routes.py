@@ -323,6 +323,47 @@ def test_generate_month_skips_row_on_integrity_error(client, engine, monkeypatch
         assert len(s.scalars(select(models.Invoice)).all()) == 1
 
 
+def test_generate_month_cannot_double_bill_a_period(client, engine, monkeypatch):
+    """The OTHER concurrent-generate race: both callers pass the
+    existing-invoice check before either commits, then allocate DIFFERENT
+    numbers — so the Invoice.number unique constraint never fires. The
+    uq_invoices_customer_period_live partial unique index must reject the
+    loser's live invoice for the same (customer, period)."""
+    from app import invoice_pdf
+
+    _fix(engine)
+    real_render = invoice_pdf.render_invoice
+    raced = []
+
+    def racing_render(data):
+        # Simulate the rival admin's generate committing in the window between
+        # this caller's existing-invoice check and its own commit.
+        if not raced:
+            raced.append(data.customer_name)
+            with Session(engine) as s2:
+                cust = s2.scalars(select(models.Customer).where(
+                    models.Customer.name == data.customer_name)).one()
+                s2.add(models.Invoice(number="INV-2026-9999", customer_id=cust.id,
+                                      period_year=2026, period_month=7,
+                                      total_cents=data.total_cents, status="draft",
+                                      pdf_filename="INV-2026-9999.pdf"))
+                s2.commit()
+        return real_render(data)
+
+    monkeypatch.setattr(invoice_pdf, "render_invoice", racing_render)
+
+    with Session(engine) as s:
+        created, skipped = invoicing.generate_month(s, 2026, 7, 1)
+    # The raced customer is counted as skipped, the other proceeds normally.
+    assert (created, skipped) == (1, 1)
+    with Session(engine) as s:
+        for cust in s.scalars(select(models.Customer)).all():
+            live = s.scalars(select(models.Invoice).where(
+                models.Invoice.customer_id == cust.id,
+                models.Invoice.status != "void")).all()
+            assert len(live) <= 1, f"{cust.name} double-billed"
+
+
 def test_register_tolerant_bad_ym_and_status(client, engine):
     _fix(engine)
     r = client.get("/invoices?ym=garbage&status=bogus")

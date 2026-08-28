@@ -162,6 +162,57 @@ def test_migrate_dedupes_duplicate_visits_and_enforces_uniqueness(engine):
         assert raised
 
 
+def test_migrate_voids_duplicate_live_invoices_and_enforces_uniqueness(engine):
+    from sqlalchemy.exc import IntegrityError
+
+    # A pre-fix DB where the concurrent-generate race double-billed customer 5
+    # for July: two live invoices, the second of which the business actually
+    # sent and took a payment on. Customer 6 has a legitimate void+regenerate
+    # pair that must NOT be touched.
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE invoices (id INTEGER PRIMARY KEY, number VARCHAR(20) UNIQUE, "
+            "customer_id INTEGER, period_year INTEGER, period_month INTEGER, "
+            "total_cents INTEGER, status VARCHAR(8), pdf_filename VARCHAR(200))"))
+        conn.execute(text(
+            "CREATE TABLE payments (id INTEGER PRIMARY KEY, invoice_id INTEGER, "
+            "amount_cents INTEGER)"))
+        conn.execute(text("INSERT INTO invoices VALUES "
+                          "(1, 'INV-2026-0001', 5, 2026, 7, 5000, 'draft', 'a.pdf'), "
+                          "(2, 'INV-2026-0002', 5, 2026, 7, 5000, 'sent', 'b.pdf'), "
+                          "(3, 'INV-2026-0003', 6, 2026, 7, 100, 'void', 'c.pdf'), "
+                          "(4, 'INV-2026-0004', 6, 2026, 7, 100, 'draft', 'd.pdf')"))
+        conn.execute(text("INSERT INTO payments VALUES (1, 2, 5000)"))
+
+    migrate.run(engine)
+    migrate.run(engine)  # idempotent
+
+    with engine.begin() as conn:
+        status = dict(conn.execute(text("SELECT id, status FROM invoices")).all())
+        # Kept the paid/sent duplicate, voided (not deleted) the stray draft;
+        # customer 6's pair untouched.
+        assert status == {1: "void", 2: "sent", 3: "void", 4: "draft"}
+        # The payment stayed attached to the surviving invoice.
+        assert conn.execute(text("SELECT invoice_id FROM payments")).scalar() == 2
+        # A second live invoice for an already-billed period is now rejected...
+        try:
+            conn.execute(text(
+                "INSERT INTO invoices (number, customer_id, period_year, period_month, "
+                "total_cents, status, pdf_filename) "
+                "VALUES ('INV-2026-0005', 5, 2026, 7, 1, 'draft', 'e.pdf')"))
+            raised = False
+        except IntegrityError:
+            raised = True
+        assert raised
+    # ...but void rows stay outside the index, so void-then-regenerate still works.
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE invoices SET status='void' WHERE id=2"))
+        conn.execute(text(
+            "INSERT INTO invoices (number, customer_id, period_year, period_month, "
+            "total_cents, status, pdf_filename) "
+            "VALUES ('INV-2026-0006', 5, 2026, 7, 1, 'draft', 'f.pdf')"))
+
+
 def test_before_change_fires_once_and_only_when_migrating(engine):
     # A legacy DB with pending column adds: the hook fires exactly once, even
     # though many ALTERs run. A second migrate.run finds nothing to do and

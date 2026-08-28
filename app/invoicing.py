@@ -188,9 +188,13 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
     crash mid-write never leaves a truncated file at the final path.
 
     A concurrent generate call (e.g. two admins clicking "Generate" at
-    once) can race on `next_number()` and collide on the Invoice.number
-    unique constraint; that per-row commit failure is caught, rolled back,
-    and counted as skipped rather than aborting the whole batch.
+    once) can race in two ways: colliding on the Invoice.number unique
+    constraint via `next_number()`, or both passing the existing-invoice
+    check before either commits (which would double-bill the customer —
+    with DIFFERENT numbers, so the number constraint alone can't catch it;
+    the `uq_invoices_customer_period_live` partial unique index does).
+    Either per-row commit failure is caught, rolled back, and counted as
+    skipped rather than aborting the whole batch.
 
     Returns (created, skipped).
     """
@@ -230,7 +234,8 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
         try:
             session.commit()
         except IntegrityError:
-            # Lost the concurrent next_number() race on this filename. Commit
+            # Lost a concurrent-generate race: either next_number() collided
+            # or the other run already committed this (customer, period). Commit
             # BEFORE writing the PDF (unlike before) so the loser never
             # overwrites the winner's file at the shared INV-YYYY-NNNN.pdf path
             # — invoice_regenerate writes-after-commit for this same reason.
