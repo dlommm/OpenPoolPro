@@ -5,3 +5,6 @@ data/
 app/static/app.css
 .env
 .DS_Store
+
+# pytest-cov local artifact
+.coverage
