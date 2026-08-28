@@ -16,8 +16,13 @@ WORKDIR /srv
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install from the compiled lock, not requirements.txt: the loose floor pins
+# would let a `docker build --pull` at release time resolve NEWER package
+# versions than the ones CI just tested, and make a :vX.Y.Z image
+# irreproducible. requirements.txt stays the human-edited input; regenerate
+# with `uv pip compile --python-version 3.12 requirements.txt -o requirements.lock`.
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 COPY app ./app
 COPY scripts ./scripts
 COPY docker-entrypoint.sh /docker-entrypoint.sh

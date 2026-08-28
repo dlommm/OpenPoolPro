@@ -5,8 +5,18 @@ self-hosted GitLab at `github.com`. Pipeline lives in `.gitlab-ci.yml`.
 
 ## What happens on a push to `main`
 
-1. **test** — runs the full `pytest` suite inside a throwaway `python:3.12-slim`
-   container. Must pass before release runs.
+1. **test stage** — four parallel jobs, all of which must pass before release
+   (except `audit`, which warns):
+   - **lint** — `ruff check app/ tests/ scripts/` (config in `pyproject.toml`).
+   - **audit** — `pip-audit` against `requirements.lock`; `allow_failure: true`
+     so a brand-new upstream CVE turns the pipeline yellow without blocking an
+     unrelated urgent fix.
+   - **test** — the full `pytest` suite (`-n auto`, with coverage; floor 90%)
+     inside a throwaway `python:3.12-slim` container, installed from
+     `requirements-dev.lock` so CI tests exactly the pins the image ships.
+   - **build-smoke** — builds the Docker image and runs it until its baked
+     HEALTHCHECK reports healthy, so a broken Dockerfile/entrypoint fails the
+     MR instead of the release.
 2. **release** —
    - Computes the next version from **conventional commits** since the last tag
      (`scripts/next-version.sh`).
@@ -15,7 +25,18 @@ self-hosted GitLab at `github.com`. Pipeline lives in `.gitlab-ci.yml`.
    - **On a version bump only**: also pushes `:vX.Y.Z`, creates and pushes the git
      tag `vX.Y.Z`, and publishes a GitLab **Release**.
 
-Merge requests run **test** only.
+Merge requests run the **test stage** only.
+
+## Dependency locks
+
+`requirements.txt` / `requirements-dev.txt` are the human-edited inputs (loose
+floor pins); `requirements.lock` / `requirements-dev.lock` are compiled pins
+that CI installs and the Dockerfile ships — so the released image can never
+contain package versions CI didn't test. After editing either input file,
+regenerate and commit both locks:
+
+    uv pip compile --python-version 3.12 requirements.txt -o requirements.lock
+    uv pip compile --python-version 3.12 requirements-dev.txt -o requirements-dev.lock
 
 ## Versioning (conventional commits)
 

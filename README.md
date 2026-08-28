@@ -32,10 +32,11 @@ folder.
 ## Develop
 
     python3.12 -m venv .venv && source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements-dev.txt
     python scripts/build_css.py
     APP_PASSWORD=dev COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
-    pytest
+    ruff check app/ tests/ scripts/   # same gate CI runs
+    pytest -n auto
 
 ## Security
 

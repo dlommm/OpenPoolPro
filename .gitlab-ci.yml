@@ -15,8 +15,12 @@ stages:
   - test
   - release
 
-test:
-  stage: test
+# Shared bits for the python jobs: the suite assumes the runner's clock is in
+# the app's default business timezone (APP_TZ=America/New_York): several
+# Today/route-sheet tests seed "today" via date.today() and one test asserts
+# the ET->UTC evening rollover. python:3.12-slim ships no tz database, so
+# date.today() would be UTC and those tests break on the UTC/ET date boundary.
+.python-job:
   image: python:3.12-slim
   variables:
     TZ: "America/New_York"
@@ -25,23 +29,69 @@ test:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
   before_script:
-    # The suite assumes the runner's clock is in the app's default business
-    # timezone (APP_TZ=America/New_York): several Today/route-sheet tests seed
-    # "today" via date.today() and one test asserts the ET->UTC evening
-    # rollover. python:3.12-slim ships no tz database, so date.today() would be
-    # UTC and those tests break on the UTC/ET date boundary. Install tzdata and
-    # anchor the clock to New York so date.today() matches business_today().
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends tzdata
     - ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
   cache:
     key:
       files:
-        - requirements-dev.txt
+        - requirements-dev.lock
     paths:
       - .cache/pip
+
+lint:
+  extends: .python-job
   script:
-    - pip install -r requirements-dev.txt
-    - python -m pytest -q
+    - pip install -q ruff
+    - ruff check app/ tests/ scripts/
+
+# A new upstream CVE must be VISIBLE (yellow pipeline) without blocking an
+# unrelated urgent fix from merging — pip-audit failures warn, not gate.
+audit:
+  extends: .python-job
+  allow_failure: true
+  script:
+    - pip install -q pip-audit
+    - pip-audit --no-deps -r requirements.lock
+
+test:
+  extends: .python-job
+  script:
+    # The locks are what the Dockerfile installs — test exactly those pins.
+    - pip install -r requirements-dev.lock
+    - python -m pytest -q -n auto --cov=app --cov-report=term --cov-fail-under=90
+  coverage: '/^TOTAL.+?(\d+%)$/'
+
+# The image used to be built for the first time AFTER merge, in the release
+# job — a broken Dockerfile/entrypoint merged green and failed (or worse,
+# shipped) later. Build it per-MR and prove the container actually boots to a
+# healthy /health (the baked HEALTHCHECK curls the DB-backed endpoint).
+build-smoke:
+  stage: test
+  image: docker:27-cli
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+  variables:
+    SMOKE: "openpoolpro-smoke-$CI_COMMIT_SHORT_SHA"
+  script:
+    - docker build --build-arg APP_VERSION=ci-smoke -t "$SMOKE" .
+    - docker run -d --name "$SMOKE"
+      -e APP_PASSWORD=ci-smoke-only-not-a-real-password
+      -e SECRET_KEY=cismoke0000000000000000000000000000000000000000000000000000000000
+      "$SMOKE"
+    - |
+      # HEALTHCHECK: 20s start-period, 30s interval — allow ~2 min total.
+      for i in $(seq 1 24); do
+        status="$(docker inspect --format '{{.State.Health.Status}}' "$SMOKE")"
+        echo "health: $status"
+        [ "$status" = "healthy" ] && exit 0
+        [ "$status" = "unhealthy" ] && break
+        sleep 5
+      done
+      echo "--- container logs ---"; docker logs "$SMOKE"; exit 1
+  after_script:
+    - docker rm -f "$SMOKE" >/dev/null 2>&1 || true
+    - docker rmi "$SMOKE" >/dev/null 2>&1 || true
 
 release:
   stage: release
