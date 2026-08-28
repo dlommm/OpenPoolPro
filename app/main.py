@@ -273,6 +273,25 @@ def create_app(engine=None) -> FastAPI:
     from fastapi.responses import RedirectResponse as _RR
     from starlette.exceptions import HTTPException as StarletteHTTPException
 
+    from fastapi.exceptions import RequestValidationError
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exc(request, exc):
+        # A browser form post that trips FastAPI validation (e.g. a required
+        # Form(...) field left blank with client-side `required` stripped or
+        # unsupported) used to get the default raw-JSON 422 — unreadable, and
+        # it looked like the app ate everything typed. Browsers get a readable
+        # page with a Go-back button (bfcache usually restores the form);
+        # htmx and non-HTML callers keep the structured default.
+        accept = request.headers.get("accept", "")
+        if request.headers.get("hx-request") or "text/html" not in accept:
+            from fastapi.exception_handlers import request_validation_exception_handler
+            return await request_validation_exception_handler(request, exc)
+        missing = sorted({str(e["loc"][-1]) for e in exc.errors()
+                          if e.get("type") == "missing" and e.get("loc")})
+        return templates.TemplateResponse(request, "422.html",
+                                          {"missing": missing}, status_code=422)
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exc(request, exc):
         if exc.status_code == 401:

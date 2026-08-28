@@ -130,7 +130,7 @@
   {% for r in rules %}
   <div class="{{ 'opacity-50' if not r.active }}">
     <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/edit" class="card space-y-2 p-3 text-sm">
-      <input name="title" value="{{ r.title }}" class="field">
+      <input name="title" value="{{ r.title }}" required class="field">
       <textarea name="description" class="field min-h-16 py-2">{{ r.description }}</textarea>
       <div class="grid grid-cols-2 gap-2">
         <select name="job_type" class="field">

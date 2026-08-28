@@ -150,6 +150,39 @@
     return true;
   }
 
+  // ---------- double-submit guard ----------
+  // A tech double-tapping "Complete visit" on flaky mobile fires the POST
+  // twice (and, offline, queues it twice); an admin double-clicking "Record
+  // payment" pays twice. Disable the form's submit buttons AFTER the submit
+  // event finishes (setTimeout 0, so a button's name=value pair still
+  // serializes into the POST), then re-enable on bfcache restore (pageshow)
+  // or after 10s so a hung network never strands a usable form. htmx-driven
+  // forms manage their own request lifecycle and are left alone.
+  function releaseSubmitGuards() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll("[data-submit-guard]"), function (b) {
+        b.disabled = false;
+        b.removeAttribute("data-submit-guard");
+        b.removeAttribute("aria-busy");
+      });
+  }
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.querySelectorAll || e.defaultPrevented) return;
+    if (form.hasAttribute("hx-post") || form.hasAttribute("hx-get")) return;
+    var buttons = form.querySelectorAll(
+      'button[type="submit"], button:not([type]), input[type="submit"]');
+    setTimeout(function () {
+      Array.prototype.forEach.call(buttons, function (b) {
+        b.disabled = true;
+        b.setAttribute("data-submit-guard", "1");
+        b.setAttribute("aria-busy", "true");
+      });
+      setTimeout(releaseSubmitGuards, 10000);
+    }, 0);
+  });
+  window.addEventListener("pageshow", releaseSubmitGuards);
+
   if (!("serviceWorker" in navigator)) return;
 
   // ---------- service worker channel ----------

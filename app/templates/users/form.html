@@ -34,7 +34,8 @@
 </form>
 {% if u %}
 <form method="post" action="/users/{{ u.id }}/password" class="mt-4 flex gap-2">
-  <input type="password" name="password" placeholder="New password (8+)" class="field flex-1">
+  <input type="password" name="password" placeholder="New password (8+)" required
+         aria-label="New password (8+ characters)" class="field flex-1">
   <button class="btn-secondary px-4">Reset</button>
 </form>
 <h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Time off</h2>

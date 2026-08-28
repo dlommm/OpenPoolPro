@@ -6,7 +6,8 @@
   {% for name, label, type in [("name","Name","text"),("qb_display_name","QuickBooks name (blank = same)","text"),
      ("phone","Phone","tel"),("email","Email","email")] %}
   <label class="block"><span class="field-label">{{ label }}</span>
-    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}" class="field"></label>
+    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}"
+           {{ "required" if name == "name" }} class="field"></label>
   {% endfor %}
   <label class="block"><span class="field-label">Notes</span>
     <textarea name="notes" class="field min-h-24 py-2">{{ c.notes if c else "" }}</textarea></label>
