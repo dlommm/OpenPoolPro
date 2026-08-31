@@ -28,6 +28,7 @@
   {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
     ("/customers", "Customers", "customers"), ("/jobs", "Service / Jobs", "jobs")] %}
   {% if u is none or u.can("manage_customers") %}{% set items = items + [("/quotes", "Quotes", "money")] %}{% endif %}
+  {% if u is none or u.can("manage_customers") %}{% set items = items + [("/contracts", "Contracts", "document")] %}{% endif %}
   {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/inventory", "Inventory", "inventory")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}

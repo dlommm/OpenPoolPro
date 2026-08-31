@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}New contract{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Contracts", "New contract") }}
+
+<p class="mb-3 text-sm text-mist">Pick a pool — the draft is created instantly with rates
+  prefilled from your size tiers, ready to tweak and approve.</p>
+
+<div class="mb-4 flex flex-wrap items-center gap-2">
+  <form method="get" action="/contracts/new" class="flex flex-wrap items-center gap-2">
+    <input type="hidden" name="season" value="{{ season }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search customer or address…"
+           class="field min-w-[14rem] text-sm" autofocus>
+    <button class="btn-secondary">Search</button>
+  </form>
+  <div class="ml-auto flex gap-1.5">
+    {% for y in seasons %}
+    <a href="/contracts/new?season={{ y }}{{ '&q=' ~ (q | urlencode) if q }}"
+       class="tag {{ 'bg-shallow text-pool' if y == season }}">{{ y }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if pools %}
+<div class="card divide-y divide-seam p-0">
+  {% for pool in pools %}
+  <div class="flex flex-wrap items-center gap-2 p-3">
+    <div class="min-w-0 flex-1">
+      <p class="truncate font-medium">{{ pool.property.customer.name }}</p>
+      <p class="truncate font-data text-sm text-mist">{{ pool.property.address or pool.property.label }}
+        · {{ pool.label }} · {{ "{:,}".format(pool.gallons) }} gal</p>
+    </div>
+    {% if pool.id in existing %}
+    <a href="/contracts/{{ existing[pool.id] }}" class="btn-secondary">View {{ season }} contract</a>
+    {% else %}
+    <form method="post" action="/pools/{{ pool.id }}/contracts/new">
+      <input type="hidden" name="season_year" value="{{ season }}">
+      <button class="btn-primary flex items-center gap-1">{{ ui.icon("plus", "h-4 w-4") }}Create draft</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% if truncated %}
+<p class="mt-2 text-sm text-mist">Showing the first 100 pools — narrow it down with search.</p>
+{% endif %}
+{% else %}
+<div class="card p-6 text-center text-mist">
+  No active pools{{ " matching “" ~ q ~ "”" if q }}.
+</div>
+{% endif %}
+{% endblock %}

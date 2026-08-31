@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Renew season{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Contracts", "Renew " ~ from_season ~ " → " ~ to_season) }}
+
+<p class="mb-3 max-w-prose text-sm text-mist">Every <b>signed</b> {{ from_season }} contract whose pool
+  doesn't already have a live {{ to_season }} contract gets a new draft, priced from your current
+  rate tiers (a pool with no matching tier keeps its old prices). Nothing is sent —
+  you approve and send each draft as usual.</p>
+
+<form method="get" action="/contracts/renew" class="mb-4 flex flex-wrap items-end gap-2">
+  <label class="block"><span class="field-label">From season</span>
+    <input inputmode="numeric" name="from_season" value="{{ from_season }}" class="field font-data w-24"></label>
+  <label class="block"><span class="field-label">To season</span>
+    <input inputmode="numeric" name="to_season" value="{{ to_season }}" class="field font-data w-24"></label>
+  <button class="btn-secondary">Preview</button>
+</form>
+
+{% if plan %}
+<div class="card mb-4 overflow-x-auto p-0">
+  <table class="w-full min-w-[30rem] text-sm">
+    <thead>
+      <tr class="border-b border-seam text-left text-mist">
+        <th class="p-3 font-medium">Customer</th>
+        <th class="p-3 font-medium">Pool</th>
+        {% if show_money %}
+        <th class="p-3 text-right font-medium">{{ from_season }} value</th>
+        <th class="p-3 text-right font-medium">{{ to_season }} value</th>
+        <th class="p-3 text-right font-medium">Change</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in plan %}
+      <tr class="border-b border-seam last:border-0">
+        <td class="p-3 font-medium">{{ item.pool.property.customer.name }}</td>
+        <td class="p-3 text-mist">{{ item.pool.property.address or item.pool.property.label }} · {{ item.pool.label }}</td>
+        {% if show_money %}
+        <td class="money p-3 text-right">{{ item.old_value | dollars }}</td>
+        <td class="money p-3 text-right">{{ item.new_value | dollars }}</td>
+        <td class="money p-3 text-right {{ 'text-safety' if item.delta < 0 }}">
+          {{ "+" if item.delta > 0 else ("−" if item.delta < 0) }}{{ (item.delta | abs) | dollars }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<form method="post" action="/contracts/renew" class="flex flex-wrap items-center gap-3"
+      onsubmit="return confirm('Create {{ plan | length }} draft contract{{ 's' if plan | length != 1 }} for {{ to_season }}?')">
+  <input type="hidden" name="from_season" value="{{ from_season }}">
+  <input type="hidden" name="to_season" value="{{ to_season }}">
+  <button class="btn-primary">Create {{ plan | length }} draft{{ "s" if plan | length != 1 }}</button>
+  {% if skipped %}<span class="text-sm text-mist">{{ skipped }} skipped (already renewed or inactive).</span>{% endif %}
+</form>
+{% else %}
+<div class="card p-6 text-center text-mist">
+  Nothing to renew: no signed {{ from_season }} contracts without a {{ to_season }} contract.
+  {% if skipped %}<span class="block text-sm">({{ skipped }} already renewed or inactive.)</span>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

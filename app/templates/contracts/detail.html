@@ -2,11 +2,13 @@
 {% block title %}Contract{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+<a href="/contracts?season={{ contract.season_year }}" class="mb-1 inline-flex min-h-11 items-center gap-1 text-sm text-pool">← All contracts</a>
 {{ ui.page_header(customer.name, pool.label ~ " — " ~ contract.season_year ~ " Service Agreement") }}
 
 <p class="mb-4 flex flex-wrap items-center gap-1.5 font-data text-sm text-mist">
   <span class="tag {{ 'tag-safety' if contract.status == 'void' }}">{{ contract.status }}</span>
   <span>{{ prop.address }}</span>
+  {% if show_money %}<span>· <span class="money">{{ value | dollars }}</span> season value</span>{% endif %}
 </p>
 
 {% if send_error %}
@@ -84,6 +86,13 @@
     <a href="/contracts/{{ contract.id }}/signed" class="btn-secondary">View signed PDF</a>
     {% endif %}
   </div>
+  {% if signed_exists or pdf_exists %}
+  <details class="mt-3">
+    <summary class="cursor-pointer text-sm text-pool">Preview {{ "signed" if signed_exists else "contract" }} PDF</summary>
+    <iframe src="/contracts/{{ contract.id }}/{{ 'signed' if signed_exists else 'pdf' }}"
+            title="Contract PDF preview" class="mt-2 h-[70vh] w-full rounded-lg border border-seam"></iframe>
+  </details>
+  {% endif %}
 
   <div class="mt-3 flex flex-wrap items-center gap-2">
     {% if contract.status == "draft" %}
@@ -95,6 +104,12 @@
     {% if contract.status == "approved" %}
     <form method="post" action="/contracts/{{ contract.id }}/send">
       <button class="btn-primary">Send to customer</button>
+    </form>
+    {% endif %}
+
+    {% if contract.status == "sent" %}
+    <form method="post" action="/contracts/{{ contract.id }}/send">
+      <button class="btn-secondary">Resend to customer</button>
     </form>
     {% endif %}
 
@@ -113,5 +128,17 @@
     </form>
     {% endif %}
   </div>
+</div>
+
+<div class="card mt-4 p-4">
+  <h2 class="set-h">History</h2>
+  <ol class="space-y-1.5 text-sm">
+    {% for label, at, who in timeline %}
+    <li class="flex flex-wrap items-baseline gap-x-2">
+      <span class="font-medium">{{ label }}</span>
+      <span class="font-data text-mist">{{ at | localdt if at else "—" }}{{ " · " ~ who if who }}</span>
+    </li>
+    {% endfor %}
+  </ol>
 </div>
 {% endblock %}
