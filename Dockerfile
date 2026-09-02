@@ -48,4 +48,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # it to match your deployment, and keep port 8000 unpublished (or bound to 127.0.0.1)
 # so nothing can reach the app without traversing the proxy.
 ENV FORWARDED_ALLOW_IPS=172.17.0.1
-CMD ["sh", "-c", "exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"$FORWARDED_ALLOW_IPS\""]
+# --no-access-log: the e-sign flow puts a bearer token in the URL path, and
+# uvicorn's default access log would write every live signing link to stdout.
+# The app's own observability middleware logs failures/slow requests with that
+# path segment redacted, which is the log that actually gets read.
+CMD ["sh", "-c", "exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --no-access-log --proxy-headers --forwarded-allow-ips \"$FORWARDED_ALLOW_IPS\""]

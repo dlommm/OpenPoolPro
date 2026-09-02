@@ -80,6 +80,13 @@ self.addEventListener("fetch", e => {
     return;
   }
 
+  // Public e-sign pages (and their PDF sub-frame) must never enter
+  // PAGES_CACHE: the visitor is a CUSTOMER on their own (possibly shared)
+  // device, there is no logout/login event to ever clear the cache for them,
+  // and the cached bytes would include their contract PDF and address.
+  // Straight network pass-through, no offline fallback.
+  if (url.pathname.startsWith("/sign/")) return;
+
   if (req.method === "GET" && req.mode === "navigate") {
     e.respondWith(handleNavigate(req));
     return;

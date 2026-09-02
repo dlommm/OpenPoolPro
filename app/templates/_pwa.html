@@ -30,6 +30,10 @@
     setTimeout(function () { location.reload(); }, 200);
   }
 
+  // Never install the PWA machinery on a CUSTOMER's browser: /sign pages are
+  // public one-shot visits, not the operator's app.
+  if (location.pathname.indexOf("/sign/") === 0) return;
+
   // Re-registering is idempotent; use it to drive update checks.
   navigator.serviceWorker.register("/sw.js").then(function (r) {
     reg = r;

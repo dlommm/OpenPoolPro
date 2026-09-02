@@ -63,6 +63,20 @@ def _user_id(request):
     return getattr(user, "id", None)
 
 
+def redact_path(path: str) -> str:
+    """Strip the bearer credential from /sign paths before they hit a log.
+
+    The e-sign token lives in the URL path — the one secret this module's
+    method-and-path-only discipline doesn't automatically cover. Anyone with
+    log access could otherwise lift a live signing link. (uvicorn's access
+    log is disabled in the Dockerfile for the same reason.)"""
+    if path.startswith("/sign/"):
+        parts = path.split("/")
+        parts[2] = "[token]"
+        return "/".join(parts)
+    return path
+
+
 def request_logging_middleware(slow_seconds: float | None = None):
     """Build the http middleware that makes request failures visible.
 
@@ -74,6 +88,7 @@ def request_logging_middleware(slow_seconds: float | None = None):
 
     async def observe_requests(request, call_next):
         started = time.perf_counter()
+        path = redact_path(request.url.path)
         try:
             response = await call_next(request)
         except Exception:
@@ -81,20 +96,20 @@ def request_logging_middleware(slow_seconds: float | None = None):
             # the exact same 500, we only leave a copy of the traceback behind.
             request_log.exception(
                 "unhandled exception on %s %s (user=%s) after %.0fms",
-                request.method, request.url.path, _user_id(request),
+                request.method, path, _user_id(request),
                 (time.perf_counter() - started) * 1000)
             raise
         elapsed = time.perf_counter() - started
         threshold = SLOW_REQUEST_SECONDS if slow_seconds is None else slow_seconds
         if elapsed >= threshold:
             request_log.warning("slow request %s %s -> %s in %.0fms",
-                                request.method, request.url.path,
+                                request.method, path,
                                 response.status_code, elapsed * 1000)
         else:
             # Per-request logging stays off by default (LOG_LEVEL=DEBUG turns it
             # on) -- an access log nobody reads only buries the lines that matter.
             request_log.debug("%s %s -> %s in %.0fms", request.method,
-                              request.url.path, response.status_code, elapsed * 1000)
+                              path, response.status_code, elapsed * 1000)
         return response
 
     return observe_requests

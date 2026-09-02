@@ -2,7 +2,7 @@ import logging
 import os
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -122,9 +122,34 @@ def create_app(engine=None) -> FastAPI:
     seeds.run(app.state.engine)
 
     EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
-    # /sign is the customer-facing contract e-sign flow: its routes are gated
-    # by a 256-bit single-use token in the URL, not by a session.
-    EXEMPT_PREFIX = ("/static", "/sign")
+    # /sign/ is the customer-facing contract e-sign flow: its routes are gated
+    # by a 256-bit single-use token in the URL, not by a session. Trailing
+    # slashes are load-bearing — a raw "/sign" prefix would silently exempt any
+    # future route merely starting with those letters (e.g. "/signage").
+    EXEMPT_PREFIX = ("/static/", "/sign/")
+
+    # The public /sign POST (and /login) parse form bodies before any auth or
+    # rate-limit check runs, and this is a single-process app: an unauthenticated
+    # multi-GB body would be buffered into memory and take the whole app down.
+    # 64 KB is orders of magnitude above the largest legitimate form here.
+    PUBLIC_BODY_LIMIT = 64 * 1024
+    PUBLIC_BODY_PATHS = ("/sign/", "/login")
+
+    @app.middleware("http")
+    async def public_body_cap(request, call_next):
+        path = request.url.path
+        if request.method == "POST" and (
+                path == "/login" or any(path.startswith(p) for p in PUBLIC_BODY_PATHS)):
+            declared = request.headers.get("content-length")
+            try:
+                too_big = declared is not None and int(declared) > PUBLIC_BODY_LIMIT
+            except ValueError:
+                too_big = True
+            # No Content-Length (chunked) from a browser form never happens;
+            # reject rather than buffer an unbounded stream.
+            if too_big or declared is None:
+                return PlainTextResponse("request body too large", status_code=413)
+        return await call_next(request)
 
     @app.middleware("http")
     async def require_auth(request, call_next):

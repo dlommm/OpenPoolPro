@@ -111,6 +111,9 @@ INDEXES = [
     ("ix_comm_log_customer_id", "comm_log", "customer_id"),
     ("ix_photos_taken_at", "photos", "taken_at"),
     ("ix_payments_invoice_id", "payments", "invoice_id"),
+    # Every public /sign hit looks a contract up by token hash — without this
+    # the hottest unauthenticated query in the app is a full table scan.
+    ("ix_contracts_sign_token_hash", "contracts", "sign_token_hash"),
 ]
 
 COLUMNS = {
