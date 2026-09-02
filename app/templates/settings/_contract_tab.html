@@ -59,7 +59,7 @@
 
   <form method="post" action="/settings/contract/save" id="ct-form"
         hx-post="/settings/contract/preview" hx-trigger="input delay:600ms, change delay:300ms, ct-reorder"
-        hx-target="#ct-preview" hx-swap="innerHTML">
+        hx-sync="this:replace" hx-target="#ct-preview" hx-swap="innerHTML">
     <div id="ct-doc" class="card w-full p-6 sm:p-10 xl:px-[8%]">
       <input class="w-full border-0 bg-transparent text-center font-display text-2xl font-bold outline-none focus:ring-2 focus:ring-pool/50"
              name="doc_title" value="{{ contract_template.title }}" title="Document title — click to edit">
@@ -103,7 +103,8 @@
     <div id="ct-savebar" class="sticky bottom-16 z-20 mt-4 hidden w-full items-center justify-between gap-3 rounded-xl border border-seam bg-paper p-3 shadow-card lg:bottom-4">
       <span class="text-sm font-medium">Unsaved changes</span>
       <span class="flex gap-2">
-        <button type="button" class="btn-secondary px-4" onclick="if(confirm('Discard your changes?'))location.reload()">Discard</button>
+        <button type="button" class="btn-secondary px-4"
+                onclick="if(confirm('Discard your changes?')){document.getElementById('ct-form')._submitting=true;location.reload();}">Discard</button>
         <button class="btn-primary px-6">Save contract</button>
       </span>
     </div>
@@ -222,6 +223,14 @@
     blocks.addEventListener('mousedown', function (e) {
       var h = e.target.closest('.ct-handle');
       if (h) h.closest('[data-block]').setAttribute('draggable', 'true');
+    });
+    // A press on the handle that never becomes a drag must not leave the
+    // section draggable — a later text-selection drag would move the whole
+    // block. dragend below can't fire in that case; mouseup always does.
+    document.addEventListener('mouseup', function () {
+      if (!dragging) blocks.querySelectorAll('[draggable]').forEach(function (b) {
+        b.removeAttribute('draggable');
+      });
     });
     blocks.addEventListener('dragstart', function (e) {
       dragging = e.target.closest('[data-block]');

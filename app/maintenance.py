@@ -1,12 +1,36 @@
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app import models
 from app.timefmt import business_today
 
 OPEN_STATUSES = ("open", "scheduled")
+
+# Both tables are insert-only with no other pruning path, so without retention
+# they grow forever. Outbox rows are delivery bookkeeping — worthless once
+# settled; failed rows are kept the same window so an operator can still see
+# what didn't go out. The audit log is the security/compliance trail and gets
+# a much longer window.
+OUTBOX_RETENTION_DAYS = 90
+AUDIT_RETENTION_DAYS = 730
+
+
+def prune_history(session: Session) -> tuple[int, int]:
+    """Delete settled EmailOutbox rows and expired AuditLog rows. Returns
+    (outbox_deleted, audit_deleted). Caller commits."""
+    now = models.utcnow()
+    outbox = session.execute(
+        delete(models.EmailOutbox)
+        .where(models.EmailOutbox.status.in_(("sent", "failed")),
+               models.EmailOutbox.created_at < now - timedelta(days=OUTBOX_RETENTION_DAYS))
+    ).rowcount
+    audit = session.execute(
+        delete(models.AuditLog)
+        .where(models.AuditLog.at < now - timedelta(days=AUDIT_RETENTION_DAYS))
+    ).rowcount
+    return outbox, audit
 
 
 def run_maintenance_rules(session: Session, today: date) -> int:
@@ -80,6 +104,10 @@ def warranty_alerts(session: Session, today: date) -> list[models.Equipment]:
 def run_nightly(engine) -> int:
     """APScheduler entry point: opens its own session, mirrors
     app.backup.run_backup's engine-based wiring, and runs the rules engine
-    against business-local "today"."""
+    against business-local "today". Also prunes settled outbox rows and
+    expired audit history (both otherwise grow without bound)."""
     with Session(engine) as s:
-        return run_maintenance_rules(s, business_today())
+        created = run_maintenance_rules(s, business_today())
+        prune_history(s)
+        s.commit()
+        return created

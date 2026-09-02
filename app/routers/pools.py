@@ -8,14 +8,13 @@ from app import models, sizes
 from app.db import get_or_404, get_session
 from app.deps import require_perm
 from app.forms import parse_date_tolerant
-from app.rates import gallons
+from app.rates import gallons, tier_rate_cents
 from app.templating import templates
 
 router = APIRouter()
 
 
 def _tier_rate_for(session, g: int, kind: str = "pool") -> int:
-    from app.rates import tier_rate_cents
     return tier_rate_cents(session, kind, g)
 
 

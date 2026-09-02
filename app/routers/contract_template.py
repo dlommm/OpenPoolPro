@@ -2,7 +2,7 @@ import html as _html
 import json
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,20 @@ def _blocks_from_form(form) -> list[dict]:
     titles = form.getlist("title")
     bodies = form.getlist("body")
     whens = form.getlist("when")
-    vis_iter = iter(form.getlist("visible"))
+    visibles = form.getlist("visible")
+    # The editor UI always moves a block's inputs as one <section>, keeping
+    # these parallel lists aligned — but a hand-crafted POST (or a future JS
+    # regression) with mismatched counts would silently mis-pair titles with
+    # the wrong bodies or drop content. Refuse rather than degrade.
+    n_text = kinds.count("text")
+    n_computed = sum(1 for k in kinds if k in _COMPUTED)
+    # `when` may be absent entirely (older/handmade posts) — then every text
+    # block is unconditional; if present it must align like the others.
+    if not (len(titles) == len(bodies) == n_text
+            and len(whens) in (0, n_text)
+            and len(visibles) == n_computed):
+        raise HTTPException(status_code=400, detail="form fields out of sync")
+    vis_iter = iter(visibles)
     blocks = []
     ti = 0
     for kind in kinds:

@@ -32,6 +32,12 @@ services:
       # able to reach this port directly can forge the client IP that the login
       # rate limiter and the auth audit log key on. Publish on 0.0.0.0 ONLY for
       # direct LAN access with no proxy in front.
+      #
+      # CONTRACT E-SIGNING needs the app reachable from the CUSTOMER's browser:
+      # a LAN-only deployment emails /sign links customers can never open. Put
+      # the app behind your HTTPS proxy on a public domain, and set
+      # Settings -> System -> "Public base URL" to that domain if staff browse
+      # by LAN address (emailed links are built from it).
       - "8000:8000"                 # host:container — change the host side if 8000 is in use
 
     # Drop everything, then add back only what the entrypoint needs before it

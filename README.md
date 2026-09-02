@@ -192,6 +192,31 @@ Settings → Email shows the configured host only (credentials never render
 anywhere), the last 50 outbox rows with status/attempts/last error, and
 buttons to send a test email or flush the outbox on demand.
 
+## Contract e-signing
+
+Sending a contract emails the customer a unique signing link
+(`/sign/<token>`) next to the PDF attachment. The link is 256-bit random,
+single-use, and time-boxed (24 hours to 30 days — picked on the send form);
+only its hash is stored, a resend replaces it, and signing or voiding kills
+it. The customer reviews the PDF, types their full legal name, ticks the
+terms-and-conditions box, and the app appends a Certificate of Electronic
+Signature page (name, timestamp, IP) to the exact PDF that was emailed and
+registers it as the signed copy.
+
+**Deployment requirement: customers must be able to reach the app.** The
+signing page is served by this app itself — a LAN-only deployment will email
+links customers can never open. Run behind your HTTPS reverse proxy on a
+public domain, and if staff browse the app by LAN address, set
+**Settings → System → Public base URL** to the public domain so emailed
+links use it (otherwise links are built from whatever address the sender
+was browsing from).
+
+Operational notes: contract emails are sent synchronously (no outbox
+retry) — a failed send shows a banner on the contract page and changes
+nothing, so just resend. Signing links appear in no logs (uvicorn's access
+log is disabled and the app's own request log redacts the token), and the
+`/sign` pages are exempt from staff login but rate-limited per IP.
+
 ## Offline (PWA)
 
 Installed to the Home Screen, the app keeps working with a weak or absent

@@ -17,6 +17,8 @@ import os
 from reportlab.lib.units import inch
 from reportlab.platypus import Image
 
+from app import company
+
 
 def logo_flowable(max_w: float = 1.7 * inch, max_h: float = 0.85 * inch):
     """Return a reportlab ``Image`` for the company logo, sized to fit within
@@ -24,9 +26,9 @@ def logo_flowable(max_w: float = 1.7 * inch, max_h: float = 0.85 * inch):
     try:
         from PIL import Image as PILImage
 
-        from app.company import logo_path
-
-        path = logo_path()
+        # Module-attribute call (not a from-import of the name) so the test
+        # suite's monkeypatch of app.company.logo_path still takes effect.
+        path = company.logo_path()
         if not os.path.isfile(path):
             return None
         pil = PILImage.open(path)
