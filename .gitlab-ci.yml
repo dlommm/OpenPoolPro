@@ -15,6 +15,13 @@ stages:
   - test
   - release
 
+# The instance also has a Windows shell runner (win-runner) that picks up
+# untagged jobs — every script here is bash and dies instantly in PowerShell
+# (pipeline #319). Pin all jobs to the Linux docker runner.
+default:
+  tags:
+    - Linux
+
 # Shared bits for the python jobs: the suite assumes the runner's clock is in
 # the app's default business timezone (APP_TZ=America/New_York): several
 # Today/route-sheet tests seed "today" via date.today() and one test asserts
