@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Sign your {{ contract.season_year }} agreement{% endblock %}
+{% block nav %}{% endblock %}
+{% block main_offset %}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl pb-16">
+  <div class="mb-6 mt-4 text-center">
+    {% if has_logo_check() %}
+    <img src="/branding/logo" alt="{{ company.business_name }}" class="mx-auto mb-3 max-h-14">
+    {% endif %}
+    <h1 class="font-display text-2xl font-bold">{{ company.business_name or "Pool Service Agreement" }}</h1>
+    <p class="page-eyebrow">{{ contract.season_year }} Pool Service Agreement</p>
+  </div>
+
+  <div class="card mb-4 p-4">
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      <div><dt class="field-label">Prepared for</dt><dd class="font-medium">{{ customer.name }}</dd></div>
+      <div><dt class="field-label">Service address</dt><dd>{{ prop.address }}</dd></div>
+      <div><dt class="field-label">Season</dt><dd class="font-data">{{ contract.season_year }} · {{ contract.weeks }} weeks</dd></div>
+      <div><dt class="field-label">Season value</dt><dd class="money">{{ value | dollars }}</dd></div>
+    </dl>
+    <p class="mt-3 text-sm text-mist">
+      This signing link expires {{ expires_local.strftime("%B %d, %Y at %I:%M %p") }}.
+    </p>
+  </div>
+
+  <div class="card mb-4 p-4">
+    <h2 class="set-h">Your agreement</h2>
+    <p class="mb-2 text-sm text-mist">Please review the full agreement below before signing.
+      <a href="/sign/{{ token }}/pdf" target="_blank" class="text-pool">Open the PDF in a new tab</a>.</p>
+    <iframe src="/sign/{{ token }}/pdf" title="Agreement PDF"
+            class="h-[70vh] w-full rounded-lg border border-seam"></iframe>
+  </div>
+
+  {% if form_error %}
+  <div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">{{ form_error }}</div>
+  {% endif %}
+
+  <form method="post" action="/sign/{{ token }}" class="card p-4">
+    <h2 class="set-h">Sign electronically</h2>
+    <label class="block">
+      <span class="field-label">Type your full legal name — this is your electronic signature</span>
+      <input name="signed_name" value="{{ signed_name or '' }}" required maxlength="120"
+             autocomplete="name" placeholder="Full name" class="field">
+    </label>
+    <label class="mt-3 flex items-start gap-2 text-sm">
+      <input type="checkbox" name="agree" value="yes" required class="mt-1">
+      <span>I have read the agreement above and <b>agree to its terms and conditions</b>.
+        I understand that typing my name and submitting this form is a legally binding
+        electronic signature on this document.</span>
+    </label>
+    <button class="btn-primary mt-4">Agree &amp; sign</button>
+    <p class="mt-2 text-center text-xs text-mist">A signed copy is recorded with
+      {{ company.business_name or "us" }} the moment you submit.</p>
+  </form>
+</div>
+{% endblock %}

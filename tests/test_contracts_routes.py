@@ -192,7 +192,7 @@ def test_send_emails_pdf_attachment_and_flips_to_sent(client, engine, monkeypatc
         assert contract.sent_at is not None
         rows = s.scalars(select(models.AuditLog).where(
             models.AuditLog.action == "contract.status")).all()
-        assert any(row.detail == f"{cid} -> sent" for row in rows)
+        assert any(row.detail.startswith(f"{cid} -> sent") for row in rows)
 
 
 def test_send_without_email_or_smtp_stays_approved(client, engine):

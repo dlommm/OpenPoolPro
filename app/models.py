@@ -178,6 +178,12 @@ class Contract(Base):
     approved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Public e-sign link: only the sha256 of the emailed token is stored, so a
+    # DB read-out can't mint working sign links. Cleared on signing (one-shot).
+    sign_token_hash: Mapped[str] = mapped_column(String(64), default="")
+    sign_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_name: Mapped[str] = mapped_column(String(120), default="")
+    signed_ip: Mapped[str] = mapped_column(String(64), default="")
     pool: Mapped[Pool] = relationship()
 
 

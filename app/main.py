@@ -41,6 +41,7 @@ from app.routers import (  # noqa: E402
     quotes,
     routes,
     settings,
+    sign,
     today,
     users,
     visits,
@@ -53,7 +54,7 @@ ROUTERS = (
     money.router, settings.router, company.router, company.serve_router,
     console.router, users.router, account.router, audit.router,
     analytics.router, inventory.router, invoices.router, routes.router,
-    contracts.router, contract_template.router,
+    contracts.router, contract_template.router, sign.router,
 )
 
 
@@ -103,6 +104,11 @@ def create_app(engine=None) -> FastAPI:
     # (not a module singleton) so it never accumulates across the test suite.
     from app import security as _security
     app.state.account_limiter = _security.RateLimiter(max_fails=8, lock_seconds=900)
+    # Throttle for the public /sign routes, keyed by client IP: a 256-bit
+    # token can't be guessed, but scanners probing invalid links shouldn't
+    # get unlimited free tries either. Generous cap — a customer fumbling a
+    # pasted link must never lock themselves out.
+    app.state.sign_limiter = _security.RateLimiter(max_fails=20, lock_seconds=900)
     Base.metadata.create_all(app.state.engine)
     from app import backup, migrate
     # Real boots snapshot the DB immediately before the first migration
@@ -116,7 +122,9 @@ def create_app(engine=None) -> FastAPI:
     seeds.run(app.state.engine)
 
     EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
-    EXEMPT_PREFIX = ("/static",)
+    # /sign is the customer-facing contract e-sign flow: its routes are gated
+    # by a 256-bit single-use token in the URL, not by a session.
+    EXEMPT_PREFIX = ("/static", "/sign")
 
     @app.middleware("http")
     async def require_auth(request, call_next):

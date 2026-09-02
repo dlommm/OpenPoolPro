@@ -17,9 +17,11 @@ DATA_DIR/contracts/{id}/ with fixed filenames (contract.pdf, signed.pdf), so
 there is no user-controlled filename and therefore no path-traversal surface
 on the two serve routes.
 """
+import hashlib
 import math
 import os
-from datetime import date
+import secrets
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
@@ -41,6 +43,17 @@ PAGE_SIZE = 50
 # A sent contract with no signature after this many days lands in the hub's
 # needs-attention digest.
 STALE_SENT_DAYS = 14
+
+# E-sign link lifetimes offered on the send form: (label, hours).
+SIGN_EXPIRY_CHOICES = (
+    ("24 hours", 24),
+    ("3 days", 72),
+    ("7 days", 168),
+    ("14 days", 336),
+    ("30 days", 720),
+)
+DEFAULT_SIGN_EXPIRY_HOURS = 168
+_SIGN_EXPIRY_HOURS = {hours for _, hours in SIGN_EXPIRY_CHOICES}
 
 # (dollar form field name, cents column name) pairs, same 6 rate fields the
 # contract snapshot shares with ContractRate / rates.CONTRACT_RATE_FIELDS.
@@ -69,6 +82,25 @@ def _atomic_write(path: str, data: bytes) -> None:
     with open(tmp_path, "wb") as f:
         f.write(data)
     os.replace(tmp_path, path)
+
+
+def issue_sign_token(contract: "models.Contract", hours: int) -> str:
+    """Mint a fresh e-sign token, store only its sha256, return the raw token
+    for the email link. Overwrites any prior token, so a resend invalidates
+    the older link. Caller commits."""
+    token = secrets.token_urlsafe(32)
+    contract.sign_token_hash = hashlib.sha256(token.encode()).hexdigest()
+    contract.sign_token_expires_at = models.utcnow() + timedelta(hours=hours)
+    return token
+
+
+def _public_base_url(request: Request, session: Session) -> str:
+    """Absolute origin for customer-facing links. The public_base_url Setting
+    wins (for deployments where staff browse by LAN IP but customers need the
+    proxied domain); otherwise the request's own origin, which honors
+    X-Forwarded-* from the trusted reverse proxy."""
+    configured = models.get_setting(session, "public_base_url", "").strip()
+    return (configured or str(request.base_url)).rstrip("/")
 
 
 def _parse_date_field(raw: str | None):
@@ -303,7 +335,7 @@ def _timeline(session: Session, contract: "models.Contract"):
     if contract.sent_at:
         events.append(("Sent to customer", contract.sent_at, ""))
     if contract.signed_at:
-        events.append(("Signed", contract.signed_at, ""))
+        events.append(("Signed", contract.signed_at, contract.signed_name or ""))
     if contract.status == "void":
         void_row = session.scalars(
             select(models.AuditLog)
@@ -330,6 +362,12 @@ def contract_detail(request: Request, cid: int, session: Session = Depends(get_s
         "show_money": request.state.user.can("view_money"),
         "send_error": request.query_params.get("send_error"),
         "sign_error": request.query_params.get("sign_error"),
+        "expiry_choices": SIGN_EXPIRY_CHOICES,
+        "default_expiry": DEFAULT_SIGN_EXPIRY_HOURS,
+        "sign_link_expires": contract.sign_token_expires_at,
+        "sign_link_active": bool(
+            contract.sign_token_hash and contract.sign_token_expires_at
+            and models.utcnow() <= contract.sign_token_expires_at),
     })
 
 
@@ -404,9 +442,11 @@ def approve_contract(request: Request, cid: int, session: Session = Depends(get_
 
 
 @router.post("/contracts/{cid}/send")
-def send_contract(request: Request, cid: int, session: Session = Depends(get_session)):
+def send_contract(request: Request, cid: int, link_expiry: str = Form(""),
+                  session: Session = Depends(get_session)):
     contract = get_or_404(session, models.Contract, cid)
-    # "sent" is allowed too: resend keeps the status and refreshes sent_at.
+    # "sent" is allowed too: resend keeps the status, refreshes sent_at, and
+    # replaces the e-sign link (the previous token stops working).
     if contract.status not in ("approved", "sent"):
         raise HTTPException(status_code=400)
 
@@ -415,21 +455,35 @@ def send_contract(request: Request, cid: int, session: Session = Depends(get_ses
     if not customer.email or not mailer.smtp_configured(session) or not os.path.isfile(path):
         return RedirectResponse(f"/contracts/{cid}?send_error=1", status_code=303)
 
+    hours = parse_int_tolerant(link_expiry) or DEFAULT_SIGN_EXPIRY_HOURS
+    if hours not in _SIGN_EXPIRY_HOURS:
+        hours = DEFAULT_SIGN_EXPIRY_HOURS
+    token = issue_sign_token(contract, hours)
+    sign_url = f"{_public_base_url(request, session)}/sign/{token}"
+    expiry_label = next(label for label, h in SIGN_EXPIRY_CHOICES if h == hours)
+
     with open(path, "rb") as f:
         pdf_bytes = f.read()
     subject = f"Your {contract.season_year} Pool Service Agreement"
-    body = (f"Attached is your {contract.season_year} pool service agreement. "
+    body = (f"Attached is your {contract.season_year} pool service agreement.\n\n"
+            "You can review and sign it online here:\n\n"
+            f"  {sign_url}\n\n"
+            f"For security, this signing link expires in {expiry_label} and stops "
+            "working once the agreement is signed. If it expires, just reply to "
+            "this email and we'll send you a fresh one.\n\n"
             "Please review and let us know if you have any questions.")
     try:
         mailer.send_message(customer.email, subject, body, conf=mailer.smtp_settings(session),
                              attachments=[(pdf_bytes, "contract.pdf")])
     except Exception:
+        # The freshly minted token was never committed — the session rollback
+        # discards it, so a failed send leaves no live link behind.
         return RedirectResponse(f"/contracts/{cid}?send_error=1", status_code=303)
 
     contract.status = "sent"
     contract.sent_at = models.utcnow()
     models.audit(session, request.state.user.id, "contract.status",
-                 detail=f"{contract.id} -> sent")
+                 detail=f"{contract.id} -> sent (sign link, {expiry_label})")
     session.commit()
     return RedirectResponse(f"/contracts/{cid}", status_code=303)
 

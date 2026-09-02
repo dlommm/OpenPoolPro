@@ -548,6 +548,19 @@
         </div>
 
         <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Public link address</h2>
+          <form method="post" action="/settings/public-url" class="space-y-2">
+            <label class="block"><span class="field-label">Public base URL</span>
+              <input name="public_base_url" value="{{ public_base_url }}" inputmode="url"
+                     placeholder="https://pool.example.com" class="field font-data"></label>
+            <p class="text-xs text-mist">Used in links emailed to customers (contract e-signing).
+              Leave blank to use the address you're browsing from. Set it when staff use the app
+              by LAN address but customers reach it through your domain.</p>
+            <button class="btn-secondary w-full">Save public address</button>
+          </form>
+        </div>
+
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Appearance</h2>
           <p class="mb-3 text-sm text-mist">Pick a theme — applies to the whole app, for everyone.</p>
           <form method="post" action="/settings/appearance" class="space-y-3">

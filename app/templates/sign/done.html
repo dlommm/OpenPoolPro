@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Agreement signed{% endblock %}
+{% block nav %}{% endblock %}
+{% block main_offset %}{% endblock %}
+{% block content %}
+<div class="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center pb-16 text-center">
+  <h1 class="font-display text-2xl font-bold">Thank you — you're all set!</h1>
+  <p class="mt-3 text-mist">
+    <b>{{ signed_name }}</b> signed the {{ contract.season_year }} Pool Service Agreement
+    on {{ signed_local.strftime("%B %d, %Y at %I:%M %p") }}.
+    {{ company.business_name or "We" }} now has your signed copy on file
+    {% if customer.email %}and a record is kept for {{ customer.email }}{% endif %}.
+  </p>
+  <p class="mt-3 text-sm text-mist">You can close this page.</p>
+</div>
+{% endblock %}

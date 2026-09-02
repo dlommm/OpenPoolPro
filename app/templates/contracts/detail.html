@@ -78,6 +78,18 @@
 
 <div class="card p-4">
   <h2 class="set-h">Documents &amp; workflow</h2>
+  {% if contract.status == "sent" %}
+  <p class="mb-3 text-sm {{ 'text-mist' if sign_link_active else 'text-safety' }}">
+    {% if sign_link_active %}
+    E-sign link active — expires {{ sign_link_expires | localdt }}. Resending replaces it.
+    {% else %}
+    The customer's e-sign link has expired. Resend to issue a fresh one.
+    {% endif %}
+  </p>
+  {% elif contract.status == "signed" and contract.signed_name %}
+  <p class="mb-3 text-sm text-mist">Signed electronically by
+    <b>{{ contract.signed_name }}</b> on {{ contract.signed_at | localdt }}.</p>
+  {% endif %}
   <div class="flex flex-wrap gap-2">
     {% if pdf_exists %}
     <a href="/contracts/{{ contract.id }}/pdf" class="btn-secondary">View contract PDF</a>
@@ -101,15 +113,21 @@
     </form>
     {% endif %}
 
-    {% if contract.status == "approved" %}
-    <form method="post" action="/contracts/{{ contract.id }}/send">
-      <button class="btn-primary">Send to customer</button>
-    </form>
-    {% endif %}
-
-    {% if contract.status == "sent" %}
-    <form method="post" action="/contracts/{{ contract.id }}/send">
-      <button class="btn-secondary">Resend to customer</button>
+    {% if contract.status in ("approved", "sent") %}
+    <form method="post" action="/contracts/{{ contract.id }}/send"
+          class="flex flex-wrap items-center gap-2">
+      <label class="flex items-center gap-1.5 text-sm text-mist">Sign link valid for
+        <select name="link_expiry" class="field w-auto font-data">
+          {% for label, hours in expiry_choices %}
+          <option value="{{ hours }}" {{ "selected" if hours == default_expiry }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if contract.status == "approved" %}
+      <button class="btn-primary">Email sign link to customer</button>
+      {% else %}
+      <button class="btn-secondary">Resend (new sign link)</button>
+      {% endif %}
     </form>
     {% endif %}
 

@@ -176,6 +176,12 @@ COLUMNS = {
         ("due_date", "DATE"),
         ("sent_at", "DATETIME"),
     ],
+    "contracts": [
+        ("sign_token_hash", "VARCHAR(64) DEFAULT ''"),
+        ("sign_token_expires_at", "DATETIME"),
+        ("signed_name", "VARCHAR(120) DEFAULT ''"),
+        ("signed_ip", "VARCHAR(64) DEFAULT ''"),
+    ],
 }
 
 

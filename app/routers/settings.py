@@ -133,6 +133,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "smtp": {**mailer.smtp_settings(session),
                  "pass_set": bool(mailer.smtp_settings(session)["password"])},
         "geoapify_configured": bool(models.get_setting(session, "geoapify_key", "")),
+        "public_base_url": models.get_setting(session, "public_base_url", ""),
         "outbox": outbox,
         "mail_result": (mail_sent_n, mail_failed_n) if mail_sent_n is not None
                        and mail_failed_n is not None else None,
@@ -605,6 +606,19 @@ async def save_geoapify(request: Request, session: Session = Depends(get_session
         models.set_setting(session, "geoapify_key", gk.strip())
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/public-url")
+async def save_public_url(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    raw = (form.get("public_base_url") or "").strip().rstrip("/")
+    # Blank clears the override (customer links fall back to the request
+    # origin); anything set must be an absolute http(s) origin.
+    if raw and not raw.startswith(("http://", "https://")):
+        return RedirectResponse("/settings#system", status_code=303)
+    models.set_setting(session, "public_base_url", raw)
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
 
 
 @router.post("/settings/mail/test")
