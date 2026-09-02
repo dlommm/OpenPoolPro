@@ -58,6 +58,13 @@ CONTRACT_RATE_FIELDS = (
 )
 
 
+def season_value_cents(contract) -> int:
+    """A contract's headline season value: weekly service for the season plus
+    the open/close. Green-clean, storm, and service calls are per-incident
+    rates, not committed revenue, so they stay out of the number."""
+    return contract.weekly_cents * contract.weeks + contract.open_close_cents
+
+
 def contract_rates_for(session, pool_gallons: int) -> dict | None:
     """Resolve the size-matched ContractRate row's 6 cents fields as a dict.
 

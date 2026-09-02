@@ -22,8 +22,10 @@ from sqlalchemy.orm import Session
 
 from app import contract_pdf, models
 from app.company import company_info
+from app.contract_files import pdf_path, signed_path
 from app.db import get_session
-from app.routers.contracts import _atomic_write, _pdf_path, _signed_path, season_value_cents
+from app.fileio import atomic_write
+from app.rates import season_value_cents
 from app.templating import templates
 from app.timefmt import to_local
 
@@ -100,11 +102,15 @@ def sign_pdf(request: Request, token: str, session: Session = Depends(get_sessio
     contract, error = _resolve(request, session, token)
     if error is not None:
         return error
-    path = _pdf_path(contract)
+    path = pdf_path(contract)
     if not contract.pdf_filename or not os.path.isfile(path):
         return _message(request, "Document unavailable",
                         "The agreement PDF could not be loaded. Please contact us.", 404)
-    return FileResponse(path, media_type="application/pdf", filename="contract.pdf")
+    # inline: the default attachment disposition forces a download, which
+    # blanks the sign page's iframe and breaks "open in a new tab" — the
+    # customer could never actually read what they're signing.
+    return FileResponse(path, media_type="application/pdf", filename="contract.pdf",
+                        content_disposition_type="inline")
 
 
 @router.post("/sign/{token}")
@@ -122,12 +128,21 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
         ctx["signed_name"] = name
         return templates.TemplateResponse(request, "sign/page.html", ctx, status_code=422)
 
-    path = _pdf_path(contract)
+    path = pdf_path(contract)
     if not contract.pdf_filename or not os.path.isfile(path):
         return _message(request, "Document unavailable",
                         "The agreement PDF could not be loaded. Please contact us.", 404)
     with open(path, "rb") as f:
         original = f.read()
+
+    # Claim sent->signed BEFORE the PDF work: a concurrent staff void (or a
+    # double-submit of this form) loses here with a friendly page instead of
+    # silently overwriting the other transition. Nothing is committed until
+    # the very end, so a later failure rolls the claim back too.
+    if not models.claim_contract_status(session, contract, ("sent",), "signed"):
+        return _message(request, "This link is no longer active",
+                        "This agreement is no longer awaiting a signature. "
+                        "If you believe that's wrong, please contact us.", 410)
 
     now = models.utcnow()
     ip = _client_ip(request)
@@ -148,9 +163,8 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
                         "We couldn't record your signature just now. Please try again "
                         "in a moment, or contact us.", 500)
 
-    _atomic_write(_signed_path(contract), signed_bytes)
+    atomic_write(signed_path(contract), signed_bytes)
     contract.signed_pdf_filename = "signed.pdf"
-    contract.status = "signed"
     contract.signed_at = now
     contract.signed_name = name
     contract.signed_ip = ip

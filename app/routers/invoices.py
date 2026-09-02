@@ -12,6 +12,7 @@ from app import invoicing, mailer, models, receivables
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
+from app.fileio import atomic_write
 from app.forms import cents
 from app.templating import templates
 from app.timefmt import business_today, parse_ym
@@ -299,8 +300,5 @@ def invoice_regenerate(request: Request, iid: int, session: Session = Depends(ge
     # a stale DB row. The write itself is atomic (tmp file + os.replace), so
     # a crash mid-write can never leave a truncated PDF at the final path.
     path = _pdf_path(inv)
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "wb") as f:
-        f.write(pdf_bytes)
-    os.replace(tmp_path, path)
+    atomic_write(path, pdf_bytes)
     return RedirectResponse(f"/invoices?ym={inv.period_year}-{inv.period_month:02d}", status_code=303)

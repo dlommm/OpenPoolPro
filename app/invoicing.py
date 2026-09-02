@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app import config, models, qbo, receivables, tax
 from app.company import company_info
+from app.fileio import atomic_write
 from app.timefmt import to_local_hhmm
 
 
@@ -243,10 +244,7 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
             continue
 
         path = os.path.join(_invoices_dir(), filename)
-        tmp_path = f"{path}.tmp"
-        with open(tmp_path, "wb") as f:
-            f.write(pdf_bytes)
-        os.replace(tmp_path, path)
+        atomic_write(path, pdf_bytes)
         created += 1
 
     return created, skipped

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import models, rates, sizes, tax
 from app.db import get_or_404, get_session
-from app.forms import parse_date_tolerant, parse_float_tolerant, parse_int_tolerant
+from app.forms import cents, parse_date_tolerant, parse_float_tolerant, parse_int_tolerant
 from app.routers.customers import _apply_property
 from app.routers.pools import _apply as _apply_pool
 from app.templating import templates
@@ -31,10 +31,9 @@ def _template_size_rows(tmpl: "models.JobTemplate") -> list[dict]:
 
 
 def _dollars_to_cents(val: str) -> int:
-    try:
-        return round(float(val or 0) * 100)
-    except ValueError:
-        return 0
+    # forms.cents guards the "inf" OverflowError 500 this inline copy had,
+    # and accepts "$"/thousands separators like every other money field.
+    return cents(val) or 0
 
 
 def _parse_assignee(assigned_tech_id: str) -> int | None:

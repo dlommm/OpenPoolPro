@@ -21,6 +21,11 @@
   That file doesn't look like a PDF — try again.
 </div>
 {% endif %}
+{% if conflict %}
+<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+  This contract changed while you were working — review its current status below.
+</div>
+{% endif %}
 
 <div class="card mb-4 p-4">
   <h2 class="set-h">Season &amp; rates</h2>

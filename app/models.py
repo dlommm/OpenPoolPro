@@ -180,7 +180,9 @@ class Contract(Base):
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Public e-sign link: only the sha256 of the emailed token is stored, so a
     # DB read-out can't mint working sign links. Cleared on signing (one-shot).
-    sign_token_hash: Mapped[str] = mapped_column(String(64), default="")
+    # Indexed: this is the hottest unauthenticated query in the app (every
+    # /sign hit) and would otherwise scan the whole contracts table.
+    sign_token_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
     sign_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     signed_name: Mapped[str] = mapped_column(String(120), default="")
     signed_ip: Mapped[str] = mapped_column(String(64), default="")
@@ -565,7 +567,11 @@ class Payment(Base):
 class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(60), primary_key=True)
-    value: Mapped[str] = mapped_column(String(200))
+    # Text, not String(N): the contract_template key stores multi-KB JSON.
+    # SQLite never enforced the old String(200) so nothing broke, but the
+    # declared type should not lie to the next reader (or to a future
+    # Postgres port, which WOULD enforce it).
+    value: Mapped[str] = mapped_column(Text)
 
 
 def get_setting(session, key: str, default: str) -> str:
@@ -611,6 +617,30 @@ def audit(session, user_id: int | None, action: str, detail: str = "") -> AuditL
     session.add(row)
     session.flush()
     return row
+
+
+def claim_contract_status(session, contract: Contract,
+                          expected: tuple[str, ...], new_status: str) -> bool:
+    """Atomically transition contract.status with a conditional UPDATE.
+
+    Every lifecycle route reads the row, checks status in Python, then writes
+    — a check-then-act window in which a concurrent transition can be silently
+    overwritten (a customer e-sign racing a staff void was the concrete case).
+    The UPDATE ... WHERE status IN expected makes the loser observe rowcount 0
+    instead of clobbering the winner; SQLite's write lock plus the engine's 5s
+    busy timeout serialize the writers. Runs inside the caller's open
+    transaction — on False the caller must abandon the request without
+    committing (session teardown rolls the claim attempt back)."""
+    from sqlalchemy import update
+
+    result = session.execute(
+        update(Contract)
+        .where(Contract.id == contract.id, Contract.status.in_(expected))
+        .values(status=new_status))
+    if result.rowcount != 1:
+        return False
+    contract.status = new_status  # keep the in-memory instance in sync
+    return True
 
 
 class EmailOutbox(Base):

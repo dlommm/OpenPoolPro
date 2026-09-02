@@ -28,11 +28,16 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app import config, contract_pdf, mailer, models, rates, tax
+from app import contract_pdf, mailer, models, rates, tax
 from app.company import company_info
+from app.contract_files import pdf_path as _pdf_path
+from app.contract_files import signed_path as _signed_path
 from app.db import get_or_404, get_session
 from app.deps import require_perm
+from app.fileio import atomic_write as _atomic_write
+from app.forms import cents as parse_cents
 from app.forms import parse_int_tolerant, parse_page
+from app.rates import season_value_cents
 from app.templating import templates
 from app.timefmt import business_today
 
@@ -63,25 +68,7 @@ CONTRACT_DOLLAR_FIELDS = tuple(
 )
 
 
-def _contract_dir(cid: int) -> str:
-    d = os.path.join(config.DATA_DIR, "contracts", str(cid))
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
-def _pdf_path(contract: "models.Contract") -> str:
-    return os.path.join(_contract_dir(contract.id), "contract.pdf")
-
-
-def _signed_path(contract: "models.Contract") -> str:
-    return os.path.join(_contract_dir(contract.id), "signed.pdf")
-
-
-def _atomic_write(path: str, data: bytes) -> None:
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "wb") as f:
-        f.write(data)
-    os.replace(tmp_path, path)
+NON_VOID = ("draft", "approved", "sent", "signed")
 
 
 def issue_sign_token(contract: "models.Contract", hours: int) -> str:
@@ -116,13 +103,6 @@ def _parse_date_field(raw: str | None):
         return True, date.fromisoformat(raw)
     except ValueError:
         return False, None
-
-
-def season_value_cents(contract: "models.Contract") -> int:
-    """A contract's headline season value: weekly service for the season plus
-    the open/close. Green-clean, storm, and service calls are per-incident
-    rates, not committed revenue, so they stay out of the number."""
-    return contract.weekly_cents * contract.weeks + contract.open_close_cents
 
 
 _EAGER_CUSTOMER = selectinload(models.Contract.pool).selectinload(
@@ -362,6 +342,7 @@ def contract_detail(request: Request, cid: int, session: Session = Depends(get_s
         "show_money": request.state.user.can("view_money"),
         "send_error": request.query_params.get("send_error"),
         "sign_error": request.query_params.get("sign_error"),
+        "conflict": request.query_params.get("conflict"),
         "expiry_choices": SIGN_EXPIRY_CHOICES,
         "default_expiry": DEFAULT_SIGN_EXPIRY_HOURS,
         "sign_link_expires": contract.sign_token_expires_at,
@@ -374,7 +355,10 @@ def contract_detail(request: Request, cid: int, session: Session = Depends(get_s
 @router.post("/contracts/{cid}/edit")
 async def edit_contract(request: Request, cid: int, session: Session = Depends(get_session)):
     contract = get_or_404(session, models.Contract, cid)
-    if contract.status != "draft":
+    # The no-op claim re-verifies draft under the write lock, so an edit
+    # racing an approve can't commit rate changes onto an approved snapshot.
+    if contract.status != "draft" or not models.claim_contract_status(
+            session, contract, ("draft",), "draft"):
         raise HTTPException(status_code=400)
     form = await request.form()
 
@@ -383,17 +367,25 @@ async def edit_contract(request: Request, cid: int, session: Session = Depends(g
         if not raw:
             setattr(contract, cents_field, 0)
             continue
-        try:
-            setattr(contract, cents_field, round(float(raw) * 100))
-        except ValueError:
-            pass  # garbage: leave the stored value alone
+        # forms.cents guards the "inf"/overflow 500 the scattered parser
+        # copies had; None = garbage, leave the stored value alone.
+        parsed = parse_cents(raw)
+        if parsed is not None:
+            setattr(contract, cents_field, parsed)
 
     season_raw = (form.get("season_year") or "").strip()
     if season_raw:
         try:
-            contract.season_year = int(season_raw)
+            new_season = int(season_raw)
         except ValueError:
-            pass
+            new_season = contract.season_year
+        # Re-check the one-live-contract-per-pool-season invariant that
+        # new_contract enforces: without this, editing season_year could
+        # create a duplicate the hub totals and renewal flow double-count.
+        if new_season != contract.season_year:
+            clash = _existing_for_season(session, contract.pool_id, new_season)
+            if clash is None or clash.id == contract.id:
+                contract.season_year = new_season
 
     weeks_raw = (form.get("weeks") or "").strip()
     if weeks_raw:
@@ -419,7 +411,10 @@ async def edit_contract(request: Request, cid: int, session: Session = Depends(g
 def approve_contract(request: Request, cid: int, session: Session = Depends(get_session)):
 
     contract = get_or_404(session, models.Contract, cid)
-    if contract.status != "draft":
+    # Conditional claim doubles as the double-click guard: the second submit
+    # sees rowcount 0 and 400s instead of re-rendering and re-auditing.
+    if contract.status != "draft" or not models.claim_contract_status(
+            session, contract, ("draft",), "approved"):
         raise HTTPException(status_code=400)
 
     pool = contract.pool
@@ -432,7 +427,6 @@ def approve_contract(request: Request, cid: int, session: Session = Depends(get_
     _atomic_write(_pdf_path(contract), pdf_bytes)
 
     contract.pdf_filename = "contract.pdf"
-    contract.status = "approved"
     contract.approved_at = models.utcnow()
     contract.approved_by_id = request.state.user.id
     models.audit(session, request.state.user.id, "contract.status",
@@ -480,7 +474,12 @@ def send_contract(request: Request, cid: int, link_expiry: str = Form(""),
         # discards it, so a failed send leaves no live link behind.
         return RedirectResponse(f"/contracts/{cid}?send_error=1", status_code=303)
 
-    contract.status = "sent"
+    # Claimed after the email so an SMTP failure never advances status; a
+    # concurrent void between our read and here loses gracefully — the email
+    # went out, but its link dies with the uncommitted token.
+    if not models.claim_contract_status(session, contract,
+                                        ("approved", "sent"), "sent"):
+        return RedirectResponse(f"/contracts/{cid}?conflict=1", status_code=303)
     contract.sent_at = models.utcnow()
     models.audit(session, request.state.user.id, "contract.status",
                  detail=f"{contract.id} -> sent (sign link, {expiry_label})")
@@ -503,9 +502,10 @@ async def mark_signed(request: Request, cid: int, file: UploadFile,
     if not data.startswith(b"%PDF"):
         return RedirectResponse(f"/contracts/{cid}?sign_error=1", status_code=303)
 
+    if not models.claim_contract_status(session, contract, NON_VOID, "signed"):
+        return RedirectResponse(f"/contracts/{cid}?conflict=1", status_code=303)
     _atomic_write(_signed_path(contract), data)
     contract.signed_pdf_filename = "signed.pdf"
-    contract.status = "signed"
     contract.signed_at = models.utcnow()
     models.audit(session, request.state.user.id, "contract.status",
                  detail=f"{contract.id} -> signed")
@@ -516,9 +516,9 @@ async def mark_signed(request: Request, cid: int, file: UploadFile,
 @router.post("/contracts/{cid}/void")
 def void_contract(request: Request, cid: int, session: Session = Depends(get_session)):
     contract = get_or_404(session, models.Contract, cid)
-    if contract.status == "void":
+    if contract.status == "void" or not models.claim_contract_status(
+            session, contract, NON_VOID, "void"):
         raise HTTPException(status_code=400)
-    contract.status = "void"
     models.audit(session, request.state.user.id, "contract.status",
                  detail=f"{contract.id} -> void")
     session.commit()
@@ -533,7 +533,10 @@ def contract_pdf_route(cid: int, session: Session = Depends(get_session)):
     path = _pdf_path(contract)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404)
-    return FileResponse(path, media_type="application/pdf", filename="contract.pdf")
+    # inline: the default attachment disposition forces a download, which
+    # breaks the detail page's iframe preview and "View PDF" links.
+    return FileResponse(path, media_type="application/pdf", filename="contract.pdf",
+                        content_disposition_type="inline")
 
 
 @router.get("/contracts/{cid}/signed")
@@ -544,4 +547,5 @@ def contract_signed_route(cid: int, session: Session = Depends(get_session)):
     path = _signed_path(contract)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404)
-    return FileResponse(path, media_type="application/pdf", filename="signed-contract.pdf")
+    return FileResponse(path, media_type="application/pdf", filename="signed-contract.pdf",
+                        content_disposition_type="inline")
