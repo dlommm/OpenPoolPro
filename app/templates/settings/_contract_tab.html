@@ -1,153 +1,262 @@
 {% import "_ui.html" as ui %}
-{# One source of truth for a text block's markup: the saved-blocks loop and the
-   "+ Add section" <template> both render this macro, so they can't drift. #}
-{% macro text_block(title="", body="", when="", open=False) %}
-<details class="rounded-xl border border-seam" data-block {{ "open" if open }}>
-  <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2">
-    <span class="ct-chevron text-mist transition">▸</span>
-    <span class="ct-summary-title flex-1 truncate text-sm font-medium">{{ title or "Untitled section" }}</span>
-    <span class="flex gap-1">
-      <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move up"
-              onclick="event.preventDefault();ctMove(this,-1)">↑</button>
-      <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move down"
-              onclick="event.preventDefault();ctMove(this,1)">↓</button>
-      <button type="button" class="btn-secondary px-2.5 py-1 text-xs text-safety" title="Delete section"
-              onclick="event.preventDefault();ctDelete(this)">✕</button>
-    </span>
-  </summary>
-  <div class="space-y-2 border-t border-seam p-3">
-    <input type="hidden" name="kind" value="text">
-    <input type="hidden" name="when" value="{{ when or '' }}">
-    {% if when %}<p class="text-xs text-mist">Only appears on contracts that include a spa.</p>{% endif %}
-    <input class="field font-semibold" name="title" value="{{ title }}"
-           placeholder="Section heading (optional)" onfocus="ctFocus(this)"
-           oninput="ctSyncTitle(this)">
-    <textarea class="field min-h-32 font-data text-sm" name="body" rows="6"
-              onfocus="ctFocus(this)"
-              placeholder="Body text — use “Insert a field” for customer data; start a line with &quot;- &quot; for a bullet">{{ body }}</textarea>
+{# Contract template editor, document-style: the tab renders as the contract
+   itself. Click any section to edit it in place; data placeholders display as
+   labeled chips; the toggle swaps in the server-rendered sample preview.
+
+   Progressive enhancement: the server emits every section in its EDIT state
+   (plain inputs/textareas that submit the same positional kind/title/body/
+   when/visible lists /settings/contract/save has always parsed), and JS then
+   collapses them into the click-to-edit document view. No JS = a working,
+   if plainer, form. #}
+
+{% macro text_block(title="", body="", when="") %}
+<section class="ct-section group relative rounded-lg" data-block data-kind="text">
+  <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
+    <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" onclick="ctMove(this,-1)">↑</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" onclick="ctMove(this,1)">↓</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-safety" title="Delete section" onclick="ctDelete(this)">✕</button>
   </div>
-</details>
-{% endmacro %}
-
-<div class="grid gap-4 lg:grid-cols-2 lg:items-start">
-  {# ---- editor ---- #}
-  <div class="card p-4">
-    <h2 class="set-h">Contract template</h2>
-    <p class="mb-3 text-sm text-mist">This is the agreement your customers receive. Each section
-      below is one part of the document — click a section to open and edit it. The preview on the
-      right updates as you type.</p>
-
-    <details class="mb-3 rounded-xl border border-seam">
-      <summary class="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium">Insert a field
-        <span class="font-normal text-mist">— fills in from each customer's data</span></summary>
-      <div class="border-t border-seam p-3">
+  <input type="hidden" name="kind" value="text">
+  <input type="hidden" name="when" value="{{ when or '' }}">
+  <div class="ct-view hidden cursor-text rounded-lg px-2 py-1.5 transition hover:bg-shallow/40" title="Click to edit"></div>
+  <div class="ct-edit space-y-2 rounded-lg border border-pool/50 bg-shallow/20 p-3">
+    <input class="field font-semibold" name="title" value="{{ title }}"
+           placeholder="Section heading (optional)" onfocus="ctFocus(this)">
+    <textarea class="field ct-body min-h-24 text-sm" name="body" rows="4"
+              onfocus="ctFocus(this)" oninput="ctGrow(this)"
+              placeholder="Write this part of the agreement. Use “Insert customer info” below to drop in details that fill themselves in. Start a line with &quot;- &quot; for a bullet.">{{ body }}</textarea>
+    <div class="flex flex-wrap items-center gap-2">
+      <select class="field w-auto text-sm" onchange="ctInsertToken(this)">
+        <option value="">Insert customer info…</option>
         {% for token, label, group in contract_tokens %}
         {% if loop.first or group != loop.previtem[2] %}
-        {% if not loop.first %}</div>{% endif %}
-        <p class="field-label {{ 'mt-2' if not loop.first }}">{{ group }}</p>
-        <div class="flex flex-wrap gap-1">
+        {% if not loop.first %}</optgroup>{% endif %}
+        <optgroup label="{{ group }}">
         {% endif %}
-        <button type="button" class="tag" title="{{ label }}"
-                onclick="ctInsertToken('{{ token }}')">{{ label }}</button>
-        {% if loop.last %}</div>{% endif %}
+        <option value="{{ token }}">{{ label }}</option>
+        {% if loop.last %}</optgroup>{% endif %}
         {% endfor %}
-      </div>
-    </details>
+      </select>
+      <select class="field w-auto text-sm" onchange="this.closest('[data-block]').querySelector('input[name=when]').value=this.value">
+        <option value="" {{ "selected" if not when }}>Shows on: all contracts</option>
+        <option value="includes_spa" {{ "selected" if when == "includes_spa" }}>Shows on: spa contracts only</option>
+      </select>
+      <button type="button" class="btn-secondary ml-auto px-4 py-1.5 text-sm" onclick="ctDone(this)">Done</button>
+    </div>
+  </div>
+</section>
+{% endmacro %}
 
-    <form method="post" action="/settings/contract/save" id="ct-form" class="space-y-3"
-          hx-post="/settings/contract/preview" hx-trigger="input delay:600ms, change delay:300ms, ct-reorder"
-          hx-target="#ct-preview" hx-swap="innerHTML">
-      <label class="block"><span class="field-label">Document title</span>
-        <input class="field" name="doc_title" value="{{ contract_template.title }}"></label>
+<div id="ct-root">
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <p class="text-sm text-mist"><b class="text-ink">This is your contract.</b> Click any part to
+      edit it in place — the blue chips fill in automatically from each customer's details.</p>
+    <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+      <input type="checkbox" id="ct-sample-toggle" class="h-4 w-4" onchange="ctToggleSample(this)">
+      See it with sample data</label>
+  </div>
 
-      <div id="ct-blocks" class="space-y-2">
+  <form method="post" action="/settings/contract/save" id="ct-form"
+        hx-post="/settings/contract/preview" hx-trigger="input delay:600ms, change delay:300ms, ct-reorder"
+        hx-target="#ct-preview" hx-swap="innerHTML">
+    <div id="ct-doc" class="card mx-auto max-w-3xl p-6 sm:p-10">
+      <input class="w-full border-0 bg-transparent text-center font-display text-2xl font-bold outline-none focus:ring-2 focus:ring-pool/50"
+             name="doc_title" value="{{ contract_template.title }}" title="Document title — click to edit">
+
+      <div id="ct-blocks" class="mt-4 space-y-1">
         {% for b in contract_template.blocks %}
         {% if b.kind == "text" %}
         {{ text_block(b.title, b.body, b.get("when") or "") }}
         {% else %}
-        <div class="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-dashed border-seam px-3 py-2" data-block>
+        <section class="ct-section group relative rounded-lg" data-block data-kind="{{ b.kind }}">
+          <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
+            <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
+            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" onclick="ctMove(this,-1)">↑</button>
+            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" onclick="ctMove(this,1)">↓</button>
+          </div>
           <input type="hidden" name="kind" value="{{ b.kind }}">
-          <span class="text-sm">
-            {% if b.kind == "parties" %}Customer &amp; company details
-            {% elif b.kind == "rates" %}Service rates table
-            {% else %}Signature lines{% endif %}
-            <span class="font-data text-xs uppercase tracking-wide text-mist">· auto-generated</span>
-          </span>
-          <span class="flex items-center gap-2">
-            <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
-            <label class="flex items-center gap-1.5 text-sm">
+          <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
+          <div class="my-1 flex items-center justify-between gap-2 rounded-lg border border-dashed border-seam px-3 py-2 {{ 'opacity-50' if not b.get('visible', True) }}">
+            <span class="text-sm text-mist">
+              {% if b.kind == "parties" %}📋 Customer &amp; company details
+              {% elif b.kind == "rates" %}💲 Service rates table
+              {% else %}✍️ Signature lines{% endif %}
+              — fills in automatically</span>
+            <label class="flex items-center gap-1.5 text-sm text-mist">
               <input type="checkbox" {{ "checked" if b.get('visible', True) }} class="h-4 w-4"
-                     onchange="this.closest('[data-block]').querySelector('input[name=visible]').value = this.checked ? 'on' : 'off'"> Show</label>
-            <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move up"
-                    onclick="ctMove(this,-1)">↑</button>
-            <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move down"
-                    onclick="ctMove(this,1)">↓</button>
-          </span>
-        </div>
+                     onchange="ctVisible(this)"> Show</label>
+          </div>
+        </section>
         {% endif %}
         {% endfor %}
       </div>
 
-      <div class="flex flex-wrap gap-2">
-        <button type="button" class="btn-secondary flex-1" onclick="ctAddSection()">+ Add section</button>
-        <button class="btn-primary flex-1">Save contract</button>
-      </div>
-    </form>
-
-    <template id="ct-block-tpl">{{ text_block(open=True) }}</template>
-  </div>
-
-  {# ---- live preview ---- #}
-  <div class="card p-4 lg:sticky lg:top-4">
-    <h2 class="set-h">Live preview</h2>
-    <p class="mb-2 text-sm text-mist">Updates as you type, shown with sample data. Real contracts
-      use each customer's info.</p>
-    <div id="ct-preview" class="max-h-[70vh] overflow-y-auto rounded-lg border border-seam p-3">
-      {{ contract_preview_html | safe }}
+      <button type="button" class="mt-4 w-full rounded-lg border border-dashed border-seam py-2 text-sm text-mist transition hover:border-pool hover:text-pool"
+              onclick="ctAddSection()">+ Add a section</button>
     </div>
-  </div>
+
+    <div id="ct-preview-wrap" class="mx-auto hidden max-w-3xl">
+      <div id="ct-preview" class="card p-6 sm:p-10">{{ contract_preview_html | safe }}</div>
+    </div>
+
+    <div id="ct-savebar" class="sticky bottom-16 z-20 mx-auto mt-4 hidden max-w-3xl items-center justify-between gap-3 rounded-xl border border-seam bg-paper p-3 shadow-card lg:bottom-4">
+      <span class="text-sm font-medium">Unsaved changes</span>
+      <span class="flex gap-2">
+        <button type="button" class="btn-secondary px-4" onclick="if(confirm('Discard your changes?'))location.reload()">Discard</button>
+        <button class="btn-primary px-6">Save contract</button>
+      </span>
+    </div>
+  </form>
+
+  <template id="ct-block-tpl">{{ text_block() }}</template>
 </div>
 
 <script>
   (function () {
+    var LABELS = {};
+    {% for token, label, group in contract_tokens %}LABELS[{{ token | tojson }}] = {{ label | tojson }};
+    {% endfor %}
+    var TOKEN_RE = new RegExp('\\{\\{\\s*([a-z0-9_]+)\\s*\\}\\}', 'g');
+    var form = document.getElementById('ct-form');
+    var blocks = document.getElementById('ct-blocks');
     var last = null;
+
+    function esc(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function chipify(s) {
+      return esc(s).replace(TOKEN_RE, function (m, tok) {
+        var label = LABELS[tok];
+        return label
+          ? '<span class="ct-chip mx-0.5 inline-flex items-center rounded-full border border-pool/40 bg-shallow px-1.5 text-xs font-medium text-pool">' + esc(label) + '</span>'
+          : esc(m);
+      });
+    }
+    // Mirrors the server preview's text rules: blank-line paragraphs, "- " bullets.
+    function renderView(sec) {
+      var title = sec.querySelector('input[name=title]').value;
+      var body = sec.querySelector('textarea[name=body]').value;
+      var when = sec.querySelector('input[name=when]').value;
+      var html = '';
+      if (when) html += '<span class="mb-1 inline-block rounded-full border border-seam px-2 text-xs text-mist">Spa contracts only</span>';
+      if (title) html += '<h3 class="font-semibold">' + chipify(title) + '</h3>';
+      if (!body.trim() && !title) html += '<p class="text-sm italic text-mist">Empty section — click to write it.</p>';
+      body.split('\n\n').forEach(function (para) {
+        var bullets = [];
+        para.split('\n').forEach(function (ln) {
+          if (!ln.trim()) return;
+          if (ln.replace(/^\s+/, '').indexOf('- ') === 0) {
+            bullets.push(ln.replace(/^\s+/, '').slice(2));
+          } else {
+            if (bullets.length) { html += ctUl(bullets); bullets = []; }
+            html += '<p class="mt-1 text-sm">' + chipify(ln) + '</p>';
+          }
+        });
+        if (bullets.length) html += ctUl(bullets);
+      });
+      sec.querySelector('.ct-view').innerHTML = html;
+    }
+    function ctUl(items) {
+      return '<ul class="ml-5 list-disc text-sm">' + items.map(function (b) {
+        return '<li>' + chipify(b) + '</li>';
+      }).join('') + '</ul>';
+    }
+    function toView(sec) { renderView(sec); sec.querySelector('.ct-edit').classList.add('hidden'); sec.querySelector('.ct-view').classList.remove('hidden'); }
+    function toEdit(sec) {
+      blocks.querySelectorAll('[data-kind=text]').forEach(function (s) { if (s !== sec) toView(s); });
+      sec.querySelector('.ct-view').classList.add('hidden');
+      sec.querySelector('.ct-edit').classList.remove('hidden');
+      var ta = sec.querySelector('textarea'); ctGrow(ta); ta.focus();
+    }
+    function dirty() {
+      document.getElementById('ct-savebar').classList.remove('hidden');
+      document.getElementById('ct-savebar').classList.add('flex');
+    }
+
     window.ctFocus = function (el) { last = el; };
-    window.ctSyncTitle = function (input) {
-      var s = input.closest('[data-block]').querySelector('.ct-summary-title');
-      if (s) s.textContent = input.value || 'Untitled section';
-    };
-    window.ctInsertToken = function (tok) {
-      var el = last || document.querySelector('#ct-blocks textarea');
-      if (!el) return;
-      var t = '{{ "{{" }}' + tok + '{{ "}}" }}';
+    window.ctGrow = function (ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    window.ctDone = function (btn) { toView(btn.closest('[data-block]')); };
+    window.ctInsertToken = function (sel) {
+      if (!sel.value) return;
+      var el = last && sel.closest('[data-block]').contains(last)
+        ? last : sel.closest('[data-block]').querySelector('textarea');
+      var t = '{' + '{' + sel.value + '}' + '}';
       var s = el.selectionStart != null ? el.selectionStart : el.value.length;
       var e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
       el.value = el.value.slice(0, s) + t + el.value.slice(e);
       el.focus(); el.selectionStart = el.selectionEnd = s + t.length;
-      el.dispatchEvent(new Event('input', {bubbles: true}));
+      sel.value = '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
     };
     window.ctMove = function (btn, dir) {
       var b = btn.closest('[data-block]');
       var sib = dir < 0 ? b.previousElementSibling : b.nextElementSibling;
       if (!sib) return;
-      dir < 0 ? b.parentNode.insertBefore(b, sib) : b.parentNode.insertBefore(sib, b);
-      btn.closest('form').dispatchEvent(new CustomEvent('ct-reorder', {bubbles: true}));
+      dir < 0 ? blocks.insertBefore(b, sib) : blocks.insertBefore(sib, b);
+      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
     };
     window.ctDelete = function (btn) {
-      var form = btn.closest('form');
+      if (!confirm('Delete this section from the contract?')) return;
       btn.closest('[data-block]').remove();
-      form.dispatchEvent(new CustomEvent('ct-reorder', {bubbles: true}));
+      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
+    };
+    window.ctVisible = function (cb) {
+      var sec = cb.closest('[data-block]');
+      sec.querySelector('input[name=visible]').value = cb.checked ? 'on' : 'off';
+      sec.querySelector('.border-dashed').classList.toggle('opacity-50', !cb.checked);
     };
     window.ctAddSection = function () {
-      var tpl = document.getElementById('ct-block-tpl');
-      var node = tpl.content.firstElementChild.cloneNode(true);
-      document.getElementById('ct-blocks').appendChild(node);
-      node.querySelector('input[name=title]').focus();
+      var node = document.getElementById('ct-block-tpl').content.firstElementChild.cloneNode(true);
+      blocks.appendChild(node); toEdit(node); dirty();
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
-    // Rotate the ▸ chevron on open sections (CSS-in-JS-free: just a class hook).
-    document.getElementById('ct-blocks').addEventListener('toggle', function (e) {
-      var c = e.target.querySelector && e.target.querySelector('.ct-chevron');
-      if (c) c.style.transform = e.target.open ? 'rotate(90deg)' : '';
-    }, true);
+    window.ctToggleSample = function (cb) {
+      document.getElementById('ct-doc').classList.toggle('hidden', cb.checked);
+      document.getElementById('ct-preview-wrap').classList.toggle('hidden', !cb.checked);
+      if (cb.checked) form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true }));
+    };
+
+    // Drag to reorder: the handle arms its section, drop re-inserts it.
+    var dragging = null;
+    blocks.addEventListener('mousedown', function (e) {
+      var h = e.target.closest('.ct-handle');
+      if (h) h.closest('[data-block]').setAttribute('draggable', 'true');
+    });
+    blocks.addEventListener('dragstart', function (e) {
+      dragging = e.target.closest('[data-block]');
+      if (dragging) dragging.classList.add('opacity-50');
+    });
+    blocks.addEventListener('dragover', function (e) {
+      if (!dragging) return;
+      e.preventDefault();
+      var over = e.target.closest('[data-block]');
+      if (!over || over === dragging) return;
+      var r = over.getBoundingClientRect();
+      blocks.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+    });
+    blocks.addEventListener('dragend', function () {
+      if (!dragging) return;
+      dragging.classList.remove('opacity-50');
+      dragging.removeAttribute('draggable');
+      dragging = null;
+      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
+    });
+
+    // Click a rendered section to edit it in place.
+    blocks.addEventListener('click', function (e) {
+      var view = e.target.closest('.ct-view');
+      if (view) toEdit(view.closest('[data-block]'));
+    });
+    form.addEventListener('input', dirty);
+    form.addEventListener('change', dirty);
+    window.addEventListener('beforeunload', function (e) {
+      var bar = document.getElementById('ct-savebar');
+      if (!bar.classList.contains('hidden') && !form._submitting) e.preventDefault();
+    });
+    form.addEventListener('submit', function () { form._submitting = true; });
+
+    // Collapse the server-rendered edit forms into the document view.
+    blocks.querySelectorAll('[data-kind=text]').forEach(toView);
   })();
 </script>
