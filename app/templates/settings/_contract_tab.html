@@ -1,49 +1,90 @@
 {% import "_ui.html" as ui %}
+{# One source of truth for a text block's markup: the saved-blocks loop and the
+   "+ Add section" <template> both render this macro, so they can't drift. #}
+{% macro text_block(title="", body="", when="", open=False) %}
+<details class="rounded-xl border border-seam" data-block {{ "open" if open }}>
+  <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2">
+    <span class="ct-chevron text-mist transition">▸</span>
+    <span class="ct-summary-title flex-1 truncate text-sm font-medium">{{ title or "Untitled section" }}</span>
+    <span class="flex gap-1">
+      <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move up"
+              onclick="event.preventDefault();ctMove(this,-1)">↑</button>
+      <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move down"
+              onclick="event.preventDefault();ctMove(this,1)">↓</button>
+      <button type="button" class="btn-secondary px-2.5 py-1 text-xs text-safety" title="Delete section"
+              onclick="event.preventDefault();ctDelete(this)">✕</button>
+    </span>
+  </summary>
+  <div class="space-y-2 border-t border-seam p-3">
+    <input type="hidden" name="kind" value="text">
+    <input type="hidden" name="when" value="{{ when or '' }}">
+    {% if when %}<p class="text-xs text-mist">Only appears on contracts that include a spa.</p>{% endif %}
+    <input class="field font-semibold" name="title" value="{{ title }}"
+           placeholder="Section heading (optional)" onfocus="ctFocus(this)"
+           oninput="ctSyncTitle(this)">
+    <textarea class="field min-h-32 font-data text-sm" name="body" rows="6"
+              onfocus="ctFocus(this)"
+              placeholder="Body text — use “Insert a field” for customer data; start a line with &quot;- &quot; for a bullet">{{ body }}</textarea>
+  </div>
+</details>
+{% endmacro %}
+
 <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
   {# ---- editor ---- #}
   <div class="card p-4">
     <h2 class="set-h">Contract template</h2>
-    <p class="mb-3 text-sm text-mist">Edit the service agreement below. Click a field to drop it
-      into the text you're editing — it fills in from each customer's data when the contract is
-      generated. Start a line with <span class="font-data">- </span> for a bullet.</p>
+    <p class="mb-3 text-sm text-mist">This is the agreement your customers receive. Each section
+      below is one part of the document — click a section to open and edit it. The preview on the
+      right updates as you type.</p>
 
-    <p class="field-label">Insert a field</p>
-    <div class="mb-3 flex flex-wrap gap-1">
-      {% for token, label, group in contract_tokens %}
-      <button type="button" class="tag" title="{{ label }} — {{ group }}"
-              onclick="ctInsertToken('{{ token }}')">{{ '{{' }}{{ token }}{{ '}}' }}</button>
-      {% endfor %}
-    </div>
+    <details class="mb-3 rounded-xl border border-seam">
+      <summary class="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium">Insert a field
+        <span class="font-normal text-mist">— fills in from each customer's data</span></summary>
+      <div class="border-t border-seam p-3">
+        {% for token, label, group in contract_tokens %}
+        {% if loop.first or group != loop.previtem[2] %}
+        {% if not loop.first %}</div>{% endif %}
+        <p class="field-label {{ 'mt-2' if not loop.first }}">{{ group }}</p>
+        <div class="flex flex-wrap gap-1">
+        {% endif %}
+        <button type="button" class="tag" title="{{ label }}"
+                onclick="ctInsertToken('{{ token }}')">{{ label }}</button>
+        {% if loop.last %}</div>{% endif %}
+        {% endfor %}
+      </div>
+    </details>
 
-    <form method="post" action="/settings/contract/save" id="ct-form" class="space-y-3">
+    <form method="post" action="/settings/contract/save" id="ct-form" class="space-y-3"
+          hx-post="/settings/contract/preview" hx-trigger="input delay:600ms, change delay:300ms, ct-reorder"
+          hx-target="#ct-preview" hx-swap="innerHTML">
       <label class="block"><span class="field-label">Document title</span>
         <input class="field" name="doc_title" value="{{ contract_template.title }}"></label>
 
       <div id="ct-blocks" class="space-y-2">
         {% for b in contract_template.blocks %}
-        <div class="card border-seam p-2.5" data-block>
+        {% if b.kind == "text" %}
+        {{ text_block(b.title, b.body, b.get("when") or "") }}
+        {% else %}
+        <div class="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-dashed border-seam px-3 py-2" data-block>
           <input type="hidden" name="kind" value="{{ b.kind }}">
-          {% if b.kind == "text" %}
-          <input class="field mb-1 font-semibold" name="title" value="{{ b.title }}"
-                 placeholder="Section heading (optional)" onfocus="ctFocus(this)">
-          <textarea class="field min-h-24 font-data text-sm" name="body" rows="4"
-                    onfocus="ctFocus(this)"
-                    placeholder="Body text — use fields above; start a line with &quot;- &quot; for a bullet">{{ b.body }}</textarea>
-          {% else %}
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-data text-xs uppercase tracking-wide text-mist">{{ b.kind }} block — auto-generated</span>
+          <span class="text-sm">
+            {% if b.kind == "parties" %}Customer &amp; company details
+            {% elif b.kind == "rates" %}Service rates table
+            {% else %}Signature lines{% endif %}
+            <span class="font-data text-xs uppercase tracking-wide text-mist">· auto-generated</span>
+          </span>
+          <span class="flex items-center gap-2">
             <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
             <label class="flex items-center gap-1.5 text-sm">
               <input type="checkbox" {{ "checked" if b.get('visible', True) }} class="h-4 w-4"
                      onchange="this.closest('[data-block]').querySelector('input[name=visible]').value = this.checked ? 'on' : 'off'"> Show</label>
-          </div>
-          {% endif %}
-          <div class="mt-2 flex gap-1.5">
-            <button type="button" class="btn-secondary px-3" title="Move up" onclick="ctMove(this,-1)">↑</button>
-            <button type="button" class="btn-secondary px-3" title="Move down" onclick="ctMove(this,1)">↓</button>
-            <button type="button" class="btn-secondary px-3 text-safety" onclick="ctDelete(this)">Delete</button>
-          </div>
+            <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move up"
+                    onclick="ctMove(this,-1)">↑</button>
+            <button type="button" class="btn-secondary px-2.5 py-1 text-xs" title="Move down"
+                    onclick="ctMove(this,1)">↓</button>
+          </span>
         </div>
+        {% endif %}
         {% endfor %}
       </div>
 
@@ -52,16 +93,16 @@
         <button class="btn-primary flex-1">Save contract</button>
       </div>
     </form>
+
+    <template id="ct-block-tpl">{{ text_block(open=True) }}</template>
   </div>
 
   {# ---- live preview ---- #}
-  <div class="card p-4">
+  <div class="card p-4 lg:sticky lg:top-4">
     <h2 class="set-h">Live preview</h2>
-    <p class="mb-2 text-sm text-mist">Shown with sample data. Real contracts use each customer's info.</p>
-    <button type="button" class="btn-secondary mb-3"
-            hx-post="/settings/contract/preview" hx-include="#ct-form"
-            hx-target="#ct-preview" hx-swap="innerHTML">Refresh preview</button>
-    <div id="ct-preview" class="max-h-[36rem] overflow-y-auto rounded-lg border border-seam p-3">
+    <p class="mb-2 text-sm text-mist">Updates as you type, shown with sample data. Real contracts
+      use each customer's info.</p>
+    <div id="ct-preview" class="max-h-[70vh] overflow-y-auto rounded-lg border border-seam p-3">
       {{ contract_preview_html | safe }}
     </div>
   </div>
@@ -71,6 +112,10 @@
   (function () {
     var last = null;
     window.ctFocus = function (el) { last = el; };
+    window.ctSyncTitle = function (input) {
+      var s = input.closest('[data-block]').querySelector('.ct-summary-title');
+      if (s) s.textContent = input.value || 'Untitled section';
+    };
     window.ctInsertToken = function (tok) {
       var el = last || document.querySelector('#ct-blocks textarea');
       if (!el) return;
@@ -79,26 +124,30 @@
       var e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
       el.value = el.value.slice(0, s) + t + el.value.slice(e);
       el.focus(); el.selectionStart = el.selectionEnd = s + t.length;
+      el.dispatchEvent(new Event('input', {bubbles: true}));
     };
     window.ctMove = function (btn, dir) {
       var b = btn.closest('[data-block]');
       var sib = dir < 0 ? b.previousElementSibling : b.nextElementSibling;
       if (!sib) return;
       dir < 0 ? b.parentNode.insertBefore(b, sib) : b.parentNode.insertBefore(sib, b);
+      btn.closest('form').dispatchEvent(new CustomEvent('ct-reorder', {bubbles: true}));
     };
-    window.ctDelete = function (btn) { btn.closest('[data-block]').remove(); };
+    window.ctDelete = function (btn) {
+      var form = btn.closest('form');
+      btn.closest('[data-block]').remove();
+      form.dispatchEvent(new CustomEvent('ct-reorder', {bubbles: true}));
+    };
     window.ctAddSection = function () {
-      var d = document.createElement('div');
-      d.className = 'card border-seam p-2.5'; d.setAttribute('data-block', '');
-      d.innerHTML =
-        '<input type="hidden" name="kind" value="text">' +
-        '<input class="field mb-1 font-semibold" name="title" placeholder="Section heading (optional)" onfocus="ctFocus(this)">' +
-        '<textarea class="field min-h-24 font-data text-sm" name="body" rows="4" onfocus="ctFocus(this)" placeholder="Body text"></textarea>' +
-        '<div class="mt-2 flex gap-1.5">' +
-        '<button type="button" class="btn-secondary px-3" onclick="ctMove(this,-1)">↑</button>' +
-        '<button type="button" class="btn-secondary px-3" onclick="ctMove(this,1)">↓</button>' +
-        '<button type="button" class="btn-secondary px-3 text-safety" onclick="ctDelete(this)">Delete</button></div>';
-      document.getElementById('ct-blocks').appendChild(d);
+      var tpl = document.getElementById('ct-block-tpl');
+      var node = tpl.content.firstElementChild.cloneNode(true);
+      document.getElementById('ct-blocks').appendChild(node);
+      node.querySelector('input[name=title]').focus();
     };
+    // Rotate the ▸ chevron on open sections (CSS-in-JS-free: just a class hook).
+    document.getElementById('ct-blocks').addEventListener('toggle', function (e) {
+      var c = e.target.querySelector && e.target.querySelector('.ct-chevron');
+      if (c) c.style.transform = e.target.open ? 'rotate(90deg)' : '';
+    }, true);
   })();
 </script>

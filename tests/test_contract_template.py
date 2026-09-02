@@ -100,6 +100,25 @@ def test_save_persists_template_admin(client, engine):
         assert tpl["blocks"][1]["kind"] == "rates" and tpl["blocks"][1]["visible"] is True
 
 
+def test_save_round_trips_when_condition(client, engine):
+    """Saving must not strip a block's `when` gate (regression: the spa-only
+    section used to lose includes_spa on the first save and then rendered on
+    every contract)."""
+    r = client.post("/settings/contract/save", data={
+        "doc_title": "Service Agreement",
+        "kind": ["text", "text"],
+        "title": ["Intro", "Spa Care"],
+        "body": ["Hello.", "Spa serviced weekly."],
+        "when": ["", "includes_spa"],
+        "visible": [],
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    with Session(engine) as s:
+        tpl = get_template(s)
+        assert tpl["blocks"][0]["when"] is None
+        assert tpl["blocks"][1]["when"] == "includes_spa"
+
+
 def test_save_requires_admin(tech_client):
     c = tech_client("sam")
     r = c.post("/settings/contract/save", data={"doc_title": "x", "kind": ["text"],

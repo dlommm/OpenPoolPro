@@ -18,12 +18,17 @@ _COMPUTED = {"parties", "rates", "signature"}
 
 def _blocks_from_form(form) -> list[dict]:
     """Rebuild the ordered block list from the editor form. `kind[]` gives block
-    order. Text blocks carry a `title[]`/`body[]` (one each, in text-block order);
-    computed blocks carry one `visible[]` value each ("on"/"off"), in their order.
-    Both are consumed positionally as we walk `kind[]`."""
+    order. Text blocks carry a `title[]`/`body[]`/`when[]` (one each, in
+    text-block order); computed blocks carry one `visible[]` value each
+    ("on"/"off"), in their order. All consumed positionally as we walk `kind[]`.
+
+    `when` round-trips through a hidden input: without it, saving the template
+    silently stripped the spa section's includes_spa condition, making it
+    render on every contract from then on."""
     kinds = form.getlist("kind")
     titles = form.getlist("title")
     bodies = form.getlist("body")
+    whens = form.getlist("when")
     vis_iter = iter(form.getlist("visible"))
     blocks = []
     ti = 0
@@ -32,7 +37,7 @@ def _blocks_from_form(form) -> list[dict]:
             blocks.append({"kind": "text",
                            "title": (titles[ti] if ti < len(titles) else ""),
                            "body": (bodies[ti] if ti < len(bodies) else ""),
-                           "when": None})
+                           "when": (whens[ti] if ti < len(whens) else "") or None})
             ti += 1
         elif kind in _COMPUTED:
             blocks.append({"kind": kind, "visible": next(vis_iter, "off") == "on"})
