@@ -3,55 +3,120 @@
 {% block nav %}{% endblock %}
 {% block main_offset %}{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl pb-16">
-  <div class="mb-6 mt-4 text-center">
-    {% if has_logo_check() %}
-    <img src="/branding/logo" alt="{{ company.business_name }}" class="mx-auto mb-3 max-h-14">
+{# DocuSign-style flow: the agreement renders as a real in-page document (no
+   PDF iframe — phone-friendly), with the signature panel embedded exactly at
+   the document's signature block, a typed name shown as a script signature,
+   and a sticky action bar. The PDF stays one tap away and is the document of
+   record; this page mirrors it block-for-block (app/contract_html.py). #}
+<style>
+  @font-face{font-family:'Great Vibes';src:url('/static/fonts/GreatVibes-Regular.ttf');font-display:swap}
+  .sig-script{font-family:'Great Vibes',cursive;font-size:2rem;line-height:1.2}
+  .ct-doc p{margin:.35rem 0;font-size:.925rem;line-height:1.55}
+  .ct-doc ul{margin:.3rem 0 .3rem 1.4rem;list-style:disc;font-size:.925rem;line-height:1.5}
+  .ct-doc .ct-co{margin:0;font-size:.85rem;line-height:1.4}
+  .ct-doc .ct-title{margin:1rem 0;text-align:center;font-size:1.35rem;font-weight:700}
+  .ct-doc .ct-h{margin:1.1rem 0 .3rem;font-size:1rem;font-weight:700}
+  .ct-doc .ct-parties{margin:.4rem 0;padding:.6rem .8rem;border:1px solid var(--color-seam,#E4DBCC);border-radius:.5rem}
+  .ct-doc .ct-rates{width:100%;border-collapse:collapse;font-size:.9rem}
+  .ct-doc .ct-rates td{padding:.4rem .5rem;border-bottom:1px solid var(--color-seam,#E4DBCC);vertical-align:top}
+  .ct-doc .ct-rl{width:11rem;font-weight:700}
+  @media (max-width:480px){.ct-doc .ct-rl{width:7rem}}
+</style>
+
+<div class="pb-28">
+  <div class="sticky top-0 z-20 -mx-4 mb-4 border-b border-seam bg-paper/95 px-4 py-2 backdrop-blur">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-2">
+      <span class="flex min-w-0 items-center gap-2">
+        {% if has_logo_check() %}<img src="/branding/logo" alt="" class="h-8 w-auto shrink-0">{% endif %}
+        <b class="truncate">{{ company.business_name or "Pool Service Agreement" }}</b>
+      </span>
+      <span class="shrink-0 text-xs text-mist">Link expires {{ expires_local.strftime("%b %d, %I:%M %p") }}</span>
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-3xl">
+    <div class="card mb-4 flex flex-wrap items-center justify-between gap-3 border-pool/50 bg-shallow/40 p-4">
+      <div>
+        <p class="font-display text-lg font-bold">Please review and sign your
+          {{ contract.season_year }} Pool Service Agreement</p>
+        <p class="text-sm text-mist">Prepared for {{ customer.name }} · {{ prop.address }}</p>
+      </div>
+      <a href="#sign-here" class="btn-primary px-6">Start ↓</a>
+    </div>
+
+    {% if form_error %}
+    <div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">{{ form_error }}</div>
     {% endif %}
-    <h1 class="font-display text-2xl font-bold">{{ company.business_name or "Pool Service Agreement" }}</h1>
-    <p class="page-eyebrow">{{ contract.season_year }} Pool Service Agreement</p>
+
+    <div class="card ct-doc p-6 sm:p-10">
+      {% set parts = doc_html.split("<!--SIGN-HERE-->") %}
+      {{ parts[0] | safe }}
+
+      <div id="sign-here" class="relative my-4 rounded-xl border-2 border-pool bg-shallow/30 p-4 pt-6">
+        <span class="absolute -top-3 left-4 rounded bg-pool px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">Sign here</span>
+        <form method="post" action="/sign/{{ token }}" id="sign-form" class="space-y-3">
+          <label class="block">
+            <span class="field-label">Type your full legal name</span>
+            <input name="signed_name" id="sig-name" value="{{ signed_name or '' }}" required
+                   maxlength="120" autocomplete="name" placeholder="Full name" class="field">
+          </label>
+          <div class="rounded-lg border border-seam bg-paper px-4 pb-1 pt-3">
+            <div id="sig-preview" class="sig-script min-h-12 text-ink">&nbsp;</div>
+            <div class="flex justify-between border-t border-seam pt-1 text-xs text-mist">
+              <span>Signature</span><span>{{ today_local }}</span>
+            </div>
+          </div>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="agree" id="sig-agree" value="yes" required class="mt-1">
+            <span>I have read this agreement and <b>agree to its terms and conditions</b>.
+              I understand that adopting this signature and finishing is a legally binding
+              electronic signature on this document.</span>
+          </label>
+          <button id="sig-submit" class="btn-primary w-full sm:w-auto sm:px-8" disabled>Adopt signature &amp; finish</button>
+        </form>
+      </div>
+
+      {{ parts[1] | safe if parts | length > 1 }}
+    </div>
+
+    <p class="mt-3 text-center text-xs text-mist">
+      This page is a faithful rendering of your agreement.
+      <a href="/sign/{{ token }}/pdf" target="_blank" rel="noopener" class="text-pool">View the PDF</a>
+      — the signed PDF is the document of record and will be emailed to you.</p>
   </div>
 
-  <div class="card mb-4 p-4">
-    <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-      <div><dt class="field-label">Prepared for</dt><dd class="font-medium">{{ customer.name }}</dd></div>
-      <div><dt class="field-label">Service address</dt><dd>{{ prop.address }}</dd></div>
-      <div><dt class="field-label">Season</dt><dd class="font-data">{{ contract.season_year }} · {{ contract.weeks }} weeks</dd></div>
-      <div><dt class="field-label">Season value</dt><dd class="money">{{ value | dollars }}</dd></div>
-    </dl>
-    <p class="mt-3 text-sm text-mist">
-      This signing link expires {{ expires_local.strftime("%B %d, %Y at %I:%M %p") }}.
-    </p>
+  <div class="fixed inset-x-0 bottom-0 z-20 border-t border-seam bg-paper/95 px-4 py-3 backdrop-blur">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-3">
+      <a href="/sign/{{ token }}/pdf" target="_blank" rel="noopener" class="text-sm text-pool">View PDF</a>
+      <span class="flex items-center gap-3">
+        <span id="bar-hint" class="hidden text-xs text-mist sm:inline">Type your name and tick the box to finish</span>
+        <button form="sign-form" id="bar-submit" class="btn-primary px-8" disabled>Finish</button>
+      </span>
+    </div>
   </div>
-
-  <div class="card mb-4 p-4">
-    <h2 class="set-h">Your agreement</h2>
-    <p class="mb-2 text-sm text-mist">Please review the full agreement below before signing.
-      <a href="/sign/{{ token }}/pdf" target="_blank" class="text-pool">Open the PDF in a new tab</a>.</p>
-    <iframe src="/sign/{{ token }}/pdf" title="Agreement PDF"
-            class="h-[70vh] w-full rounded-lg border border-seam"></iframe>
-  </div>
-
-  {% if form_error %}
-  <div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">{{ form_error }}</div>
-  {% endif %}
-
-  <form method="post" action="/sign/{{ token }}" class="card p-4">
-    <h2 class="set-h">Sign electronically</h2>
-    <label class="block">
-      <span class="field-label">Type your full legal name — this is your electronic signature</span>
-      <input name="signed_name" value="{{ signed_name or '' }}" required maxlength="120"
-             autocomplete="name" placeholder="Full name" class="field">
-    </label>
-    <label class="mt-3 flex items-start gap-2 text-sm">
-      <input type="checkbox" name="agree" value="yes" required class="mt-1">
-      <span>I have read the agreement above and <b>agree to its terms and conditions</b>.
-        I understand that typing my name and submitting this form is a legally binding
-        electronic signature on this document.</span>
-    </label>
-    <button class="btn-primary mt-4">Agree &amp; sign</button>
-    <p class="mt-2 text-center text-xs text-mist">A signed copy is recorded with
-      {{ company.business_name or "us" }} the moment you submit.</p>
-  </form>
 </div>
+
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var name = document.getElementById("sig-name");
+  var agree = document.getElementById("sig-agree");
+  var preview = document.getElementById("sig-preview");
+  var buttons = [document.getElementById("sig-submit"), document.getElementById("bar-submit")];
+  var hint = document.getElementById("bar-hint");
+  function update() {
+    preview.textContent = name.value.trim() || " ";
+    var ready = !!name.value.trim() && agree.checked;
+    buttons.forEach(function (b) { b.disabled = !ready; });
+    hint.classList.toggle("hidden", ready);
+  }
+  name.addEventListener("input", update);
+  agree.addEventListener("change", update);
+  // A bar-submit click when the form is out of view should still show which
+  // fields are missing — scroll the sign panel into view on invalid submit.
+  document.getElementById("sign-form").addEventListener("invalid", function () {
+    document.getElementById("sign-here").scrollIntoView({behavior: "smooth", block: "center"});
+  }, true);
+  update();
+})();
+</script>
 {% endblock %}

@@ -11,12 +11,14 @@ from app.main import create_app
 
 SECURITY_HEADERS = {
     "x-content-type-options": "nosniff",
-    "x-frame-options": "DENY",
+    # SAMEORIGIN (not DENY): the app frames its own contract PDFs.
+    "x-frame-options": "SAMEORIGIN",
     "referrer-policy": "same-origin",
     # The script nonce varies per request by design; match the shape.
     "content-security-policy": re.compile(
         r"default-src 'self'; script-src 'self' 'nonce-[A-Za-z0-9_-]+'; "
-        r"style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps\.geoapify\.com"
+        r"style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps\.geoapify\.com; "
+        r"frame-ancestors 'self'"
     ),
 }
 

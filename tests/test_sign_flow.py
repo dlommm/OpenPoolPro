@@ -70,9 +70,56 @@ def test_sign_page_renders_without_a_session(client, engine, monkeypatch):
     assert r.status_code == 200
     assert "Riviera Household" in r.text
     assert "terms and conditions" in r.text
+    # DocuSign-style page: the agreement renders in-page as HTML (no iframe),
+    # with the signature panel embedded at the document's signature block.
+    assert "<iframe" not in r.text
+    assert "Service Rates" in r.text
+    assert "Sign here" in r.text
+    assert "GreatVibes" in r.text  # script-font signature preview
     r = client.get(f"/sign/{token}/pdf")
     assert r.status_code == 200
     assert r.content.startswith(b"%PDF")
+    # Frameable by our own pages and displayed inline, not downloaded —
+    # X-Frame-Options: DENY silently blanked every same-origin PDF preview.
+    assert r.headers["x-frame-options"] == "SAMEORIGIN"
+    assert r.headers["content-disposition"].startswith("inline")
+
+
+def test_signing_emails_the_signed_copy(client, engine, monkeypatch):
+    from app import mailer
+
+    cid, token, _ = _sent_contract(client, engine, monkeypatch)
+    calls = []
+    monkeypatch.setattr(mailer, "send_message",
+                        lambda to, sub, body, conf=None, attachments=None:
+                        calls.append((to, sub, attachments)))
+    client.cookies.clear()
+    r = client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
+    assert r.status_code == 200
+    assert "emailed to" in r.text and "riviera@example.com" in r.text
+    to, subject, attachments = calls[-1]
+    assert to == "riviera@example.com"
+    assert "Signed" in subject
+    pdf_bytes, filename = attachments[0]
+    assert filename == "signed-contract.pdf"
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_signing_succeeds_even_when_copy_email_fails(client, engine, monkeypatch):
+    from app import mailer
+
+    cid, token, _ = _sent_contract(client, engine, monkeypatch)
+
+    def boom(*a, **k):
+        raise ConnectionError("smtp down")
+
+    monkeypatch.setattr(mailer, "send_message", boom)
+    client.cookies.clear()
+    r = client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
+    assert r.status_code == 200
+    assert "Thank you" in r.text  # signing recorded regardless
+    with Session(engine) as s:
+        assert s.get(models.Contract, cid).status == "signed"
 
 
 def test_invalid_token_is_rejected(client, engine, monkeypatch):

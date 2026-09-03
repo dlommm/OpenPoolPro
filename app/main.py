@@ -249,7 +249,11 @@ def create_app(engine=None) -> FastAPI:
         request.state.csp_nonce = _secrets.token_urlsafe(16)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        # SAMEORIGIN, not DENY: the app frames its own contract PDFs (staff
+        # detail preview). DENY blocked even same-origin frames, which is why
+        # the inline PDF viewers rendered blank. Third-party framing
+        # (clickjacking) stays blocked — reinforced by frame-ancestors below.
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "same-origin"
         # Pin clients to HTTPS whenever the deployment is HTTPS (COOKIE_SECURE
         # is the same switch): without HSTS, one http:// bookmark is a
@@ -268,7 +272,8 @@ def create_app(engine=None) -> FastAPI:
         # the attack this pass is closing.
         response.headers["Content-Security-Policy"] = (
             f"default-src 'self'; script-src 'self' 'nonce-{request.state.csp_nonce}'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com; "
+            "frame-ancestors 'self'"
         )
         # HTML must always revalidate so a home-screen PWA never renders a stale
         # shell (the SW is network-first for navigations, but iOS's HTTP cache

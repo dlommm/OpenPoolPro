@@ -20,14 +20,13 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import contract_pdf, models
+from app import contract_html, contract_pdf, mailer, models, tax
 from app.company import company_info
 from app.contract_files import pdf_path, signed_path
 from app.db import get_session
 from app.fileio import atomic_write
-from app.rates import season_value_cents
 from app.templating import templates
-from app.timefmt import to_local
+from app.timefmt import business_today, to_local
 
 router = APIRouter()
 
@@ -80,10 +79,15 @@ def _resolve(request: Request, session: Session, token: str):
 
 def _page_ctx(session: Session, contract: "models.Contract", token: str) -> dict:
     prop = contract.pool.property
+    company = company_info(session)
+    doc_html = contract_html.render_contract_html(
+        contract, contract.pool, prop, prop.customer, company,
+        tax_rate_ppm=tax.resolve_rate_ppm(session, prop.state), session=session)
     return {
         "contract": contract, "pool": contract.pool, "prop": prop,
-        "customer": prop.customer, "company": company_info(session),
-        "token": token, "value": season_value_cents(contract),
+        "customer": prop.customer, "company": company,
+        "token": token, "doc_html": doc_html,
+        "today_local": business_today().strftime("%B %d, %Y"),
         "expires_local": to_local(contract.sign_token_expires_at),
     }
 
@@ -174,7 +178,25 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
                  detail=f"{contract.id} -> signed (e-sign by {name})")
     session.commit()
 
+    # Email the customer their signed copy — strictly best-effort AFTER the
+    # commit: the signature is on record either way, and a mail hiccup must
+    # never show the signer an error for an agreement that IS signed.
+    emailed = False
+    customer = prop.customer
+    try:
+        if customer.email and mailer.smtp_configured(session):
+            mailer.send_message(
+                customer.email,
+                f"Signed: your {contract.season_year} Pool Service Agreement",
+                (f"Thank you, {name}!\n\nAttached is your signed "
+                 f"{contract.season_year} pool service agreement for your records."),
+                conf=mailer.send_conf(session),
+                attachments=[(signed_bytes, "signed-contract.pdf")])
+            emailed = True
+    except Exception:
+        pass
+
     return templates.TemplateResponse(request, "sign/done.html", {
-        "contract": contract, "customer": prop.customer, "company": company,
-        "signed_name": name, "signed_local": to_local(now),
+        "contract": contract, "customer": customer, "company": company,
+        "signed_name": name, "signed_local": to_local(now), "emailed": emailed,
     })

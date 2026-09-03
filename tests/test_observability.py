@@ -86,7 +86,7 @@ def test_exception_is_re_raised_so_the_response_is_unchanged(client):
 
     ok = client.get("/")
     assert ok.status_code == 200
-    assert ok.headers["X-Frame-Options"] == "DENY"
+    assert ok.headers["X-Frame-Options"] == "SAMEORIGIN"
     assert ok.headers["Cache-Control"] == "no-cache"
 
 
