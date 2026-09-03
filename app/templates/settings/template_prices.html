@@ -18,7 +18,7 @@
         <input name="label" value="{{ p.label }}" placeholder="Size" class="field">
         <input inputmode="numeric" name="max_gallons" value="{{ p.max_gallons or '' }}" placeholder="∞" class="field text-center font-data">
         <div class="relative flex items-center"><input inputmode="decimal" name="hours" value="{{ '%.2f'|format(p.hours) }}" class="field pr-8 font-data font-semibold"><span class="pointer-events-none absolute right-3 text-xs text-mist">hrs</span></div>
-        <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=hours]').value='';r.style.display='none'">&times;</button>
+        <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" data-remove-row=".tier-row" data-clear="hours">&times;</button>
       </div>
       {% endfor %}
     </div>
@@ -27,19 +27,19 @@
       <input name="label" placeholder="Size" class="field">
       <input inputmode="numeric" name="max_gallons" placeholder="∞" class="field text-center font-data">
       <div class="relative flex items-center"><input inputmode="decimal" name="hours" placeholder="0.00" class="field pr-8 font-data font-semibold"><span class="pointer-events-none absolute right-3 text-xs text-mist">hrs</span></div>
-      <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" onclick="var r=this.closest('.tier-row');r.querySelector('input[name=hours]').value='';r.style.display='none'">&times;</button>
+      <button type="button" title="Remove" class="flex h-11 items-center justify-center rounded-lg text-xl text-mist hover:text-safety" data-remove-row=".tier-row" data-clear="hours">&times;</button>
     </div>
     <div class="mt-3 flex flex-wrap gap-2 border-t border-dashed border-seam pt-3">
-      <select class="field flex-1" onchange="tpAddCommon(this)">
+      <select class="field flex-1" data-tp-common>
         <option value="">Add common size…</option>
         {% for o in size_opts["pool"] %}<option value="{{ o.label }}|{{ o.ref_gallons }}">{{ o.label }} &middot; {{ "{:,}".format(o.ref_gallons) }} gal</option>{% endfor %}
       </select>
-      <button type="button" class="btn-secondary whitespace-nowrap px-4" onclick="tpAddTier(this)">+ Add custom</button>
+      <button type="button" class="btn-secondary whitespace-nowrap px-4" data-tp-add>+ Add custom</button>
     </div>
     <button class="btn-primary mt-3">Save hours</button>
   </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
   function tpAddTier(el, label, gallons) {
     var form = el.closest("form");
     var tmpl = form.querySelector(".tier-row-tmpl");
@@ -60,5 +60,13 @@
     tpAddTier(sel, parts[0], parts[1]);
     sel.selectedIndex = 0;
   }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-tp-add]");
+    if (b) tpAddTier(b);
+  });
+  document.addEventListener("change", function (e) {
+    var s = e.target.closest("[data-tp-common]");
+    if (s) tpAddCommon(s);
+  });
 </script>
 {% endblock %}

@@ -37,7 +37,7 @@
   </div>
   <a href="/properties/{{ property_id }}/pools/new" class="mt-1 inline-block text-sm text-mist underline">Custom size</a>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var poolSelect = document.getElementById("pool_size_select");
   var spaSelect = document.getElementById("spa_size_select");

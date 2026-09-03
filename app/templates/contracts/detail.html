@@ -146,7 +146,7 @@
     </form>
 
     <form method="post" action="/contracts/{{ contract.id }}/void"
-          onsubmit="return confirm('Void this contract? This cannot be undone.')">
+          data-confirm="Void this contract? This cannot be undone.">
       <button class="btn-danger">Void</button>
     </form>
     {% endif %}

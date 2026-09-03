@@ -253,7 +253,11 @@ def test_locked_bad_password_unknown_user_responses_identical(engine, monkeypatc
     r_locked = c.post("/login", data={"username": "owner", "password": "testpass"})  # right password!
 
     assert r_unknown.status_code == r_badpw.status_code == r_locked.status_code == 200
-    assert r_unknown.text == r_badpw.text == r_locked.text
+    # The CSP script nonce differs per request by design and carries no
+    # account-state signal — strip it, then the bodies must be identical.
+    import re
+    denonce = lambda t: re.sub(r'nonce="[^"]*"', 'nonce=""', t)  # noqa: E731
+    assert denonce(r_unknown.text) == denonce(r_badpw.text) == denonce(r_locked.text)
 
 
 # ---------------------------------------------------------------------------

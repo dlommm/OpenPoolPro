@@ -73,7 +73,7 @@
             {% if item.suggested_qty is not none %}
               order <span class="font-semibold text-ink">{{ "%.2f"|format(item.suggested_qty) }} {{ c.unit }}</span>
             {% else %}
-              <button type="button" onclick="invEdit({{ c.id }})" class="text-pool underline">set order qty</button>
+              <button type="button" data-inv-edit="{{ c.id }}" class="text-pool underline">set order qty</button>
             {% endif %}
           </td>
           <td class="py-2 text-right">
@@ -92,7 +92,7 @@
   <div class="mb-2 flex items-center justify-between">
     <h2 class="set-h">All stock</h2>
     <label class="flex items-center gap-2 text-xs text-mist">
-      <input type="checkbox" onchange="invShowInactive(this.checked)" class="h-4 w-4"> Show inactive
+      <input type="checkbox" data-inv-inactive-toggle class="h-4 w-4"> Show inactive
     </label>
   </div>
   <div class="overflow-x-auto">
@@ -124,7 +124,7 @@
           <td class="py-2 pr-3 text-mist">{{ "%.2f"|format(c.reorder_point) if c.reorder_point is not none else "—" }}</td>
           <td class="py-2 pr-3 money">{{ (c.stock_qty * c.cost_per_unit_cents) | dollars }}</td>
           <td class="py-2 text-right">
-            <button type="button" onclick="invEdit({{ c.id }})" class="btn-secondary px-3 py-1 text-xs">Edit</button>
+            <button type="button" data-inv-edit="{{ c.id }}" class="btn-secondary px-3 py-1 text-xs">Edit</button>
           </td>
         </tr>
         <tr id="edit-{{ c.id }}" class="hidden">
@@ -183,16 +183,16 @@
 {# Zone 4 — activity: history (tabbed) #}
 <div class="card mb-4 p-4">
   <div class="mb-3 flex gap-4 border-b border-seam">
-    <button type="button" id="tabbtn-purchases" onclick="invTab('purchases')"
+    <button type="button" id="tabbtn-purchases" data-inv-tab="purchases"
             class="border-b-2 border-pool pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-ink">Purchases</button>
-    <button type="button" id="tabbtn-adjustments" onclick="invTab('adjustments')"
+    <button type="button" id="tabbtn-adjustments" data-inv-tab="adjustments"
             class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Adjustments</button>
   </div>
   <div id="tab-purchases">{{ history_table(purchases, users_by_id, "No purchases logged yet.") }}</div>
   <div id="tab-adjustments" class="hidden">{{ history_table(adjustments, users_by_id, "No recount adjustments yet.") }}</div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function invEdit(id){var r=document.getElementById('edit-'+id);if(!r)return;var willShow=r.classList.contains('hidden');r.classList.toggle('hidden');if(willShow)r.scrollIntoView({block:'center',behavior:'smooth'});}
 function invShowInactive(show){
   document.querySelectorAll('.inv-inactive').forEach(function(el){el.classList.toggle('hidden', !show);});
@@ -207,5 +207,14 @@ function invTab(name){
     b.classList.toggle('border-transparent', !on); b.classList.toggle('text-mist', !on);
   });
 }
+document.addEventListener('click', function(e){
+  var edit = e.target.closest('[data-inv-edit]');
+  if (edit) return invEdit(edit.getAttribute('data-inv-edit'));
+  var tab = e.target.closest('[data-inv-tab]');
+  if (tab) invTab(tab.getAttribute('data-inv-tab'));
+});
+document.addEventListener('change', function(e){
+  if (e.target.closest('[data-inv-inactive-toggle]')) invShowInactive(e.target.checked);
+});
 </script>
 {% endblock %}

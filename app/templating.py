@@ -10,6 +10,7 @@ import contextvars
 import logging
 import os
 
+import jinja2
 from fastapi.templating import Jinja2Templates
 from jinja2 import BaseLoader, FileSystemLoader, TemplateNotFound
 
@@ -129,3 +130,17 @@ def _low_stock_count(request) -> int:
 
 
 templates.env.globals["low_stock_count"] = _low_stock_count
+
+
+@jinja2.pass_context
+def _csp_nonce(ctx) -> str:
+    """The per-request script nonce (set by the security_headers middleware).
+    Every inline <script> must carry nonce="{{ csp_nonce() }}" — the CSP has
+    no 'unsafe-inline' for scripts, so an un-nonced block silently does
+    nothing. tests/test_csp_nonce.py greps the template sources to make that
+    mistake impossible to ship."""
+    request = ctx.get("request")
+    return getattr(request.state, "csp_nonce", "") if request is not None else ""
+
+
+templates.env.globals["csp_nonce"] = _csp_nonce

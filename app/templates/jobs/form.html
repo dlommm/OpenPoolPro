@@ -207,7 +207,7 @@
   {% endif %}
   <button class="btn-primary">Save</button>
 </form>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   // --- Mode toggle (Existing / New customer) ------------------------------
   var existingRadio = document.getElementById("mode_existing");

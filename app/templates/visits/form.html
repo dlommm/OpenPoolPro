@@ -132,7 +132,7 @@
 </form>
 
 <script type="application/json" id="collect-data">{{ collect | tojson }}</script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var dataEl = document.getElementById("collect-data");
   if (!dataEl) return;
@@ -199,7 +199,7 @@
 </form>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener("click", function (e) {
   if (e.target.id !== "apply-doses") return;
   document.querySelectorAll("#dose-panel [data-chem-id]").forEach(function (el) {

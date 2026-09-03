@@ -3,7 +3,7 @@
    which every production theme overrides — so under any real theme the
    chosen filename was silently never reflected. Anything all four shells
    need belongs in a shared partial, never inline in one base. #}
-<script>
+<script nonce="{{ csp_nonce() }}">
 // Reflect the chosen filename on styled upload buttons that submit via a form
 // (logo, signed contract, CSV). htmx auto-upload inputs (hx-post) upload on
 // change and re-render, so they keep their action label.

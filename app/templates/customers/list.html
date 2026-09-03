@@ -52,14 +52,14 @@
     <input type="hidden" id="show-state" name="show" value="{{ 'inactive' if show_inactive else '' }}">
     <input type="hidden" name="q" value="{{ q }}">
     <label class="sr-only" for="city">City</label>
-    <select id="city" name="city" class="field w-auto" onchange="this.form.submit()">
+    <select id="city" name="city" class="field w-auto" data-autosubmit>
       <option value="">All cities</option>
       {% for ct in cities %}
       <option value="{{ ct }}" {{ "selected" if city == ct }}>{{ ct }}</option>
       {% endfor %}
     </select>
     <label class="sr-only" for="sort">Sort</label>
-    <select id="sort" name="sort" class="field w-auto" onchange="this.form.submit()">
+    <select id="sort" name="sort" class="field w-auto" data-autosubmit>
       <option value="name" {{ "selected" if sort == "name" }}>Name</option>
       <option value="city" {{ "selected" if sort == "city" }}>City</option>
       <option value="recent" {{ "selected" if sort == "recent" }}>Recent</option>

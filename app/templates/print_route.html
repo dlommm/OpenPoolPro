@@ -12,7 +12,7 @@
 
 {{ ui.page_header("Route sheet", d.strftime("%A, %b %-d")) }}
 
-<button onclick="window.print()" class="no-print btn-secondary mb-3">Print route sheet</button>
+<button data-print class="no-print btn-secondary mb-3">Print route sheet</button>
 
 <div class="rise space-y-2.5">
   {% for s in stops %}

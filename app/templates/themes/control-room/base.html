@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#0E141B">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <script>(function(){try{var m=localStorage.getItem('mode');if(m==='light'||m==='dark')document.documentElement.setAttribute('data-mode',m);}catch(e){}})();</script>
+  <script nonce="{{ csp_nonce() }}">(function(){try{var m=localStorage.getItem('mode');if(m==='light'||m==='dark')document.documentElement.setAttribute('data-mode',m);}catch(e){}})();</script>
   <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
   <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
   <title>{% block title %}OpenPoolPro{% endblock %}</title>
@@ -120,6 +120,7 @@
   {% endblock %}
   <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
   {% include "_offline.html" %}
+  {% include "_behaviors.html" %}
   {% include "_uploads.html" %}
   {% include "_mode_toggle.html" %}
   {% include "_pwa.html" %}

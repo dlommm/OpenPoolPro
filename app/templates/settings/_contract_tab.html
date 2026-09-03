@@ -13,21 +13,20 @@
 <section class="ct-section group relative rounded-lg" data-block data-kind="text">
   <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
     <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" onclick="ctMove(this,-1)">↑</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" onclick="ctMove(this,1)">↓</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-safety" title="Delete section" onclick="ctDelete(this)">✕</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" data-ct-move="-1">↑</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" data-ct-move="1">↓</button>
+    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-safety" title="Delete section" data-ct-delete>✕</button>
   </div>
   <input type="hidden" name="kind" value="text">
   <input type="hidden" name="when" value="{{ when or '' }}">
   <div class="ct-view hidden cursor-text rounded-lg px-2 py-1.5 transition hover:bg-shallow/40" title="Click to edit"></div>
   <div class="ct-edit space-y-2 rounded-lg border border-pool/50 bg-shallow/20 p-3">
     <input class="field font-semibold" name="title" value="{{ title }}"
-           placeholder="Section heading (optional)" onfocus="ctFocus(this)">
+           placeholder="Section heading (optional)">
     <textarea class="field ct-body min-h-24 text-sm" name="body" rows="4"
-              onfocus="ctFocus(this)" oninput="ctGrow(this)"
               placeholder="Write this part of the agreement. Use “Insert customer info” below to drop in details that fill themselves in. Start a line with &quot;- &quot; for a bullet.">{{ body }}</textarea>
     <div class="flex flex-wrap items-center gap-2">
-      <select class="field w-auto text-sm" onchange="ctInsertToken(this)">
+      <select class="field w-auto text-sm" data-ct-token>
         <option value="">Insert customer info…</option>
         {% for token, label, group in contract_tokens %}
         {% if loop.first or group != loop.previtem[2] %}
@@ -38,11 +37,11 @@
         {% if loop.last %}</optgroup>{% endif %}
         {% endfor %}
       </select>
-      <select class="field w-auto text-sm" onchange="this.closest('[data-block]').querySelector('input[name=when]').value=this.value">
+      <select class="field w-auto text-sm" data-ct-when>
         <option value="" {{ "selected" if not when }}>Shows on: all contracts</option>
         <option value="includes_spa" {{ "selected" if when == "includes_spa" }}>Shows on: spa contracts only</option>
       </select>
-      <button type="button" class="btn-secondary ml-auto px-4 py-1.5 text-sm" onclick="ctDone(this)">Done</button>
+      <button type="button" class="btn-secondary ml-auto px-4 py-1.5 text-sm" data-ct-done>Done</button>
     </div>
   </div>
 </section>
@@ -53,7 +52,7 @@
     <p class="text-sm text-mist"><b class="text-ink">This is your contract.</b> Click any part to
       edit it in place — the blue chips fill in automatically from each customer's details.</p>
     <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-      <input type="checkbox" id="ct-sample-toggle" class="h-4 w-4" onchange="ctToggleSample(this)">
+      <input type="checkbox" id="ct-sample-toggle" class="h-4 w-4">
       See it with sample data</label>
   </div>
 
@@ -72,8 +71,8 @@
         <section class="ct-section group relative rounded-lg" data-block data-kind="{{ b.kind }}">
           <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
             <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
-            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" onclick="ctMove(this,-1)">↑</button>
-            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" onclick="ctMove(this,1)">↓</button>
+            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" data-ct-move="-1">↑</button>
+            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" data-ct-move="1">↓</button>
           </div>
           <input type="hidden" name="kind" value="{{ b.kind }}">
           <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
@@ -85,7 +84,7 @@
               — fills in automatically</span>
             <label class="flex items-center gap-1.5 text-sm text-mist">
               <input type="checkbox" {{ "checked" if b.get('visible', True) }} class="h-4 w-4"
-                     onchange="ctVisible(this)"> Show</label>
+                     data-ct-visible> Show</label>
           </div>
         </section>
         {% endif %}
@@ -93,7 +92,7 @@
       </div>
 
       <button type="button" class="mt-4 w-full rounded-lg border border-dashed border-seam py-2 text-sm text-mist transition hover:border-pool hover:text-pool"
-              onclick="ctAddSection()">+ Add a section</button>
+              data-ct-add>+ Add a section</button>
     </div>
 
     <div id="ct-preview-wrap" class="hidden w-full">
@@ -103,8 +102,7 @@
     <div id="ct-savebar" class="sticky bottom-16 z-20 mt-4 hidden w-full items-center justify-between gap-3 rounded-xl border border-seam bg-paper p-3 shadow-card lg:bottom-4">
       <span class="text-sm font-medium">Unsaved changes</span>
       <span class="flex gap-2">
-        <button type="button" class="btn-secondary px-4"
-                onclick="if(confirm('Discard your changes?')){document.getElementById('ct-form')._submitting=true;location.reload();}">Discard</button>
+        <button type="button" class="btn-secondary px-4" data-ct-discard>Discard</button>
         <button class="btn-primary px-6">Save contract</button>
       </span>
     </div>
@@ -113,7 +111,7 @@
   <template id="ct-block-tpl">{{ text_block() }}</template>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   (function () {
     var LABELS = {};
     {% for token, label, group in contract_tokens %}LABELS[{{ token | tojson }}] = {{ label | tojson }};
@@ -252,11 +250,43 @@
       form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
     });
 
-    // Click a rendered section to edit it in place.
+    // All button/select behavior is delegated off data- attributes (the CSP
+    // forbids inline handlers), so cloned template sections just work.
     blocks.addEventListener('click', function (e) {
+      var mv = e.target.closest('[data-ct-move]');
+      if (mv) return ctMove(mv, parseInt(mv.getAttribute('data-ct-move'), 10));
+      var del = e.target.closest('[data-ct-delete]');
+      if (del) return ctDelete(del);
+      var done = e.target.closest('[data-ct-done]');
+      if (done) return ctDone(done);
       var view = e.target.closest('.ct-view');
       if (view) toEdit(view.closest('[data-block]'));
     });
+    blocks.addEventListener('change', function (e) {
+      var t = e.target;
+      if (t.closest('[data-ct-token]')) return ctInsertToken(t);
+      if (t.closest('[data-ct-when]')) {
+        t.closest('[data-block]').querySelector('input[name=when]').value = t.value;
+        return;
+      }
+      if (t.closest('[data-ct-visible]')) ctVisible(t);
+    });
+    // Track the last-focused editable so token insertion lands at the caret,
+    // and auto-grow textareas as they fill.
+    blocks.addEventListener('focusin', function (e) {
+      if (e.target.matches('.ct-edit input[name=title], .ct-edit textarea')) ctFocus(e.target);
+    });
+    blocks.addEventListener('input', function (e) {
+      if (e.target.matches('textarea.ct-body')) ctGrow(e.target);
+    });
+    document.getElementById('ct-sample-toggle')
+      .addEventListener('change', function () { ctToggleSample(this); });
+    document.querySelector('[data-ct-add]')
+      .addEventListener('click', function () { ctAddSection(); });
+    document.querySelector('[data-ct-discard]')
+      .addEventListener('click', function () {
+        if (confirm('Discard your changes?')) { form._submitting = true; location.reload(); }
+      });
     form.addEventListener('input', dirty);
     form.addEventListener('change', dirty);
     window.addEventListener('beforeunload', function (e) {

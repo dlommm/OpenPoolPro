@@ -105,7 +105,7 @@
   <button class="btn-primary">Mark complete</button>
 </form>
 <script type="application/json" id="collect-data">{{ collect | tojson }}</script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var dataEl = document.getElementById("collect-data");
   if (!dataEl) return;

@@ -1,6 +1,6 @@
 {# Customer-detail tab toggle. Included by every customers/detail.html. Panels
    carry data-custab="profile|photos|pool"; buttons carry data-custab-btn=…. #}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var TABS = ["profile", "photos", "pool"];
   function show(name) {

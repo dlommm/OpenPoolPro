@@ -5,7 +5,7 @@
    `preventDefault`/`stopPropagation` matter here: the topbar's toggle
    button lives inside a native <details><summary>, and without them a
    click would also toggle the mobile nav menu open/closed. #}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var root = document.documentElement;
   function effectiveMode() {

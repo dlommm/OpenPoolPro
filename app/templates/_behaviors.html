@@ -1,0 +1,48 @@
+{# Delegated replacements for the inline on*= handlers the nonce CSP killed.
+   One listener per event type on document, driven by data- attributes, so
+   markup cloned by JS (tier rows, editor sections) inherits behavior with no
+   re-binding. Shared partial, included by all four base shells — the
+   shared-behavior-in-shared-partials rule from the theme audit. #}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  // <form data-confirm="message">: replaces the old inline submit-confirm.
+  // Capture phase so cancelling beats the global double-submit guard.
+  document.addEventListener("submit", function (e) {
+    var msg = e.target.getAttribute && e.target.getAttribute("data-confirm");
+    if (msg && !confirm(msg)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+
+  // <select data-autosubmit>: submit the owning form on change.
+  document.addEventListener("change", function (e) {
+    var el = e.target.closest && e.target.closest("[data-autosubmit]");
+    if (el && el.form) el.form.submit();
+  });
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest && e.target.closest(
+      "[data-print],[data-back],[data-remove-row]");
+    if (!t) return;
+    if (t.hasAttribute("data-print")) { window.print(); return; }
+    if (t.hasAttribute("data-back")) { history.back(); return; }
+    // <button data-remove-row=".tier-row" data-clear="rate_dollars">: blank
+    // the named input (so the server drops the row) and hide it.
+    var row = t.closest(t.getAttribute("data-remove-row"));
+    if (!row) return;
+    var input = row.querySelector("input[name=" + t.getAttribute("data-clear") + "]");
+    if (input) input.value = "";
+    row.style.display = "none";
+  });
+
+  // <img data-hide-on-error> / <img data-swap-on-error>: error events don't
+  // bubble, so listen in the capture phase.
+  document.addEventListener("error", function (e) {
+    var el = e.target;
+    if (!el || !el.matches) return;
+    if (el.matches("[data-hide-on-error]")) el.style.display = "none";
+    if (el.matches("[data-swap-on-error]")) {
+      el.style.display = "none";
+      if (el.nextElementSibling) el.nextElementSibling.style.display = "flex";
+    }
+  }, true);
+})();
+</script>

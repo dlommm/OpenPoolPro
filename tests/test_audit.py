@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -12,16 +13,21 @@ SECURITY_HEADERS = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
     "referrer-policy": "same-origin",
-    "content-security-policy": (
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
+    # The script nonce varies per request by design; match the shape.
+    "content-security-policy": re.compile(
+        r"default-src 'self'; script-src 'self' 'nonce-[A-Za-z0-9_-]+'; "
+        r"style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps\.geoapify\.com"
     ),
 }
 
 
 def _assert_security_headers(resp):
     for header, expected in SECURITY_HEADERS.items():
-        assert resp.headers.get(header) == expected, f"{header}: {resp.headers.get(header)!r}"
+        actual = resp.headers.get(header)
+        if hasattr(expected, "fullmatch"):
+            assert actual and expected.fullmatch(actual), f"{header}: {actual!r}"
+        else:
+            assert actual == expected, f"{header}: {actual!r}"
 
 
 def _seed_rows(engine, n, action="test.bulk", user_id=None, start=None):

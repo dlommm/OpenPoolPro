@@ -29,7 +29,7 @@
     <a href="/invoices/batch.zip?ym={{ ym }}" class="btn-secondary">Download batch (.zip)</a>
     {% if can_email %}
     <form method="post" action="/invoices/email-batch"
-          onsubmit="return confirm('Email every draft invoice for {{ ym }} to its customer?')">
+          data-confirm="Email every draft invoice for {{ ym }} to its customer?">
       <input type="hidden" name="ym" value="{{ ym }}">
       <button class="btn-secondary">Email all drafts</button>
     </form>
@@ -124,7 +124,7 @@
             <button class="btn-secondary">Regenerate</button>
           </form>
           <form method="post" action="/invoices/{{ inv.id }}/status"
-                onsubmit="return confirm('Void invoice {{ inv.number }}? Voiding is permanent — the number is burned and cannot be reused.')">
+                data-confirm="Void invoice {{ inv.number }}? Voiding is permanent — the number is burned and cannot be reused.">
             <input type="hidden" name="action" value="void">
             <button class="btn-danger">Void</button>
           </form>
@@ -137,7 +137,7 @@
             <span class="money">{{ p.amount_cents | dollars }}</span>
             <span>{{ p.received_on }} · {{ p.method }}{{ " · " ~ p.reference if p.reference }}</span>
             <form method="post" action="/payments/{{ p.id }}/delete"
-                  onsubmit="return confirm('Remove this {{ p.amount_cents | dollars }} payment?')">
+                  data-confirm="Remove this {{ p.amount_cents | dollars }} payment?">
               <button class="text-safety" aria-label="Remove payment">&times;</button>
             </form>
           </div>

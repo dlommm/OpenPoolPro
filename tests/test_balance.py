@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from datetime import date
 
@@ -146,7 +147,10 @@ def test_preview_deterministic_and_apply_matches(client, engine):
     _prop(engine, "Y0", 2, lee, route_order=0)
     r1 = client.get("/routes/balance?preview=1").text
     r2 = client.get("/routes/balance?preview=1").text
-    assert r1 == r2
+    # The CSP script nonce is per-request by design — strip it before the
+    # determinism comparison; everything else must be byte-identical.
+    denonce = lambda t: re.sub(r'nonce="[^"]*"', 'nonce=""', t)  # noqa: E731
+    assert denonce(r1) == denonce(r2)
 
     with Session(engine) as s:
         load = weekday_load(s)

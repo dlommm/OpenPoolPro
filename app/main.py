@@ -241,6 +241,12 @@ def create_app(engine=None) -> FastAPI:
     # short-circuit, /login itself, all of it -- not just templated pages.
     @app.middleware("http")
     async def security_headers(request, call_next):
+        # Per-request script nonce: templates stamp it on every inline
+        # <script> via the csp_nonce() Jinja global. Assigned here — the
+        # outermost middleware — so it exists for every render, including
+        # error pages raised by inner middleware.
+        import secrets as _secrets
+        request.state.csp_nonce = _secrets.token_urlsafe(16)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -252,8 +258,16 @@ def create_app(engine=None) -> FastAPI:
         # plain-HTTP services this app must not break.
         if config.COOKIE_SECURE:
             response.headers["Strict-Transport-Security"] = "max-age=15552000"
+        # script-src: nonce only — the presence of a nonce makes browsers
+        # ignore 'unsafe-inline', so injected <script> and inline on*=
+        # handlers are both dead. Every legitimate inline block carries the
+        # nonce (enforced by tests/test_csp_nonce.py source scan); handlers
+        # were all converted to addEventListener/delegation.
+        # style-src keeps 'unsafe-inline': Tailwind-adjacent inline styles
+        # and style="" attributes are pervasive and style injection is not
+        # the attack this pass is closing.
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            f"default-src 'self'; script-src 'self' 'nonce-{request.state.csp_nonce}'; "
             "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://maps.geoapify.com"
         )
         # HTML must always revalidate so a home-screen PWA never renders a stale

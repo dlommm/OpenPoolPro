@@ -8,7 +8,7 @@
   <form method="get" action="/contracts" class="flex flex-wrap items-center gap-2">
     <label class="block">
       <span class="sr-only">Season</span>
-      <select name="season" class="field font-data" onchange="this.form.submit()">
+      <select name="season" class="field font-data" data-autosubmit>
         {% for y in seasons %}<option value="{{ y }}" {{ "selected" if y == season }}>{{ y }}</option>{% endfor %}
       </select>
     </label>

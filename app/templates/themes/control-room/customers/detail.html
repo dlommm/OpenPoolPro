@@ -111,7 +111,7 @@
             <div class="mt-2">
               <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" loading="lazy"
                    class="h-24 w-full rounded-md object-cover"
-                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                   data-swap-on-error>
               <div class="h-24 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-seam text-center font-data text-[10px] uppercase tracking-[0.08em] text-mist" style="display:none">
                 <span>Map unavailable</span><span>Check Geoapify key in Settings</span>
               </div>

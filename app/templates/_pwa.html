@@ -16,7 +16,7 @@
 <div id="pwa-ptr" aria-hidden="true">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   if (!("serviceWorker" in navigator)) return;
   var el = document.getElementById("pwa-ptr");
