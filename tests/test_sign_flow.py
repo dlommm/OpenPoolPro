@@ -85,6 +85,20 @@ def test_sign_page_renders_without_a_session(client, engine, monkeypatch):
     assert r.headers["content-disposition"].startswith("inline")
 
 
+def test_signer_ip_is_the_customer_public_ip_not_the_proxy(client, engine, monkeypatch):
+    """The certificate must record the customer's public IP even through a
+    multi-hop proxy chain (Pangolin tunnel -> Traefik), taken from the
+    leftmost X-Forwarded-For entry."""
+    cid, token, _ = _sent_contract(client, engine, monkeypatch)
+    client.cookies.clear()
+    r = client.post(f"/sign/{token}",
+                    data={"signed_name": "Ada Rivera", "agree": "yes"},
+                    headers={"x-forwarded-for": "203.0.113.9, 172.18.0.5, 172.18.0.2"})
+    assert r.status_code == 200
+    with Session(engine) as s:
+        assert s.get(models.Contract, cid).signed_ip == "203.0.113.9"
+
+
 def test_signing_emails_the_signed_copy(client, engine, monkeypatch):
     from app import mailer
 

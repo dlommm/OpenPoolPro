@@ -138,6 +138,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         "public_base_url": models.get_setting(session, "public_base_url", ""),
         "conn_check": {
             "client_ip": request.client.host if request.client else "(unknown)",
+            "public_ip": (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                          or (request.client.host if request.client else "")),
             "xff": request.headers.get("x-forwarded-for", ""),
             "x_real_ip": request.headers.get("x-real-ip", ""),
             "forwarded_proto": request.headers.get("x-forwarded-proto", ""),

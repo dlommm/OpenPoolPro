@@ -41,6 +41,26 @@ def _lookup(session: Session, token: str) -> "models.Contract | None":
 
 
 def _client_ip(request: Request) -> str:
+    """Trusted client IP for rate-limiting — uvicorn already resolved this from
+    X-Forwarded-For against FORWARDED_ALLOW_IPS, so it can't be spoofed. Keep
+    security decisions on this, not the raw header."""
+    return request.client.host if request.client else ""
+
+
+def _signer_ip(request: Request) -> str:
+    """The customer's apparent PUBLIC IP, for the signature certificate.
+
+    Informational (not an access control), so we want the originating client
+    even when the operator hasn't perfectly enumerated every internal proxy
+    hop in FORWARDED_ALLOW_IPS: take the LEFTMOST X-Forwarded-For entry (the
+    original client per the standard), which is the customer's public IP
+    through Pangolin/Traefik. Fall back to the trusted peer when there's no
+    forwarded header (direct/LAN access)."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
     return request.client.host if request.client else ""
 
 
@@ -149,7 +169,7 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
                         "If you believe that's wrong, please contact us.", 410)
 
     now = models.utcnow()
-    ip = _client_ip(request)
+    ip = _signer_ip(request)  # customer's public IP for the certificate
     prop = contract.pool.property
     company = company_info(session)
     try:

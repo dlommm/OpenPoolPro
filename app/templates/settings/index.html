@@ -611,12 +611,14 @@
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Connection check</h2>
           <p class="mb-3 text-sm text-mist">What the app sees for <em>your current request</em>.
-            Behind a reverse proxy (Pangolin, Traefik, nginx…), the client IP should be your real
-            address, not the proxy's — if it shows the proxy/container IP, set
-            <span class="font-data">FORWARDED_ALLOW_IPS</span> to the proxy's network (a CIDR like
-            <span class="font-data">172.18.0.0/16</span> is fine) so the app trusts its forwarded headers.</p>
+            The <b>public (client) IP</b> is what gets recorded on e-signature certificates — it should
+            be your real internet address, not a <span class="font-data">172.x</span>/<span class="font-data">10.x</span>
+            proxy address. If it shows an internal IP, widen
+            <span class="font-data">FORWARDED_ALLOW_IPS</span> to cover every proxy hop (a CIDR like
+            <span class="font-data">172.18.0.0/16</span> covers a whole docker network, including Pangolin's tunnel).</p>
           <dl class="grid grid-cols-1 gap-x-4 gap-y-1.5 font-data text-sm sm:grid-cols-2">
-            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">Resolved client IP</dt><dd class="font-semibold">{{ conn_check.client_ip }}</dd></div>
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">Public (client) IP</dt><dd class="font-semibold text-pool">{{ conn_check.public_ip or "—" }}</dd></div>
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">Trusted peer (rate-limit key)</dt><dd class="font-semibold">{{ conn_check.client_ip }}</dd></div>
             <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">HTTPS (X-Forwarded-Proto)</dt><dd>{{ conn_check.forwarded_proto or "—" }}</dd></div>
             <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">X-Forwarded-For</dt><dd class="truncate">{{ conn_check.xff or "—" }}</dd></div>
             <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">X-Real-IP</dt><dd class="truncate">{{ conn_check.x_real_ip or "—" }}</dd></div>

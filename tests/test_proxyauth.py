@@ -96,4 +96,4 @@ def test_connection_check_card_shows_ip_and_headers(client):
     r = client.get("/settings")
     assert r.status_code == 200
     assert "Connection check" in r.text
-    assert "Resolved client IP" in r.text
+    assert "Public (client) IP" in r.text

@@ -97,10 +97,15 @@ a trusted source — set `FORWARDED_ALLOW_IPS` to the address (or CIDR) the
 proxy connects *from*. For Pangolin/Traefik in Docker that's the proxy
 container's network, e.g. `FORWARDED_ALLOW_IPS=172.18.0.0/16` (a CIDR is
 accepted). To verify: open **Settings → System → Connection check** — it
-shows the resolved client IP and the forwarded headers for your current
-request. If the IP shown is the proxy/container address instead of your real
-one, widen `FORWARDED_ALLOW_IPS`. (Leaving it wrong means the login rate
-limiter and audit log key on the proxy's IP, not the real client.)
+shows the **public (client) IP** and the forwarded headers for your current
+request. That public IP is what gets recorded on e-signature certificates
+(the signer's apparent internet address) and is taken from the leftmost
+`X-Forwarded-For` entry, so it survives a multi-hop chain (Pangolin tunnel →
+Traefik) even if a hop is missing from `FORWARDED_ALLOW_IPS`. The separate
+"trusted peer" value is what the login/​sign rate limiters key on — a
+security control, so it uses only the IP uvicorn resolved against
+`FORWARDED_ALLOW_IPS`. If either shows an internal `172.x`/`10.x` address
+instead of a real one, widen `FORWARDED_ALLOW_IPS` to cover every proxy hop.
 
 **Auto-login via a trusted header (SSO).** If your proxy already
 authenticates staff (Pangolin resource auth, Authelia, authentik, Cloudflare
