@@ -55,6 +55,21 @@ RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "0") == "1"
 # BACKUP_FILE in its environment; e.g. 'rclone copy "$BACKUP_FILE" remote:pool-backups'.
 BACKUP_SYNC_CMD = os.environ.get("BACKUP_SYNC_CMD", "")
 
+# Trusted-header SSO for a reverse proxy that already authenticates the user
+# (Pangolin, Authelia, authentik, etc.). When PROXY_AUTH_SECRET is set, a
+# request carrying header PROXY_AUTH_HEADER whose value equals the secret is
+# logged in automatically as the owner — no login screen. The proxy MUST
+# strip this header from untrusted inbound traffic and only add it on requests
+# it has authenticated; anyone who can send the header directly to the app is
+# authenticated, which is exactly why the app must be reachable ONLY through
+# the proxy (bind loopback / keep the port unpublished). Empty = disabled, and
+# the normal password/2FA login is always available as a fallback.
+PROXY_AUTH_SECRET = os.environ.get("PROXY_AUTH_SECRET", "")
+PROXY_AUTH_HEADER = os.environ.get("PROXY_AUTH_HEADER", "X-OpenPool-Auth")
+# Optional: header carrying the proxy-authenticated username, so SSO maps to a
+# specific staff user (for correct audit attribution) instead of the owner.
+PROXY_AUTH_USER_HEADER = os.environ.get("PROXY_AUTH_USER_HEADER", "X-OpenPool-User")
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")

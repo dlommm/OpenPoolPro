@@ -609,6 +609,34 @@
         </div>
 
         <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Connection check</h2>
+          <p class="mb-3 text-sm text-mist">What the app sees for <em>your current request</em>.
+            Behind a reverse proxy (Pangolin, Traefik, nginx…), the client IP should be your real
+            address, not the proxy's — if it shows the proxy/container IP, set
+            <span class="font-data">FORWARDED_ALLOW_IPS</span> to the proxy's network (a CIDR like
+            <span class="font-data">172.18.0.0/16</span> is fine) so the app trusts its forwarded headers.</p>
+          <dl class="grid grid-cols-1 gap-x-4 gap-y-1.5 font-data text-sm sm:grid-cols-2">
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">Resolved client IP</dt><dd class="font-semibold">{{ conn_check.client_ip }}</dd></div>
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">HTTPS (X-Forwarded-Proto)</dt><dd>{{ conn_check.forwarded_proto or "—" }}</dd></div>
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">X-Forwarded-For</dt><dd class="truncate">{{ conn_check.xff or "—" }}</dd></div>
+            <div class="flex justify-between gap-2 border-b border-seam/60 py-1"><dt class="text-mist">X-Real-IP</dt><dd class="truncate">{{ conn_check.x_real_ip or "—" }}</dd></div>
+          </dl>
+          <div class="mt-3 border-t border-seam pt-3 text-sm">
+            <p class="font-medium">Proxy auto-login (trusted-header SSO)</p>
+            {% if conn_check.proxy_auth_enabled %}
+            <p class="text-mist">Enabled — header <span class="font-data">{{ conn_check.proxy_auth_header }}</span>.
+              {% if conn_check.proxy_auth_present %}<span class="text-pool">The header is present on this request.</span>
+              {% else %}<span class="text-safety">Not present on this request</span> — you're on the password-login path
+              (or the proxy isn't injecting it here).{% endif %}</p>
+            {% else %}
+            <p class="text-mist">Disabled. Set <span class="font-data">PROXY_AUTH_SECRET</span> (and have your proxy
+              inject that value as a header) to skip the login screen for proxy-authenticated staff. See the README's
+              "Reverse proxy &amp; SSO" section.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Public link address</h2>
           <form method="post" action="/settings/public-url" class="space-y-2">
             <label class="block"><span class="field-label">Public base URL</span>

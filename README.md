@@ -75,13 +75,61 @@ folder.
   deployment set `COOKIE_SECURE=0` in `.env` (without it, logins won't
   stick over HTTP); the app logs a warning at boot when it's off.
 - **Response headers:** every response carries `X-Content-Type-Options:
-  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, and a
-  restrictive `Content-Security-Policy`; when `COOKIE_SECURE` is on (the
-  default), `Strict-Transport-Security` pins browsers to HTTPS as well.
+  nosniff`, `X-Frame-Options: SAMEORIGIN` (so the app can frame its own
+  contract PDFs while other sites can't frame it — reinforced by CSP
+  `frame-ancestors 'self'`), `Referrer-Policy: same-origin`, and a
+  nonce-based `Content-Security-Policy` (no `'unsafe-inline'` for scripts);
+  when `COOKIE_SECURE` is on (the default), `Strict-Transport-Security`
+  pins browsers to HTTPS as well.
 - **Upgrading a live instance:** this release changes the pending-2FA
   cookie's purpose check, so any in-flight 2FA login started just before
   the upgrade will have its pending cookie rejected; the 5-minute pending
   TTL self-heals, and affected users just restart the login.
+
+## Reverse proxy & SSO (Pangolin, Traefik, nginx…)
+
+The app is designed to run behind a TLS-terminating reverse proxy that is the
+*only* way in — bind the container to loopback or leave its port unpublished
+so nothing reaches it except through the proxy.
+
+**Real client IP.** The app reads `X-Forwarded-For`/`X-Real-IP`, but only from
+a trusted source — set `FORWARDED_ALLOW_IPS` to the address (or CIDR) the
+proxy connects *from*. For Pangolin/Traefik in Docker that's the proxy
+container's network, e.g. `FORWARDED_ALLOW_IPS=172.18.0.0/16` (a CIDR is
+accepted). To verify: open **Settings → System → Connection check** — it
+shows the resolved client IP and the forwarded headers for your current
+request. If the IP shown is the proxy/container address instead of your real
+one, widen `FORWARDED_ALLOW_IPS`. (Leaving it wrong means the login rate
+limiter and audit log key on the proxy's IP, not the real client.)
+
+**Auto-login via a trusted header (SSO).** If your proxy already
+authenticates staff (Pangolin resource auth, Authelia, authentik, Cloudflare
+Access…), OpenPoolPro can skip its own login screen for those requests:
+
+1. Set a long random shared secret in the app's environment:
+   `PROXY_AUTH_SECRET=$(openssl rand -hex 32)`.
+2. Configure the proxy to inject that value as a header on requests it has
+   authenticated. In **Pangolin**, on the resource → *Additional Headers* (or
+   the underlying Traefik `headers` middleware), add
+   `X-OpenPool-Auth: <the same secret>`. The header name is configurable via
+   `PROXY_AUTH_HEADER` (default `X-OpenPool-Auth`).
+3. That's it — an authenticated request is logged in as the **owner** and gets
+   a normal session cookie, so later requests ride the cookie whether or not
+   the header is present. Password + 2FA login still works as a fallback.
+4. *(Optional, for audit attribution)* have the proxy also pass the
+   authenticated username in `PROXY_AUTH_USER_HEADER` (default
+   `X-OpenPool-User`); it maps to that active staff user instead of the owner.
+
+⚠️ **Trust model:** this authenticates anyone who can send the header. It is
+safe **only** because the app is reachable solely through the proxy and the
+proxy strips any client-supplied copy of the header and re-adds it itself.
+Never publish the app's port directly with `PROXY_AUTH_SECRET` set.
+
+**Customer sign links.** The public `/sign/<token>` pages must be reachable
+by customers — don't restrict them behind the proxy's staff auth. In Pangolin,
+leave `/sign` (and `/static`, `/branding`, `/sw.js`, `/manifest.json`) on a
+public path rule while gating the rest. Set **Settings → System → Public base
+URL** to your public domain so emailed links use it (see "Contract e-signing").
 
 ## Backup & restore
 

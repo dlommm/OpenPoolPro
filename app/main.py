@@ -182,6 +182,19 @@ def create_app(engine=None) -> FastAPI:
                             theme = DEFAULT_THEME
                         request.state.active_theme = theme
                         active_theme_var.set(theme)
+            # No valid session cookie? Try trusted-header SSO before bouncing
+            # to /login: a proxy that already authenticated the user (Pangolin
+            # et al.) injects PROXY_AUTH_HEADER, and we mint a normal session
+            # from it — so the next request rides the cookie, header or not.
+            if request.state.user is None:
+                from sqlalchemy.orm import Session as _S
+
+                from app import proxyauth
+                with _S(app.state.engine) as s:
+                    puser = proxyauth.resolve_user(request, s)
+                    if puser is not None:
+                        s.expunge(puser)
+                        request.state.user = puser
             if request.state.user is None:
                 request.session.clear()
                 return RedirectResponse("/login", status_code=303)
