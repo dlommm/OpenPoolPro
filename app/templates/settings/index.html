@@ -492,9 +492,44 @@
           <div class="mb-4 rounded-xl border border-seam p-3">
             <h3 class="mb-1 text-sm font-semibold">Office 365 — Modern Auth (OAuth 2.0)</h3>
             <p class="mb-2 text-xs text-mist">Recommended for Microsoft 365 mailboxes: sign in once,
-              no password stored, tokens refresh automatically. Needs a one-time (free) app
-              registration in Microsoft Entra — see the README's "Email via Office 365" section
-              for the 3-minute walkthrough.</p>
+              no password stored, tokens refresh automatically. Takes a one-time, free app
+              registration in your Microsoft account (~3 minutes) — follow the steps below.</p>
+
+            {% if not o365_connected %}
+            <details class="mb-3 rounded-lg border border-seam" {{ "open" if not o365_client_id }}>
+              <summary class="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium">
+                One-time setup — get your two IDs from Microsoft</summary>
+              <ol class="list-decimal space-y-2.5 border-t border-seam p-3 pl-8 text-sm">
+                <li>Open the <a href="https://entra.microsoft.com" target="_blank" rel="noopener"
+                    class="font-medium text-pool">Microsoft Entra admin center</a> (sign in as a
+                  Microsoft 365 admin) and go to <b>Applications → App registrations →
+                  New registration</b>.</li>
+                <li>Name it anything (e.g. <span class="font-data">OpenPoolPro mail</span>), choose
+                  <b>“Accounts in this organizational directory only”</b>, leave Redirect URI empty,
+                  and click <b>Register</b>.</li>
+                <li>You land on the app's <b>Overview</b> page — copy the
+                  <b>Application (client) ID</b> and <b>Directory (tenant) ID</b> into the two
+                  fields below and hit <b>Save Office 365 app details</b>.</li>
+                <li>Still in the app: <b>Authentication → Advanced settings</b> → set
+                  <b>“Allow public client flows”</b> to <b>Yes</b> → Save. (This is what lets the
+                  code-based sign-in below work.)</li>
+                <li><b>API permissions → Add a permission → Microsoft Graph → Delegated
+                  permissions</b> → search <span class="font-data">SMTP.Send</span> → tick it →
+                  <b>Add permissions</b>. If a <b>“Grant admin consent”</b> button shows, click
+                  that too.</li>
+                <li>One Exchange check: in the
+                  <a href="https://admin.exchange.microsoft.com" target="_blank" rel="noopener"
+                     class="font-medium text-pool">Exchange admin center</a> →
+                  <b>Recipients → Mailboxes</b> → your sending mailbox → <b>Email apps</b> →
+                  make sure <b>Authenticated SMTP</b> is turned on. (Modern Auth replaces the
+                  password, not the SMTP protocol.)</li>
+                <li>Back here: click <b>Connect Office 365</b> below, enter the code Microsoft
+                  shows you at <span class="font-data">microsoft.com/devicelogin</span>, and sign
+                  in as the mailbox you want to send from. This page updates by itself when
+                  you're done.</li>
+              </ol>
+            </details>
+            {% endif %}
             <form method="post" action="/settings/smtp/oauth" class="mb-2 grid gap-2 sm:grid-cols-2">
               <label class="block"><span class="field-label">Application (client) ID</span>
                 <input name="client_id" value="{{ o365_client_id }}" autocomplete="off"
