@@ -47,6 +47,9 @@ class Customer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    # QuickBooks Online link: the Id of the matching QBO Customer once pushed,
+    # so a re-sync updates rather than creating a duplicate. Empty = not synced.
+    qbo_customer_id: Mapped[str] = mapped_column(String(40), default="")
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 

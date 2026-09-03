@@ -1,5 +1,6 @@
 import math
 import os
+import secrets
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -137,6 +138,10 @@ def settings_page(request: Request, rules_created: str | None = None,
         "geoapify_configured": bool(models.get_setting(session, "geoapify_key", "")),
         "public_base_url": models.get_setting(session, "public_base_url", ""),
         "require_2fa": models.get_setting(session, "require_2fa", "0") == "1",
+        **_qbo_ctx(session),
+        "qbo_items": _qbo_items_maybe(request, session),
+        "qbo_result": {k: request.query_params.get(k) for k in
+                       ("qbo_ok", "qbo_error", "qbo_synced", "qbo_failed")},
         "staff_without_2fa": session.scalars(select(models.User).where(
             models.User.active, models.User.totp_enabled.is_(False))).all(),
         "conn_check": {
@@ -706,6 +711,133 @@ async def save_geoapify(request: Request, session: Session = Depends(get_session
         models.set_setting(session, "geoapify_key", gk.strip())
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+def _qbo_redirect_uri(request: Request, session: Session) -> str:
+    """The OAuth callback URL — must match what's registered in the Intuit app.
+    Uses public_base_url when set (staff may browse by LAN address), else the
+    request origin."""
+    base = models.get_setting(session, "public_base_url", "").strip() or str(request.base_url).rstrip("/")
+    return f"{base.rstrip('/')}/settings/qbo/callback"
+
+
+def _qbo_items_maybe(request: Request, session):
+    """QBO items for the mapping dropdowns — fetched ONLY when the user asks
+    (a network call), so a normal settings render never depends on QBO."""
+    from app import qbo_api
+    if request.query_params.get("qbo_load_items") and qbo_api.connected(session):
+        try:
+            return qbo_api.list_items(session)
+        except qbo_api.QboError:
+            return []
+    return None
+
+
+def _qbo_ctx(session) -> dict:
+    from app import qbo_api
+    return {
+        "qbo_client_id": models.get_setting(session, "qbo_client_id", ""),
+        "qbo_secret_set": bool(models.get_setting(session, "qbo_client_secret", "")),
+        "qbo_environment": models.get_setting(session, "qbo_environment", "sandbox"),
+        "qbo_configured": qbo_api.configured(session),
+        "qbo_connected": qbo_api.connected(session),
+        "qbo_company": models.get_setting(session, "qbo_company_name", ""),
+        "qbo_item_service": models.get_setting(session, "qbo_item_service_id", ""),
+        "qbo_item_chem": models.get_setting(session, "qbo_item_chem_id", ""),
+    }
+
+
+@router.post("/settings/qbo/config")
+async def save_qbo_config(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    models.set_setting(session, "qbo_client_id", (form.get("client_id") or "").strip())
+    env = "production" if form.get("environment") == "production" else "sandbox"
+    models.set_setting(session, "qbo_environment", env)
+    secret = form.get("client_secret")  # write-only, blank keeps the stored one
+    if secret is not None and secret.strip():
+        models.set_setting(session, "qbo_client_secret", secret.strip())
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
+
+
+@router.get("/settings/qbo/connect")
+def qbo_connect(request: Request, session: Session = Depends(get_session)):
+    from app import qbo_api
+    try:
+        state = secrets.token_urlsafe(24)
+        request.session["qbo_oauth_state"] = state
+        url = qbo_api.authorize_url(session, _qbo_redirect_uri(request, session), state)
+    except qbo_api.QboError as e:
+        return RedirectResponse(f"/settings?qbo_error={e}#system", status_code=303)
+    return RedirectResponse(url, status_code=303)
+
+
+@router.get("/settings/qbo/callback")
+def qbo_callback(request: Request, code: str = "", state: str = "", realmId: str = "",
+                 error: str = "", session: Session = Depends(get_session)):
+    from app import qbo_api
+    expected = request.session.pop("qbo_oauth_state", None)
+    if error:
+        return RedirectResponse("/settings?qbo_error=QuickBooks sign-in was cancelled#system",
+                                status_code=303)
+    if not code or not realmId or not state or state != expected:
+        return RedirectResponse("/settings?qbo_error=Sign-in could not be verified — try again#system",
+                                status_code=303)
+    try:
+        name = qbo_api.complete_connection(session, code, realmId,
+                                           _qbo_redirect_uri(request, session))
+        models.set_setting(session, "qbo_company_name", name)
+        models.audit(session, request.state.user.id, "settings.qbo", detail=f"connected {name}")
+        session.commit()
+    except qbo_api.QboError as e:
+        return RedirectResponse(f"/settings?qbo_error={e}#system", status_code=303)
+    return RedirectResponse("/settings?qbo_ok=1#system", status_code=303)
+
+
+@router.post("/settings/qbo/disconnect")
+def qbo_disconnect(request: Request, session: Session = Depends(get_session)):
+    from app import qbo_api
+    qbo_api.disconnect(session)
+    models.set_setting(session, "qbo_company_name", "")
+    models.audit(session, request.state.user.id, "settings.qbo", detail="disconnected")
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
+
+
+@router.post("/settings/qbo/items")
+async def save_qbo_items(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    models.set_setting(session, "qbo_item_service_id", (form.get("item_service") or "").strip())
+    models.set_setting(session, "qbo_item_chem_id", (form.get("item_chem") or "").strip())
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
+
+
+@router.post("/settings/qbo/sync-customers")
+def qbo_sync_customers(request: Request, session: Session = Depends(get_session)):
+    from app import qbo_api
+    if not qbo_api.connected(session):
+        return RedirectResponse("/settings?qbo_error=Connect QuickBooks first#system", status_code=303)
+    customers = session.scalars(select(models.Customer).where(models.Customer.active)).all()
+    synced = failed = 0
+    last_error = ""
+    for c in customers:
+        try:
+            qbo_id = qbo_api.push_customer(session, c)
+            c.qbo_customer_id = qbo_id
+            session.commit()  # per-customer: a mid-batch failure keeps prior work
+            synced += 1
+        except qbo_api.QboError as e:
+            session.rollback()
+            failed += 1
+            last_error = str(e)
+    models.audit(session, request.state.user.id, "settings.qbo",
+                 detail=f"customer sync: {synced} ok, {failed} failed")
+    session.commit()
+    q = f"qbo_synced={synced}&qbo_failed={failed}"
+    if last_error:
+        q += f"&qbo_error={last_error}"
+    return RedirectResponse(f"/settings?{q}#system", status_code=303)
 
 
 @router.post("/settings/sign-messages")

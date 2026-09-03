@@ -85,6 +85,7 @@
     "notify_email",
     "phone",
     "qb_display_name",
+    "qbo_customer_id",
     "tags"
   ],
   "email_outbox": [

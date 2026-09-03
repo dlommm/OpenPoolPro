@@ -665,6 +665,67 @@
         </div>
 
         <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">QuickBooks Online</h2>
+          {% if qbo_result.qbo_ok %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">QuickBooks connected.</div>{% endif %}
+          {% if qbo_result.qbo_synced %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer sync: {{ qbo_result.qbo_synced }} synced{% if qbo_result.qbo_failed and qbo_result.qbo_failed != "0" %}, {{ qbo_result.qbo_failed }} failed{% endif %}.</div>{% endif %}
+          {% if qbo_result.qbo_error %}<div class="mb-3 rounded-lg border border-safety/40 bg-safety/10 p-2 text-sm text-safety">{{ qbo_result.qbo_error }}</div>{% endif %}
+
+          <p class="mb-3 text-sm text-mist">Push your customers into QuickBooks Online (invoice &amp;
+            payment sync is coming next). One-time setup: create a free app at
+            <a href="https://developer.intuit.com" target="_blank" rel="noopener" class="text-pool">developer.intuit.com</a>,
+            add this redirect URI to it —
+            <span class="font-data text-xs">{{ (public_base_url or "https://your-domain") }}/settings/qbo/callback</span>
+            — then paste the app's keys below. Start in Sandbox to test safely.</p>
+
+          <form method="post" action="/settings/qbo/config" class="mb-3 grid gap-2 sm:grid-cols-2">
+            <label class="block"><span class="field-label">Client ID</span>
+              <input name="client_id" value="{{ qbo_client_id }}" autocomplete="off" class="field font-data"></label>
+            <label class="block"><span class="field-label">Client secret {% if qbo_secret_set %}<span class="font-normal normal-case text-mist">— saved, blank keeps it</span>{% endif %}</span>
+              <input type="password" name="client_secret" autocomplete="new-password" placeholder="{% if qbo_secret_set %}••••••••{% endif %}" class="field font-data"></label>
+            <label class="flex items-center gap-2 self-end pb-2.5 text-sm">
+              <input type="checkbox" name="environment" value="production" {{ "checked" if qbo_environment == "production" }} class="h-5 w-5">
+              Production (unchecked = Sandbox)</label>
+            <button class="btn-secondary sm:col-span-2">Save QuickBooks app keys</button>
+          </form>
+
+          {% if qbo_connected %}
+          <div class="mb-3 flex flex-wrap items-center gap-2">
+            <span class="tag inline-flex border-pool bg-shallow">Connected{% if qbo_company %} — {{ qbo_company }}{% endif %}</span>
+            <span class="tag inline-flex">{{ qbo_environment|capitalize }}</span>
+            <form method="post" action="/settings/qbo/disconnect"><button class="btn-secondary px-3 py-1 text-xs">Disconnect</button></form>
+          </div>
+
+          <div class="mb-3 rounded-lg border border-seam p-3">
+            <h3 class="mb-1 text-sm font-semibold">Income item mapping</h3>
+            <p class="mb-2 text-xs text-mist">Which QuickBooks items your service labor and chemical
+              charges post to (used when invoice sync ships).
+              <a href="/settings?qbo_load_items=1#system" class="text-pool">Load items from QuickBooks</a>.</p>
+            {% if qbo_items is not none %}
+            <form method="post" action="/settings/qbo/items" class="grid gap-2 sm:grid-cols-2">
+              {% for field, label, current in [("item_service","Service / labor",qbo_item_service),("item_chem","Chemicals",qbo_item_chem)] %}
+              <label class="block"><span class="field-label">{{ label }}</span>
+                <select name="{{ field }}" class="field">
+                  <option value="">— not mapped —</option>
+                  {% for it in qbo_items %}<option value="{{ it.id }}" {{ "selected" if it.id == current }}>{{ it.name }}</option>{% endfor %}
+                </select></label>
+              {% endfor %}
+              <button class="btn-secondary sm:col-span-2">Save item mapping</button>
+            </form>
+            {% endif %}
+          </div>
+
+          <form method="post" action="/settings/qbo/sync-customers"
+                data-confirm="Push all active customers to QuickBooks now? This creates or updates them in QuickBooks.">
+            <button class="btn-primary">Sync customers to QuickBooks</button>
+          </form>
+          {% elif qbo_configured %}
+          <a href="/settings/qbo/connect" class="btn-primary inline-block">Connect QuickBooks</a>
+          {% else %}
+          <p class="text-sm text-mist">Save your app keys above, then connect.</p>
+          {% endif %}
+        </div>
+
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Public link address</h2>
           <form method="post" action="/settings/public-url" class="space-y-2">
             <label class="block"><span class="field-label">Public base URL</span>

@@ -319,6 +319,35 @@ nothing, so just resend. Signing links appear in no logs (uvicorn's access
 log is disabled and the app's own request log redacts the token), and the
 `/sign` pages are exempt from staff login but rate-limited per IP.
 
+## QuickBooks Online (Phase 1)
+
+Push your customers into QuickBooks Online over Intuit's OAuth 2.0 API — no
+QuickBooks password is stored (only a refresh token, same discipline as the
+Office 365 connection). This is Phase 1: connect + customer sync + income-item
+mapping; invoice and payment posting are the next phase. The CSV export
+(**Money → Export**) remains as the zero-dependency fallback.
+
+One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
+
+1. Create an app and enable the **Accounting** scope.
+2. Under **Keys & OAuth**, add this **Redirect URI** exactly:
+   `https://<your-domain>/settings/qbo/callback` (use your public domain — the
+   one in Settings → System → Public base URL).
+3. Copy the **Client ID** and **Client Secret** into Settings → System →
+   QuickBooks Online, leave **Sandbox** ticked to test against a fake company
+   first, and save.
+4. Click **Connect QuickBooks**, approve on Intuit's screen, and you'll return
+   to Settings showing "Connected — <company>".
+5. Optionally **Load items from QuickBooks** and map your service/labor and
+   chemical charges to QuickBooks items (used when invoice sync ships).
+6. **Sync customers to QuickBooks** creates or updates each active customer;
+   the QuickBooks Id is stored per customer so re-syncing never creates
+   duplicates.
+
+Going to **production** requires Intuit's app review (start it early in the
+Developer portal); until then, keep the environment on Sandbox. Refresh tokens
+expire after ~100 days of inactivity — reconnect if that ever happens.
+
 ## Offline (PWA)
 
 Installed to the Home Screen, the app keeps working with a weak or absent
