@@ -1,0 +1,34 @@
+{# Office 365 connection status — also served as an htmx fragment by the
+   start/poll routes. The pending state polls itself every 4s; the returned
+   fragment stops carrying the trigger once the flow resolves. #}
+<div id="o365-status">
+  {% if o365_error %}
+  <p class="mb-2 rounded-lg border border-safety/40 bg-safety/10 p-2 text-sm text-safety">{{ o365_error }}</p>
+  {% endif %}
+
+  {% if o365_pending %}
+  <div hx-get="/settings/smtp/oauth/poll" hx-trigger="every 4s" hx-target="#o365-status" hx-swap="outerHTML"
+       class="rounded-lg border border-pool/50 bg-shallow/40 p-3">
+    <p class="text-sm">On any device, go to
+      <a href="{{ o365_pending.verification_uri }}" target="_blank" rel="noopener" class="font-semibold text-pool">{{ o365_pending.verification_uri }}</a>
+      and enter this code:</p>
+    <p class="my-2 text-center font-data text-2xl font-bold tracking-[.3em]">{{ o365_pending.user_code }}</p>
+    <p class="text-xs text-mist">Sign in with the mailbox you want OpenPoolPro to send from.
+      This page updates by itself once you've approved.</p>
+  </div>
+  {% elif o365_connected %}
+  <p class="mb-2">
+    <span class="tag inline-flex border-pool bg-shallow">Connected — {{ o365_account or "mailbox" }}</span>
+    {% if o365_active %}<span class="tag ml-1 inline-flex">Active for sending</span>{% endif %}
+  </p>
+  <form method="post" action="/settings/smtp/oauth/disconnect">
+    <button class="btn-secondary">Disconnect</button>
+  </form>
+  {% else %}
+  <form method="post" action="/settings/smtp/oauth/start"
+        hx-post="/settings/smtp/oauth/start" hx-target="#o365-status" hx-swap="outerHTML">
+    <button class="btn-primary" {{ "disabled" if not o365_client_id }}>Connect Office 365</button>
+    {% if not o365_client_id %}<p class="mt-1 text-xs text-mist">Save the Application (client) ID first.</p>{% endif %}
+  </form>
+  {% endif %}
+</div>

@@ -486,8 +486,30 @@
       <div class="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Email</h2>
-          {% if smtp_configured %}<span class="tag mb-3 inline-flex border-pool bg-shallow">Configured — {{ smtp.host }}</span>
+          {% if smtp_configured %}<span class="tag mb-3 inline-flex border-pool bg-shallow">Configured — {{ smtp_active_host }}{{ " (Office 365)" if o365_active }}</span>
           {% else %}<span class="tag tag-safety mb-3 inline-flex">Not configured</span>{% endif %}
+
+          <div class="mb-4 rounded-xl border border-seam p-3">
+            <h3 class="mb-1 text-sm font-semibold">Office 365 — Modern Auth (OAuth 2.0)</h3>
+            <p class="mb-2 text-xs text-mist">Recommended for Microsoft 365 mailboxes: sign in once,
+              no password stored, tokens refresh automatically. Needs a one-time (free) app
+              registration in Microsoft Entra — see the README's "Email via Office 365" section
+              for the 3-minute walkthrough.</p>
+            <form method="post" action="/settings/smtp/oauth" class="mb-2 grid gap-2 sm:grid-cols-2">
+              <label class="block"><span class="field-label">Application (client) ID</span>
+                <input name="client_id" value="{{ o365_client_id }}" autocomplete="off"
+                       placeholder="00000000-0000-0000-0000-000000000000" class="field font-data"></label>
+              <label class="block"><span class="field-label">Directory (tenant) ID</span>
+                <input name="tenant" value="{{ o365_tenant }}" autocomplete="off"
+                       placeholder="yourcompany.onmicrosoft.com or GUID" class="field font-data"></label>
+              <button class="btn-secondary sm:col-span-2">Save Office 365 app details</button>
+            </form>
+            {% include "settings/_o365_status.html" %}
+          </div>
+
+          <h3 class="mb-1 text-sm font-semibold">Any provider — password (SMTP AUTH)</h3>
+          {% if o365_active %}<p class="mb-2 text-xs text-mist">Not in use while Office 365 is
+            connected. Saving below with "switch to password sending" ticked takes over.</p>{% endif %}
           <form method="post" action="/settings/smtp" class="mb-4 space-y-2">
             <div class="grid gap-2 sm:grid-cols-2">
               <label class="block"><span class="field-label">SMTP host</span>
@@ -503,6 +525,10 @@
               <label class="flex items-center gap-2 self-end pb-2.5"><input type="checkbox" name="smtp_starttls" {{ "checked" if smtp.starttls }} class="h-5 w-5"><span class="text-sm text-ink">Use STARTTLS</span></label>
             </div>
             <p class="text-xs text-mist">Stored in the app database. Leave host blank to disable email. Env vars still work as a fallback.</p>
+            {% if o365_active %}
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_password_auth" class="h-4 w-4">
+              Switch to password sending (stops using Office 365)</label>
+            {% else %}<input type="hidden" name="use_password_auth" value="on">{% endif %}
             <button class="btn-secondary w-full">Save email settings</button>
           </form>
           <div class="mb-3 flex flex-wrap gap-2">

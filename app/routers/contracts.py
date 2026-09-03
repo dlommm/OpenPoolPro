@@ -467,7 +467,7 @@ def send_contract(request: Request, cid: int, link_expiry: str = Form(""),
             "this email and we'll send you a fresh one.\n\n"
             "Please review and let us know if you have any questions.")
     try:
-        mailer.send_message(customer.email, subject, body, conf=mailer.smtp_settings(session),
+        mailer.send_message(customer.email, subject, body, conf=mailer.send_conf(session),
                              attachments=[(pdf_bytes, "contract.pdf")])
     except Exception:
         # The freshly minted token was never committed — the session rollback

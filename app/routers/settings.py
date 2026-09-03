@@ -130,8 +130,10 @@ def settings_page(request: Request, rules_created: str | None = None,
         "rules_created": _parse_count(rules_created),
         "company": company_info(session),
         "smtp_configured": mailer.smtp_configured(session),
-        "smtp": {**mailer.smtp_settings(session),
-                 "pass_set": bool(mailer.smtp_settings(session)["password"])},
+        "smtp": {**mailer.smtp_settings(session, force_password=True),
+                 "pass_set": bool(models.get_setting(session, "smtp_pass", config.SMTP_PASS))},
+        "smtp_active_host": mailer.smtp_settings(session)["host"],
+        **_o365_ctx(request, session),
         "geoapify_configured": bool(models.get_setting(session, "geoapify_key", "")),
         "public_base_url": models.get_setting(session, "public_base_url", ""),
         "outbox": outbox,
@@ -594,8 +596,88 @@ async def save_smtp(request: Request, session: Session = Depends(get_session)):
     pw = form.get("smtp_pass")  # write-only: only overwrite when a value is supplied
     if pw is not None and pw.strip():
         models.set_setting(session, "smtp_pass", pw)
+    # Saving the password form is an explicit choice of password auth.
+    if form.get("use_password_auth") == "on":
+        models.set_setting(session, "smtp_auth_mode", "password")
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+def _o365_ctx(request: Request, session: Session) -> dict:
+    """Context for the Office 365 status fragment (and the settings page)."""
+    from app import msoauth
+    pending = getattr(request.app.state, "msoauth_pending", None)
+    return {
+        "o365_client_id": models.get_setting(session, "smtp_oauth_client_id", ""),
+        "o365_tenant": models.get_setting(session, "smtp_oauth_tenant", ""),
+        "o365_account": models.get_setting(session, "smtp_oauth_account", ""),
+        "o365_connected": msoauth.connected(session),
+        "o365_active": models.get_setting(session, "smtp_auth_mode", "password") == "oauth365",
+        "o365_pending": pending,
+    }
+
+
+@router.post("/settings/smtp/oauth")
+async def save_smtp_oauth(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    models.set_setting(session, "smtp_oauth_client_id",
+                       (form.get("client_id") or "").strip())
+    models.set_setting(session, "smtp_oauth_tenant",
+                       (form.get("tenant") or "").strip())
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
+
+
+@router.post("/settings/smtp/oauth/start")
+def start_smtp_oauth(request: Request, session: Session = Depends(get_session)):
+    from app import msoauth
+    client_id = models.get_setting(session, "smtp_oauth_client_id", "")
+    tenant = models.get_setting(session, "smtp_oauth_tenant", "")
+    ctx = _o365_ctx(request, session)
+    if not client_id:
+        ctx["o365_error"] = "Save an Application (client) ID first."
+    else:
+        try:
+            request.app.state.msoauth_pending = msoauth.start_device_flow(client_id, tenant)
+            ctx["o365_pending"] = request.app.state.msoauth_pending
+        except msoauth.MsAuthError as e:
+            ctx["o365_error"] = str(e)
+        except Exception:
+            ctx["o365_error"] = "Could not reach Microsoft — check the network and try again."
+    return templates.TemplateResponse(request, "settings/_o365_status.html", ctx)
+
+
+@router.get("/settings/smtp/oauth/poll")
+def poll_smtp_oauth(request: Request, session: Session = Depends(get_session)):
+    from app import msoauth
+    pending = getattr(request.app.state, "msoauth_pending", None)
+    ctx = _o365_ctx(request, session)
+    if pending is not None:
+        try:
+            account = msoauth.poll_device_flow(session, pending)
+            if account is not None:
+                request.app.state.msoauth_pending = None
+                models.audit(session, request.state.user.id, "settings.smtp_oauth",
+                             detail=f"connected {account}")
+                session.commit()
+                ctx = _o365_ctx(request, session)
+        except msoauth.MsAuthError as e:
+            request.app.state.msoauth_pending = None
+            ctx = _o365_ctx(request, session)
+            ctx["o365_error"] = str(e)
+        except Exception:
+            ctx["o365_error"] = "Could not reach Microsoft — still trying…"
+    return templates.TemplateResponse(request, "settings/_o365_status.html", ctx)
+
+
+@router.post("/settings/smtp/oauth/disconnect")
+def disconnect_smtp_oauth(request: Request, session: Session = Depends(get_session)):
+    from app import msoauth
+    msoauth.disconnect(session)
+    models.audit(session, request.state.user.id, "settings.smtp_oauth",
+                 detail="disconnected")
+    session.commit()
+    return RedirectResponse("/settings#system", status_code=303)
 
 
 @router.post("/settings/geoapify")

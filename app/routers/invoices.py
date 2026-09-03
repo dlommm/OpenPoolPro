@@ -77,7 +77,7 @@ def _send_invoice_email(session: Session, inv: models.Invoice,
             f"{_company_name(session)}")
     try:
         mailer.send_message(customer.email, f"Invoice {inv.number} — {period}", body,
-                            conf=mailer.smtp_settings(session),
+                            conf=mailer.send_conf(session),
                             attachments=[(pdf_bytes, f"{inv.number}.pdf")])
     except Exception:
         return False, "send"

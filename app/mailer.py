@@ -22,15 +22,36 @@ def _config_conf() -> dict:
             "starttls": config.SMTP_STARTTLS}
 
 
-def smtp_settings(session) -> dict:
-    """Resolved SMTP config: DB settings first, env/config as the fallback."""
+def smtp_settings(session, *, force_password: bool = False) -> dict:
+    """Resolved SMTP config: DB settings first, env/config as the fallback.
+
+    Display/config resolution only — never touches the network. In
+    oauth365 mode (Office 365 Modern Auth) the connection details are pinned
+    to Exchange Online and the user/from default to the connected mailbox;
+    send paths must use send_conf(), which injects a live access token.
+    force_password=True resolves the password-mode values regardless of the
+    active mode (the settings page's password form edits those even while
+    Office 365 is active).
+    """
     g = models.get_setting
+    mode = "password" if force_password else g(session, "smtp_auth_mode", "password")
+    if mode == "oauth365":
+        from app import msoauth
+        account = g(session, "smtp_oauth_account", "")
+        return {
+            "auth_mode": "oauth365",
+            "host": msoauth.SMTP_HOST, "port": msoauth.SMTP_PORT,
+            "user": account, "password": "",
+            "from": g(session, "smtp_from", "") or account,
+            "starttls": True,
+        }
     try:
         port = int(g(session, "smtp_port", str(config.SMTP_PORT)) or config.SMTP_PORT)
     except ValueError:
         port = config.SMTP_PORT
     user = g(session, "smtp_user", config.SMTP_USER)
     return {
+        "auth_mode": "password",
         "host": g(session, "smtp_host", config.SMTP_HOST),
         "port": port,
         "user": user,
@@ -40,9 +61,24 @@ def smtp_settings(session) -> dict:
     }
 
 
+def send_conf(session) -> dict:
+    """smtp_settings plus, in oauth365 mode, a live access token. The ONLY
+    conf builder send paths should use (smtp_settings stays network-free for
+    the settings page render)."""
+    conf = smtp_settings(session)
+    if conf["auth_mode"] == "oauth365":
+        from app import msoauth
+        conf["oauth_token"] = msoauth.access_token(session)
+    return conf
+
+
 def smtp_configured(session=None) -> bool:
     if session is not None:
-        return bool(smtp_settings(session)["host"])
+        conf = smtp_settings(session)
+        if conf["auth_mode"] == "oauth365":
+            from app import msoauth
+            return msoauth.connected(session)
+        return bool(conf["host"])
     return bool(config.SMTP_HOST)
 
 
@@ -76,7 +112,12 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
     with smtplib.SMTP(conf["host"], conf["port"], timeout=15) as smtp:
         if conf["starttls"]:
             smtp.starttls()
-        if conf["user"]:
+        if conf.get("auth_mode") == "oauth365" and conf.get("oauth_token"):
+            # SASL XOAUTH2 (Office 365 Modern Auth): bearer token, no password.
+            auth = f"user={conf['user']}\x01auth=Bearer {conf['oauth_token']}\x01\x01"
+            smtp.ehlo()
+            smtp.auth("XOAUTH2", lambda challenge=None: auth)
+        elif conf["user"]:
             smtp.login(conf["user"], conf["password"])
         smtp.send_message(msg)
 
@@ -87,8 +128,13 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
     Caller commits (same contract as queue/audit). Unconfigured SMTP is a
     no-op: returns (0, 0) without touching any row.
     """
-    conf = smtp_settings(session)
-    if not conf["host"]:
+    if not smtp_configured(session):
+        return (0, 0)
+    try:
+        conf = send_conf(session)
+    except Exception:
+        # Token refresh failed (expired grant, Microsoft unreachable): leave
+        # every row pending for the next flush instead of burning attempts.
         return (0, 0)
 
     rows = session.scalars(

@@ -204,7 +204,7 @@ def test_renew_skips_pools_already_renewed_and_rejects_same_season(client, engin
 def test_resend_allowed_from_sent(client, engine, monkeypatch):
     sent = []
     monkeypatch.setattr("app.mailer.smtp_configured", lambda session: True)
-    monkeypatch.setattr("app.mailer.smtp_settings", lambda session: object())
+    monkeypatch.setattr("app.mailer.send_conf", lambda session: {})
     monkeypatch.setattr("app.mailer.send_message",
                         lambda *a, **kw: sent.append(a))
     with Session(engine) as s:

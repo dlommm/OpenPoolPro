@@ -192,6 +192,41 @@ Settings → Email shows the configured host only (credentials never render
 anywhere), the last 50 outbox rows with status/attempts/last error, and
 buttons to send a test email or flush the outbox on demand.
 
+### Email via Office 365 (Modern Auth / OAuth 2.0)
+
+Microsoft is retiring password ("basic") SMTP auth in Exchange Online. For a
+Microsoft 365 mailbox, use the built-in Modern Auth connection instead — the
+app never sees or stores the mailbox password, and tokens refresh themselves.
+
+One-time setup (~3 minutes, free), in the [Microsoft Entra admin
+center](https://entra.microsoft.com) → Applications → App registrations:
+
+1. **New registration** — any name (e.g. "OpenPoolPro mail"), supported
+   account types: *Accounts in this organizational directory only*. No
+   redirect URI needed.
+2. On the app's Overview page, copy the **Application (client) ID** and
+   **Directory (tenant) ID** into OpenPoolPro's Settings → Email → Office 365
+   card and save.
+3. **Authentication** → Advanced settings → set **Allow public client
+   flows** to *Yes* (this is what enables the device-code sign-in).
+4. **API permissions** → Add a permission → Microsoft Graph → Delegated →
+   **SMTP.Send** → Add. (If your tenant requires admin consent for new
+   apps, click *Grant admin consent* too.)
+5. In Exchange admin, the sending mailbox must have **Authenticated SMTP**
+   enabled (Recipients → the mailbox → Email apps). Modern Auth replaces
+   the password, not the SMTP protocol itself.
+
+Then click **Connect Office 365** in Settings → Email: enter the shown code
+at microsoft.com/devicelogin, sign in as the sending mailbox, and the page
+flips to "Connected" by itself. Host/port/STARTTLS are pinned automatically
+(smtp.office365.com:587); the From address defaults to the connected
+mailbox. Disconnecting (or saving the password form with "switch to
+password sending" ticked) falls back to classic SMTP AUTH.
+
+If Microsoft invalidates the grant (password reset, ~90 days of no
+sending, consent revoked), sends fail with a "reconnect in Settings"
+error and queued mail simply waits — reconnect and flush.
+
 ## Contract e-signing
 
 Sending a contract emails the customer a unique signing link
