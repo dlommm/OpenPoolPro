@@ -184,6 +184,8 @@ COLUMNS = {
         ("sign_token_expires_at", "DATETIME"),
         ("signed_name", "VARCHAR(120) DEFAULT ''"),
         ("signed_ip", "VARCHAR(64) DEFAULT ''"),
+        ("sign_viewed_at", "DATETIME"),
+        ("signed_pdf_hash", "VARCHAR(64) DEFAULT ''"),
     ],
 }
 

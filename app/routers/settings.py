@@ -166,8 +166,9 @@ def settings_page(request: Request, rules_created: str | None = None,
 
 def _contract_tab_ctx(session) -> dict:
     """Context for the Settings 'Contract' tab: the stored template, the token
-    palette, and a preview rendered against the sample context."""
-    from app import contract_tokens
+    palette, a preview rendered against the sample context, and the editable
+    e-sign message templates."""
+    from app import contract_tokens, sign_messages
     from app.contract_defaults import get_template
     from app.routers.contract_template import _preview_html, sample_context
     tpl = get_template(session)
@@ -175,6 +176,9 @@ def _contract_tab_ctx(session) -> dict:
         "contract_template": tpl,
         "contract_tokens": contract_tokens.TOKENS,
         "contract_preview_html": _preview_html(tpl, sample_context()),
+        "sign_messages": {k: sign_messages.get_message(session, k)
+                          for k in sign_messages.DEFAULTS},
+        "sign_message_tokens": sign_messages.TOKENS,
     }
 
 
@@ -702,6 +706,18 @@ async def save_geoapify(request: Request, session: Session = Depends(get_session
         models.set_setting(session, "geoapify_key", gk.strip())
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/sign-messages")
+async def save_sign_messages(request: Request, session: Session = Depends(get_session)):
+    from app import sign_messages
+    form = await request.form()
+    for key in sign_messages.DEFAULTS:
+        val = form.get(key)
+        if val is not None:
+            models.set_setting(session, key, val)
+    session.commit()
+    return RedirectResponse("/settings#contract", status_code=303)
 
 
 @router.post("/settings/require-2fa")

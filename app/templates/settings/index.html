@@ -724,6 +724,35 @@
     {# ============================ CONTRACT ============================ #}
     <section class="tab-panel" data-tab="contract" id="contract">
       {% include "settings/_contract_tab.html" %}
+
+      <div class="card mt-4 p-4">
+        <h2 class="set-h">E-signing messages</h2>
+        <p class="mb-3 text-sm text-mist">Customize the emails and the confirmation screen customers
+          see when signing. Use these fields — they fill in automatically:
+          {% for tok, label in sign_message_tokens.items() %}<span class="tag mr-1 font-data text-xs"
+            title="{{ label }}">{{ '{' }}{{ tok }}{{ '}' }}</span>{% endfor %}</p>
+        <form method="post" action="/settings/sign-messages" class="space-y-4">
+          <div>
+            <h3 class="mb-1 text-sm font-semibold">“Please sign” email (sent with the link)</h3>
+            <label class="block"><span class="field-label">Subject</span>
+              <input name="sign_email_subject" value="{{ sign_messages.sign_email_subject }}" class="field"></label>
+            <textarea name="sign_email_body" rows="7" class="field mt-2 font-data text-sm">{{ sign_messages.sign_email_body }}</textarea>
+          </div>
+          <div>
+            <h3 class="mb-1 text-sm font-semibold">“Signed copy” email (sent after signing)</h3>
+            <label class="block"><span class="field-label">Subject</span>
+              <input name="signed_email_subject" value="{{ sign_messages.signed_email_subject }}" class="field"></label>
+            <textarea name="signed_email_body" rows="5" class="field mt-2 font-data text-sm">{{ sign_messages.signed_email_body }}</textarea>
+          </div>
+          <div>
+            <h3 class="mb-1 text-sm font-semibold">Confirmation screen (after the customer signs)</h3>
+            <label class="block"><span class="field-label">Heading</span>
+              <input name="sign_done_heading" value="{{ sign_messages.sign_done_heading }}" class="field"></label>
+            <textarea name="sign_done_body" rows="3" class="field mt-2 font-data text-sm">{{ sign_messages.sign_done_body }}</textarea>
+          </div>
+          <button class="btn-primary">Save e-signing messages</button>
+        </form>
+      </div>
     </section>
 
   </div>

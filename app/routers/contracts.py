@@ -24,11 +24,11 @@ import secrets
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app import contract_pdf, mailer, models, rates, tax
+from app import contract_pdf, mailer, models, rates, sign_messages, tax
 from app.company import company_info
 from app.contract_files import pdf_path as _pdf_path
 from app.contract_files import signed_path as _signed_path
@@ -39,7 +39,7 @@ from app.forms import cents as parse_cents
 from app.forms import parse_int_tolerant, parse_page
 from app.rates import season_value_cents
 from app.templating import templates
-from app.timefmt import business_today
+from app.timefmt import business_today, to_local
 
 router = APIRouter(dependencies=[Depends(require_perm("manage_customers"))])
 
@@ -333,12 +333,23 @@ def contract_detail(request: Request, cid: int, session: Session = Depends(get_s
     pool = contract.pool
     prop = pool.property
     customer = prop.customer
+    signed_exists = bool(contract.signed_pdf_filename) and os.path.isfile(_signed_path(contract))
+    # Integrity check for the audit trail: does the stored signed PDF still
+    # hash to what we recorded at signing? True/False/None (no e-sign hash,
+    # e.g. a staff-uploaded wet-signed PDF).
+    integrity_ok = None
+    if signed_exists and contract.signed_pdf_hash:
+        with open(_signed_path(contract), "rb") as f:
+            integrity_ok = hashlib.sha256(f.read()).hexdigest() == contract.signed_pdf_hash
     return templates.TemplateResponse(request, "contracts/detail.html", {
         "contract": contract, "pool": pool, "prop": prop, "customer": customer,
         "timeline": _timeline(session, contract),
         "value": season_value_cents(contract),
         "pdf_exists": bool(contract.pdf_filename) and os.path.isfile(_pdf_path(contract)),
-        "signed_exists": bool(contract.signed_pdf_filename) and os.path.isfile(_signed_path(contract)),
+        "signed_exists": signed_exists,
+        "has_certificate": contract.status == "signed" and bool(contract.signed_at)
+        and bool(contract.signed_pdf_hash),
+        "integrity_ok": integrity_ok,
         "show_money": request.state.user.can("view_money"),
         "send_error": request.query_params.get("send_error"),
         "sign_error": request.query_params.get("sign_error"),
@@ -458,14 +469,17 @@ def send_contract(request: Request, cid: int, link_expiry: str = Form(""),
 
     with open(path, "rb") as f:
         pdf_bytes = f.read()
-    subject = f"Your {contract.season_year} Pool Service Agreement"
-    body = (f"Attached is your {contract.season_year} pool service agreement.\n\n"
-            "You can review and sign it online here:\n\n"
-            f"  {sign_url}\n\n"
-            f"For security, this signing link expires in {expiry_label} and stops "
-            "working once the agreement is signed. If it expires, just reply to "
-            "this email and we'll send you a fresh one.\n\n"
-            "Please review and let us know if you have any questions.")
+    prop = contract.pool.property
+    mctx = {
+        "customer_name": customer.name,
+        "company_name": company_info(session).get("business_name") or "",
+        "season_year": contract.season_year,
+        "property_address": prop.address,
+        "sign_url": sign_url, "expiry_label": expiry_label,
+        "signer_name": "", "signed_date": "",
+    }
+    subject = sign_messages.resolved(session, "sign_email_subject", mctx)
+    body = sign_messages.resolved(session, "sign_email_body", mctx)
     try:
         mailer.send_message(customer.email, subject, body, conf=mailer.send_conf(session),
                              attachments=[(pdf_bytes, "contract.pdf")])
@@ -549,3 +563,39 @@ def contract_signed_route(cid: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type="application/pdf", filename="signed-contract.pdf",
                         content_disposition_type="inline")
+
+
+def _envelope_id(contract: "models.Contract") -> str:
+    """Stable, human-quotable identifier for the signing 'envelope'."""
+    return f"OPP-{contract.id}-{contract.season_year}"
+
+
+@router.get("/contracts/{cid}/certificate")
+def contract_certificate_route(cid: int, session: Session = Depends(get_session)):
+    """The staff-side Certificate of Completion — the legal audit record
+    (signer, email, IP, sent/viewed/signed timestamps, document hash). Not
+    part of the customer's copy; generated on demand from the stored trail."""
+    contract = get_or_404(session, models.Contract, cid)
+    if contract.status != "signed" or not contract.signed_at:
+        raise HTTPException(status_code=404)
+    prop = contract.pool.property
+    company = company_info(session)
+
+    def _fmt(dt):
+        return to_local(dt).strftime("%B %d, %Y at %I:%M %p %Z") if dt else ""
+
+    pdf_bytes = contract_pdf.certificate_of_completion_pdf(
+        contract_ref=(f"{prop.customer.name} — {prop.address} — "
+                      f"{contract.season_year} Pool Service Agreement (contract #{contract.id})"),
+        signer_name=contract.signed_name or "",
+        signer_email=prop.customer.email or "",
+        signer_ip=contract.signed_ip or "",
+        sent_at_local=_fmt(contract.sent_at),
+        viewed_at_local=_fmt(contract.sign_viewed_at),
+        signed_at_local=_fmt(contract.signed_at),
+        document_hash=contract.signed_pdf_hash or "",
+        company_name=company.get("business_name") or "",
+        envelope_id=_envelope_id(contract))
+    return Response(pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition":
+                             f'inline; filename="certificate-{_envelope_id(contract)}.pdf"'})

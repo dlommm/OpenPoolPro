@@ -20,13 +20,27 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import contract_html, contract_pdf, mailer, models, tax
+from app import contract_html, contract_pdf, mailer, models, sign_messages, tax
 from app.company import company_info
 from app.contract_files import pdf_path, signed_path
 from app.db import get_session
 from app.fileio import atomic_write
 from app.templating import templates
 from app.timefmt import business_today, to_local
+
+
+def _msg_ctx(contract, prop, company: dict, **extra) -> dict:
+    """Token context shared by the sign-request email, signed email, and the
+    confirmation page (unset extras render as empty)."""
+    ctx = {
+        "customer_name": prop.customer.name,
+        "company_name": company.get("business_name") or "",
+        "season_year": contract.season_year,
+        "property_address": prop.address,
+        "sign_url": "", "signer_name": "", "signed_date": "", "expiry_label": "",
+    }
+    ctx.update(extra)
+    return ctx
 
 router = APIRouter()
 
@@ -117,6 +131,11 @@ def sign_page(request: Request, token: str, session: Session = Depends(get_sessi
     contract, error = _resolve(request, session, token)
     if error is not None:
         return error
+    # Record first-view for the audit trail (attribution evidence). One-shot,
+    # committed immediately so it survives regardless of what follows.
+    if contract.sign_viewed_at is None:
+        contract.sign_viewed_at = models.utcnow()
+        session.commit()
     return templates.TemplateResponse(request, "sign/page.html",
                                       _page_ctx(session, contract, token))
 
@@ -152,12 +171,9 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
         ctx["signed_name"] = name
         return templates.TemplateResponse(request, "sign/page.html", ctx, status_code=422)
 
-    path = pdf_path(contract)
-    if not contract.pdf_filename or not os.path.isfile(path):
+    if not contract.pdf_filename:
         return _message(request, "Document unavailable",
                         "The agreement PDF could not be loaded. Please contact us.", 404)
-    with open(path, "rb") as f:
-        original = f.read()
 
     # Claim sent->signed BEFORE the PDF work: a concurrent staff void (or a
     # double-submit of this form) loses here with a friendly page instead of
@@ -169,19 +185,19 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
                         "If you believe that's wrong, please contact us.", 410)
 
     now = models.utcnow()
-    ip = _signer_ip(request)  # customer's public IP for the certificate
+    ip = _signer_ip(request)  # customer's public IP — audit trail only
     prop = contract.pool.property
     company = company_info(session)
+    signed_date = to_local(now).strftime("%B %d, %Y")
     try:
-        signed_bytes = contract_pdf.signed_contract_pdf(
-            original,
-            signer_name=name,
-            signed_at_local=to_local(now).strftime("%B %d, %Y at %I:%M %p %Z"),
-            signer_ip=ip,
-            company_name=company.get("business_name") or "",
-            contract_ref=(f"{prop.customer.name} — {prop.address} — "
-                          f"{contract.season_year} Pool Service Agreement "
-                          f"(contract #{contract.id})"))
+        # Re-render the agreement with the adopted signature drawn INLINE in
+        # the signature block (no separate certificate page, no IP on the
+        # customer's copy) — DocuSign-style. Same frozen contract data as the
+        # approved copy, so the content is identical bar the filled signature.
+        signed_bytes = contract_pdf.render_contract(
+            contract, contract.pool, prop, prop.customer, company,
+            tax_rate_ppm=tax.resolve_rate_ppm(session, prop.state), session=session,
+            signature={"name": name, "date": signed_date})
     except Exception:
         return _message(request, "Something went wrong",
                         "We couldn't record your signature just now. Please try again "
@@ -189,13 +205,16 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
 
     atomic_write(signed_path(contract), signed_bytes)
     contract.signed_pdf_filename = "signed.pdf"
+    # SHA-256 of the exact signed bytes — the tamper-evidence anchor for the
+    # Certificate of Completion.
+    contract.signed_pdf_hash = hashlib.sha256(signed_bytes).hexdigest()
     contract.signed_at = now
     contract.signed_name = name
     contract.signed_ip = ip
     contract.sign_token_hash = ""
     contract.sign_token_expires_at = None
     models.audit(session, None, "contract.status",
-                 detail=f"{contract.id} -> signed (e-sign by {name})")
+                 detail=f"{contract.id} -> signed (e-sign by {name}, ip {ip})")
     session.commit()
 
     # Email the customer their signed copy — strictly best-effort AFTER the
@@ -203,13 +222,13 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
     # never show the signer an error for an agreement that IS signed.
     emailed = False
     customer = prop.customer
+    mctx = _msg_ctx(contract, prop, company, signer_name=name, signed_date=signed_date)
     try:
         if customer.email and mailer.smtp_configured(session):
             mailer.send_message(
                 customer.email,
-                f"Signed: your {contract.season_year} Pool Service Agreement",
-                (f"Thank you, {name}!\n\nAttached is your signed "
-                 f"{contract.season_year} pool service agreement for your records."),
+                sign_messages.resolved(session, "signed_email_subject", mctx),
+                sign_messages.resolved(session, "signed_email_body", mctx),
                 conf=mailer.send_conf(session),
                 attachments=[(signed_bytes, "signed-contract.pdf")])
             emailed = True
@@ -218,5 +237,7 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
 
     return templates.TemplateResponse(request, "sign/done.html", {
         "contract": contract, "customer": customer, "company": company,
-        "signed_name": name, "signed_local": to_local(now), "emailed": emailed,
+        "done_heading": sign_messages.resolved(session, "sign_done_heading", mctx),
+        "done_body": sign_messages.resolved(session, "sign_done_body", mctx),
+        "emailed": emailed,
     })

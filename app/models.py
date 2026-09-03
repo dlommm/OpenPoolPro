@@ -186,6 +186,12 @@ class Contract(Base):
     sign_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     signed_name: Mapped[str] = mapped_column(String(120), default="")
     signed_ip: Mapped[str] = mapped_column(String(64), default="")
+    # Audit trail for legal defensibility (ESIGN/UETA): when the customer first
+    # opened the sign link, and the SHA-256 of the signed PDF so the file can be
+    # proven byte-for-byte unaltered later. Retained staff-side, never shown to
+    # the customer.
+    sign_viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_pdf_hash: Mapped[str] = mapped_column(String(64), default="")
     pool: Mapped[Pool] = relationship()
 
 

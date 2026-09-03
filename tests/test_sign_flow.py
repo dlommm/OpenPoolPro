@@ -207,32 +207,60 @@ def test_submit_signs_and_registers_the_contract(client, engine, monkeypatch):
         assert os.path.isfile(path)
         signed = open(path, "rb").read()
         assert signed.startswith(b"%PDF")
-        original = open(os.path.join(config.DATA_DIR, "contracts", str(cid),
-                                     "contract.pdf"), "rb").read()
-        assert len(signed) > len(original)  # certificate page appended
+        # Signed PDF hash is recorded (tamper-evidence) and matches the file.
+        import hashlib
+        assert contract.signed_pdf_hash == hashlib.sha256(signed).hexdigest()
 
         rows = s.scalars(select(models.AuditLog).where(
             models.AuditLog.action == "contract.status")).all()
-        assert any("signed (e-sign by Ada Rivera)" in row.detail for row in rows)
+        assert any("signed (e-sign by Ada Rivera" in row.detail for row in rows)
 
     # The spent link (and its PDF route) is dead afterwards.
     assert client.get(f"/sign/{token}").status_code == 404
     assert client.get(f"/sign/{token}/pdf").status_code == 404
 
 
-def test_signed_certificate_page_carries_signer_details(client, engine, monkeypatch):
+def test_signature_is_inline_no_separate_certificate_page(client, engine, monkeypatch):
+    import io
+
     from pypdf import PdfReader
 
     cid, token, _ = _sent_contract(client, engine, monkeypatch)
     client.cookies.clear()
     client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
 
-    import io
     path = os.path.join(config.DATA_DIR, "contracts", str(cid), "signed.pdf")
-    reader = PdfReader(io.BytesIO(open(path, "rb").read()))
-    cert_text = reader.pages[-1].extract_text()
-    assert "Certificate of Electronic Signature" in cert_text
-    assert "Ada Rivera" in cert_text
+    signed = PdfReader(io.BytesIO(open(path, "rb").read()))
+    text = "".join(p.extract_text() for p in signed.pages)
+    assert "Ada Rivera" in text  # signature is in the document
+    # No separate certificate page, and the customer copy never shows the IP.
+    assert "Certificate of Completion" not in text
+    assert "Signer IP" not in text
+
+
+def test_certificate_of_completion_is_staff_only_and_has_audit_details(client, engine, monkeypatch):
+    import io
+
+    from pypdf import PdfReader
+
+    cid, token, _ = _sent_contract(client, engine, monkeypatch)
+    # Customer opens the link (records viewed), then signs from a known IP.
+    client.cookies.clear()
+    client.get(f"/sign/{token}", headers={"x-forwarded-for": "198.51.100.9, 8.8.8.8"})
+    client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"},
+                headers={"x-forwarded-for": "198.51.100.9, 8.8.8.8"})
+
+    # Staff-only route (requires the authed client fixture, re-login).
+    client.post("/login", data={"username": "owner", "password": "testpass"})
+    r = client.get(f"/contracts/{cid}/certificate")
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    cert = "".join(p.extract_text() for p in PdfReader(io.BytesIO(r.content)).pages)
+    assert "Certificate of Completion" in cert
+    assert "Ada Rivera" in cert
+    assert "198.51.100.9" in cert  # signer IP lives here, not on the customer copy
+    assert "ESIGN" in cert or "UETA" in cert
+    with Session(engine) as s:
+        assert s.get(models.Contract, cid).sign_viewed_at is not None
 
 
 def test_public_base_url_setting_wins_in_email_link(client, engine, monkeypatch):

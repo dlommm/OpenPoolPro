@@ -95,8 +95,9 @@ def test_sign_pdf_render_failure_leaves_contract_sent(client, engine, monkeypatc
     def boom(*a, **k):
         raise RuntimeError("merge failed")
 
-    real_signed_pdf = contract_pdf.signed_contract_pdf
-    monkeypatch.setattr(contract_pdf, "signed_contract_pdf", boom)
+    # The signed copy is a re-render of the contract with the signature inline.
+    real_render = contract_pdf.render_contract
+    monkeypatch.setattr(contract_pdf, "render_contract", boom)
     client.cookies.clear()
     r = client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
     assert r.status_code == 500
@@ -107,7 +108,7 @@ def test_sign_pdf_render_failure_leaves_contract_sent(client, engine, monkeypatc
     assert not os.path.isfile(
         os.path.join(config.DATA_DIR, "contracts", str(cid), "signed.pdf"))
     # And the retry actually works.
-    monkeypatch.setattr(contract_pdf, "signed_contract_pdf", real_signed_pdf)
+    monkeypatch.setattr(contract_pdf, "render_contract", real_render)
     r = client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
     assert r.status_code == 200
 
@@ -133,15 +134,18 @@ def test_post_to_expired_token_rejected(client, engine, monkeypatch):
     assert r.status_code == 410
 
 
-def test_sign_pdf_missing_on_disk_is_friendly_404(client, engine, monkeypatch):
+def test_sign_pdf_missing_on_disk_still_previews_404_but_signing_re_renders(client, engine, monkeypatch):
     cid, token = _sent_with_token(client, engine, monkeypatch)
     os.unlink(os.path.join(config.DATA_DIR, "contracts", str(cid), "contract.pdf"))
     client.cookies.clear()
+    # The inline PDF preview 404s (file gone)...
     assert client.get(f"/sign/{token}/pdf").status_code == 404
-    r = client.post(f"/sign/{token}", data={"signed_name": "A", "agree": "yes"})
-    assert r.status_code == 404
+    # ...but signing re-renders the agreement from stored data, so a missing
+    # approved file on disk doesn't block the customer from signing.
+    r = client.post(f"/sign/{token}", data={"signed_name": "Ada", "agree": "yes"})
+    assert r.status_code == 200
     with Session(engine) as s:
-        assert s.get(models.Contract, cid).status == "sent"
+        assert s.get(models.Contract, cid).status == "signed"
 
 
 # ---------- lifecycle guards ----------
