@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import os
 
@@ -109,6 +110,11 @@ def create_app(engine=None) -> FastAPI:
     # get unlimited free tries either. Generous cap — a customer fumbling a
     # pasted link must never lock themselves out.
     app.state.sign_limiter = _security.RateLimiter(max_fails=20, lock_seconds=900)
+    # Per-public-IP request throttle (flood/scrape/brute-force blunting; NOT
+    # DDoS protection — see config). Disabled when the limit is 0.
+    app.state.request_throttle = (
+        _security.RequestThrottle(config.REQUEST_RATE_LIMIT_PER_MIN)
+        if config.REQUEST_RATE_LIMIT_PER_MIN > 0 else None)
     Base.metadata.create_all(app.state.engine)
     from app import backup, migrate
     # Real boots snapshot the DB immediately before the first migration
@@ -120,6 +126,12 @@ def create_app(engine=None) -> FastAPI:
                     if engine is None else None)
     migrate.run(app.state.engine, before_change=pre_snapshot)
     seeds.run(app.state.engine)
+    # Cache the require-2FA policy in app.state so the auth middleware needn't
+    # hit the DB on every request; the settings toggle updates it in place
+    # (single process, so app.state is authoritative).
+    from sqlalchemy.orm import Session as _BootS
+    with _BootS(app.state.engine) as _bs:
+        app.state.require_2fa = models.get_setting(_bs, "require_2fa", "0") == "1"
 
     EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
     # /sign/ is the customer-facing contract e-sign flow: its routes are gated
@@ -134,6 +146,25 @@ def create_app(engine=None) -> FastAPI:
     # 64 KB is orders of magnitude above the largest legitimate form here.
     PUBLIC_BODY_LIMIT = 64 * 1024
     PUBLIC_BODY_PATHS = ("/sign/", "/login")
+
+    @app.middleware("http")
+    async def request_throttle(request, call_next):
+        throttle = app.state.request_throttle
+        # Only throttle PUBLIC client IPs: if FORWARDED_ALLOW_IPS is wrong and
+        # every request looks like it comes from a private proxy IP, throttling
+        # would lock out ALL users at once — so a private/loopback/unresolvable
+        # IP fails OPEN. /health is never throttled (uptime monitors).
+        if throttle is not None and request.url.path != "/health":
+            host = request.client.host if request.client else ""
+            try:
+                is_public = ipaddress.ip_address(host).is_global
+            except ValueError:
+                is_public = False
+            if is_public and not throttle.allow(host):
+                return PlainTextResponse(
+                    "Too many requests — slow down and try again shortly.",
+                    status_code=429, headers={"Retry-After": "30"})
+        return await call_next(request)
 
     @app.middleware("http")
     async def public_body_cap(request, call_next):
@@ -200,6 +231,14 @@ def create_app(engine=None) -> FastAPI:
                 return RedirectResponse("/login", status_code=303)
             request.session["user_id"] = request.state.user.id  # rolling cookie
             request.session["epoch"] = request.state.user.session_epoch
+            # Mandatory-2FA gate: when the require_2fa setting is on, a
+            # logged-in user without TOTP can reach ONLY the account pages (to
+            # enroll) and logout until they finish. The password stage already
+            # passed, so this hardens an internet-exposed login with no second
+            # login mechanism.
+            if (app.state.require_2fa and not request.state.user.totp_enabled
+                    and not path.startswith("/account") and path != "/logout"):
+                return RedirectResponse("/account?force2fa=1", status_code=303)
         return await call_next(request)
 
     # CSRF defense-in-depth: reject state-changing requests whose Origin (or,

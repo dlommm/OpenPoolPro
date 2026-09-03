@@ -136,6 +136,9 @@ def settings_page(request: Request, rules_created: str | None = None,
         **_o365_ctx(request, session),
         "geoapify_configured": bool(models.get_setting(session, "geoapify_key", "")),
         "public_base_url": models.get_setting(session, "public_base_url", ""),
+        "require_2fa": models.get_setting(session, "require_2fa", "0") == "1",
+        "staff_without_2fa": session.scalars(select(models.User).where(
+            models.User.active, models.User.totp_enabled.is_(False))).all(),
         "conn_check": {
             "client_ip": request.client.host if request.client else "(unknown)",
             "public_ip": (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
@@ -699,6 +702,18 @@ async def save_geoapify(request: Request, session: Session = Depends(get_session
         models.set_setting(session, "geoapify_key", gk.strip())
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/require-2fa")
+async def save_require_2fa(request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    on = "1" if form.get("require_2fa") == "on" else "0"
+    models.set_setting(session, "require_2fa", on)
+    models.audit(session, request.state.user.id, "settings.require_2fa",
+                 detail="enabled" if on == "1" else "disabled")
+    session.commit()
+    request.app.state.require_2fa = on == "1"  # keep the middleware's cache in sync
+    return RedirectResponse("/settings#system", status_code=303)
 
 
 @router.post("/settings/public-url")

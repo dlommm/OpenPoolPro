@@ -70,6 +70,18 @@ PROXY_AUTH_HEADER = os.environ.get("PROXY_AUTH_HEADER", "X-OpenPool-Auth")
 # specific staff user (for correct audit attribution) instead of the owner.
 PROXY_AUTH_USER_HEADER = os.environ.get("PROXY_AUTH_USER_HEADER", "X-OpenPool-User")
 
+# Per-IP request throttle for an internet-exposed deployment: blunts floods,
+# scrapers, and brute-force sweeps from a single source. NOT DDoS protection —
+# a distributed (many-IP) flood must be absorbed upstream (Cloudflare, or
+# Pangolin/Traefik rate-limit middleware / Crowdsec). Requests over the limit
+# get 429. 0 disables it. Only PUBLIC client IPs are throttled: if
+# FORWARDED_ALLOW_IPS is misconfigured and the app sees a private proxy IP for
+# everyone, the throttle fails OPEN (no-op) rather than locking out all users.
+try:
+    REQUEST_RATE_LIMIT_PER_MIN = int(os.environ.get("REQUEST_RATE_LIMIT_PER_MIN", "300"))
+except ValueError:
+    REQUEST_RATE_LIMIT_PER_MIN = 300
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")

@@ -136,6 +136,40 @@ def unsign_pending(secret_key: str, token: str | None, max_age: int = 300) -> di
         return None
 
 
+class RequestThrottle:
+    """In-process rolling-window request counter, keyed by client IP.
+
+    Blunts single-source floods / scraping / brute-force sweeps: at most
+    `limit` requests per `window` seconds per key, else the request is
+    rejected. Distinct from RateLimiter (which counts auth FAILURES) — this
+    counts every request. Same single-process, opportunistically-pruned,
+    monotonic-clock design. NOT a defense against a distributed DDoS, which
+    has to be absorbed upstream.
+    """
+
+    _PRUNE_THRESHOLD = 4096
+
+    def __init__(self, limit: int, window: int = 60, clock=time.monotonic):
+        self.limit = limit
+        self.window = window
+        self._clock = clock
+        self._hits: dict[str, tuple[int, float]] = {}
+
+    def allow(self, key: str) -> bool:
+        """Record a hit for key; return False if it exceeds the limit."""
+        now = self._clock()
+        count, window_start = self._hits.get(key, (0, now))
+        if now - window_start > self.window:
+            count, window_start = 0, now
+        count += 1
+        self._hits[key] = (count, window_start)
+        if len(self._hits) > self._PRUNE_THRESHOLD:
+            for k, (_, ws) in list(self._hits.items()):
+                if now - ws > self.window:
+                    self._hits.pop(k, None)
+        return count <= self.limit
+
+
 class RateLimiter:
     """In-process, per-key login rate limiter.
 

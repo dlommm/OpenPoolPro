@@ -609,6 +609,32 @@
         </div>
 
         <div class="card p-4 lg:col-span-2">
+          <h2 class="set-h">Login security</h2>
+          <p class="mb-3 text-sm text-mist">Every failed login is already rate-limited (5 tries per
+            username <em>and</em> per IP, then a 5-minute lockout), and the app throttles request
+            floods per public IP. For an internet-exposed login, also require two-factor
+            authentication for all staff.</p>
+          <form method="post" action="/settings/require-2fa" class="flex flex-wrap items-center gap-3">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="require_2fa" {{ "checked" if require_2fa }} class="h-5 w-5">
+              <span class="font-medium">Require 2FA for all staff</span>
+            </label>
+            <button class="btn-secondary px-4">Save</button>
+          </form>
+          {% if require_2fa and staff_without_2fa %}
+          <p class="mt-2 text-sm text-safety">{{ staff_without_2fa | length }} active
+            {{ "member has" if staff_without_2fa | length == 1 else "members have" }} not set up 2FA
+            yet — {{ staff_without_2fa | map(attribute="name") | join(", ") }}. They'll be prompted to
+            enroll the next time they use the app before they can go anywhere else.</p>
+          {% elif require_2fa %}
+          <p class="mt-2 text-sm text-mist">All active staff have 2FA enabled. 🔒</p>
+          {% endif %}
+          <p class="mt-3 border-t border-seam pt-3 text-xs text-mist"><b>DDoS:</b> a distributed flood
+            can't be stopped by the app itself — put Cloudflare (or another edge/CDN) in front of your
+            domain, or use Pangolin/Traefik's rate-limit middleware / Crowdsec, for that.</p>
+        </div>
+
+        <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Connection check</h2>
           <p class="mb-3 text-sm text-mist">What the app sees for <em>your current request</em>.
             The <b>public (client) IP</b> is what gets recorded on e-signature certificates — it should

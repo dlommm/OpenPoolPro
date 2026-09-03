@@ -4,6 +4,12 @@
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Your account", user.name) }}
 
+{% if request.query_params.get("force2fa") and not user.totp_enabled %}
+<div class="card mb-3 border-safety/50 bg-safety/10 p-3 text-sm font-medium text-safety">
+  Two-factor authentication is required for all staff. Please set it up below to continue — until
+  you do, the rest of the app is locked for your account.
+</div>
+{% endif %}
 {% if banner %}
 <div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">{{ banner }}</div>
 {% endif %}

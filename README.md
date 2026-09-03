@@ -59,6 +59,20 @@ folder.
   whichever trips first) locks that key out for 5 minutes. Locked-out,
   bad-password, and unknown-username all return the identical response so
   an attacker can't tell which is which.
+- **Require 2FA (for an internet-exposed login):** Settings → System →
+  Login security has a "Require 2FA for all staff" switch. With it on, any
+  staff member without 2FA is sent to `/account` to enroll (and can reach
+  nothing else) the next time they use the app. The card lists who still
+  needs to enroll.
+- **Request throttle:** each public client IP is capped at
+  `REQUEST_RATE_LIMIT_PER_MIN` requests/minute (default 300; `0` disables),
+  returning `429` over the limit — blunts single-source floods, scrapers,
+  and brute-force sweeps. Only *public* IPs are throttled, so a
+  misconfigured `FORWARDED_ALLOW_IPS` fails open (no throttle) rather than
+  locking every user out. This is **not** DDoS protection: a distributed
+  flood must be absorbed upstream — put Cloudflare (or another edge/CDN) in
+  front of your domain, or use Pangolin/Traefik rate-limit middleware or
+  Crowdsec. `/health` is never throttled.
 - **Audit log:** sensitive actions (login/lockout, password changes, 2FA
   enable/disable/reset, backup-code use, user create/disable/permission
   changes, rate changes, exports, CSV imports) are recorded with a

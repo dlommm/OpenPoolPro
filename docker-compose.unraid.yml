@@ -85,6 +85,13 @@ services:
       # PROXY_AUTH_HEADER: "X-OpenPool-Auth"       # default; the header the proxy adds
       # PROXY_AUTH_USER_HEADER: "X-OpenPool-User"  # optional: maps SSO to a staff username
 
+      # --- Per-public-IP request throttle (flood/scrape/brute-force blunting;
+      #     NOT DDoS protection — use Cloudflare or Pangolin/Crowdsec upstream
+      #     for that). Requests over this many per minute from one public IP get
+      #     429. Only PUBLIC IPs are throttled, so a wrong FORWARDED_ALLOW_IPS
+      #     fails open instead of locking everyone out. 0 disables. Default 300. ---
+      # REQUEST_RATE_LIMIT_PER_MIN: "300"
+
       # --- Optional: outbound email (invoices, notifications) ---
       # SMTP_HOST: "smtp.example.com"
       # SMTP_PORT: "587"
