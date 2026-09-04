@@ -583,12 +583,34 @@ class Setting(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
+# Settings rows holding credentials. These are encrypted at rest (AES-256-GCM,
+# key derived from SECRET_KEY) transparently by get_setting/set_setting, so
+# every existing call site is covered and none can forget. The threat this
+# closes is a leaked DATABASE/backup — the nightly backup ships the DB off-box
+# but never the environment, so ciphertext alone is useless. See app/secretbox.
+ENCRYPTED_SETTING_KEYS = frozenset({
+    "smtp_pass",                  # SMTP password
+    "smtp_oauth_refresh_token",   # Office 365 refresh token
+    "qbo_client_secret",          # QuickBooks app secret
+    "qbo_refresh_token",          # QuickBooks refresh token
+    "geoapify_key",               # Geoapify API key
+})
+
+
 def get_setting(session, key: str, default: str) -> str:
     row = session.get(Setting, key)
-    return row.value if row else default
+    if row is None:
+        return default
+    if key in ENCRYPTED_SETTING_KEYS:
+        from app import secretbox
+        return secretbox.decrypt(row.value)
+    return row.value
 
 
 def set_setting(session, key: str, value: str) -> None:
+    if key in ENCRYPTED_SETTING_KEYS:
+        from app import secretbox
+        value = secretbox.encrypt(value)
     row = session.get(Setting, key)
     if row:
         row.value = value

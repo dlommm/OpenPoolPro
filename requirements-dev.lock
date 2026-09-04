@@ -24,6 +24,8 @@ certifi==2026.7.22
     #   httpcore
     #   httpx
     #   requests
+cffi==2.1.1
+    # via cryptography
 charset-normalizer==3.5.1
     # via
     #   reportlab
@@ -32,6 +34,8 @@ click==8.5.0
     # via uvicorn
 coverage==7.15.4
     # via pytest-cov
+cryptography==50.0.1
+    # via -r requirements.txt
 cyclonedx-python-lib==11.12.0
     # via pip-audit
 defusedxml==0.7.1
@@ -108,6 +112,8 @@ pluggy==1.6.0
     #   pytest-cov
 py-serializable==2.1.0
     # via cyclonedx-python-lib
+pycparser==3.0
+    # via cffi
 pydantic==2.13.5
     # via fastapi
 pydantic-core==2.46.5

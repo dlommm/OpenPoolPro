@@ -140,8 +140,15 @@ def settings_page(request: Request, rules_created: str | None = None,
         "require_2fa": models.get_setting(session, "require_2fa", "0") == "1",
         **_qbo_ctx(session),
         "qbo_items": _qbo_items_maybe(request, session),
-        "qbo_result": {k: request.query_params.get(k) for k in
-                       ("qbo_ok", "qbo_error", "qbo_synced", "qbo_failed")},
+        # Flags/counts only — never free text from the URL. The error message
+        # itself comes from the qbo_last_error setting (server-written), so a
+        # crafted link can't render attacker copy inside the admin UI.
+        "qbo_result": {
+            "qbo_ok": bool(request.query_params.get("qbo_ok")),
+            "qbo_error": bool(request.query_params.get("qbo_error")),
+            "qbo_synced": _parse_count(request.query_params.get("qbo_synced")),
+            "qbo_failed": _parse_count(request.query_params.get("qbo_failed")),
+        },
         "staff_without_2fa": session.scalars(select(models.User).where(
             models.User.active, models.User.totp_enabled.is_(False))).all(),
         "conn_check": {
@@ -722,15 +729,21 @@ def _qbo_redirect_uri(request: Request, session: Session) -> str:
 
 
 def _qbo_items_maybe(request: Request, session):
-    """QBO items for the mapping dropdowns — fetched ONLY when the user asks
-    (a network call), so a normal settings render never depends on QBO."""
-    from app import qbo_api
-    if request.query_params.get("qbo_load_items") and qbo_api.connected(session):
-        try:
-            return qbo_api.list_items(session)
-        except qbo_api.QboError:
-            return []
-    return None
+    """QBO items for the mapping dropdowns. Populated by the POST /qbo/items-load
+    route (which stashes them in the session), never by a GET query param: a
+    page render must never make an outbound call, or a crafted link could make
+    an admin's browser drive traffic to Intuit."""
+    return request.session.pop("qbo_items", None)
+
+
+def _qbo_fail(request: Request, session: Session, message: str) -> RedirectResponse:
+    """Record an error for display and redirect. The text is stored server-side
+    rather than echoed through the URL — a reflected `?qbo_error=<anything>`
+    would let an attacker render arbitrary copy inside the real admin UI
+    ('QuickBooks needs re-authorization, call 1-800-...')."""
+    models.set_setting(session, "qbo_last_error", message[:300])
+    session.commit()
+    return RedirectResponse("/settings?qbo_error=1#system", status_code=303)
 
 
 def _qbo_ctx(session) -> dict:
@@ -744,6 +757,7 @@ def _qbo_ctx(session) -> dict:
         "qbo_company": models.get_setting(session, "qbo_company_name", ""),
         "qbo_item_service": models.get_setting(session, "qbo_item_service_id", ""),
         "qbo_item_chem": models.get_setting(session, "qbo_item_chem_id", ""),
+        "qbo_last_error": models.get_setting(session, "qbo_last_error", ""),
     }
 
 
@@ -757,18 +771,30 @@ async def save_qbo_config(request: Request, session: Session = Depends(get_sessi
     if secret is not None and secret.strip():
         models.set_setting(session, "qbo_client_secret", secret.strip())
     session.commit()
+    # New credentials or a sandbox<->production flip must not keep using a
+    # token minted for the old config (valid for up to an hour).
+    from app import qbo_api
+    qbo_api.clear_cache()
     return RedirectResponse("/settings#system", status_code=303)
 
 
-@router.get("/settings/qbo/connect")
+# POST, not GET: starting a connect mints a state nonce into the session, and
+# SameSite=Lax lets a cross-site top-level GET navigation carry the admin's
+# cookie — so a GET version could be driven by a link on a phishing page.
+@router.post("/settings/qbo/connect")
 def qbo_connect(request: Request, session: Session = Depends(get_session)):
     from app import qbo_api
     try:
         state = secrets.token_urlsafe(24)
-        request.session["qbo_oauth_state"] = state
-        url = qbo_api.authorize_url(session, _qbo_redirect_uri(request, session), state)
+        verifier = qbo_api.new_code_verifier()
+        url = qbo_api.authorize_url(session, _qbo_redirect_uri(request, session),
+                                    state, verifier)
     except qbo_api.QboError as e:
-        return RedirectResponse(f"/settings?qbo_error={e}#system", status_code=303)
+        return _qbo_fail(request, session, str(e))
+    # Stored only after authorize_url succeeded, so a misconfigured attempt
+    # doesn't leave a dangling nonce.
+    request.session["qbo_oauth_state"] = state
+    request.session["qbo_code_verifier"] = verifier
     return RedirectResponse(url, status_code=303)
 
 
@@ -776,22 +802,44 @@ def qbo_connect(request: Request, session: Session = Depends(get_session)):
 def qbo_callback(request: Request, code: str = "", state: str = "", realmId: str = "",
                  error: str = "", session: Session = Depends(get_session)):
     from app import qbo_api
-    expected = request.session.pop("qbo_oauth_state", None)
+    # Read (don't consume) first: a forged/cancelled callback must not eat a
+    # pending nonce, or an attacker could repeatedly navigate the admin to
+    # ?error=1 and make a genuine connect impossible to finish.
+    expected = request.session.get("qbo_oauth_state")
     if error:
-        return RedirectResponse("/settings?qbo_error=QuickBooks sign-in was cancelled#system",
-                                status_code=303)
-    if not code or not realmId or not state or state != expected:
-        return RedirectResponse("/settings?qbo_error=Sign-in could not be verified — try again#system",
-                                status_code=303)
+        return _qbo_fail(request, session, "QuickBooks sign-in was cancelled.")
+    if not (code and realmId and state and expected
+            and secrets.compare_digest(state, expected)):
+        return _qbo_fail(request, session,
+                         "Sign-in could not be verified — start the connection again.")
+    # Genuine callback: now the nonce is spent (single use).
+    request.session.pop("qbo_oauth_state", None)
+    verifier = request.session.pop("qbo_code_verifier", "")
     try:
         name = qbo_api.complete_connection(session, code, realmId,
-                                           _qbo_redirect_uri(request, session))
+                                           _qbo_redirect_uri(request, session), verifier)
         models.set_setting(session, "qbo_company_name", name)
+        models.set_setting(session, "qbo_last_error", "")
         models.audit(session, request.state.user.id, "settings.qbo", detail=f"connected {name}")
         session.commit()
     except qbo_api.QboError as e:
-        return RedirectResponse(f"/settings?qbo_error={e}#system", status_code=303)
+        return _qbo_fail(request, session, str(e))
     return RedirectResponse("/settings?qbo_ok=1#system", status_code=303)
+
+
+@router.post("/settings/qbo/items-load")
+def qbo_items_load(request: Request, session: Session = Depends(get_session)):
+    """Fetch the QBO item list on explicit request (POST, so a page render or a
+    crafted link can never trigger an outbound call) and stash it for the next
+    settings render."""
+    from app import qbo_api
+    if not qbo_api.connected(session):
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    try:
+        request.session["qbo_items"] = qbo_api.list_items(session)
+    except qbo_api.QboError as e:
+        return _qbo_fail(request, session, str(e))
+    return RedirectResponse("/settings#system", status_code=303)
 
 
 @router.post("/settings/qbo/disconnect")
@@ -813,12 +861,21 @@ async def save_qbo_items(request: Request, session: Session = Depends(get_sessio
     return RedirectResponse("/settings#system", status_code=303)
 
 
+# Each customer costs 1-2 synchronous HTTP calls to Intuit, and this app runs
+# a single process — an unbounded loop would tie it up for every other user.
+# Sync in capped batches; re-running picks up where it left off (already-linked
+# customers are cheap updates, and the cap is far above a normal book).
+SYNC_BATCH = 250
+
+
 @router.post("/settings/qbo/sync-customers")
 def qbo_sync_customers(request: Request, session: Session = Depends(get_session)):
     from app import qbo_api
     if not qbo_api.connected(session):
-        return RedirectResponse("/settings?qbo_error=Connect QuickBooks first#system", status_code=303)
-    customers = session.scalars(select(models.Customer).where(models.Customer.active)).all()
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    customers = session.scalars(
+        select(models.Customer).where(models.Customer.active)
+        .order_by(models.Customer.id).limit(SYNC_BATCH)).all()
     synced = failed = 0
     last_error = ""
     for c in customers:
@@ -833,11 +890,10 @@ def qbo_sync_customers(request: Request, session: Session = Depends(get_session)
             last_error = str(e)
     models.audit(session, request.state.user.id, "settings.qbo",
                  detail=f"customer sync: {synced} ok, {failed} failed")
+    models.set_setting(session, "qbo_last_error", last_error[:300] if last_error else "")
     session.commit()
-    q = f"qbo_synced={synced}&qbo_failed={failed}"
-    if last_error:
-        q += f"&qbo_error={last_error}"
-    return RedirectResponse(f"/settings?{q}#system", status_code=303)
+    return RedirectResponse(
+        f"/settings?qbo_synced={synced}&qbo_failed={failed}#system", status_code=303)
 
 
 @router.post("/settings/sign-messages")

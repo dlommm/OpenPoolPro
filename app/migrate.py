@@ -40,6 +40,33 @@ def _dedupe_and_unique_visits(conn, guard) -> None:
         conn.execute(text(
             "CREATE UNIQUE INDEX uq_visits_property_date ON visits (property_id, date)"))
 
+def _encrypt_stored_secrets(conn, guard) -> None:
+    """Encrypt credential settings that predate encryption-at-rest.
+
+    Without this, an existing deployment's SMTP password and OAuth refresh
+    tokens would sit in the database as plaintext until each was next re-saved
+    by hand — and every nightly backup shipped off-box would carry them. Runs
+    once: already-encrypted values (enc.v1. prefix) are skipped, so a second
+    boot is a no-op.
+    """
+    from app import secretbox
+    from app.models import ENCRYPTED_SETTING_KEYS
+
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(settings)"))}
+    if not {"key", "value"} <= cols:
+        return
+    rows = conn.execute(text(
+        "SELECT key, value FROM settings WHERE key IN :keys AND value != ''")
+        .bindparams(bindparam("keys", expanding=True)),
+        {"keys": sorted(ENCRYPTED_SETTING_KEYS)}).all()
+    for key, value in rows:
+        if secretbox.is_encrypted(value):
+            continue
+        guard()
+        conn.execute(text("UPDATE settings SET value=:v WHERE key=:k"),
+                     {"v": secretbox.encrypt(value), "k": key})
+
+
 def _dedupe_and_unique_invoice_period(conn, guard) -> None:
     """A customer has at most one live (non-void) invoice per billing period.
     generate_month's exists-check and its commit are separated by PDF
@@ -251,3 +278,4 @@ def run(engine, before_change=None) -> None:
 
         _dedupe_and_unique_visits(conn, guard)
         _dedupe_and_unique_invoice_period(conn, guard)
+        _encrypt_stored_secrets(conn, guard)

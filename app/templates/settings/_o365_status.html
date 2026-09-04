@@ -24,6 +24,10 @@
   <form method="post" action="/settings/smtp/oauth/disconnect">
     <button class="btn-secondary">Disconnect</button>
   </form>
+  <p class="mt-1 text-xs text-mist">Disconnecting removes the saved token from this app.
+    Microsoft has no revoke API, so to fully withdraw access also remove it at
+    <a href="https://myaccount.microsoft.com/consent" target="_blank" rel="noopener"
+       class="text-pool">myaccount.microsoft.com/consent</a>.</p>
   {% else %}
   <form method="post" action="/settings/smtp/oauth/start"
         hx-post="/settings/smtp/oauth/start" hx-target="#o365-status" hx-swap="outerHTML">

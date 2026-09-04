@@ -152,7 +152,16 @@ def access_token(session) -> str:
 
 
 def disconnect(session) -> None:
-    """Forget the connection and fall back to password auth. Caller commits."""
+    """Forget the connection and fall back to password auth. Caller commits.
+
+    NOTE: this is a LOCAL disconnect only. Unlike Intuit (see qbo_api.disconnect,
+    which POSTs a revoke), the Microsoft identity platform v2 endpoint exposes no
+    token-revocation endpoint, so the grant itself stays alive at Microsoft until
+    the user withdraws it at https://myaccount.microsoft.com/consent (or an admin
+    revokes it in Entra). The settings UI says so, because "Disconnected" must not
+    imply a revocation that did not happen — a token captured from an old backup
+    would otherwise still send mail.
+    """
     models.set_setting(session, "smtp_oauth_refresh_token", "")
     models.set_setting(session, "smtp_oauth_account", "")
     models.set_setting(session, "smtp_auth_mode", "password")

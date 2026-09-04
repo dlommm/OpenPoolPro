@@ -73,6 +73,20 @@ folder.
   flood must be absorbed upstream — put Cloudflare (or another edge/CDN) in
   front of your domain, or use Pangolin/Traefik rate-limit middleware or
   Crowdsec. `/health` is never throttled.
+- **Credentials encrypted at rest:** the settings rows that hold secrets —
+  SMTP password, Office 365 refresh token, QuickBooks client secret and
+  refresh token, Geoapify key — are stored AES-256-GCM encrypted, with the
+  key derived from `SECRET_KEY` (which lives in the environment, *not* in
+  `DATA_DIR`). Nightly backups copy the database but never the environment,
+  so a leaked or misconfigured off-box backup no longer yields working
+  tokens. This does **not** protect against an attacker who already has the
+  host — they can read `SECRET_KEY` too. Existing plaintext values are
+  encrypted automatically on first boot after upgrading.
+  *If you upgraded an existing install: backups taken before the upgrade
+  still contain the old plaintext secrets — rotate them (reconnect
+  QuickBooks/Office 365, change the SMTP password) or purge those snapshots.*
+  Rotating `SECRET_KEY` makes stored credentials unreadable; the app treats
+  them as unset and you re-enter them in Settings.
 - **Audit log:** sensitive actions (login/lockout, password changes, 2FA
   enable/disable/reset, backup-code use, user create/disable/permission
   changes, rate changes, exports, CSV imports) are recorded with a

@@ -12,4 +12,5 @@ pyotp>=2.9
 segno>=1.6
 reportlab>=4.0
 pypdf>=4.0
+cryptography>=42
 openpyxl>=3.1

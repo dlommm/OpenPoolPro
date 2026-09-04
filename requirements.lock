@@ -14,10 +14,14 @@ bcrypt==4.0.1
     # via
     #   -r requirements.txt
     #   passlib
+cffi==2.1.1
+    # via cryptography
 charset-normalizer==3.5.1
     # via reportlab
 click==8.5.0
     # via uvicorn
+cryptography==50.0.1
+    # via -r requirements.txt
 et-xmlfile==2.0.0
     # via openpyxl
 fastapi==0.141.1
@@ -44,6 +48,8 @@ pillow==12.3.0
     # via
     #   -r requirements.txt
     #   reportlab
+pycparser==3.0
+    # via cffi
 pydantic==2.13.5
     # via fastapi
 pydantic-core==2.46.5

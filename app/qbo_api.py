@@ -13,7 +13,9 @@ CREATES/UPDATES customers (non-money). Invoice/payment posting is Phase 2 and
 will carry its own idempotency mapping. Uses stdlib urllib (no new dependency).
 """
 import base64
+import hashlib
 import json
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -35,6 +37,22 @@ _API_BASE = {
 # In-process access-token cache: {"token", "exp"}. Single process (instance
 # lock), so a module dict is the right scope.
 _cache: dict = {}
+
+
+def _expires_in(resp: dict) -> int:
+    """Token lifetime in seconds, tolerating a malformed/missing value rather
+    than 500ing on int()."""
+    try:
+        return max(60, int(resp.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        return 3600
+
+
+def clear_cache() -> None:
+    """Drop the cached access token — call when the app credentials or the
+    sandbox/production environment change, or a token minted for the old
+    config keeps being sent to the new endpoint for up to an hour."""
+    _cache.clear()
 
 
 class QboError(Exception):
@@ -72,7 +90,19 @@ def configured(session) -> bool:
 
 # ---------- OAuth (authorization-code flow) ----------
 
-def authorize_url(session, redirect_uri: str, state: str) -> str:
+def new_code_verifier() -> str:
+    """PKCE verifier (RFC 7636). Defense in depth: even if an authorization
+    code leaks (referer, shoulder-surf, a proxy log), it cannot be redeemed
+    without the verifier that never left this server."""
+    return secrets.token_urlsafe(64)
+
+
+def _code_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def authorize_url(session, redirect_uri: str, state: str, code_verifier: str) -> str:
     cfg = _cfg(session)
     if not cfg["client_id"]:
         raise QboError("Enter your QuickBooks app credentials first.")
@@ -82,6 +112,8 @@ def authorize_url(session, redirect_uri: str, state: str) -> str:
         "scope": SCOPE,
         "redirect_uri": redirect_uri,
         "state": state,
+        "code_challenge": _code_challenge(code_verifier),
+        "code_challenge_method": "S256",
     }
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
 
@@ -108,22 +140,32 @@ def _token_request(session, form: dict) -> dict:
         raise QboError("Could not reach QuickBooks. Check the network and try again.") from exc
 
 
-def complete_connection(session, code: str, realm_id: str, redirect_uri: str) -> str:
+def complete_connection(session, code: str, realm_id: str, redirect_uri: str,
+                        code_verifier: str = "") -> str:
     """Exchange the auth code for tokens and persist the connection. Returns
     the connected company name. Commits (tokens must survive regardless of the
     request outcome)."""
-    resp = _token_request(session, {
+    if not realm_id.isdigit() or len(realm_id) > 30:
+        # Intuit realm ids are decimal. Validated before it is stored and
+        # interpolated into API URLs, so no odd path segment can ever reach
+        # the request builder.
+        raise QboError("QuickBooks returned an unexpected company id.")
+    form = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": redirect_uri,
-    })
-    if "refresh_token" not in resp:
+    }
+    if code_verifier:
+        form["code_verifier"] = code_verifier
+    resp = _token_request(session, form)
+    if "refresh_token" not in resp or "access_token" not in resp:
+        # Guard both: a response with one but not the other would otherwise
+        # KeyError into a 500 instead of an admin-readable message.
         raise QboError(resp.get("error_description") or resp.get("error")
                        or "QuickBooks did not return a token.")
     models.set_setting(session, "qbo_refresh_token", resp["refresh_token"])
     models.set_setting(session, "qbo_realm_id", realm_id)
-    _cache.update(token=resp["access_token"],
-                  exp=time.time() + int(resp.get("expires_in", 3600)) - 120)
+    _cache.update(token=resp["access_token"], exp=time.time() + _expires_in(resp) - 120)
     session.commit()
     try:
         return company_name(session)
@@ -149,8 +191,7 @@ def access_token(session) -> str:
     if resp.get("refresh_token") and resp["refresh_token"] != cfg["refresh_token"]:
         models.set_setting(session, "qbo_refresh_token", resp["refresh_token"])
         session.commit()
-    _cache.update(token=resp["access_token"],
-                  exp=time.time() + int(resp.get("expires_in", 3600)) - 120)
+    _cache.update(token=resp["access_token"], exp=time.time() + _expires_in(resp) - 120)
     return _cache["token"]
 
 
@@ -179,7 +220,10 @@ def disconnect(session) -> None:
 
 def _api(session, method: str, path: str, body: dict | None = None) -> dict:
     token = access_token(session)
-    realm = _cfg(session)["realm_id"]
+    # Quoted even though realm_id is validated numeric on the way in — same
+    # belt-and-braces the Office 365 client applies to its tenant id, so no
+    # stored value can ever shape the request path.
+    realm = urllib.parse.quote(_cfg(session)["realm_id"], safe="")
     url = f"{api_base(session)}/v3/company/{realm}/{path}"
     sep = "&" if "?" in url else "?"
     url = f"{url}{sep}minorversion={MINOR_VERSION}"
@@ -207,7 +251,10 @@ def _api(session, method: str, path: str, body: dict | None = None) -> dict:
 
 
 def _query(session, statement: str) -> list:
-    resp = _api(session, "GET", "query?query=" + urllib.parse.quote(statement))
+    # safe="" so nothing in a statement can leak into the URL structure. NOTE
+    # for Phase 2: QBO's query language is injectable — never interpolate a
+    # customer name or other user data into `statement` without escaping it.
+    resp = _api(session, "GET", "query?query=" + urllib.parse.quote(statement, safe=""))
     qr = resp.get("QueryResponse", {})
     # QueryResponse holds the entity under its type name (Customer, Item, ...).
     for val in qr.values():
