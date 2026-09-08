@@ -70,7 +70,7 @@ def redact_path(path: str) -> str:
     method-and-path-only discipline doesn't automatically cover. Anyone with
     log access could otherwise lift a live signing link. (uvicorn's access
     log is disabled in the Dockerfile for the same reason.)"""
-    if path.startswith("/sign/"):
+    if path.startswith(("/sign/", "/portal/")):
         parts = path.split("/")
         parts[2] = "[token]"
         return "/".join(parts)
@@ -128,14 +128,22 @@ def logged_job(func, name: str | None = None):
 
     @functools.wraps(func)
     def run_logged(*args, **kwargs):
+        from app.operations import record_run
+        engine = args[0] if args and hasattr(args[0], "connect") else None
+        if engine is not None:
+            record_run(engine, label, "running")
         job_log.info("job %s started", label)
         started = time.perf_counter()
         try:
             result = func(*args, **kwargs)
         except Exception:
+            if engine is not None:
+                record_run(engine, label, "failed")
             job_log.exception("job %s FAILED after %.1fs", label,
                               time.perf_counter() - started)
             return None
+        if engine is not None:
+            record_run(engine, label, "finished")
         job_log.info("job %s finished in %.1fs", label, time.perf_counter() - started)
         return result
 

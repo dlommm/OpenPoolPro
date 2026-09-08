@@ -31,8 +31,9 @@
   {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/inventory", "Inventory", "inventory")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
+  {% if u is not none and u.role == "admin" %}{% set items = items + [("/operations", "Operations", "settings")] %}{% endif %}
   {% set low_count = low_stock_count(request) if request is not none and (u is none or u.role == "admin") else 0 %}
-  <aside id="sidebar" class="hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-surface p-4 shadow-[6px_0_24px_rgba(15,23,42,0.04)]">
+  <aside id="sidebar" class="overflow-y-auto hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-surface p-4 shadow-[6px_0_24px_rgba(15,23,42,0.04)]">
     <a href="/" class="mb-6 flex items-center gap-2.5">
       {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
       {% else %}

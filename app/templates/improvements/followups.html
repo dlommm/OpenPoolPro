@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Payment follow-ups{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Receivables", "Payment follow-ups") }}
+<p class="mb-4 text-sm text-mist">Review and approve messages below. Approved reminders enter the email outbox; the balance and recipient are checked again before sending. Draft, void, and paid invoices are excluded.</p>
+{% if request.query_params.get('approved') %}<p class="card mb-4 p-3" role="status">Selected reminders queued. Delivery status is shown below.</p>{% endif %}
+<form action="/followups/settings" method="post" class="card mb-4 flex flex-wrap items-end gap-3 p-4"><label class="min-w-0 flex-1">Remind at these days overdue<input class="field" name="days" value="{{ days }}" required maxlength="50"></label><button class="btn-secondary">Save thresholds</button></form>
+<form action="/followups/approve" method="post">
+<div class="space-y-3">
+{% for row in rows %}<article class="card p-4">
+  <label class="flex min-h-11 items-center gap-3"><input type="checkbox" name="snapshot" value="{{ row.snapshot }}"><span class="font-semibold">{{ row.invoice.customer.name }} · {{ row.invoice.number }} · {{ row.invoice.balance_cents | dollars }}</span></label>
+  <p class="break-words text-sm">To: {{ row.invoice.customer.email }} · {{ row.stage }}-day reminder</p>
+  <p class="mt-3 font-semibold">{{ row.subject }}</p><pre class="mt-2 whitespace-pre-wrap break-words font-body text-sm">{{ row.body }}</pre>
+</article>{% else %}<p class="card p-4">No reminders need approval. Paid invoices, recent reminders, and invoices without email addresses are excluded.</p>{% endfor %}
+</div>
+{% if rows %}<button class="btn-primary my-4">Approve selected messages for delivery</button>{% endif %}
+</form>
+<h2 class="mb-3 mt-6 font-display text-xl font-bold">Recent reminder activity</h2>
+<div class="space-y-2">{% for item in history %}<div class="card p-3"><strong>{{ item.invoice.number }}</strong> · {{ item.stage }}-day reminder · <span class="tag">{{ item.outbox.status }}</span><p class="break-words text-sm text-mist">{{ item.outbox.to_addr }} · approved {{ item.created_at | localdt }}{% if item.outbox.sent_at %} · sent {{ item.outbox.sent_at | localdt }}{% endif %}</p>{% if item.outbox.status == 'canceled' %}<p class="text-sm">Invoice or recipient changed after approval. Review the current balance before approving a new message.</p>{% elif item.outbox.status == 'failed' %}<p class="text-sm">Delivery failed. Review Email settings; the outbox retries up to five attempts.</p>{% endif %}</div>{% else %}<p class="text-sm text-mist">No reminders approved yet.</p>{% endfor %}</div>
+<a class="btn-secondary mt-4" href="/ar">Accounts receivable</a>
+{% endblock %}

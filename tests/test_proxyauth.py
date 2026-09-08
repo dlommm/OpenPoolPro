@@ -64,11 +64,11 @@ def test_user_header_maps_to_that_staff_user(client, engine, monkeypatch):
     assert r.status_code == 403
 
 
-def test_unknown_user_header_falls_back_to_owner(client, engine, monkeypatch):
+def test_unknown_user_header_is_rejected(client, engine, monkeypatch):
     c = _client(engine, monkeypatch)
     r = c.get("/settings", headers={"X-OpenPool-Auth": "s3cret-proxy-token",
                                     "X-OpenPool-User": "ghost"}, follow_redirects=False)
-    assert r.status_code == 200  # owner is admin
+    assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
 def test_inactive_mapped_user_is_rejected_not_owner(client, engine, monkeypatch):

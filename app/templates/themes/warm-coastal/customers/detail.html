@@ -2,6 +2,8 @@
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/customers/{{ c.id }}/portal">Customer portal</a>{% endif %}
+
 
 <header class="pb-3 pt-2">
   <p class="page-eyebrow">Customer file</p>

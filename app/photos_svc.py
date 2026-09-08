@@ -57,6 +57,10 @@ def delete_photo(session, photo_id: int) -> None:
     ph = session.get(models.Photo, photo_id)
     if ph is None:
         return
+    shared = session.get(models.PortalPhoto, photo_id)
+    if shared is not None:
+        session.delete(shared)
+        session.flush()
     for p in (path_for(ph), path_for(ph, thumb=True)):
         if os.path.exists(p):
             os.remove(p)

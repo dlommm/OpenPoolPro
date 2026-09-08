@@ -2,6 +2,8 @@
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/customers/{{ c.id }}/portal">Customer portal</a>{% endif %}
+
 <div class="flex items-start justify-between gap-2">
   {{ ui.page_header("Customer file", c.name) }}
   <a href="/customers/{{ c.id }}/edit" class="btn-secondary mt-2 shrink-0">Edit</a>

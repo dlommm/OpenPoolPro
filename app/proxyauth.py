@@ -13,8 +13,8 @@ bind the container to loopback / leave the port unpublished, and set the
 secret long and random. The header value is compared in constant time.
 
 The optional user header (PROXY_AUTH_USER_HEADER) maps the SSO identity to a
-specific active staff user for correct audit attribution; missing/unknown ->
-the owner account. Password + 2FA login always remains available as a
+specific active staff user for correct audit attribution; missing -> owner,
+unknown -> rejected. Password + 2FA login always remains available as a
 fallback (this never disables it).
 """
 import secrets
@@ -39,7 +39,7 @@ def resolve_user(request, session) -> "models.User | None":
     if username:
         user = session.scalars(
             select(models.User).where(models.User.username == username)).first()
-    if user is None:
+    else:
         user = session.scalars(
             select(models.User).where(models.User.username == "owner")).first()
     return user if (user is not None and user.active) else None

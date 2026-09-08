@@ -686,3 +686,47 @@ class EmailOutbox(Base):
     last_error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PortalAccess(Base):
+    __tablename__ = "portal_access"
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class PortalPhoto(Base):
+    __tablename__ = "portal_photos"
+    photo_id: Mapped[int] = mapped_column(ForeignKey("photos.id"), primary_key=True)
+
+
+class InvoiceFollowup(Base):
+    __tablename__ = "invoice_followups"
+    __table_args__ = (Index("uq_followup_stage", "invoice_id", "stage", unique=True),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    stage: Mapped[int] = mapped_column(Integer)
+    balance_cents: Mapped[int] = mapped_column(Integer)
+    due_date: Mapped[date] = mapped_column(Date)
+    outbox_id: Mapped[int] = mapped_column(ForeignKey("email_outbox.id"), unique=True)
+    approved_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    outbox: Mapped[EmailOutbox] = relationship()
+    invoice: Mapped[Invoice] = relationship()
+
+
+class WaterReview(Base):
+    __tablename__ = "water_reviews"
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"))
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class OperationRun(Base):
+    __tablename__ = "operation_runs"
+    name: Mapped[str] = mapped_column(String(120), primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="running")

@@ -757,7 +757,7 @@
    shrink so the 1fr split holds regardless of content. */
 .cr-cust-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
 @media (max-width: 900px) { .cr-cust-grid { grid-template-columns: minmax(0, 1fr); } }
-.cr-stack { display: grid; gap: 14px; min-width: 0; }
+.cr-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 
 .cr-specrows { display: grid; gap: 0; }
 .cr-sr { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-seam); }

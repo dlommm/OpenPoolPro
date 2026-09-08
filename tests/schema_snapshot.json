@@ -111,6 +111,16 @@
     "serial",
     "warranty_end"
   ],
+  "invoice_followups": [
+    "approved_by_id",
+    "balance_cents",
+    "created_at",
+    "due_date",
+    "id",
+    "invoice_id",
+    "outbox_id",
+    "stage"
+  ],
   "invoices": [
     "customer_id",
     "due_date",
@@ -187,6 +197,12 @@
     "property_id",
     "title"
   ],
+  "operation_runs": [
+    "finished_at",
+    "name",
+    "started_at",
+    "status"
+  ],
   "payments": [
     "amount_cents",
     "created_at",
@@ -223,6 +239,15 @@
     "surface",
     "water_type",
     "width_ft"
+  ],
+  "portal_access": [
+    "created_at",
+    "customer_id",
+    "expires_at",
+    "token_hash"
+  ],
+  "portal_photos": [
+    "photo_id"
   ],
   "properties": [
     "active",
@@ -385,5 +410,11 @@
     "ta",
     "tasks_done",
     "tax_rate_ppm"
+  ],
+  "water_reviews": [
+    "created_at",
+    "fingerprint",
+    "job_id",
+    "property_id"
   ]
 }

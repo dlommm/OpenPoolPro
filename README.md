@@ -152,6 +152,8 @@ Access…), OpenPoolPro can skip its own login screen for those requests:
 4. *(Optional, for audit attribution)* have the proxy also pass the
    authenticated username in `PROXY_AUTH_USER_HEADER` (default
    `X-OpenPool-User`); it maps to that active staff user instead of the owner.
+   An unknown or inactive named user is rejected; only an absent username
+   uses the owner fallback. Create the staff account before enabling its SSO mapping.
 
 ⚠️ **Trust model:** this authenticates anyone who can send the header. It is
 safe **only** because the app is reachable solely through the proxy and the
@@ -247,8 +249,9 @@ pass the path to the `.db` file.
 
 Customers who opt in (a per-customer "Email visit notifications" checkbox
 on the customer form) get a plain-text email when their visit is marked
-done — business name, property, date, completed task labels, technician
-name. Never a dollar amount or chemical amount. Sending goes through a
+done — business name, property, date, water readings and targets, chemicals
+added, completed task labels, visit notes, and technician name. Dollar amounts
+are excluded. Sending goes through a
 durable outbox: every notification is written as a row in the database
 first, then a background job flushes it via SMTP every 5 minutes (or
 immediately from Settings → Email → "Flush now" / "Send test email"). A
@@ -387,6 +390,24 @@ signal:
   reconnect (`online` event) and on every app open, not silently in the
   background while the app is closed — reopen the app once you're back on
   signal to sync.
+
+## Planning, customer portals, and business health
+
+Open **Operations** in the administrator menu for route planning, payment
+follow-ups, water alerts, and operational health. Each customer detail page
+also has **Customer portal** access controls.
+
+- **Route planner:** editable suggested stop order and approximate travel estimates.
+- **Customer portal:** expiring, revocable links to completed service records,
+  sent invoices, agreements, and explicitly shared photos. Set an HTTPS Public
+  base URL and allow `/portal/` through the proxy's public path rule.
+- **Payment follow-ups:** configurable overdue thresholds, full message previews,
+  explicit approval, delivery history, and cancellation when invoice data changes.
+- **Water alerts:** repeated or worsening readings with staff-created inspection jobs.
+- **Operations:** backup/storage/mail/scheduler status, integration configuration,
+  and unsynced work on the current device.
+
+See [setup, permissions, and behavior](docs/application-improvements.md).
 
 ## Visual smoke check
 

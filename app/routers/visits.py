@@ -66,6 +66,7 @@ def service_report(session, v, business: str, tech_name: str) -> str:
 
 
 def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
+    get_or_404(session, models.Property, property_id)
     v = session.scalars(select(models.Visit).where(
         models.Visit.property_id == property_id, models.Visit.date == d)).first()
     if v is None:
@@ -324,6 +325,8 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
 @router.post("/visit/{property_id}/{visit_date}/dismiss")
 def dismiss(property_id: int, visit_date: date, request: Request, session: Session = Depends(get_session)):
     v = _get_or_create(session, property_id, visit_date)
+    if v.status == "done":
+        return PlainTextResponse("This stop is already completed.", status_code=409)
     if v.status == "due":
         v.status = "skipped"
     v.completed_by_id = request.state.user.id

@@ -33,12 +33,14 @@ from app.routers import (  # noqa: E402
     contracts,
     csv_io,
     customers,
+    improvements,
     inventory,
     invoices,
     jobs,
     money,
     photos,
     pools,
+    portal,
     quotes,
     routes,
     settings,
@@ -56,6 +58,7 @@ ROUTERS = (
     console.router, users.router, account.router, audit.router,
     analytics.router, inventory.router, invoices.router, routes.router,
     contracts.router, contract_template.router, sign.router,
+    improvements.router, portal.router,
 )
 
 
@@ -138,7 +141,7 @@ def create_app(engine=None) -> FastAPI:
     # by a 256-bit single-use token in the URL, not by a session. Trailing
     # slashes are load-bearing — a raw "/sign" prefix would silently exempt any
     # future route merely starting with those letters (e.g. "/signage").
-    EXEMPT_PREFIX = ("/static/", "/sign/")
+    EXEMPT_PREFIX = ("/static/", "/sign/", "/portal/")
 
     # The public /sign POST (and /login) parse form bodies before any auth or
     # rate-limit check runs, and this is a single-process app: an unauthenticated
@@ -332,6 +335,12 @@ def create_app(engine=None) -> FastAPI:
         # can otherwise satisfy the fetch from Last-Modified heuristics).
         if response.headers.get("content-type", "").startswith("text/html"):
             response.headers["Cache-Control"] = "no-cache"
+        if any(request.url.path == p or request.url.path.startswith(p + "/")
+               for p in ("/account", "/settings", "/users", "/sign", "/login", "/portal", "/followups")):
+            response.headers["Cache-Control"] = "no-store"
+        if "/portal" in request.url.path:
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     from fastapi.exceptions import RequestValidationError
@@ -340,6 +349,10 @@ def create_app(engine=None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exc(request, exc):
+        if request.url.path.startswith("/portal/"):
+            return templates.TemplateResponse(request, "portal/message.html", {
+                "message": "This page request is invalid. Open the original portal link and try again."},
+                status_code=422)
         # A browser form post that trips FastAPI validation (e.g. a required
         # Form(...) field left blank with client-side `required` stripped or
         # unsupported) used to get the default raw-JSON 422 — unreadable, and
@@ -357,6 +370,11 @@ def create_app(engine=None) -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exc(request, exc):
+        if request.url.path.startswith("/portal/"):
+            return templates.TemplateResponse(request, "portal/message.html", {
+                "message": "Please try again later." if exc.status_code == 429 else
+                "This link or document is unavailable. Ask your service provider for a new portal link."},
+                status_code=exc.status_code)
         if exc.status_code == 401:
             return _RR("/login", status_code=303)
         if exc.status_code == 403:

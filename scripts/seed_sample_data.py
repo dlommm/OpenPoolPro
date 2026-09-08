@@ -24,6 +24,9 @@ def run() -> None:
         if models.get_setting(s, "sample_seeded", "") == "1":
             print("sample data already seeded — skipping")
             return
+        if s.scalars(select(models.Customer)).first() is not None:
+            print("existing customers found — refusing to change business data")
+            return
 
         # --- Company profile + billing settings ---
         for key, value in [

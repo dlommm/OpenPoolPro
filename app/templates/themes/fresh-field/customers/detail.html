@@ -2,6 +2,8 @@
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/customers/{{ c.id }}/portal">Customer portal</a>{% endif %}
+
 
 {% set ffh2 = "mb-2 mt-6 text-xs font-extrabold uppercase tracking-[0.12em] text-mist" %}
 

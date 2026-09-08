@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app import config, models
 from app.db import get_session
 from app.deps import require_admin
+from app.forms import cents
 from app.qbo import csv_safe
 from app.rates import gallons
 from app.templating import templates
@@ -217,11 +218,7 @@ async def import_commit(request: Request, token: str,
         session.add(c)
         session.flush()
         if val(row, "address") or val(row, "property_label"):
-            rate = val(row, "rate_override_dollars").lstrip("$")
-            try:
-                rate_cents = round(float(rate) * 100) if rate else None
-            except ValueError:
-                rate_cents = None
+            rate_cents = cents(val(row, "rate_override_dollars"))
             tech = None
             if val(row, "assigned_tech"):
                 tech = session.scalars(select(models.User).where(

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Water history{% endblock %}
 {% block content %}
+{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/water-alerts">Review water alerts</a>{% endif %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header(c.name, prop.label ~ " — water history") }}
 

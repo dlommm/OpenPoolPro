@@ -2,6 +2,8 @@
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/customers/{{ c.id }}/portal">Customer portal</a>{% endif %}
+
 
 <div class="cr-phead">
   <div class="cr-ey">Customer file</div>
@@ -204,7 +206,7 @@
         </div>
         {% if can_manage %}
         <form method="post" action="/customers/{{ c.id }}/tags/add" class="flex gap-2">
-          <input name="tags" placeholder="Add tag (comma-separated)" class="field flex-1">
+          <input name="tags" placeholder="Add tag (comma-separated)" class="field min-w-0 flex-1">
           <button class="btn-secondary">Add</button>
         </form>
         {% endif %}

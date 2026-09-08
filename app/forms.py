@@ -73,5 +73,10 @@ def cents(dollars: str | None, *, minimum: int = 0) -> int | None:
         return None
     if not math.isfinite(f):
         return None
-    value = round(f * 100)
+    scaled = f * 100
+    # SQLite INTEGER is signed 64-bit. Even a finite dollar float can
+    # overflow during scaling or when the resulting cents reach SQLite.
+    if not math.isfinite(scaled) or scaled >= 2**63:
+        return None
+    value = round(scaled)
     return value if value >= minimum else None

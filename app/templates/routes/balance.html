@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Route balance{% endblock %}
 {% block content %}
+<a class="btn-secondary mb-3" href="/routes/plan">Plan stop order</a>
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Field power", "Route balance") }}
 <p class="mb-4 text-sm text-mist">Balances across techs — properties assigned to an admin/owner or a disabled tech are left as-is.</p>

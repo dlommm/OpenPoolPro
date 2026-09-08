@@ -5,6 +5,7 @@ time and never appear in a template or log line -- see send_message, the
 only function in this module that touches smtplib.
 """
 import smtplib
+import threading
 from email.message import EmailMessage
 
 from sqlalchemy import and_, or_, select
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from app import config, models
 
 MAX_ATTEMPTS = 5
+_flush_lock = threading.Lock()
 
 
 def _config_conf() -> dict:
@@ -123,6 +125,16 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
 
 
 def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
+    # The scheduler and the manual flush button share a single sender.
+    if not _flush_lock.acquire(blocking=False):
+        return (0, 0)
+    try:
+        return _flush_outbox(session, limit)
+    finally:
+        _flush_lock.release()
+
+
+def _flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
     """Send oldest-first pending rows plus failed rows with attempts < 5.
 
     Caller commits (same contract as queue/audit). Unconfigured SMTP is a
@@ -148,6 +160,12 @@ def flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
 
     sent = failed = 0
     for row in rows:
+        from app.followups import may_deliver
+        if not may_deliver(session, row):
+            row.status = "canceled"
+            row.last_error = "Invoice balance, status, or recipient changed after approval."
+            session.commit()
+            continue
         try:
             send_message(row.to_addr, row.subject, row.body, conf)
         except Exception as exc:

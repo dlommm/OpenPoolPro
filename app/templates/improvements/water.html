@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Water alerts{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Service quality", "Water alerts") }}
+<p class="mb-4 text-sm text-mist">Flags repeated out-of-target readings or three readings moving away from your configured target, using the last 90 days. Retest and inspect before choosing treatment. An alert does not change chemical doses or customer billing.</p>
+<div class="space-y-3">{% for alert in alerts %}<article class="card p-4">
+  <a class="font-semibold text-pool" href="/properties/{{ alert.property.id }}/water">{{ alert.property.customer.name }} — {{ alert.property.label }}</a>
+  <h2 class="mt-2 font-display text-xl font-bold">{{ alert.label }}</h2>
+  <p>{{ alert.reason }}</p><p class="mt-2 text-sm">Oldest → newest: {{ alert['values'] | join(' → ') }} · latest {{ alert.date }}</p><p class="text-sm text-mist">Configured band: {{ '%g' | format(alert.low) }}–{{ '%g' | format(alert.high) }}</p>
+  {% if alert.job_id %}<a class="btn-secondary mt-3" href="/jobs/{{ alert.job_id }}">View inspection job</a>{% else %}<form class="mt-3" method="post" action="/water-alerts/inspect"><input type="hidden" name="fingerprint" value="{{ alert.fingerprint }}"><button class="btn-primary">Create inspection job</button></form>{% endif %}
+</article>{% else %}<p class="card p-4">No repeated or worsening readings found. At least two recent readings per metric are needed to detect a pattern.</p>{% endfor %}</div>
+<a class="btn-secondary mt-4" href="/settings">Configure water targets</a>
+{% endblock %}

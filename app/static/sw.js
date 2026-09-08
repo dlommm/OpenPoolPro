@@ -85,7 +85,12 @@ self.addEventListener("fetch", e => {
   // device, there is no logout/login event to ever clear the cache for them,
   // and the cached bytes would include their contract PDF and address.
   // Straight network pass-through, no offline fallback.
-  if (url.pathname.startsWith("/sign/")) return;
+  if (url.pathname.startsWith("/sign/") || url.pathname.startsWith("/portal/")) return;
+  if (url.pathname.includes("/portal") || url.pathname.startsWith("/followups")) return;
+
+  // Account enrollment can contain the TOTP seed and one-time backup codes.
+  // Do not store security/settings pages or serve older offline copies.
+  if (["/account", "/settings", "/users"].some(p => url.pathname === p || url.pathname.startsWith(p + "/"))) return;
 
   if (req.method === "GET" && req.mode === "navigate") {
     e.respondWith(handleNavigate(req));
@@ -145,10 +150,11 @@ async function handleNavigate(req) {
     const landedOnLogin = (() => {
       try { return new URL(resp.url).pathname === "/login"; } catch { return false; }
     })();
-    if (landedOnLogin && new URL(req.url).pathname !== "/login") {
-      clearPagesCache();
+    if (landedOnLogin) {
+      await clearPagesCache();
     }
-    if (resp && resp.ok && !landedOnLogin) {
+    const noStore = /\bno-store\b/i.test(resp.headers.get("cache-control") || "");
+    if (resp && resp.ok && !landedOnLogin && !noStore) {
       const copy = resp.clone();
       caches.open(PAGES_CACHE).then(c => c.put(req, copy));
     }
@@ -378,10 +384,10 @@ async function replayOnce() {
     // treating it as dead would do the same more slowly -- it is retryable, so
     // it stays queued until the tech logs back in.
     const finalPath = (() => { try { return new URL(resp.url).pathname; } catch { return ""; } })();
-    const loginRedirect = finalPath === "/login";
+    const loginRedirect = finalPath === "/login" || finalPath === "/login/2fa" || finalPath === "/account";
     if (resp.ok && !loginRedirect) {
       await queueDelete(entry.id);
-    } else if (loginRedirect || resp.status >= 500 || resp.status < 400) {
+    } else if (loginRedirect || resp.status >= 500 || resp.status < 400 || resp.status === 429 || resp.status === 408) {
       if (loginRedirect) BLOCKED_AUTH = true;
       break;  // retryable — login redirect, server fault, or an odd non-2xx we won't gamble on
     } else {
