@@ -92,7 +92,9 @@ def home(request: Request, token: str, visits_page: int = Query(1, ge=1, le=1000
         .order_by(models.Contract.season_year.desc()).limit(50)).all()
     photos = session.scalars(portal.photo_query(customer.id).join(models.PortalPhoto)
         .order_by(models.Photo.id.desc()).limit(100)).all()
+    from app.routers.qbo_billing import invoice_context
     return templates.TemplateResponse(request, "portal/home.html", {
+        **invoice_context(session, customer.id, sent_only=True), "qbo_portal": True,
         "customer": customer, "token": token, "visits": visits, "invoices": invoices,
         "contracts": contracts, "photos": photos, "visits_page": visits_page, "invoices_page": invoices_page,
         "company": models.get_setting(session, "business_name", "OpenPoolPro")})
@@ -131,3 +133,17 @@ def photo_file(request: Request, token: str, photo_id: int, session: Session = D
         raise HTTPException(404)
     path = portal.safe_file(f"{config.DATA_DIR}/photos/{photo.entity_type}/{photo.entity_id}", photo.filename)
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/portal/{token}/quickbooks/{invoice_id}/pdf")
+def quickbooks_pdf(request: Request, token: str, invoice_id: int, session: Session = Depends(get_session)):
+    customer = _customer(request, token, session)
+    invoice = session.scalar(select(models.QBOInvoiceMirror).where(
+        models.QBOInvoiceMirror.id == invoice_id,
+        models.QBOInvoiceMirror.customer_id == customer.id,
+        models.QBOInvoiceMirror.email_status == "EmailSent",
+        models.QBOInvoiceMirror.status.not_in(("unavailable", "deleted", "void"))))
+    if invoice is None:
+        raise HTTPException(404)
+    from app.routers.qbo_billing import mirrored_pdf
+    return mirrored_pdf(session, invoice)

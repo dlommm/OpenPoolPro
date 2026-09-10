@@ -12,6 +12,7 @@ def setup_function(_):
 
 
 def _configure(engine, secret="app-secret", env="sandbox"):
+    models.Base.metadata.create_all(engine)
     with Session(engine) as s:
         models.set_setting(s, "qbo_client_id", "client-abc")
         models.set_setting(s, "qbo_client_secret", secret)
@@ -129,7 +130,7 @@ def test_push_customer_creates_when_unlinked(client, engine, monkeypatch):
     _connected(engine)
     seen = {}
 
-    def fake_api(s, method, path, body=None):
+    def fake_api(s, method, path, body=None, **kwargs):
         seen["method"], seen["path"], seen["body"] = method, path, body
         return {"Customer": {"Id": "77"}}
 
@@ -148,7 +149,7 @@ def test_push_customer_updates_when_already_linked(client, engine, monkeypatch):
     _connected(engine)
     calls = []
 
-    def fake_api(s, method, path, body=None):
+    def fake_api(s, method, path, body=None, **kwargs):
         calls.append((method, path))
         if method == "GET":
             return {"Customer": {"Id": "77", "SyncToken": "3"}}
@@ -156,7 +157,7 @@ def test_push_customer_updates_when_already_linked(client, engine, monkeypatch):
 
     monkeypatch.setattr(qbo_api, "_api", fake_api)
     with Session(engine) as s:
-        cust = models.Customer(name="Ada", qbo_customer_id="77")
+        cust = models.Customer(name="Ada", qbo_customer_id="77", qbo_customer_scope="sandbox:9130000")
         s.add(cust)
         s.commit()
         assert qbo_api.push_customer(s, cust) == "77"
@@ -310,7 +311,7 @@ def test_sync_customers_is_idempotent(client, engine, monkeypatch):
     _connected(engine)
     created = []
 
-    def fake_api(s, method, path, body=None):
+    def fake_api(s, method, path, body=None, **kwargs):
         if method == "POST":
             created.append(body["DisplayName"])
             return {"Customer": {"Id": "100"}}
@@ -345,3 +346,199 @@ def test_sync_requires_connection(client, engine):
     _configure(engine)  # configured but not connected
     r = client.post("/settings/qbo/sync-customers", follow_redirects=False)
     assert "qbo_error" in r.headers["location"]
+
+
+def test_invoice_wire_format_and_pdf(engine, monkeypatch):
+    import io
+    import json
+    _connected(engine)
+    calls = []
+    monkeypatch.setattr(qbo_api, "access_token", lambda s: "access")
+    def respond(req, **kwargs):
+        calls.append(req)
+        return io.BytesIO(b"%PDF-1.7 data" if "/pdf?" in req.full_url else b'{"Invoice":{"Id":"42"}}')
+    monkeypatch.setattr(qbo_api.urllib.request, "urlopen", respond)
+    with Session(engine) as s:
+        original = {"CustomerRef": {"value": "1"}, "EmailStatus": "NeedToSend"}
+        assert qbo_api.create_invoice(s, original, "stable-1")["Id"] == "42"
+        assert original["EmailStatus"] == "NeedToSend"
+        qbo_api.send_invoice(s, "42", "a+b@example.com", "send-1")
+        qbo_api.get_invoice(s, "42")
+        assert qbo_api.invoice_pdf(s, "42").startswith(b"%PDF-")
+    assert json.loads(calls[0].data)["EmailStatus"] == "NotSet"
+    assert "requestid=stable-1" in calls[0].full_url
+    assert "minorversion=75" in calls[0].full_url
+    assert "/42/send?sendTo=a%2Bb%40example.com" in calls[1].full_url
+    assert calls[1].get_header("Content-type") == "application/octet-stream"
+    assert calls[1].data == b""
+    assert "include=invoiceLink" in calls[2].full_url
+    assert calls[3].get_header("Accept") == "application/pdf"
+
+
+def test_send_timeout_is_ambiguous_and_never_retried(engine, monkeypatch):
+    import pytest
+    calls = []
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "access_token", lambda s: "access")
+    def fail(*args, **kwargs):
+        calls.append(1)
+        raise TimeoutError()
+    monkeypatch.setattr(qbo_api.urllib.request, "urlopen", fail)
+    with Session(engine) as s, pytest.raises(qbo_api.QboError) as err:
+        qbo_api.send_invoice(s, "42")
+    assert err.value.outcome_unknown and len(calls) == 1
+
+
+def test_query_pagination_and_identifier_validation(engine, monkeypatch):
+    import pytest
+    calls = []
+    def fake(s, method, path, **kw):
+        calls.append(urllib.parse.unquote(path))
+        return {"QueryResponse": {"Payment": [{"Id": "1"}, {"Id": "2"}] if len(calls) == 1 else [{"Id": "3"}]}}
+    monkeypatch.setattr(qbo_api, "_api", fake)
+    with Session(engine) as s:
+        assert len(qbo_api.query_payments(s, page_size=2)) == 3
+        with pytest.raises(qbo_api.QboError):
+            qbo_api.query_entities(s, "Invoice where Id='1'")
+    assert "startposition 1 maxresults 2" in calls[0]
+    assert "startposition 3 maxresults 2" in calls[1]
+
+
+def test_cache_is_scoped_to_company(engine, monkeypatch):
+    _connected(engine)
+    calls = []
+    monkeypatch.setattr(qbo_api, "_token_request", lambda s, form: calls.append(1) or {"access_token": str(len(calls))})
+    with Session(engine) as s:
+        assert qbo_api.access_token(s) == "1"
+        models.set_setting(s, "qbo_realm_id", "222")
+        s.commit()
+        assert qbo_api.access_token(s) == "2"
+
+
+def test_customer_wrong_company_fails_before_network(engine, monkeypatch):
+    import pytest
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "_api", lambda *a, **k: pytest.fail("cross-company call"))
+    with Session(engine) as s:
+        customer = models.Customer(name="Ada", qbo_customer_id="77", qbo_customer_scope="production:999")
+        with pytest.raises(qbo_api.QboError, match="mapping"):
+            qbo_api.push_customer(s, customer)
+
+
+def test_environment_change_disconnects_and_invalidates_mapping(client, engine):
+    _connected(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "qbo_item_service_id", "22")
+        models.set_setting(s, "qbo_billing_enabled", "1")
+        s.commit()
+    client.post("/settings/qbo/config", data={"client_id": "client-abc", "environment": "production"})
+    with Session(engine) as s:
+        assert not qbo_api.connected(s)
+        assert not models.get_setting(s, "qbo_item_service_id", "")
+        assert not models.get_setting(s, "qbo_billing_enabled", "")
+
+
+def test_http_408_mutation_unknown_401_clears_cache(engine, monkeypatch):
+    import io
+    import urllib.error
+
+    import pytest
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "access_token", lambda s: "token")
+    for status in (408, 401, 400, 503):
+        def fail(*args, status=status, **kwargs):
+            raise urllib.error.HTTPError("url", status, "failure", {}, io.BytesIO(b'{}'))
+        monkeypatch.setattr(qbo_api.urllib.request, "urlopen", fail)
+        qbo_api._cache["token"] = "stale"
+        with Session(engine) as s, pytest.raises(qbo_api.QboError) as caught:
+            qbo_api.send_invoice(s, "42")
+        assert caught.value.outcome_unknown == (status in (408, 503))
+        if status == 401:
+            assert not qbo_api._cache
+
+
+def test_malformed_success_does_not_mark_send_or_empty_sync(engine, monkeypatch):
+    import io
+
+    import pytest
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "access_token", lambda s: "token")
+    for data in (b"", b"[]", b"null", b"oops"):
+        monkeypatch.setattr(qbo_api.urllib.request, "urlopen", lambda *a, data=data, **k: io.BytesIO(data))
+        with Session(engine) as s, pytest.raises(qbo_api.QboError) as caught:
+            qbo_api.send_invoice(s, "42")
+        assert caught.value.outcome_unknown
+    monkeypatch.setattr(qbo_api, "_api", lambda *a, **k: {})
+    with Session(engine) as s, pytest.raises(qbo_api.QboError):
+        qbo_api.query_payments(s)
+
+
+def test_customer_create_freezes_payload_after_unknown_response(engine, monkeypatch):
+    import pytest
+    _connected(engine)
+    calls = []
+    def fake(s, method, path, body=None, **kwargs):
+        calls.append((dict(body), kwargs["request_id"]))
+        if len(calls) == 1:
+            raise qbo_api.QboError("unknown", outcome_unknown=True)
+        return {"Customer": {"Id": "12"}}
+    monkeypatch.setattr(qbo_api, "_api", fake)
+    with Session(engine) as s:
+        customer = models.Customer(name="First Name")
+        s.add(customer)
+        s.commit()
+        with pytest.raises(qbo_api.QboError):
+            qbo_api.push_customer(s, customer)
+        customer.name = "Changed Name"
+        s.commit()
+        assert qbo_api.push_customer(s, customer) == "12"
+    assert calls[0] == calls[1]
+
+
+def test_connection_guard_refreshes_stale_setting_identity(engine):
+    import pytest
+    _connected(engine)
+    with Session(engine) as old:
+        retained = old.get(models.Setting, "qbo_realm_id")
+        assert retained.value == "9130000"
+        old.commit()
+        # Materialize after commit so the identity is genuinely stale.
+        assert retained.value == "9130000"
+        with Session(engine) as changed:
+            models.set_setting(changed, "qbo_realm_id", "777")
+            changed.commit()
+        with pytest.raises(qbo_api.QboError, match="connection changed"):
+            with qbo_api.connection_guard(old, "sandbox:9130000"):
+                raise AssertionError("must not enter stale workflow")
+
+
+def test_connection_guard_holds_configuration_lock(engine):
+    import threading
+    _connected(engine)
+    attempted = threading.Event()
+    acquired = threading.Event()
+    def change_configuration():
+        attempted.set()
+        with qbo_api._refresh_lock:
+            acquired.set()
+    with Session(engine) as s:
+        with qbo_api.connection_guard(s, "sandbox:9130000"):
+            worker = threading.Thread(target=change_configuration)
+            worker.start()
+            assert attempted.wait(1)
+            assert not acquired.is_set()
+        worker.join(1)
+        assert acquired.is_set()
+
+
+def test_refund_receipts_paginate(engine, monkeypatch):
+    calls = []
+    def fake(s, method, path, **kwargs):
+        statement = urllib.parse.unquote(path)
+        calls.append(statement)
+        return {"QueryResponse": {"RefundReceipt": [{"Id": "8"}] if len(calls) == 1 else []}}
+    monkeypatch.setattr(qbo_api, "_api", fake)
+    with Session(engine) as s:
+        assert qbo_api.query_refund_receipts(s, page_size=1) == [{"Id": "8"}]
+    assert "from RefundReceipt" in calls[0]
+    assert "startposition 2" in calls[1]

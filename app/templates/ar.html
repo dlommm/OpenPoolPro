@@ -4,6 +4,7 @@
 <a class="btn-secondary mb-3" href="/followups">Review payment follow-ups</a>
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Money", "Accounts receivable") }}
+{% if qbo_invoices %}<section class="mb-6"><h2 class="mb-3 font-display text-xl">QuickBooks · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section><h2 class="mb-3 font-display text-xl">Local invoices</h2>{% endif %}
 
 <p class="mb-4 font-data text-3xl font-semibold text-brass">
   {{ totals.total_cents | dollars }}

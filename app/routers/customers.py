@@ -342,8 +342,10 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     if user.can("view_money"):
         lifetime_cents = lifetime_revenue_cents(session, cid)
 
+    from app.routers.qbo_billing import invoice_context
+    qbo_context = invoice_context(session, cid) if (user.can("view_money") or user.can("approve_billing")) else {}
     return templates.TemplateResponse(request, "customers/detail.html",
-        {"c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,
+        {**qbo_context, "c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,
          "active_holds": active_holds, "lifetime_cents": lifetime_cents,
          "photos": photos, "ptag": ptag, "house_photos": house_photos,
          "map_urls": map_urls, "geoapify_configured": bool(key),

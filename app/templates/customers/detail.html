@@ -16,6 +16,7 @@
 </div>
 
 <div data-custab="profile">
+{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
 <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
   {% if c.phone %}<a href="tel:{{ c.phone }}" class="flex min-h-11 items-center gap-1.5 text-pool">{{ ui.icon("phone", "h-4 w-4") }}{{ c.phone }}</a>{% endif %}
   {% if c.email %}<a href="mailto:{{ c.email }}" class="flex min-h-11 items-center text-pool">{{ c.email }}</a>{% endif %}
@@ -174,6 +175,7 @@
 </div>
 
 <div data-custab="profile">
+{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
 {% if jobs %}
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Open jobs</h2>
 <div class="mb-5 space-y-2">
@@ -216,6 +218,7 @@
 </div>
 
 <div data-custab="profile">
+{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
 <h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
 <div class="space-y-2">
   {% for e in timeline %}

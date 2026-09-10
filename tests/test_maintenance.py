@@ -242,6 +242,7 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     from app import mailer
     from app.backup import run_backup
     from app.main import create_app
+    from app.routers import qbo_billing
 
     monkeypatch.setattr(config, "RUN_SCHEDULER", True)
     monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
@@ -249,13 +250,14 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     app = create_app(engine=engine)
     try:
         jobs = app.state.scheduler.get_jobs()
-        assert len(jobs) == 3
+        assert len(jobs) == 4
         # create_app registers every job through observability.logged_job, so
         # the scheduled callable is the wrapper -- unwrap to identify the target.
         funcs = {getattr(j.func, "__wrapped__", j.func) for j in jobs}
         assert run_backup in funcs
         assert run_nightly in funcs
         assert mailer.flush_job in funcs
+        assert qbo_billing.sync_job in funcs
 
         mail_job = next(j for j in jobs
                         if getattr(j.func, "__wrapped__", None) is mailer.flush_job)

@@ -114,8 +114,10 @@ def ar_page(request: Request, session: Session = Depends(get_session)):
     """Accounts receivable aging — who owes what, and how late."""
     today = business_today()
     rows = receivables.by_customer(session, today)
+    from app.routers.qbo_billing import invoice_context
+    qbo_context = invoice_context(session)
     return templates.TemplateResponse(request, "ar.html", {
-        "rows": rows, "totals": receivables.totals(rows), "today": today,
+        **qbo_context, "rows": rows, "totals": receivables.totals(rows), "today": today,
         "buckets": [label for label, _ in receivables.AGING_BUCKETS],
         "methods": models.PAYMENT_METHODS,
         "can_email": mailer.smtp_configured(session),

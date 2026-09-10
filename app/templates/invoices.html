@@ -3,6 +3,7 @@
 {% block content %}
 {% import "_ui.html" as ui %}
 {{ ui.page_header("Business billing", "Invoices") }}
+<p class="mb-4"><a class="btn-secondary" href="/billing">QuickBooks billing and payment balances</a></p>
 
 <div class="card mb-4 p-4">
   <form method="get" action="/invoices" class="flex flex-wrap items-end gap-2">

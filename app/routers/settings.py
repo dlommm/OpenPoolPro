@@ -763,18 +763,29 @@ def _qbo_ctx(session) -> dict:
 
 @router.post("/settings/qbo/config")
 async def save_qbo_config(request: Request, session: Session = Depends(get_session)):
-    form = await request.form()
-    models.set_setting(session, "qbo_client_id", (form.get("client_id") or "").strip())
-    env = "production" if form.get("environment") == "production" else "sandbox"
-    models.set_setting(session, "qbo_environment", env)
-    secret = form.get("client_secret")  # write-only, blank keeps the stored one
-    if secret is not None and secret.strip():
-        models.set_setting(session, "qbo_client_secret", secret.strip())
-    session.commit()
-    # New credentials or a sandbox<->production flip must not keep using a
-    # token minted for the old config (valid for up to an hour).
     from app import qbo_api
-    qbo_api.clear_cache()
+    form = await request.form()
+    with qbo_api._refresh_lock:
+        old_config = qbo_api._cfg(session)
+        models.set_setting(session, "qbo_client_id", (form.get("client_id") or "").strip())
+        env = "production" if form.get("environment") == "production" else "sandbox"
+        models.set_setting(session, "qbo_environment", env)
+        secret = form.get("client_secret")  # write-only, blank keeps the stored one
+        if secret is not None and secret.strip():
+            models.set_setting(session, "qbo_client_secret", secret.strip())
+        new_config = qbo_api._cfg(session)
+        if any(old_config[key] != new_config[key] for key in ("client_id", "client_secret", "environment")):
+            for key in ("qbo_refresh_token", "qbo_realm_id"):
+                models.set_setting(session, key, "")
+            qbo_api.invalidate_mapping_settings(session)
+            request.session.pop("qbo_oauth_state", None)
+            request.session.pop("qbo_code_verifier", None)
+            request.session.pop("qbo_items", None)
+        session.commit()
+        # New credentials or a sandbox<->production flip must not keep using a
+        # token minted for the old config (valid for up to an hour).
+        from app import qbo_api
+        qbo_api.clear_cache()
     return RedirectResponse("/settings#system", status_code=303)
 
 
@@ -854,6 +865,10 @@ def qbo_disconnect(request: Request, session: Session = Depends(get_session)):
 
 @router.post("/settings/qbo/items")
 async def save_qbo_items(request: Request, session: Session = Depends(get_session)):
+    from app import qbo_api
+    if not qbo_api.connected(session):
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    models.set_setting(session, "qbo_item_scope", qbo_api.connection_scope(session))
     form = await request.form()
     models.set_setting(session, "qbo_item_service_id", (form.get("item_service") or "").strip())
     models.set_setting(session, "qbo_item_chem_id", (form.get("item_chem") or "").strip())

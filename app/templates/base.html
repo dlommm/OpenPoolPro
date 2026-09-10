@@ -27,6 +27,7 @@
   {% if u is none or u.role == "admin" %}{% set items = items + [("/dashboard", "Dashboard", "money")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/analytics", "Analytics", "week")] %}{% endif %}
   {% if u is none or u.role == "admin" %}{% set items = items + [("/invoices", "Invoices", "money")] %}{% endif %}
+  {% if u is none or u.can("view_money") or u.can("approve_billing") %}{% set items = items + [("/billing", "QuickBooks billing", "money")] %}{% endif %}
   {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
     ("/customers", "Customers", "customers"), ("/jobs", "Service / Jobs", "jobs")] %}
   {% if u is none or u.can("manage_customers") %}{% set items = items + [("/quotes", "Quotes", "money")] %}{% endif %}

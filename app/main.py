@@ -41,6 +41,7 @@ from app.routers import (  # noqa: E402
     photos,
     pools,
     portal,
+    qbo_billing,
     quotes,
     routes,
     settings,
@@ -58,7 +59,7 @@ ROUTERS = (
     console.router, users.router, account.router, audit.router,
     analytics.router, inventory.router, invoices.router, routes.router,
     contracts.router, contract_template.router, sign.router,
-    improvements.router, portal.router,
+    improvements.router, portal.router, qbo_billing.router,
 )
 
 
@@ -336,7 +337,7 @@ def create_app(engine=None) -> FastAPI:
         if response.headers.get("content-type", "").startswith("text/html"):
             response.headers["Cache-Control"] = "no-cache"
         if any(request.url.path == p or request.url.path.startswith(p + "/")
-               for p in ("/account", "/settings", "/users", "/sign", "/login", "/portal", "/followups")):
+               for p in ("/account", "/settings", "/users", "/sign", "/login", "/portal", "/followups", "/billing")):
             response.headers["Cache-Control"] = "no-store"
         if "/portal" in request.url.path:
             response.headers["Cache-Control"] = "no-store"
@@ -455,6 +456,9 @@ def create_app(engine=None) -> FastAPI:
         app.state.scheduler.add_job(observability.logged_job(mailer.flush_job),
                                     "interval", minutes=5,
                                     args=[app.state.engine])
+        app.state.scheduler.add_job(observability.logged_job(qbo_billing.sync_job),
+                                    "interval", minutes=5, args=[app.state.engine],
+                                    id="qbo_billing_sync", max_instances=1, coalesce=True)
         # The scheduler is in-process and non-persistent: a box that was down at
         # 01:00 (night deploy, Unraid reboot) silently skips that night and
         # nothing notices, so "14 daily generations" can quietly become 14

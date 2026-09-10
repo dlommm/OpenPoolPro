@@ -90,7 +90,7 @@ self.addEventListener("fetch", e => {
 
   // Account enrollment can contain the TOTP seed and one-time backup codes.
   // Do not store security/settings pages or serve older offline copies.
-  if (["/account", "/settings", "/users"].some(p => url.pathname === p || url.pathname.startsWith(p + "/"))) return;
+  if (["/account", "/settings", "/users", "/billing"].some(p => url.pathname === p || url.pathname.startsWith(p + "/"))) return;
 
   if (req.method === "GET" && req.mode === "navigate") {
     e.respondWith(handleNavigate(req));

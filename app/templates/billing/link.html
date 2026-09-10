@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}Verify QuickBooks customer{% endblock %}
+{% block content %}
+<a href="/billing" class="btn-secondary mb-4">Back to billing</a>
+<h1 class="font-display text-3xl">Verify QuickBooks customer match</h1>
+<div class="card my-4 p-4"><h2 class="font-semibold">OpenPoolPro customer</h2><p>{{ customer.name }} · {{ customer.email or 'No email' }}</p></div>
+<form method="post" action="/billing/customers/{{ customer.id }}/preview-link" class="card space-y-3 p-4"><label for="qbo_id" class="field-label">Existing QuickBooks customer ID</label><input id="qbo_id" name="qbo_id" class="field" value="{{ customer.qbo_customer_id or '' }}" pattern="[0-9]+" required><button class="btn-secondary">Look up customer for review</button></form>
+{% if remote %}<div class="card mt-4 p-4"><h2 class="font-semibold">QuickBooks customer</h2><p>{{ remote.get('DisplayName', '') }} · {{ remote.get('PrimaryEmailAddr', {}).get('Address', 'No email') }}</p><p>ID {{ remote.get('Id') }} · {{ remote.get('CompanyName', '') }}</p><p class="my-3">Confirm only if these are the same customer. Financial records will be displayed under this OpenPoolPro customer.</p><form method="post" action="/billing/customers/{{ customer.id }}/confirm-link"><button class="btn-primary">Confirm this customer match</button></form></div>{% endif %}
+{% endblock %}

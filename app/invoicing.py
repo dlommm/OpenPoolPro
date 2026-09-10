@@ -211,7 +211,11 @@ def generate_month(session: Session, year: int, month: int, user_id: int | None)
             models.Invoice.period_year == year,
             models.Invoice.period_month == month,
             models.Invoice.status != "void")).first()
-        if existing is not None:
+        reserved = session.scalar(select(models.QBODraft.id).where(
+            models.QBODraft.customer_id == row.customer.id,
+            models.QBODraft.period_year == year,
+            models.QBODraft.period_month == month))
+        if existing is not None or reserved is not None:
             skipped += 1
             continue
 

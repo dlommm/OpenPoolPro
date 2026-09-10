@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}QuickBooks billing{% endblock %}
+{% block content %}
+{% import '_ui.html' as ui %}
+{{ ui.page_header('Business billing', 'QuickBooks billing') }}
+<p class="mb-4 text-sm">Prepare charges from completed work, review and approve them here, then let QuickBooks invoice the customer and collect payment. Synced records remain available here.</p>
+{% if request.query_params.get('message') %}<p role="status" class="card mb-4 p-3">{{ request.query_params.get('message') }}</p>{% endif %}
+<div class="card mb-4 p-4">
+<p>Connection: <strong>{{ 'Connected' if connected else 'Not connected' }}</strong> · Delivery: <strong>{{ 'Enabled after approval' if enabled else 'Disabled' }}</strong></p>
+<p class="mt-2 text-sm">Last reconciliation: {{ last_sync or 'Not yet completed' }}. Automatic reconciliation runs every 5 minutes while QuickBooks is connected. Disconnected balances may be stale.</p>
+{% if sync_error %}<p role="alert" class="text-safety">{{ sync_error }}</p>{% endif %}
+<div class="mt-3 flex gap-2"><form method="post" action="/billing/sync"><button class="btn-secondary" {{ 'disabled' if not connected }}>Sync now</button></form>{% if request.state.user.role == 'admin' %}<a class="btn-secondary" href="/settings#system">Connection and item mappings</a>{% endif %}</div>
+{% if request.state.user.role == 'admin' %}
+<details class="mt-4"><summary class="cursor-pointer font-semibold">Billing setup</summary>
+<form method="post" action="/billing/settings" class="mt-3 space-y-3">
+<p class="text-sm">Before enabling delivery, verify the company, USD currency, United States tax configuration, customer mappings, service and chemical items, and QuickBooks Payments. Turn off automatic invoice delivery in QuickBooks so only approved invoices are emailed. Initial setup and exceptional accounting corrections may require QuickBooks.</p>
+<label class="flex items-start gap-2"><input type="checkbox" name="reviewed" value="true" required><span>I have checked this setup and disabled automatic invoice delivery in QuickBooks.</span></label>
+<label class="flex items-start gap-2"><input type="checkbox" name="enabled" value="true" {{ 'checked' if enabled }}><span>Enable approved invoice delivery</span></label>
+<button class="btn-primary">Save billing setup</button>
+</form></details>{% endif %}
+</div>
+<div class="card mb-4 p-4">
+<form method="get" action="/billing" class="flex flex-wrap items-end gap-2"><div><label for="ym" class="field-label">Billing month</label><input class="field" id="ym" type="month" name="ym" value="{{ ym }}"></div><button class="btn-secondary">View</button></form>
+<form class="mt-3" method="post" action="/billing/prepare"><input type="hidden" name="ym" value="{{ ym }}"><button class="btn-primary">Prepare billing drafts for {{ ym }}</button></form>
+<p class="mt-2 text-sm text-mist">Preparing drafts requires a connected QuickBooks company but does not contact customers. Periods already reserved for billing are skipped. Drafts are snapshots; review charges before approval.</p>
+</div>
+{% if mapping_customers %}<details class="card mb-4 p-4"><summary class="cursor-pointer font-semibold">Verify existing QuickBooks customer matches</summary><p class="my-2 text-sm">Existing customer IDs must be verified against the connected company before billing. New customers can be synced from Settings.</p><div class="flex flex-wrap gap-2">{% for c in mapping_customers %}<a class="btn-secondary" href="/billing/customers/{{ c.id }}/link">{{ c.name }}</a>{% endfor %}</div></details>{% endif %}
+<h2 class="mb-3 font-display text-2xl">Drafts and delivery</h2>
+<div class="mb-6 space-y-2">{% for draft in drafts %}<a class="card flex flex-wrap items-center justify-between gap-2 p-4" href="/billing/drafts/{{ draft.id }}"><span>{{ draft.customer.name }} · {{ draft.email or 'Missing billing email' }}</span><span>{{ draft.total_cents | dollars }} · <strong>{{ draft.status | replace('_', ' ') }}</strong> · Review →</span></a>{% else %}<p>No drafts for this month. Prepare drafts to collect billable work.</p>{% endfor %}</div>
+<h2 class="mb-3 font-display text-2xl">Invoices and payments</h2>
+<p class="mb-3">QuickBooks outstanding: <strong>{{ qbo_balance_cents | dollars }}</strong></p>
+{% include 'billing/_invoices.html' %}
+{% endblock %}

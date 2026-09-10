@@ -336,13 +336,13 @@ nothing, so just resend. Signing links appear in no logs (uvicorn's access
 log is disabled and the app's own request log redacts the token), and the
 `/sign` pages are exempt from staff login but rate-limited per IP.
 
-## QuickBooks Online (Phase 1)
+## QuickBooks Online
 
-Push your customers into QuickBooks Online over Intuit's OAuth 2.0 API — no
-QuickBooks password is stored (only a refresh token, same discipline as the
-Office 365 connection). This is Phase 1: connect + customer sync + income-item
-mapping; invoice and payment posting are the next phase. The CSV export
-(**Money → Export**) remains as the zero-dependency fallback.
+Push your customers into QuickBooks Online over Intuit's OAuth 2.0 API, then
+let QuickBooks issue and email the official invoices — no QuickBooks password
+is stored (only a refresh token, same discipline as the Office 365
+connection). The CSV export (**Money → Export**) remains as the
+zero-dependency fallback.
 
 One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
 
@@ -355,8 +355,8 @@ One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
    first, and save.
 4. Click **Connect QuickBooks**, approve on Intuit's screen, and you'll return
    to Settings showing "Connected — <company>".
-5. Optionally **Load items from QuickBooks** and map your service/labor and
-   chemical charges to QuickBooks items (used when invoice sync ships).
+5. **Load items from QuickBooks** and map your service/labor and chemical
+   charges to QuickBooks items — required before billing can run.
 6. **Sync customers to QuickBooks** creates or updates each active customer;
    the QuickBooks Id is stored per customer so re-syncing never creates
    duplicates.
@@ -364,6 +364,28 @@ One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
 Going to **production** requires Intuit's app review (start it early in the
 Developer portal); until then, keep the environment on Sandbox. Refresh tokens
 expire after ~100 days of inactivity — reconnect if that ever happens.
+
+### Reviewed billing
+
+**Billing** collects completed work into monthly per-customer drafts. Someone
+with **Can approve and send QuickBooks billing** (or an administrator) reviews
+the charges and approves; QuickBooks then creates the invoice, emails it, and
+hosts payment collection. Approval freezes the charges and recipient, and what
+QuickBooks returns is compared against that snapshot before any email goes out
+— a mismatch stops delivery and shows you the difference instead. Invoice
+balances, payments, and credits are reconciled back every five minutes when the
+scheduler is on (`RUN_SCHEDULER=1`), and surface on the billing page, customer
+profiles, the AR page, and the customer portal.
+
+Before enabling it: **turn off automatic invoice emails in QuickBooks** and
+exercise the whole flow against a sandbox company. The API's `EmailStatus` is
+not a verified override of company-level automation, so that check is yours to
+make, not something the app can assert for you.
+
+See [the billing workflow](docs/quickbooks-billing.md) for the monthly
+routine and its operational limits, and [the transport
+contract](docs/quickbooks-api-contract.md) for what the API client does and
+does not guarantee.
 
 ## Offline (PWA)
 

@@ -86,6 +86,7 @@
     "phone",
     "qb_display_name",
     "qbo_customer_id",
+    "qbo_customer_scope",
     "tags"
   ],
   "email_outbox": [
@@ -289,6 +290,63 @@
     "total_cost_cents",
     "user_id"
   ],
+  "qbo_billing_drafts": [
+    "approved_at",
+    "approved_by_id",
+    "approved_snapshot",
+    "created_at",
+    "customer_id",
+    "due_date",
+    "email",
+    "id",
+    "last_error",
+    "lines",
+    "period_month",
+    "period_year",
+    "qbo_invoice_id",
+    "request_id",
+    "revision",
+    "scope",
+    "source_keys",
+    "status",
+    "tax_cents",
+    "total_cents",
+    "updated_at"
+  ],
+  "qbo_billing_sources": [
+    "draft_id",
+    "source_key"
+  ],
+  "qbo_invoice_mirrors": [
+    "allocation_known",
+    "balance_cents",
+    "credit_cents",
+    "customer_id",
+    "due_date",
+    "email_status",
+    "id",
+    "last_synced_at",
+    "number",
+    "paid_cents",
+    "payment_link",
+    "qbo_id",
+    "raw",
+    "scope",
+    "status",
+    "total_cents",
+    "txn_date"
+  ],
+  "qbo_transaction_mirrors": [
+    "customer_id",
+    "id",
+    "kind",
+    "last_synced_at",
+    "qbo_id",
+    "raw",
+    "scope",
+    "total_cents",
+    "txn_date"
+  ],
   "quote_lines": [
     "amount_cents",
     "description",
@@ -367,6 +425,7 @@
   ],
   "users": [
     "active",
+    "approve_billing",
     "can_repairs",
     "id",
     "manage_customers",

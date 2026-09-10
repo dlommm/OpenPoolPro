@@ -50,6 +50,7 @@ class Customer(Base):
     # QuickBooks Online link: the Id of the matching QBO Customer once pushed,
     # so a re-sync updates rather than creating a duplicate. Empty = not synced.
     qbo_customer_id: Mapped[str] = mapped_column(String(40), default="")
+    qbo_customer_scope: Mapped[str] = mapped_column(String(100), default="")
     properties: Mapped[list["Property"]] = relationship(back_populates="customer")
 
 
@@ -456,11 +457,13 @@ class User(Base):
     can_repairs: Mapped[bool] = mapped_column(Boolean, default=False)
     view_all_routes: Mapped[bool] = mapped_column(Boolean, default=False)
     mark_cash: Mapped[bool] = mapped_column(Boolean, default=False)
+    approve_billing: Mapped[bool] = mapped_column(Boolean, default=False)
     totp_secret: Mapped[str | None] = mapped_column(String(200), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     session_epoch: Mapped[int] = mapped_column(Integer, default=0)
 
-    PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes", "mark_cash")
+    PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes",
+                        "mark_cash", "approve_billing")
 
     def can(self, flag: str) -> bool:
         if self.role == "admin":
@@ -730,3 +733,74 @@ class OperationRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(12), default="running")
+
+
+class QBODraft(Base):
+    __tablename__ = "qbo_billing_drafts"
+    __table_args__ = (Index("uq_qbo_draft_period", "customer_id", "period_year", "period_month", unique=True),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    scope: Mapped[str] = mapped_column(String(100))
+    period_year: Mapped[int] = mapped_column(Integer)
+    period_month: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    lines: Mapped[list] = mapped_column(JSON, default=list)
+    source_keys: Mapped[list] = mapped_column(JSON, default=list)
+    email: Mapped[str] = mapped_column(String(120), default="")
+    due_date: Mapped[date] = mapped_column(Date)
+    tax_cents: Mapped[int] = mapped_column(Integer, default=0)
+    total_cents: Mapped[int] = mapped_column(Integer, default=0)
+    approved_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    approved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    request_id: Mapped[str] = mapped_column(String(50), default="")
+    qbo_invoice_id: Mapped[str] = mapped_column(String(40), default="")
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    customer: Mapped[Customer] = relationship()
+
+
+class QBOInvoiceMirror(Base):
+    __tablename__ = "qbo_invoice_mirrors"
+    __table_args__ = (Index("uq_qbo_invoice_scope", "scope", "qbo_id", unique=True),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scope: Mapped[str] = mapped_column(String(100))
+    qbo_id: Mapped[str] = mapped_column(String(40))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    number: Mapped[str] = mapped_column(String(100), default="")
+    total_cents: Mapped[int] = mapped_column(Integer, default=0)
+    balance_cents: Mapped[int] = mapped_column(Integer, default=0)
+    paid_cents: Mapped[int] = mapped_column(Integer, default=0)
+    allocation_known: Mapped[bool] = mapped_column(Boolean, default=True)
+    credit_cents: Mapped[int] = mapped_column(Integer, default=0)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    txn_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="unpaid")
+    email_status: Mapped[str] = mapped_column(String(30), default="")
+    payment_link: Mapped[str] = mapped_column(Text, default="")
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    customer: Mapped[Customer] = relationship()
+
+
+class QBOTransactionMirror(Base):
+    __tablename__ = "qbo_transaction_mirrors"
+    __table_args__ = (Index("uq_qbo_transaction_scope", "scope", "kind", "qbo_id", unique=True),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scope: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(20))
+    qbo_id: Mapped[str] = mapped_column(String(40))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    total_cents: Mapped[int] = mapped_column(Integer, default=0)
+    txn_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class QBOBillingSource(Base):
+    """A source remains reserved even if its completion date is subsequently edited."""
+    __tablename__ = "qbo_billing_sources"
+    source_key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    draft_id: Mapped[int] = mapped_column(ForeignKey("qbo_billing_drafts.id"), index=True)

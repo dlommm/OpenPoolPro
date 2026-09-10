@@ -670,8 +670,7 @@
           {% if qbo_result.qbo_synced is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer sync: {{ qbo_result.qbo_synced }} synced{% if qbo_result.qbo_failed %}, {{ qbo_result.qbo_failed }} failed{% endif %}.</div>{% endif %}
           {% if qbo_result.qbo_error and qbo_last_error %}<div class="mb-3 rounded-lg border border-safety/40 bg-safety/10 p-2 text-sm text-safety">{{ qbo_last_error }}</div>{% endif %}
 
-          <p class="mb-3 text-sm text-mist">Push your customers into QuickBooks Online (invoice &amp;
-            payment sync is coming next). One-time setup: create a free app at
+          <p class="mb-3 text-sm text-mist">Review charges, approve invoices, and reconcile payments in <a href="/billing" class="text-pool">QuickBooks billing</a>. One-time setup: create a free app at
             <a href="https://developer.intuit.com" target="_blank" rel="noopener" class="text-pool">developer.intuit.com</a>,
             add this redirect URI to it —
             <span class="font-data text-xs">{{ (public_base_url or "https://your-domain") }}/settings/qbo/callback</span>
