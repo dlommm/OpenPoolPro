@@ -93,8 +93,16 @@ browser:
     PYTHONPATH: "."
   script:
     - pip install -r requirements-dev.lock
-    - pip install -q playwright
+    - pip install -q playwright pytailwindcss
     - playwright install --with-deps chromium
+    # app/static/app.css is a BUILD ARTIFACT (gitignored) -- the Dockerfile
+    # builds it in its own stage, so a native run from a fresh checkout has no
+    # stylesheet at all. Without Tailwind's preflight the [hidden] sync sheet
+    # stays clickable and even the login button is unreachable, which is
+    # exactly the naked-HTML class this job exists to catch. Mirror the
+    # Dockerfile: the first tailwindcss call downloads the binary.
+    - tailwindcss --help >/dev/null 2>&1 || true
+    - tailwindcss -i tailwind.css -o app/static/app.css --minify
     - mkdir -p "$DATA_DIR"
     # Migrations run at app startup, so the schema must exist before seeding.
     - uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log &
