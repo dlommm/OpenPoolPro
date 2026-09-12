@@ -3,7 +3,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -81,6 +81,60 @@ def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
             v = session.scalars(select(models.Visit).where(
                 models.Visit.property_id == property_id, models.Visit.date == d)).first()
     return v
+
+
+def queued_owner_conflict(request: Request):
+    """Reject an offline replay that belongs to a different staff member.
+
+    Offline queue entries live in IndexedDB, which is per-device, not
+    per-login. On a shared phone a tech could go offline, queue a completion,
+    hand the phone over, and the next person's session would replay that work
+    under THEIR name -- silently wrong attribution in completed_by, the audit
+    log and payroll-facing reports. sw.js stamps the queuing identity and
+    replays it here; a mismatch is refused before anything is written.
+
+    Returns a 409 response to return, or None to proceed. 409 is deliberate:
+    sw.js parks 4xx in the failed store with the payload intact, so the work
+    is preserved and visible rather than destroyed or misfiled.
+    """
+    owner = (request.headers.get("X-Queued-Owner") or "").strip()
+    if owner and owner != str(request.state.user.id):
+        return PlainTextResponse(
+            "This was queued offline by a different user — sign in as them to send it.",
+            status_code=409)
+    return None
+
+
+def claim_visit(session: Session, visit: models.Visit, expected: str) -> bool:
+    """Compare-and-swap the visit's revision; True if this request won it.
+
+    The form carries the revision the page was rendered from. A conditional
+    UPDATE (WHERE id = ? AND revision = ?) is the only check that survives two
+    handlers running at once: the status guard above compares values already
+    read into Python, so two completions that both saw status="due" both pass
+    it and the second overwrites the first tech's readings with no trace. Here
+    the loser matches 0 rows and is told, rather than silently winning.
+
+    A blank/absent `expected` means the form predates this field (an offline
+    entry queued by an older build); those fall back to the status guard alone
+    rather than being rejected, which would strand real field work.
+    """
+    if not expected:
+        return True
+    try:
+        revision = int(expected)
+    except (TypeError, ValueError):
+        return False
+    result = session.execute(
+        update(models.Visit)
+        .where(models.Visit.id == visit.id, models.Visit.revision == revision)
+        .values(revision=models.Visit.revision + 1))
+    if result.rowcount != 1:
+        return False
+    # The raw UPDATE bypassed the identity map; drop the stale in-memory value
+    # so anything reading visit.revision after this sees the claimed one.
+    session.refresh(visit, ["revision"])
+    return True
 
 
 def _f(val: str) -> float | None:
@@ -193,6 +247,9 @@ def visit_form(request: Request, property_id: int, visit_date: date,
 
 @router.post("/visit/{visit_id}/complete")
 async def complete(visit_id: int, request: Request, session: Session = Depends(get_session)):
+    conflict = queued_owner_conflict(request)
+    if conflict is not None:
+        return conflict
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
     # Optimistic-state guard against stale offline replays. The form carries
@@ -209,6 +266,10 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     if v.status != form_status:
         return PlainTextResponse(
             "This stop was updated after this form was loaded — open it again to make changes.",
+            status_code=409)
+    if not claim_visit(session, v, (form.get("revision") or "").strip()):
+        return PlainTextResponse(
+            "This stop was updated by someone else while you were working — open it again.",
             status_code=409)
     was_due = v.status == "due"
     v.fc, v.ph = _f(form.get("fc")), _f(form.get("ph"))
@@ -305,6 +366,9 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
 
 @router.post("/visit/{visit_id}/skip")
 async def skip(visit_id: int, request: Request, session: Session = Depends(get_session)):
+    conflict = queued_owner_conflict(request)
+    if conflict is not None:
+        return conflict
     form = await request.form()
     v = get_or_404(session, models.Visit, visit_id)
     # Only a still-due stop may be skipped. Skipping a completed visit would
@@ -313,6 +377,10 @@ async def skip(visit_id: int, request: Request, session: Session = Depends(get_s
     # — revenue vanishes, cost doesn't. Mirrors dismiss()'s due-only guard.
     if v.status != "due":
         return RedirectResponse("/", status_code=303)
+    if not claim_visit(session, v, (form.get("revision") or "").strip()):
+        return PlainTextResponse(
+            "This stop was updated by someone else while you were working — open it again.",
+            status_code=409)
     v.status = "skipped"
     v.completed_by_id = request.state.user.id
     reason = form.get("reason", "").strip()

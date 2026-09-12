@@ -406,6 +406,14 @@ signal:
   the device reconnects or the app is reopened/foregrounded — including
   the completion email that visit queues once it actually reaches the
   server.
+- Queued work belongs to the person who queued it. Each entry records the
+  signed-in staff member, and it only sends under that login — on a shared
+  phone, a colleague's pending stops stay parked (and are shown as theirs)
+  rather than syncing under your name. The server re-checks this and refuses a
+  mismatch, so attribution in completed-by, the audit log and payroll-facing
+  reports stays honest. Signing in as someone else also clears the cached
+  pages, so the previous tech's customer details (gate codes, dog notes) stop
+  being readable offline on that device.
 - Photo uploads are **not** queued offline — those still need a live
   connection at the time.
 - iOS Safari has no Background Sync API, so the queue is flushed on

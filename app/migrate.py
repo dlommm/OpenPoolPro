@@ -186,6 +186,7 @@ COLUMNS = {
         ("tax_rate_ppm", "INTEGER"),
         ("labor_override_cents", "INTEGER"),
         ("paid_cash", "BOOLEAN DEFAULT 0"),
+        ("revision", "INTEGER DEFAULT 0 NOT NULL"),
     ],
     "chemicals": [
         ("role", "VARCHAR(20) DEFAULT 'other'"),

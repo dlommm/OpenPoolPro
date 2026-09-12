@@ -65,8 +65,10 @@ def test_replay_parks_definitive_4xx_instead_of_breaking():
     body = js_function_body(sw_source(), "async function replayOnce()")
     assert "failEntry(" in body, "replay() no longer parks definitively-failed entries"
     # `failEntry` is the last arm of the if/else chain; nothing after it may bail
-    # out of the loop, or the queue behind a dead entry stays buried.
-    tail = body.split("failEntry(", 1)[1]
+    # out of the loop, or the queue behind a dead entry stays buried. Anchor on
+    # the LAST call: replay() also parks pre-identity entries earlier in the
+    # loop, and the retryable `break`s legitimately sit between the two.
+    tail = body.rsplit("failEntry(", 1)[1]
     assert "break" not in tail, "replay() still breaks out of the loop on a dead 4xx"
 
 
@@ -135,12 +137,15 @@ def test_failed_entries_keep_payload_status_and_timestamp():
 
 
 def test_failed_store_upgrade_does_not_touch_queued_work():
-    """The v1 -> v2 upgrade must ADD the failed store, never recreate `posts`
-    (which would drop whatever a tech had queued at update time)."""
+    """Every schema bump must ADD stores, never recreate `posts` (which would
+    drop whatever a tech had queued at update time). v2 added the failed store,
+    v3 the identity store; the rule is the same for whatever comes next."""
     body = js_function_body(sw_source(), "function openQueueDB()")
     assert "QUEUE_DB_VERSION" in body
-    assert body.count("objectStoreNames.contains") == 2, \
-        "both stores must be created behind a contains() guard"
+    created = body.count("createObjectStore")
+    assert created >= 3, "expected posts, failed and meta stores"
+    assert body.count("objectStoreNames.contains") == created, \
+        "every store must be created behind a contains() guard"
     assert "deleteObjectStore" not in body
 
 

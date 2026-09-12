@@ -10,6 +10,10 @@
      visit's current status and 409s on mismatch, so a completion queued
      offline and replayed days later can't silently overwrite a newer record. #}
   <input type="hidden" name="form_status" value="{{ v.status }}">
+  {# Revision as of this render. complete() compares-and-swaps it, which is what
+     catches two people editing the SAME state at once -- form_status alone
+     cannot, since both edits saw the identical status. #}
+  <input type="hidden" name="revision" value="{{ v.revision }}">
   <div class="grid grid-cols-2 gap-3">
     <label class="block"><span class="field-label">Started</span>
       <input type="time" name="started_hhmm" value="{{ v.started_at | hhmm }}" class="field font-data"></label>
@@ -194,6 +198,7 @@
 
 {% if v.status == "due" %}
 <form method="post" action="/visit/{{ v.id }}/skip" class="mt-3 flex gap-2">
+  <input type="hidden" name="revision" value="{{ v.revision }}">
   <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">
   <button class="btn-secondary">Skip</button>
 </form>

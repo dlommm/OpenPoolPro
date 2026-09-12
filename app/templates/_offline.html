@@ -191,7 +191,7 @@
   if (location.pathname.indexOf("/sign/") === 0) return;
   navigator.serviceWorker.register("/sw.js");   // idempotent; _pwa.html re-registers to drive updates
 
-  var state = { count: 0, failedCount: 0, pending: [], failed: [], blocked: "" };
+  var state = { count: 0, failedCount: 0, pending: [], failed: [], blocked: "", foreign: 0 };
   var sheet = document.getElementById("sync-sheet");
   var sheetBody = document.getElementById("sync-sheet-body");
 
@@ -220,6 +220,7 @@
     state.pending = d.pending || [];
     state.failed = d.failedEntries || [];
     state.blocked = d.blocked || "";
+    state.foreign = typeof d.foreign === "number" ? d.foreign : 0;
     paintBadges();
     markPendingStops();
     if (sheet && !sheet.hidden) renderSheet();
@@ -287,8 +288,16 @@
     410: "That stop no longer exists.",
     422: "Some of these readings aren't in a form the server accepts."
   };
-  function reasonFor(status) {
-    return REASONS[status] || ("The server rejected this (error " + status + ").");
+  // Entries parked with an explicit reason are not server rejections at all,
+  // so they must not be described as one.
+  var REASON_CODES = {
+    "identity-unknown":
+      "This was queued before the app recorded who was signed in. Check it belongs to you, "
+      + "then Retry to send it as yourself.",
+  };
+  function reasonFor(entry) {
+    if (entry.reason && REASON_CODES[entry.reason]) return REASON_CODES[entry.reason];
+    return REASONS[entry.status] || ("The server rejected this (error " + entry.status + ").");
   }
 
   function pendingRow(entry) {
@@ -303,8 +312,10 @@
     var row = el("div", "sync-row is-failed");
     row.appendChild(el("div", "sync-name", nameOf(entry)));
     row.appendChild(el("div", "sync-meta",
-      "Queued " + ago(entry.ts) + " · failed " + ago(entry.failed_at) + " · error " + entry.status));
-    row.appendChild(el("div", "sync-why", reasonFor(entry.status)));
+      "Queued " + ago(entry.ts) + " · "
+      + (entry.status ? ("failed " + ago(entry.failed_at) + " · error " + entry.status)
+                      : "needs your confirmation")));
+    row.appendChild(el("div", "sync-why", reasonFor(entry)));
 
     var acts = el("div", "sync-acts");
     var retry = el("button", "sync-btn", "Retry");
@@ -344,7 +355,7 @@
   function renderSheet() {
     if (!sheetBody) return;
     sheetBody.textContent = "";
-    if (!state.pending.length && !state.failed.length) {
+    if (!state.pending.length && !state.failed.length && !state.foreign) {
       sheetBody.appendChild(el("p", "sync-empty", "Everything is synced. Nothing is waiting."));
       return;
     }
@@ -371,6 +382,19 @@
     if (state.pending.length) {
       sheetBody.appendChild(el("p", "sync-group", "Waiting to send"));
       state.pending.forEach(function (entry) { sheetBody.appendChild(pendingRow(entry)); });
+    }
+    // Work queued by a colleague on this shared device. It is deliberately not
+    // sent under this login, and it is deliberately not deleted -- saying so is
+    // the difference between "the app is stuck" and "this isn't yours".
+    if (state.foreign > 0) {
+      var shared = el("div", "sync-row");
+      shared.appendChild(el("div", "sync-name",
+        state.foreign === 1 ? "1 stop queued by someone else"
+                            : state.foreign + " stops queued by someone else"));
+      shared.appendChild(el("div", "sync-why",
+        "Saved on this device by another user. It stays here until they sign in — "
+        + "signing in as yourself won't send it under your name."));
+      sheetBody.appendChild(shared);
     }
   }
 
@@ -479,8 +503,11 @@
     try { path = new URL(form.action, location.href).pathname; } catch (err) { return; }
     if (path === "/logout") {
       // Cached pages hold customer PII (gate codes); they must not survive
-      // sign-out on a shared or lost phone.
+      // sign-out on a shared or lost phone. Dropping the identity too means the
+      // queue goes dormant rather than draining under the next person's login;
+      // the entries themselves are kept and resume when their owner returns.
       sendNow({ type: "clear-pages" });
+      sendNow({ type: "identity", id: "" });
       return;
     }
     if (!wholeMatch(/^\/visit\/\d+\/(complete|skip)/, path)) return;
@@ -495,6 +522,14 @@
     var detail = (sub && sub.tagName === "P") ? (sub.textContent || "").split("·")[0].trim() : "";
     return detail ? name + " — " + detail : name;
   }
+
+  // ---------- identity ----------
+  // IndexedDB is per-DEVICE, not per-login. Telling the worker who is signed in
+  // is what stops a shared phone from replaying one tech's queued work under
+  // the next tech's session. Sent before the first flush so a replay never runs
+  // without knowing whose queue it is draining.
+  var STAFF_ID = "{{ staff_identity() }}";
+  if (STAFF_ID) sendNow({ type: "identity", id: STAFF_ID });
 
   // ---------- replay triggers ----------
   // iOS Safari has no Background Sync API -- reconnecting (`online`) and every

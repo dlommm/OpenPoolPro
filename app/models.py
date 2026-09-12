@@ -249,6 +249,12 @@ class Visit(Base):
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     paid_cash: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Bumped by a conditional UPDATE on every write that claims this visit.
+    # The status check alone is a read-then-write: two handlers that both read
+    # status="due" both pass it, and the second silently overwrites the first
+    # tech's readings. Comparing-and-swapping this counter makes the loser
+    # observable (0 rows matched -> 409) instead of invisible.
+    revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     property: Mapped[Property] = relationship()
     chemicals: Mapped[list["VisitChemical"]] = relationship(back_populates="visit")
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])

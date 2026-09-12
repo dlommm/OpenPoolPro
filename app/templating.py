@@ -144,3 +144,21 @@ def _csp_nonce(ctx) -> str:
 
 
 templates.env.globals["csp_nonce"] = _csp_nonce
+
+
+@jinja2.pass_context
+def _staff_identity(ctx) -> str:
+    """Id of the signed-in staff member, or "" when nobody is signed in.
+
+    The service worker stamps this onto every offline-queued visit POST and
+    replays it in an X-Queued-Owner header, so work queued by one tech can
+    never be attributed to whoever happens to be signed in later on a shared
+    device. Not a secret -- it is the same id the app already exposes in staff
+    URLs -- and the server re-checks it on replay rather than trusting it.
+    """
+    request = ctx.get("request")
+    user = getattr(request.state, "user", None) if request is not None else None
+    return str(user.id) if user is not None else ""
+
+
+templates.env.globals["staff_identity"] = _staff_identity

@@ -12,8 +12,12 @@ const QUEUE_STORE = "posts";
 // "3 waiting" badge. The full payload is kept -- a tech's readings are only
 // destroyed by an explicit, confirmed Discard from the queue screen.
 const FAILED_STORE = "failed";
-// v1 shipped with only QUEUE_STORE; the bump creates FAILED_STORE on upgrade.
-const QUEUE_DB_VERSION = 2;
+// Which staff member this device currently belongs to. IndexedDB is per-DEVICE,
+// not per-login: without this, work queued offline by one tech replays under
+// whoever signs in next on a shared phone.
+const META_STORE = "meta";
+// v1 shipped with only QUEUE_STORE; v2 added FAILED_STORE; v3 adds META_STORE.
+const QUEUE_DB_VERSION = 3;
 
 // Queued URL -> {label, page} for the queue screen. Written synchronously by
 // the `queue-hint` message the page sends immediately BEFORE submitting a
@@ -118,7 +122,9 @@ async function handleQueueablePost(req, url) {
     const body = await bodyClone.text();
     const hint = QUEUE_HINTS[url.pathname] || {};
     delete QUEUE_HINTS[url.pathname];
-    await queueAdd(url.pathname + url.search, body, hint.page || refPath(req.referrer), hint.label || "");
+    const owner = await getIdentity();
+    await queueAdd(url.pathname + url.search, body,
+                   hint.page || refPath(req.referrer), hint.label || "", owner);
     return Response.redirect("/?queued=1", 303);
   }
 }
@@ -186,6 +192,9 @@ function openQueueDB() {
       if (!db.objectStoreNames.contains(FAILED_STORE)) {
         db.createObjectStore(FAILED_STORE, { keyPath: "id", autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains(META_STORE)) {
+        db.createObjectStore(META_STORE, { keyPath: "key" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -228,10 +237,35 @@ function storeDelete(store, id) {
   }));
 }
 
+function storePut(store, record) {
+  return openQueueDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+// Persisted, not just in-memory: Background Sync can wake this worker with no
+// page open, and a replay that could not tell who owns the queue would either
+// stall forever or guess.
+function getIdentity() {
+  return storeGet(META_STORE, "identity")
+    .then(row => (row && row.value) || "")
+    .catch(() => "");
+}
+
+function setIdentity(value) {
+  return storePut(META_STORE, { key: "identity", value: value || "" });
+}
+
 // `page` and `label` are queue-screen metadata only -- the replayed POST still
-// sends exactly the urlencoded body the form produced, unchanged.
-function queueAdd(url, body, page, label) {
-  return storeAdd(QUEUE_STORE, { url, body, page: page || "", label: label || "", ts: Date.now() });
+// sends exactly the urlencoded body the form produced, unchanged. `owner` is
+// the staff id that queued it and is what the server re-checks on replay.
+function queueAdd(url, body, page, label, owner) {
+  return storeAdd(QUEUE_STORE, {
+    url, body, page: page || "", label: label || "", owner: owner || "", ts: Date.now(),
+  });
 }
 
 function queueAll() {
@@ -248,15 +282,17 @@ function failedAll() {
 
 // Park a definitively-rejected entry: payload intact, plus the status and the
 // moment it died so the queue screen can explain WHY it is not syncing.
-async function failEntry(entry, status) {
+async function failEntry(entry, status, reason) {
   try {
     await storeAdd(FAILED_STORE, {
       url: entry.url,
       body: entry.body,
       page: entry.page || "",
       label: entry.label || "",
+      owner: entry.owner || "",
       ts: entry.ts,
       status: status,
+      reason: reason || "",
       failed_at: Date.now(),
     });
   } catch (err) {
@@ -267,10 +303,15 @@ async function failEntry(entry, status) {
 
 // Retry puts the entry back at the TAIL, not the head: it already lost its place
 // in line, and everything that was stuck behind it has long since gone through.
+// Retry is an explicit human action, so it is also the moment an entry gets a
+// definite owner: whoever is signed in now is knowingly claiming this work.
+// That is what lets a pre-upgrade entry (queued before the device tracked
+// identity at all) be sent without the app silently attributing it for them.
 async function retryFailed(id) {
   const entry = await storeGet(FAILED_STORE, id).catch(() => null);
   if (entry) {
-    await queueAdd(entry.url, entry.body, entry.page, entry.label);
+    const owner = (await getIdentity()) || entry.owner || "";
+    await queueAdd(entry.url, entry.body, entry.page, entry.label, owner);
     await storeDelete(FAILED_STORE, id).catch(() => {});
   }
   await replay();
@@ -287,10 +328,18 @@ async function discardFailed(id) {
 // Bodies are deliberately NOT sent: the page has no use for them and they can
 // hold a customer's readings.
 async function postQueueState() {
-  const pending = await queueAll().catch(() => []);
+  const all = await queueAll().catch(() => []);
   const failed = await failedAll().catch(() => []);
-  pending.sort((a, b) => a.id - b.id);
+  const identity = await getIdentity();
+  all.sort((a, b) => a.id - b.id);
   failed.sort((a, b) => a.id - b.id);
+  // Split by owner rather than reusing a replay-time counter: this runs on
+  // paths where no replay happened (the queue screen simply asking, offline),
+  // and a stale count there would misreport whose work is stuck. An entry with
+  // no owner is pre-upgrade and shown as the current user's until a replay
+  // parks it for explicit confirmation.
+  const foreign = identity ? all.filter(e => e.owner && e.owner !== identity) : [];
+  const pending = all.filter(e => foreign.indexOf(e) === -1);
   const msg = {
     type: "queue-count",
     count: pending.length,
@@ -300,6 +349,10 @@ async function postQueueState() {
     // "auth" when the last replay stopped on a redirect to /login — the page
     // renders a "log back in" notice instead of a bare "waiting to send".
     blocked: BLOCKED_AUTH ? "auth" : "",
+    // Pending entries that belong to a different staff member. Reported
+    // separately so the badge can distinguish "your work is syncing" from
+    // "someone else's work is parked on this device".
+    foreign: foreign.length,
   };
   const clients = await self.clients.matchAll();
   clients.forEach(client => client.postMessage(msg));
@@ -311,10 +364,28 @@ function describe(entry) {
     url: entry.url,
     page: entry.page || "",
     label: entry.label || "",
+    owner: entry.owner || "",
     ts: entry.ts || 0,
     status: entry.status || 0,
+    reason: entry.reason || "",
     failed_at: entry.failed_at || 0,
   };
+}
+
+// Every authenticated page announces who is signed in. Two things follow from
+// a CHANGE: the previous person's rendered pages (gate codes, dog notes,
+// customer addresses) must stop being readable offline, and the queue must be
+// re-evaluated so the new person's own entries start draining. Queued work is
+// never touched here -- switching users must not destroy unsynced field work.
+async function applyIdentity(id) {
+  const previous = await getIdentity();
+  if (previous === id) {
+    if (id) await replay();
+    return;
+  }
+  if (previous) await clearPagesCache();
+  await setIdentity(id);
+  await replay();
 }
 
 // FIFO replay: posts each queued entry in enqueue order. Every response falls
@@ -364,13 +435,37 @@ async function replayOnce() {
   } catch (err) {
     entries = [];
   }
+  const identity = await getIdentity();
   entries.sort((a, b) => a.id - b.id);
   for (const entry of entries) {
+    // Nobody is signed in on this device yet (fresh install, or the worker woke
+    // via Background Sync before any page ran). Sending now would attribute the
+    // work to whatever session the browser happens to hold. Wait instead: the
+    // `identity` message re-triggers replay as soon as a page tells us who this
+    // is, and the entries keep their place in line.
+    if (!identity) break;
+    // Queued before this build tracked identity. It cannot be attributed
+    // safely and it must not be thrown away, so it is parked in the failed
+    // store -- payload intact, visible on the queue screen -- where one
+    // explicit tap on Retry claims it for the person actually signed in.
+    if (!entry.owner) {
+      await failEntry(entry, 0, "identity-unknown");
+      continue;
+    }
+    // Someone else's queued work. Leave it exactly where it is: it is not
+    // dead, it is just not ours to send. It syncs when they sign back in.
+    if (entry.owner !== identity) continue;
     let resp;
     try {
       resp = await fetch(entry.url, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          // Re-checked server-side; the client-side skip above is UX, this is
+          // the actual guarantee (an attacker-controlled worker is not the
+          // threat here -- a hurried shift change is).
+          "X-Queued-Owner": entry.owner,
+        },
         body: entry.body,
         credentials: "include",
       });
@@ -420,6 +515,8 @@ self.addEventListener("message", e => {
     e.waitUntil(retryFailed(data.id));
   } else if (data.type === "queue-discard") {
     e.waitUntil(discardFailed(data.id));
+  } else if (data.type === "identity") {
+    e.waitUntil(applyIdentity(String(data.id || "")));
   } else if (data.type === "queue-hint" && data.url) {
     // Deliberately synchronous (see QUEUE_HINTS): the POST this describes hits
     // the fetch handler in the very next turn.

@@ -463,6 +463,7 @@
     "property_id",
     "rate_cents",
     "resolved",
+    "revision",
     "salt",
     "started_at",
     "status",

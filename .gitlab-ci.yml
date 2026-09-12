@@ -60,13 +60,53 @@ audit:
     - pip install -q pip-audit
     - pip-audit --no-deps -r requirements.lock
 
+# tests/test_audit_regressions.py executes sw.js in node:vm rather than
+# string-matching it, so it is the only real guard on offline replay — the area
+# that already produced a High-severity data-loss bug. python:3.12-slim ships no
+# Node, so those tests silently SKIPPED here for their whole existence. Install
+# Node and set REQUIRE_JS_TESTS=1, which turns a missing Node into a failure
+# instead of a skip: a guard that quietly stops running is worse than no guard.
 test:
   extends: .python-job
+  variables:
+    REQUIRE_JS_TESTS: "1"
   script:
+    - apt-get install -y -qq --no-install-recommends nodejs
+    - node --version
     # The locks are what the Dockerfile installs — test exactly those pins.
     - pip install -r requirements-dev.lock
     - python -m pytest -q -n auto --cov=app --cov-report=term --cov-fail-under=90
   coverage: '/^TOTAL.+?(\d+%)$/'
+
+# The design-system smoke proves app.css actually APPLIED (computed styles), not
+# merely that a page returned 200 — the naked-HTML failure class. It needs a live
+# seeded instance, so: boot the app (which migrates), seed demo data, then drive
+# Chromium against it. Playwright was never installed in CI, so this check only
+# ever ran on someone's laptop.
+browser:
+  extends: .python-job
+  variables:
+    DATA_DIR: "$CI_PROJECT_DIR/.ci-visual"
+    APP_URL: "http://127.0.0.1:8000"
+    APP_PASSWORD: "ci-smoke-only-not-a-real-password"
+    SECRET_KEY: "cismoke0000000000000000000000000000000000000000000000000000000000"
+    PYTHONPATH: "."
+  script:
+    - pip install -r requirements-dev.lock
+    - pip install -q playwright
+    - playwright install --with-deps chromium
+    - mkdir -p "$DATA_DIR"
+    # Migrations run at app startup, so the schema must exist before seeding.
+    - uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log &
+    - |
+      for i in $(seq 1 60); do
+        python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('$APP_URL/health', timeout=2).status == 200 else 1)" 2>/dev/null && break
+        sleep 1
+      done
+      python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('$APP_URL/health', timeout=5).status == 200 else 1)" \
+        || { echo 'app never became healthy'; exit 1; }
+    - python scripts/seed_sample_data.py
+    - python scripts/visual_check.py
 
 # The image used to be built for the first time AFTER merge, in the release
 # job — a broken Dockerfile/entrypoint merged green and failed (or worse,

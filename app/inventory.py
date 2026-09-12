@@ -65,7 +65,13 @@ def record_purchase(session: Session, chemical: models.Chemical, quantity: float
     """
     if not _valid_quantity(quantity) or not _valid_cost(total_cost_cents):
         return None
-    chemical.stock_qty += quantity
+    # Atomic at the DB for the same reason as apply_visit_delta: two purchases
+    # logged for one chemical at once would otherwise each read the same
+    # stock_qty, and the second would overwrite the first's addition.
+    session.execute(update(models.Chemical)
+                    .where(models.Chemical.id == chemical.id)
+                    .values(stock_qty=models.Chemical.stock_qty + quantity))
+    session.refresh(chemical, ["stock_qty"])
     purchase = models.Purchase(chemical_id=chemical.id, quantity=quantity,
                                total_cost_cents=total_cost_cents, note=note or "",
                                user_id=user_id)
