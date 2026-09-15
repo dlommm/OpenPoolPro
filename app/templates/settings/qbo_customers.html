@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/settings#system" class="btn-secondary mb-4">Back to settings</a>
+<h1 class="font-display text-3xl">Customer sync review</h1>
+<p class="mb-4 mt-1 text-sm text-mist">{{ company or "Connected company" }} · {{ environment|capitalize }}.
+  Nothing below has happened yet. OpenPoolPro never deletes, deactivates or merges a QuickBooks
+  record, and never overwrites a QuickBooks value without your approval.</p>
+
+<div class="card mb-6 p-4">
+  <h2 class="font-display text-2xl">OpenPoolPro → QuickBooks</h2>
+
+  {% if not push.creates and not push.links and not push.additive and not push.approval %}
+    <p class="mt-3 text-sm">Nothing to push. {{ push.unchanged }} linked customer{{ '' if push.unchanged == 1 else 's' }} already match QuickBooks.</p>
+  {% else %}
+  <form method="post" action="/settings/qbo/customers/push">
+    <input type="hidden" name="digest" value="{{ push.digest }}">
+
+    {% if push.creates %}
+    <section class="mt-4">
+      <h3 class="text-sm font-semibold">Will create in QuickBooks ({{ push.creates|length }})</h3>
+      <p class="text-xs text-mist">No customer of this name exists in the connected company.</p>
+      <ul class="mt-2 text-sm">{% for r in push.creates %}<li>{{ r.name }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if push.links %}
+    <section class="mt-4">
+      <h3 class="text-sm font-semibold">Will link to existing QuickBooks customers ({{ push.links|length }})</h3>
+      <p class="text-xs text-mist">Exact name match — linked, not duplicated. Nothing is written to QuickBooks.</p>
+      <ul class="mt-2 text-sm">{% for r in push.links %}<li>{{ r.name }} → QuickBooks Id {{ r.qbo_id }}{% if r.remote_email %} · {{ r.remote_email }}{% endif %}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if push.additive %}
+    <section class="mt-4">
+      <h3 class="text-sm font-semibold">Will fill empty QuickBooks fields ({{ push.additive|length }})</h3>
+      <p class="text-xs text-mist">QuickBooks holds no value for these, so nothing is overwritten.</p>
+      <ul class="mt-2 text-sm">{% for r in push.additive %}{% for c in r.additive %}
+        <li>{{ r.name }} · {{ c.label }} — <span class="text-mist">(empty)</span> → {{ c.new }}</li>
+      {% endfor %}{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if push.approval %}
+    <section class="mt-4 rounded-lg border border-safety/40 bg-safety/10 p-3">
+      <h3 class="text-sm font-semibold text-safety">Needs your approval — these overwrite QuickBooks ({{ push.approval|length }})</h3>
+      <p class="text-xs">Unticked changes are left alone; QuickBooks keeps its current value.</p>
+      <div class="mt-2 space-y-2">{% for r in push.approval %}
+        <article class="border-t border-seam pt-2 text-sm">
+          <strong>{{ r.name }}</strong>
+          {% for c in r.additive %}<p class="text-xs text-mist">{{ c.label }} — (empty) → {{ c.new }} · applies automatically</p>{% endfor %}
+          {% for c in r.overwriting %}
+          <label class="mt-1 flex flex-wrap items-center gap-2">
+            <input type="checkbox" name="approve" value="{{ r.key }}:{{ c.key }}" class="h-5 w-5">
+            <span>{% if c.field == 'DisplayName' %}<span class="tag">name</span>{% else %}{{ c.label }}{% endif %}
+              <span class="font-data">{{ c.old }}</span> → <span class="font-data">{{ c.new }}</span></span>
+          </label>
+          {% endfor %}
+        </article>
+      {% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <button class="btn-primary mt-4"
+            data-confirm="Apply this plan to QuickBooks? Only ticked overwrites will be written.">Apply to QuickBooks</button>
+  </form>
+  {% endif %}
+
+  {% if push.review %}
+  <section class="mt-4 rounded-lg border border-seam p-3">
+    <h3 class="text-sm font-semibold">Needs attention — not included above ({{ push.review|length }})</h3>
+    <p class="text-xs text-mist">Left out of the plan on purpose. Resolve each from the customer's
+      QuickBooks link page so a duplicate is never created.</p>
+    <ul class="mt-2 space-y-1 text-sm">{% for r in push.review %}
+      <li>{{ r.name }} — {{ r.reason }}{% if r.remote_name %}: QuickBooks has
+        <strong>{{ r.remote_name }}</strong>{% if r.remote_email %} ({{ r.remote_email }}){% endif %}
+        {% if r.ratio %}<span class="text-mist"> · {{ (r.ratio * 100)|round|int }}% name match</span>{% endif %}{% endif %}
+        <a class="underline" href="/billing/customers/{{ r.customer_id }}/link">Review match</a></li>
+    {% endfor %}</ul>
+  </section>
+  {% endif %}
+</div>
+
+<div class="card p-4">
+  <h2 class="font-display text-2xl">QuickBooks → OpenPoolPro</h2>
+  <p class="text-xs text-mist">Reads QuickBooks only. Nothing here changes anything in QuickBooks.</p>
+
+  {% if not pull.auto_link and not pull.creates and not pull.review %}
+    <p class="mt-3 text-sm">Nothing to import. {{ pull.already }} QuickBooks customer{{ '' if pull.already == 1 else 's' }} already linked.</p>
+  {% else %}
+  <form method="post" action="/settings/qbo/customers/import">
+    <input type="hidden" name="digest" value="{{ pull.digest }}">
+
+    {% if pull.auto_link %}
+    <section class="mt-4">
+      <h3 class="text-sm font-semibold">Will link to existing OpenPoolPro customers ({{ pull.auto_link|length }})</h3>
+      <p class="text-xs text-mist">Exact name match — no duplicate created locally.</p>
+      <ul class="mt-2 text-sm">{% for r in pull.auto_link %}<li>{{ r.name }} → {{ r.local_name }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if pull.creates %}
+    <section class="mt-4">
+      <h3 class="text-sm font-semibold">Will create in OpenPoolPro ({{ pull.creates|length }})</h3>
+      <ul class="mt-2 text-sm">{% for r in pull.creates %}<li>{{ r.name }}{% if r.email %} · {{ r.email }}{% endif %}{% if r.phone %} · {{ r.phone }}{% endif %}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if pull.review %}
+    <section class="mt-4 rounded-lg border border-seam p-3">
+      <h3 class="text-sm font-semibold">Possible matches — your call ({{ pull.review|length }})</h3>
+      <div class="mt-2 space-y-3">{% for r in pull.review %}
+        <article class="border-t border-seam pt-2 text-sm">
+          <p>QuickBooks <strong>{{ r.name }}</strong>{% if r.email %} ({{ r.email }}){% endif %}
+            looks like OpenPoolPro <strong>{{ r.local_name }}</strong>
+            {% if r.ratio %}<span class="text-mist">· {{ (r.ratio * 100)|round|int }}% match</span>{% endif %}</p>
+          <div class="mt-1 flex flex-wrap gap-3">
+            {% for value, label in [("link","Link to " ~ r.local_name), ("create","Create a new customer"), ("skip","Skip")] %}
+            <label class="flex items-center gap-1"><input type="radio" name="decide:{{ r.key }}"
+              value="{{ value }}" {{ 'checked' if value == 'skip' }}> {{ label }}</label>
+            {% endfor %}
+          </div>
+        </article>
+      {% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <button class="btn-primary mt-4">Import into OpenPoolPro</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

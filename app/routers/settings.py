@@ -140,6 +140,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         "require_2fa": models.get_setting(session, "require_2fa", "0") == "1",
         **_qbo_ctx(session),
         "qbo_items": _qbo_items_maybe(request, session),
+        "qbo_accounts": _qbo_accounts_maybe(request),
+        "qbo_default_item_names": qbo_api_names(),
         # Flags/counts only — never free text from the URL. The error message
         # itself comes from the qbo_last_error setting (server-written), so a
         # crafted link can't render attacker copy inside the admin UI.
@@ -148,6 +150,13 @@ def settings_page(request: Request, rules_created: str | None = None,
             "qbo_error": bool(request.query_params.get("qbo_error")),
             "qbo_synced": _parse_count(request.query_params.get("qbo_synced")),
             "qbo_failed": _parse_count(request.query_params.get("qbo_failed")),
+            "qbo_items_created": _parse_count(request.query_params.get("qbo_items_created")),
+            "qbo_items_adopted": _parse_count(request.query_params.get("qbo_items_adopted")),
+            "qbo_pushed": _parse_count(request.query_params.get("qbo_pushed")),
+            "qbo_imported": _parse_count(request.query_params.get("qbo_imported")),
+            "qbo_linked": _parse_count(request.query_params.get("qbo_linked")),
+            "qbo_updated": _parse_count(request.query_params.get("qbo_updated")),
+            "qbo_held": _parse_count(request.query_params.get("qbo_held")),
         },
         "staff_without_2fa": session.scalars(select(models.User).where(
             models.User.active, models.User.totp_enabled.is_(False))).all(),
@@ -736,6 +745,12 @@ def _qbo_items_maybe(request: Request, session):
     return request.session.pop("qbo_items", None)
 
 
+def _qbo_accounts_maybe(request: Request):
+    """Income accounts for the item-provisioning dropdown. Same POST-only rule
+    as _qbo_items_maybe: a page render never makes an outbound call."""
+    return request.session.pop("qbo_accounts", None)
+
+
 def _qbo_fail(request: Request, session: Session, message: str) -> RedirectResponse:
     """Record an error for display and redirect. The text is stored server-side
     rather than echoed through the URL — a reflected `?qbo_error=<anything>`
@@ -744,6 +759,11 @@ def _qbo_fail(request: Request, session: Session, message: str) -> RedirectRespo
     models.set_setting(session, "qbo_last_error", message[:300])
     session.commit()
     return RedirectResponse("/settings?qbo_error=1#system", status_code=303)
+
+
+def qbo_api_names() -> dict:
+    from app import qbo_api
+    return qbo_api.DEFAULT_ITEM_NAMES
 
 
 def _qbo_ctx(session) -> dict:
@@ -848,6 +868,9 @@ def qbo_items_load(request: Request, session: Session = Depends(get_session)):
         return _qbo_fail(request, session, "Connect QuickBooks first.")
     try:
         request.session["qbo_items"] = qbo_api.list_items(session)
+        # Creating an item needs a revenue destination, so the account list is
+        # fetched in the same click rather than behind a second button.
+        request.session["qbo_accounts"] = qbo_api.list_income_accounts(session)
     except qbo_api.QboError as e:
         return _qbo_fail(request, session, str(e))
     return RedirectResponse("/settings#system", status_code=303)
@@ -876,39 +899,148 @@ async def save_qbo_items(request: Request, session: Session = Depends(get_sessio
     return RedirectResponse("/settings#system", status_code=303)
 
 
-# Each customer costs 1-2 synchronous HTTP calls to Intuit, and this app runs
-# a single process — an unbounded loop would tie it up for every other user.
-# Sync in capped batches; re-running picks up where it left off (already-linked
-# customers are cheap updates, and the cap is far above a normal book).
-SYNC_BATCH = 250
+@router.post("/settings/qbo/items-provision")
+async def qbo_items_provision(request: Request, session: Session = Depends(get_session)):
+    """Create the two billing items in QuickBooks when they don't exist yet, then
+    map them.
 
-
-@router.post("/settings/qbo/sync-customers")
-def qbo_sync_customers(request: Request, session: Session = Depends(get_session)):
+    Adopt-before-create: QuickBooks enforces unique item names, so a company that
+    already has these items (or made them by hand) links to the originals instead
+    of erroring. An existing name of a type an invoice line can't safely use is
+    refused rather than mapped -- that would surface later as a billing mismatch
+    on a real customer invoice instead of here, during setup.
+    """
     from app import qbo_api
     if not qbo_api.connected(session):
         return _qbo_fail(request, session, "Connect QuickBooks first.")
-    customers = session.scalars(
-        select(models.Customer).where(models.Customer.active)
-        .order_by(models.Customer.id).limit(SYNC_BATCH)).all()
-    synced = failed = 0
-    last_error = ""
-    for c in customers:
-        try:
-            qbo_id = qbo_api.push_customer(session, c)
-            c.qbo_customer_id = qbo_id
-            session.commit()  # per-customer: a mid-batch failure keeps prior work
-            synced += 1
-        except qbo_api.QboError as e:
-            session.rollback()
-            failed += 1
-            last_error = str(e)
-    models.audit(session, request.state.user.id, "settings.qbo",
-                 detail=f"customer sync: {synced} ok, {failed} failed")
-    models.set_setting(session, "qbo_last_error", last_error[:300] if last_error else "")
+    form = await request.form()
+    account = (form.get("income_account") or "").strip()
+    if not account:
+        return _qbo_fail(request, session, "Choose the income account the new items should post to.")
+    wanted = {
+        "service": ((form.get("name_service") or "").strip()
+                    or qbo_api.DEFAULT_ITEM_NAMES["service"], "qbo_item_service_id"),
+        "chemical": ((form.get("name_chem") or "").strip()
+                     or qbo_api.DEFAULT_ITEM_NAMES["chemical"], "qbo_item_chem_id"),
+    }
+    if wanted["service"][0] == wanted["chemical"][0]:
+        return _qbo_fail(request, session,
+                         "Give the service and chemical items different names.")
+    scope = qbo_api.connection_scope(session)
+    created = adopted = 0
+    try:
+        with qbo_api.connection_guard(session, scope):
+            resolved = {}
+            for name, setting_key in wanted.values():
+                existing = qbo_api.find_item_by_name(session, name)
+                if existing and existing["type"] not in qbo_api.SAFE_ITEM_TYPES:
+                    raise qbo_api.QboError(
+                        f'"{name}" already exists in QuickBooks as a '
+                        f'{existing["type"]} item, which an invoice line cannot safely use. '
+                        "Choose a different name, or map an existing service item by hand.")
+                if existing and not existing["active"]:
+                    raise qbo_api.QboError(
+                        f'"{name}" exists in QuickBooks but is inactive. '
+                        "Reactivate it there, or choose a different name.")
+                if existing:
+                    item, adopted = existing, adopted + 1
+                else:
+                    item, created = qbo_api.create_service_item(session, name, account), created + 1
+                resolved[setting_key] = item["id"]
+            # Both items are resolved remotely BEFORE any mapping is written.
+            # create_service_item commits to freeze its request body, so a
+            # mapping written between the two creates would be committed by the
+            # second one's freeze and survive this block's rollback -- leaving
+            # one item mapped and the other stale, which passes the scope check
+            # and only fails later, approving a real customer invoice.
+            for setting_key, item_id in resolved.items():
+                models.set_setting(session, setting_key, item_id)
+            models.set_setting(session, "qbo_item_scope", scope)
+            models.audit(session, request.state.user.id, "settings.qbo",
+                         detail=f"item provisioning: {created} created, {adopted} adopted")
+            models.set_setting(session, "qbo_last_error", "")
+            session.commit()
+    except qbo_api.QboError as e:
+        session.rollback()
+        return _qbo_fail(request, session, str(e))
+    return RedirectResponse(
+        f"/settings?qbo_items_created={created}&qbo_items_adopted={adopted}#system",
+        status_code=303)
+
+
+def _sync_back(request, session, message: str) -> RedirectResponse:
+    models.set_setting(session, "qbo_last_error", message[:300])
+    session.commit()
+    return RedirectResponse("/settings?qbo_error=1#system", status_code=303)
+
+
+@router.get("/settings/qbo/customers")
+def qbo_customer_review(request: Request, session: Session = Depends(get_session)):
+    """Preview both directions before anything is written.
+
+    Every number on this page comes from reads. A push writes to QuickBooks only
+    after this review; an import writes nothing to QuickBooks at all.
+    """
+    from app import qbo_api, qbo_sync
+    if not qbo_api.connected(session):
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    try:
+        push = qbo_sync.plan_push(session)
+        pull = qbo_sync.plan_import(session)
+    except (qbo_api.QboError, qbo_sync.SyncError) as exc:
+        return _qbo_fail(request, session, str(exc))
+    return templates.TemplateResponse(request, "settings/qbo_customers.html", {
+        "push": push, "pull": pull, "company": models.get_setting(session, "qbo_company_name", ""),
+        "environment": models.get_setting(session, "qbo_environment", "sandbox"),
+    })
+
+
+@router.post("/settings/qbo/customers/push")
+async def qbo_customer_push(request: Request, session: Session = Depends(get_session)):
+    """Create missing customers, link exact matches, and apply approved updates."""
+    from app import qbo_api, qbo_sync
+    if not qbo_api.connected(session):
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    form = await request.form()
+    approved = {str(v) for v in form.getlist("approve")}
+    try:
+        result = qbo_sync.apply_push(session, str(form.get("digest", "")), approved,
+                                     request.state.user.id)
+    except (qbo_api.QboError, qbo_sync.SyncError) as exc:
+        session.rollback()
+        return _sync_back(request, session, str(exc))
+    if result["errors"]:
+        return _sync_back(request, session, "; ".join(result["errors"])[:300])
+    models.set_setting(session, "qbo_last_error", "")
     session.commit()
     return RedirectResponse(
-        f"/settings?qbo_synced={synced}&qbo_failed={failed}#system", status_code=303)
+        f"/settings?qbo_pushed={result['created']}&qbo_linked={result['linked']}"
+        f"&qbo_updated={result['updated']}&qbo_held={result['skipped']}#system",
+        status_code=303)
+
+
+@router.post("/settings/qbo/customers/import")
+async def qbo_customer_import(request: Request, session: Session = Depends(get_session)):
+    """Pull the QuickBooks roster into OpenPoolPro. Reads QuickBooks only."""
+    from app import qbo_api, qbo_sync
+    if not qbo_api.connected(session):
+        return _qbo_fail(request, session, "Connect QuickBooks first.")
+    form = await request.form()
+    decisions = {}
+    for key in form.keys():
+        if key.startswith("decide:"):
+            decisions[key.removeprefix("decide:")] = str(form.get(key))
+    try:
+        result = qbo_sync.apply_import(session, str(form.get("digest", "")), decisions,
+                                       request.state.user.id)
+    except (qbo_api.QboError, qbo_sync.SyncError) as exc:
+        session.rollback()
+        return _sync_back(request, session, str(exc))
+    models.set_setting(session, "qbo_last_error", "")
+    session.commit()
+    return RedirectResponse(
+        f"/settings?qbo_imported={result['created']}&qbo_linked={result['linked']}"
+        f"&qbo_held={result['skipped']}#system", status_code=303)
 
 
 @router.post("/settings/sign-messages")

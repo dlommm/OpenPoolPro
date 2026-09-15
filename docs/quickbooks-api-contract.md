@@ -21,6 +21,14 @@ company having online payments configured and a valid invoice billing email.
 OpenPoolPro does not collect card numbers or implement a separate Payments API
 charge workflow.
 
+The transport is non-destructive by construction: methods other than GET/POST,
+`?operation=delete|void|merge`, and bodies carrying `Active: false` are refused
+before a request is built. The only writes the application can express are
+creating an item, creating a customer, updating explicitly approved customer
+fields, creating an invoice and sending one. Customer updates are sparse and
+carry only the approved fields, so no unapproved value travels with an approved
+one; the customer create primitive has no update path at all.
+
 Full, paginated Invoice/Payment/CreditMemo scans are available, including invoice
 links. An invalid/missing query envelope raises rather than masquerading as an
 empty account. A repeated page raises so callers cannot treat partial data as a
@@ -38,3 +46,6 @@ Primary references reviewed:
 No live invoice creation, email delivery, or customer payment was performed during
 implementation. Mocked transport tests verify wire format and failure handling;
 connected-account acceptance testing remains necessary before production enablement.
+
+[The sandbox test plan](quickbooks-sandbox-testing.md) is the procedure for that
+acceptance run.

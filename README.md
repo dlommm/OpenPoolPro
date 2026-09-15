@@ -356,10 +356,24 @@ One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
 4. Click **Connect QuickBooks**, approve on Intuit's screen, and you'll return
    to Settings showing "Connected — <company>".
 5. **Load items from QuickBooks** and map your service/labor and chemical
-   charges to QuickBooks items — required before billing can run.
-6. **Sync customers to QuickBooks** creates or updates each active customer;
-   the QuickBooks Id is stored per customer so re-syncing never creates
-   duplicates.
+   charges to QuickBooks items — required before billing can run. No suitable
+   items yet? **Don't have these items? Create them** creates the two service
+   items against an income account you pick and maps them in one step, linking
+   to any that already exist rather than making duplicates.
+6. **Review customer sync** shows what would change in both directions before
+   anything is written. Customers missing from QuickBooks are created; an exact
+   name match links to the existing record instead of duplicating it; a field
+   QuickBooks holds empty is filled automatically; and anything that would
+   *overwrite* a QuickBooks value — or rename a customer — waits for your
+   per-field approval. The same page imports the QuickBooks roster into
+   OpenPoolPro, which is how you onboard when QuickBooks already has your
+   customers.
+
+OpenPoolPro never deletes, voids, merges or deactivates anything in QuickBooks.
+The API client refuses to build such a request at all, so the guarantee holds by
+construction rather than by convention. Its only writes are: create an item,
+create a customer, update customer fields you approved, create an invoice, and
+send an invoice.
 
 Going to **production** requires Intuit's app review (start it early in the
 Developer portal); until then, keep the environment on Sandbox. Refresh tokens
@@ -383,7 +397,9 @@ not a verified override of company-level automation, so that check is yours to
 make, not something the app can assert for you.
 
 See [the billing workflow](docs/quickbooks-billing.md) for the monthly
-routine and its operational limits, and [the transport
+routine and its operational limits, [the sandbox test
+plan](docs/quickbooks-sandbox-testing.md) for the step-by-step end-to-end
+validation to run before enabling production billing, and [the transport
 contract](docs/quickbooks-api-contract.md) for what the API client does and
 does not guarantee.
 

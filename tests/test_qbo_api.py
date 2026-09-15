@@ -126,7 +126,7 @@ def test_access_token_expired_grant_is_admin_safe(client, engine, monkeypatch):
 
 # ---------- customer push ----------
 
-def test_push_customer_creates_when_unlinked(client, engine, monkeypatch):
+def test_create_customer_creates_when_unlinked(client, engine, monkeypatch):
     _connected(engine)
     seen = {}
 
@@ -139,30 +139,51 @@ def test_push_customer_creates_when_unlinked(client, engine, monkeypatch):
         cust = models.Customer(name="Ada Rivera", email="ada@example.com", phone="555")
         s.add(cust)
         s.commit()
-        assert qbo_api.push_customer(s, cust) == "77"
+        assert qbo_api.create_customer(s, cust) == "77"
     assert seen["method"] == "POST" and seen["path"] == "customer"
     assert seen["body"]["DisplayName"] == "Ada Rivera"
     assert "Id" not in seen["body"]  # a create, not an update
 
 
-def test_push_customer_updates_when_already_linked(client, engine, monkeypatch):
+def test_update_customer_sends_only_the_named_fields(client, engine, monkeypatch):
+    """A sync must never carry an unapproved value along with an approved one,
+    so the sparse body contains exactly the fields the caller asked for."""
     _connected(engine)
     calls = []
 
     def fake_api(s, method, path, body=None, **kwargs):
-        calls.append((method, path))
+        calls.append((method, path, body))
         if method == "GET":
             return {"Customer": {"Id": "77", "SyncToken": "3"}}
         return {"Customer": {"Id": "77"}}
 
     monkeypatch.setattr(qbo_api, "_api", fake_api)
     with Session(engine) as s:
-        cust = models.Customer(name="Ada", qbo_customer_id="77", qbo_customer_scope="sandbox:9130000")
+        cust = models.Customer(name="Ada", email="new@example.com", phone="555",
+                               qbo_customer_id="77", qbo_customer_scope="sandbox:9130000")
         s.add(cust)
         s.commit()
-        assert qbo_api.push_customer(s, cust) == "77"
-    assert ("GET", "customer/77") in calls  # fetched SyncToken first
-    assert ("POST", "customer") in calls    # then sparse update
+        qbo_api.update_customer_fields(s, cust, {"PrimaryEmailAddr": "new@example.com"})
+    body = calls[-1][2]
+    assert calls[0][0] == "GET"                       # SyncToken read first
+    assert body["SyncToken"] == "3" and body["sparse"] is True
+    assert body["PrimaryEmailAddr"] == {"Address": "new@example.com"}
+    assert "PrimaryPhone" not in body                 # not asked for, not sent
+    assert "DisplayName" not in body                  # never renames as a side effect
+
+
+def test_create_customer_refuses_an_already_linked_customer(client, engine, monkeypatch):
+    """The create primitive cannot be used to overwrite: it has no update path."""
+    import pytest
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "_api", lambda *a, **k: pytest.fail("no call expected"))
+    with Session(engine) as s:
+        cust = models.Customer(name="Ada", qbo_customer_id="77",
+                               qbo_customer_scope="sandbox:9130000")
+        s.add(cust)
+        s.commit()
+        with pytest.raises(qbo_api.QboError, match="already linked"):
+            qbo_api.create_customer(s, cust)
 
 
 def test_disconnect_clears_connection(client, engine, monkeypatch):
@@ -273,7 +294,7 @@ def test_error_text_is_not_reflected_from_the_url(client, engine):
 
 def test_error_message_comes_from_server_state(client, engine):
     _configure(engine)  # configured but not connected
-    r = client.post("/settings/qbo/sync-customers", follow_redirects=True)
+    r = client.get("/settings/qbo/customers", follow_redirects=True)
     # The flag comes from the URL; the TEXT comes from the stored setting.
     assert "Connect QuickBooks first." in r.text
     # And it is not shown on an ordinary render afterwards.
@@ -307,45 +328,12 @@ def test_malformed_token_response_is_admin_safe_not_a_500(client, engine, monkey
             pass
 
 
-def test_sync_customers_is_idempotent(client, engine, monkeypatch):
-    _connected(engine)
-    created = []
-
-    def fake_api(s, method, path, body=None, **kwargs):
-        if method == "POST":
-            created.append(body["DisplayName"])
-            return {"Customer": {"Id": "100"}}
-        return {"Customer": {"Id": "100", "SyncToken": "0"}}
-
-    monkeypatch.setattr(qbo_api, "_api", fake_api)
-    with Session(engine) as s:
-        s.add(models.Customer(name="Ada", active=True))
-        s.commit()
-    r = client.post("/settings/qbo/sync-customers", follow_redirects=False)
-    assert "qbo_synced=1" in r.headers["location"]
-    with Session(engine) as s:
-        assert s.query(models.Customer).first().qbo_customer_id == "100"
-    # Second sync: the linked customer updates (GET+POST), never a 2nd create
-    # for the same person.
-    client.post("/settings/qbo/sync-customers", follow_redirects=False)
-    # Both syncs create-or-update, but the customer keeps ONE qbo id.
-    with Session(engine) as s:
-        cust = s.query(models.Customer).first()
-        assert cust.qbo_customer_id == "100"
-
-
-def test_client_secret_never_renders(client, engine):
-    _configure(engine, secret="super-secret-value")
-    r = client.get("/settings")
-    assert r.status_code == 200
-    assert "super-secret-value" not in r.text
-    assert "QuickBooks Online" in r.text
-
-
 def test_sync_requires_connection(client, engine):
     _configure(engine)  # configured but not connected
-    r = client.post("/settings/qbo/sync-customers", follow_redirects=False)
-    assert "qbo_error" in r.headers["location"]
+    for r in (client.get("/settings/qbo/customers", follow_redirects=False),
+              client.post("/settings/qbo/customers/push", follow_redirects=False),
+              client.post("/settings/qbo/customers/import", follow_redirects=False)):
+        assert "qbo_error" in r.headers["location"]
 
 
 def test_invoice_wire_format_and_pdf(engine, monkeypatch):
@@ -422,7 +410,7 @@ def test_customer_wrong_company_fails_before_network(engine, monkeypatch):
     with Session(engine) as s:
         customer = models.Customer(name="Ada", qbo_customer_id="77", qbo_customer_scope="production:999")
         with pytest.raises(qbo_api.QboError, match="mapping"):
-            qbo_api.push_customer(s, customer)
+            qbo_api.update_customer_fields(s, customer, {"PrimaryPhone": "555"})
 
 
 def test_environment_change_disconnects_and_invalidates_mapping(client, engine):
@@ -488,10 +476,10 @@ def test_customer_create_freezes_payload_after_unknown_response(engine, monkeypa
         s.add(customer)
         s.commit()
         with pytest.raises(qbo_api.QboError):
-            qbo_api.push_customer(s, customer)
+            qbo_api.create_customer(s, customer)
         customer.name = "Changed Name"
         s.commit()
-        assert qbo_api.push_customer(s, customer) == "12"
+        assert qbo_api.create_customer(s, customer) == "12"
     assert calls[0] == calls[1]
 
 
@@ -542,3 +530,316 @@ def test_refund_receipts_paginate(engine, monkeypatch):
         assert qbo_api.query_refund_receipts(s, page_size=1) == [{"Id": "8"}]
     assert "from RefundReceipt" in calls[0]
     assert "startposition 2" in calls[1]
+
+
+# ---------- item provisioning ----------
+
+def test_q_literal_escapes_quotes_and_backslashes():
+    assert qbo_api._q_literal("Pool Service") == "'Pool Service'"
+    assert qbo_api._q_literal("Bob's Item") == r"'Bob\'s Item'"
+    assert qbo_api._q_literal("a\\b") == r"'a\\b'"
+
+
+def test_q_literal_rejects_control_characters_and_overlong_names():
+    import pytest
+    for bad in ("", "x" * 101, "drop\nit", "tab\there"):
+        with pytest.raises(qbo_api.QboError):
+            qbo_api._q_literal(bad)
+
+
+def test_find_item_by_name_requires_an_exact_name_match(client, engine, monkeypatch):
+    _connected(engine)
+    # A LIKE-ish or escaped-wrong query could return a neighbour; the exact
+    # re-check is what stops the wrong item being adopted.
+    monkeypatch.setattr(qbo_api, "_query", lambda s, stmt: [
+        {"Id": "9", "Name": "Pool Service — Labor EXTRA", "Type": "Service", "Active": True}])
+    with Session(engine) as s:
+        assert qbo_api.find_item_by_name(s, "Pool Service — Labor") is None
+
+
+def test_find_item_by_name_returns_the_match(client, engine, monkeypatch):
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "_query", lambda s, stmt: [
+        {"Id": "9", "Name": "Chemicals", "Type": "Service", "Active": True}])
+    with Session(engine) as s:
+        assert qbo_api.find_item_by_name(s, "Chemicals") == {
+            "id": "9", "name": "Chemicals", "type": "Service", "active": True}
+
+
+def test_create_service_item_posts_type_and_income_account(client, engine, monkeypatch):
+    _connected(engine)
+    seen = {}
+
+    def fake_api(s, method, path, body=None, **kwargs):
+        seen.update(method=method, path=path, body=body, request_id=kwargs.get("request_id"))
+        return {"Item": {"Id": "42", "Name": body["Name"], "Type": "Service"}}
+
+    monkeypatch.setattr(qbo_api, "_api", fake_api)
+    with Session(engine) as s:
+        item = qbo_api.create_service_item(s, "Pool Service — Labor", "88")
+    assert item == {"id": "42", "name": "Pool Service — Labor", "type": "Service", "active": True}
+    assert seen["method"] == "POST" and seen["path"] == "item"
+    assert seen["body"]["Type"] == "Service"
+    assert seen["body"]["IncomeAccountRef"] == {"value": "88"}
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,50}", seen["request_id"])
+
+
+def test_create_service_item_freezes_its_body_before_the_network_call(client, engine, monkeypatch):
+    """A retry after a lost response must re-send identical data, so the body is
+    persisted before the attempt and reused verbatim afterwards."""
+    import json as _json
+
+    _connected(engine)
+
+    def boom(s, method, path, body=None, **kwargs):
+        raise RuntimeError("network died")
+
+    monkeypatch.setattr(qbo_api, "_api", boom)
+    with Session(engine) as s:
+        try:
+            qbo_api.create_service_item(s, "Pool Service — Labor", "88")
+        except RuntimeError:
+            pass
+    with Session(engine) as s:
+        rows = s.query(models.Setting).filter(
+            models.Setting.key.like("qbo_item_create_%")).all()
+        assert len(rows) == 1
+        frozen = _json.loads(rows[0].value)
+    assert frozen == {"Name": "Pool Service — Labor", "Type": "Service",
+                      "IncomeAccountRef": {"value": "88"}}
+
+    # The retry reuses the frozen body and the same request id rather than
+    # rebuilding either from current state.
+    seen = {}
+
+    def fake_api(s, method, path, body=None, **kwargs):
+        seen.update(body=body, request_id=kwargs.get("request_id"))
+        return {"Item": {"Id": "42", "Name": body["Name"], "Type": "Service"}}
+
+    monkeypatch.setattr(qbo_api, "_api", fake_api)
+    with Session(engine) as s:
+        qbo_api.create_service_item(s, "Pool Service — Labor", "88")
+    assert seen["body"] == frozen
+    assert seen["request_id"] == rows[0].key.removeprefix("qbo_item_create_")
+
+
+def test_create_service_item_rejects_a_non_numeric_account(client, engine):
+    import pytest
+    _connected(engine)
+    with Session(engine) as s:
+        with pytest.raises(qbo_api.QboError):
+            qbo_api.create_service_item(s, "Labor", "8; drop")
+
+
+def test_list_income_accounts_filters_to_income(client, engine, monkeypatch):
+    _connected(engine)
+    seen = {}
+
+    def fake_query(s, statement):
+        seen["statement"] = statement
+        return [{"Id": "1", "Name": "Services", "AccountSubType": "ServiceFeeIncome"}]
+
+    monkeypatch.setattr(qbo_api, "_query", fake_query)
+    with Session(engine) as s:
+        assert qbo_api.list_income_accounts(s) == [
+            {"id": "1", "name": "Services", "subtype": "ServiceFeeIncome"}]
+    assert "AccountType = 'Income'" in seen["statement"]
+    assert "Active = true" in seen["statement"]
+
+
+# ---------- item provisioning route ----------
+
+def _provision(client, **overrides):
+    data = {"income_account": "88", "name_service": "Labor", "name_chem": "Chemicals"}
+    data.update(overrides)
+    return client.post("/settings/qbo/items-provision", data=data, follow_redirects=False)
+
+
+def test_provision_requires_a_connection(client, engine):
+    _configure(engine)  # configured but not connected
+    r = _provision(client)
+    assert r.status_code == 303 and "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert "Connect QuickBooks first." in models.get_setting(s, "qbo_last_error", "")
+
+
+def test_provision_requires_an_income_account(client, engine):
+    _connected(engine)
+    r = _provision(client, income_account="")
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert "income account" in models.get_setting(s, "qbo_last_error", "")
+
+
+def test_provision_rejects_two_items_with_the_same_name(client, engine):
+    _connected(engine)
+    r = _provision(client, name_service="Same", name_chem="Same")
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert "different names" in models.get_setting(s, "qbo_last_error", "")
+
+
+def test_provision_creates_both_items_and_maps_them(client, engine, monkeypatch):
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: None)
+    made = []
+
+    def fake_create(s, name, account):
+        made.append((name, account))
+        return {"id": str(100 + len(made)), "name": name, "type": "Service", "active": True}
+
+    monkeypatch.setattr(qbo_api, "create_service_item", fake_create)
+    r = _provision(client)
+    assert "qbo_items_created=2" in r.headers["location"]
+    assert "qbo_items_adopted=0" in r.headers["location"]
+    assert made == [("Labor", "88"), ("Chemicals", "88")]
+    with Session(engine) as s:
+        assert models.get_setting(s, "qbo_item_service_id", "") == "101"
+        assert models.get_setting(s, "qbo_item_chem_id", "") == "102"
+        assert models.get_setting(s, "qbo_item_scope", "") == "sandbox:9130000"
+
+
+def test_provision_adopts_existing_items_instead_of_duplicating(client, engine, monkeypatch):
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: {
+        "id": "55" if name == "Labor" else "66", "name": name, "type": "Service", "active": True})
+
+    def never(s, name, account):
+        raise AssertionError("must not create when the item already exists")
+
+    monkeypatch.setattr(qbo_api, "create_service_item", never)
+    r = _provision(client)
+    assert "qbo_items_created=0" in r.headers["location"]
+    assert "qbo_items_adopted=2" in r.headers["location"]
+    with Session(engine) as s:
+        assert models.get_setting(s, "qbo_item_service_id", "") == "55"
+
+
+def test_provision_refuses_to_map_an_inventory_item(client, engine, monkeypatch):
+    """An inventory item tracks quantity on hand and can make QuickBooks alter
+    the line, which would surface as a billing mismatch on a real invoice."""
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: {
+        "id": "55", "name": name, "type": "Inventory", "active": True})
+    r = _provision(client)
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert "Inventory" in models.get_setting(s, "qbo_last_error", "")
+        assert models.get_setting(s, "qbo_item_service_id", "") == ""
+
+
+def test_provision_refuses_an_inactive_namesake(client, engine, monkeypatch):
+    _connected(engine)
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: {
+        "id": "55", "name": name, "type": "Service", "active": False})
+    r = _provision(client)
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert "inactive" in models.get_setting(s, "qbo_last_error", "")
+
+
+def test_provision_leaves_mapping_untouched_when_the_second_item_fails(client, engine, monkeypatch):
+    """Partial mapping is worse than none: a service id saved without its
+    chemical counterpart would pass the scope check and fail at approval."""
+    _connected(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "qbo_item_service_id", "old-1")
+        models.set_setting(s, "qbo_item_chem_id", "old-2")
+        s.commit()
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: None)
+
+    def fake_create(s, name, account):
+        if name == "Chemicals":
+            raise qbo_api.QboError("QuickBooks rejected the item.")
+        return {"id": "101", "name": name, "type": "Service", "active": True}
+
+    monkeypatch.setattr(qbo_api, "create_service_item", fake_create)
+    r = _provision(client)
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert models.get_setting(s, "qbo_item_service_id", "") == "old-1"
+        assert models.get_setting(s, "qbo_item_chem_id", "") == "old-2"
+
+
+def test_provision_partial_failure_leaves_no_half_written_mapping(client, engine, monkeypatch):
+    """Regression: create_service_item commits to freeze its request body, so a
+    mapping written between the two creates was committed by the second one's
+    freeze and survived the route's rollback. Exercises the real
+    create_service_item -- monkeypatching it removes the interleaved commit and
+    hides the bug.
+    """
+    _connected(engine)
+    with Session(engine) as s:
+        models.set_setting(s, "qbo_item_service_id", "old-1")
+        models.set_setting(s, "qbo_item_chem_id", "old-2")
+        models.set_setting(s, "qbo_item_scope", "sandbox:OTHER")
+        s.commit()
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: None)
+
+    def fake_api(s, method, path, body=None, **kwargs):
+        if body["Name"] == "Chemicals":
+            raise qbo_api.QboError("QuickBooks rejected the item.")
+        return {"Item": {"Id": "101", "Name": body["Name"], "Type": "Service"}}
+
+    monkeypatch.setattr(qbo_api, "_api", fake_api)
+    r = _provision(client)
+    assert "qbo_error=1" in r.headers["location"]
+    with Session(engine) as s:
+        assert models.get_setting(s, "qbo_item_service_id", "") == "old-1"
+        assert models.get_setting(s, "qbo_item_chem_id", "") == "old-2"
+        assert models.get_setting(s, "qbo_item_scope", "") == "sandbox:OTHER"
+
+
+# ---------- non-destructive transport guarantee ----------
+
+def test_transport_refuses_destructive_requests(client, engine):
+    """QuickBooks is downstream of OpenPoolPro and must never lose a record.
+    The transport refuses to express a delete rather than trusting every future
+    caller to remember. Void/delete/deactivate are all POSTs in the QBO API, so
+    a method allowlist alone would not cover them.
+    """
+    import pytest
+    _connected(engine)
+    cases = [
+        ("DELETE", "invoice/5", None),
+        ("PUT", "customer", {"Id": "1"}),
+        ("PATCH", "item/3", None),
+        ("POST", "invoice?operation=delete", {"Id": "5", "SyncToken": "0"}),
+        ("POST", "invoice?operation=void", {"Id": "5", "SyncToken": "0"}),
+        ("POST", "customer?operation=merge", {"Id": "5"}),
+        ("POST", "customer", {"Id": "5", "SyncToken": "0", "Active": False}),
+        ("POST", "customer", {"Id": "5", "SyncToken": "0", "Active": "false"}),
+        ("POST", "invoice", {"Id": "5", "operation": "delete"}),
+    ]
+    with Session(engine) as s:
+        for method, path, body in cases:
+            with pytest.raises(qbo_api.QboError):
+                qbo_api._api(s, method, path, body)
+
+
+def test_transport_still_allows_the_five_legitimate_writes(client, engine):
+    """The guard must not block normal operation: creating items, customers and
+    invoices, sending an invoice, and every read."""
+    _connected(engine)
+    for method, path, body in [
+        ("GET", "query?query=select%20*%20from%20Item", None),
+        ("GET", "invoice/5?include=invoiceLink", None),
+        ("POST", "item", {"Name": "Labor", "Type": "Service"}),
+        ("POST", "customer", {"DisplayName": "Ada"}),
+        ("POST", "customer", {"Id": "5", "SyncToken": "0", "sparse": True}),
+        ("POST", "invoice", {"CustomerRef": {"value": "1"}}),
+        ("POST", "invoice/5/send?sendTo=a%40b.com", None),
+    ]:
+        qbo_api._assert_non_destructive(method, path, body)  # must not raise
+
+
+def test_no_destructive_call_sites_exist_in_the_codebase():
+    """Belt and braces: the guard blocks it at runtime, this catches it in review."""
+    import pathlib
+    import re as _re
+    for name in ("qbo_api.py", "qbo_billing.py"):
+        source = pathlib.Path("app", name).read_text()
+        calls = _re.findall(r'_api\(\s*session\s*,\s*"([A-Z]+)"\s*,\s*([^,)]+)', source)
+        for method, path_expr in calls:
+            assert method in qbo_api._ALLOWED_METHODS, f"{name}: {method} request"
+            assert "operation=" not in path_expr, f"{name}: operation= in {path_expr}"

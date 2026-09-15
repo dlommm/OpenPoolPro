@@ -276,9 +276,34 @@ def disconnect(session) -> None:
 
 # ---------- API ----------
 
+# OpenPoolPro is the system of record; QuickBooks is downstream. Data flows in
+# here, becomes an approved invoice there, and reconciles back. Nothing this
+# application does may remove or retire a QuickBooks record -- so the transport
+# itself refuses to express one, rather than leaving it to every future caller
+# to remember. Voiding, deleting and deactivating are all POSTs in the QBO API
+# (?operation=..., or Active:false), so a method allowlist alone is not enough.
+_ALLOWED_METHODS = ("GET", "POST")
+_DESTRUCTIVE_OPERATIONS = ("delete", "void", "merge")
+
+
+def _assert_non_destructive(method: str, path: str, body: dict | None) -> None:
+    if method not in _ALLOWED_METHODS:
+        raise QboError(f"OpenPoolPro does not issue {method} requests to QuickBooks.")
+    operation = urllib.parse.parse_qs(urllib.parse.urlparse(path).query).get("operation", [])
+    for value in operation:
+        if value.strip().lower() in _DESTRUCTIVE_OPERATIONS:
+            raise QboError("OpenPoolPro does not delete, void or merge QuickBooks records.")
+    if isinstance(body, dict):
+        if str(body.get("Active", "")).lower() == "false" or body.get("Active") is False:
+            raise QboError("OpenPoolPro does not deactivate QuickBooks records.")
+        if str(body.get("operation", "")).strip().lower() in _DESTRUCTIVE_OPERATIONS:
+            raise QboError("OpenPoolPro does not delete, void or merge QuickBooks records.")
+
+
 @_connection_locked
 def _api(session, method: str, path: str, body: dict | None = None,
          *, request_id=None, raw=False, content_type="application/json") -> dict | bytes:
+    _assert_non_destructive(method, path, body)
     token = access_token(session)
     # Quoted even though realm_id is validated numeric on the way in — same
     # belt-and-braces the Office 365 client applies to its tenant id, so no
@@ -352,6 +377,85 @@ def list_items(session) -> list[dict]:
     return [{"id": r.get("Id"), "name": r.get("Name"), "type": r.get("Type")} for r in rows]
 
 
+# ---------- item provisioning ----------
+
+# Same names the CSV fallback writes in qbo.export_csv, so a company that
+# started on the export and later connected the API keeps one set of items.
+DEFAULT_ITEM_NAMES = {"service": "Pool Service — Labor", "chemical": "Pool Service — Chemicals"}
+
+# An item we create must be one an invoice line can safely reference. Inventory
+# items track quantity on hand and can make QuickBooks alter or reject a line,
+# which would surface as a billing mismatch rather than a clear setup error.
+SAFE_ITEM_TYPES = ("Service", "NonInventory")
+
+
+def _q_literal(value: str) -> str:
+    """Escape a string literal for a QBO query.
+
+    _query's statement is injectable by construction, so nothing reaches it
+    unescaped. Control characters are rejected outright rather than normalized:
+    a name that needs them is a mistake, not something to silently repair.
+    """
+    value = str(value)
+    if not value or len(value) > 100 or any(ord(c) < 32 for c in value):
+        raise QboError("QuickBooks item names must be 1-100 characters without control characters.")
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def list_income_accounts(session) -> list[dict]:
+    """Active income accounts — where a new service item posts its revenue."""
+    rows = _query(session, "select Id, Name, AccountSubType from Account "
+                           "where AccountType = 'Income' and Active = true "
+                           "order by Name maxresults 200")
+    return [{"id": r.get("Id"), "name": r.get("Name"),
+             "subtype": r.get("AccountSubType", "")} for r in rows]
+
+
+def find_item_by_name(session, name: str) -> dict | None:
+    """Exact-name lookup, including inactive items.
+
+    QuickBooks enforces unique item names across active *and* inactive items,
+    so a create that ignored an archived namesake would fail rather than return
+    the original. The returned Name is re-checked against the request so an
+    escaping slip cannot quietly adopt a different item.
+    """
+    rows = _query(session, f"select Id, Name, Type, Active from Item where Name = {_q_literal(name)} maxresults 5")
+    for row in rows:
+        if row.get("Name") == name:
+            return {"id": row.get("Id"), "name": row.get("Name"),
+                    "type": row.get("Type", ""), "active": bool(row.get("Active", True))}
+    return None
+
+
+def create_service_item(session, name: str, income_account_id) -> dict:
+    """Create one Service item posting to the given income account.
+
+    The create body is frozen before the network attempt for the same reason
+    push_customer freezes its own: after a lost response, a retry must mean
+    exactly what the first attempt meant. Callers check for an existing item
+    first; this raises rather than guessing if one appears in between.
+    """
+    name = str(name).strip()
+    _q_literal(name)  # validate before anything is persisted or sent
+    account = _entity_id(income_account_id)
+    scope = connection_scope(session)
+    request_id = hashlib.sha256(f"item:{scope}:{name}:{account}".encode()).hexdigest()[:40]
+    pending_key = "qbo_item_create_" + request_id
+    frozen = models.get_setting(session, pending_key, "")
+    if frozen:
+        payload = json.loads(frozen)
+    else:
+        payload = {"Name": name, "Type": "Service", "IncomeAccountRef": {"value": account}}
+        models.set_setting(session, pending_key, json.dumps(payload, sort_keys=True))
+        session.commit()
+    resp = _api(session, "POST", "item", payload, request_id=request_id)
+    item = resp.get("Item", {})
+    if not item.get("Id"):
+        raise QboError("QuickBooks did not return an item id.")
+    return {"id": str(item["Id"]), "name": item.get("Name", name),
+            "type": item.get("Type", "Service"), "active": True}
+
+
 # ---------- customer push ----------
 
 def _customer_payload(customer) -> dict:
@@ -362,43 +466,6 @@ def _customer_payload(customer) -> dict:
     if customer.phone:
         body["PrimaryPhone"] = {"FreeFormNumber": customer.phone}
     return body
-
-
-def push_customer(session, customer) -> str:
-    """Create or update the customer in QBO and return its QBO Id. Idempotent:
-    an existing qbo_customer_id updates in place (sparse) rather than creating a
-    duplicate. Caller sets customer.qbo_customer_id and commits."""
-    payload = _customer_payload(customer)
-    scope = connection_scope(session)
-    if customer.qbo_customer_id and customer.qbo_customer_scope != scope:
-        raise QboError("Customer mapping belongs to an unverified or different QuickBooks company. "
-                       "Relink it before syncing.")
-    if customer.qbo_customer_id:
-        # Sparse update needs the current SyncToken.
-        existing = _api(session, "GET", f"customer/{customer.qbo_customer_id}")
-        token = existing.get("Customer", {}).get("SyncToken", "0")
-        payload.update({"Id": customer.qbo_customer_id, "SyncToken": token, "sparse": True})
-    if customer.qbo_customer_id:
-        resp = _api(session, "POST", "customer", payload)
-    else:
-        if not customer.id:
-            raise QboError("Save the customer before syncing to QuickBooks.")
-        request_id = hashlib.sha256(f"customer:{scope}:{customer.id}".encode()).hexdigest()[:40]
-        # Freeze the create body before a network attempt. A later edit must not
-        # reuse the same request ID with different data after a lost response.
-        pending_key = "qbo_customer_create_" + request_id
-        frozen = models.get_setting(session, pending_key, "")
-        if frozen:
-            payload = json.loads(frozen)
-        else:
-            models.set_setting(session, pending_key, json.dumps(payload, sort_keys=True))
-            session.commit()
-        resp = _api(session, "POST", "customer", payload, request_id=request_id)
-    qbo_id = resp.get("Customer", {}).get("Id", "")
-    if not qbo_id:
-        raise QboError("QuickBooks did not return a customer id.")
-    customer.qbo_customer_scope = scope
-    return qbo_id
 
 
 def _entity_id(value):
@@ -515,3 +582,97 @@ def get_customer(session, customer_id):
 
 def query_refund_receipts(session, page_size=1000):
     return _all_entities(session, "RefundReceipt", page_size)
+
+
+def query_customers(session, page_size=1000):
+    """Every customer in the connected company, fully paginated.
+
+    Sync planning compares against the whole roster, so a partial page would
+    read as "not in QuickBooks" and plan a create for a customer that exists.
+    _all_entities raises on a repeated page rather than returning short.
+    """
+    return _all_entities(session, "Customer", page_size)
+
+
+def create_customer(session, customer) -> str:
+    """Create a customer in QuickBooks and return its Id.
+
+    Create-only by design. Updating a linked customer goes through
+    update_customer_fields, which sends only fields an operator approved -- so
+    no code path can overwrite a QuickBooks value as a side effect of a sync.
+    """
+    if customer.qbo_customer_id:
+        raise QboError("This customer is already linked to QuickBooks.")
+    if not customer.id:
+        raise QboError("Save the customer before syncing to QuickBooks.")
+    scope = connection_scope(session)
+    payload = _customer_payload(customer)
+    request_id = hashlib.sha256(f"customer:{scope}:{customer.id}".encode()).hexdigest()[:40]
+    # Freeze the create body before a network attempt. A later edit must not
+    # reuse the same request ID with different data after a lost response.
+    pending_key = "qbo_customer_create_" + request_id
+    frozen = models.get_setting(session, pending_key, "")
+    if frozen:
+        payload = json.loads(frozen)
+    else:
+        models.set_setting(session, pending_key, json.dumps(payload, sort_keys=True))
+        session.commit()
+    resp = _api(session, "POST", "customer", payload, request_id=request_id)
+    qbo_id = resp.get("Customer", {}).get("Id", "")
+    if not qbo_id:
+        raise QboError("QuickBooks did not return a customer id.")
+    customer.qbo_customer_scope = scope
+    return str(qbo_id)
+
+
+# QBO field -> the operator-facing label used everywhere a change is displayed.
+CUSTOMER_FIELDS = {"DisplayName": "name", "PrimaryEmailAddr": "email", "PrimaryPhone": "phone"}
+
+
+def remote_customer_value(raw: dict, field: str) -> str:
+    """Read one comparable field off a QuickBooks customer record."""
+    if field == "DisplayName":
+        return str(raw.get("DisplayName", "") or "")
+    if field == "PrimaryEmailAddr":
+        return str((raw.get("PrimaryEmailAddr") or {}).get("Address", "") or "")
+    if field == "PrimaryPhone":
+        return str((raw.get("PrimaryPhone") or {}).get("FreeFormNumber", "") or "")
+    raise QboError("Unknown QuickBooks customer field.")
+
+
+def _customer_field_body(field: str, value: str) -> dict:
+    if field == "DisplayName":
+        return {"DisplayName": value}
+    if field == "PrimaryEmailAddr":
+        return {"PrimaryEmailAddr": {"Address": value}}
+    if field == "PrimaryPhone":
+        return {"PrimaryPhone": {"FreeFormNumber": value}}
+    raise QboError("Unknown QuickBooks customer field.")
+
+
+def update_customer_fields(session, customer, fields: dict) -> dict:
+    """Sparse-update ONLY the named fields on a linked QuickBooks customer.
+
+    Every other field is omitted from the body, so a sync can never carry an
+    unapproved value along with an approved one. The caller has already decided
+    that each field here is either additive or explicitly approved.
+    """
+    if not fields:
+        raise QboError("No approved customer fields to update.")
+    scope = connection_scope(session)
+    if not customer.qbo_customer_id or customer.qbo_customer_scope != scope:
+        raise QboError("Customer mapping belongs to an unverified or different QuickBooks company. "
+                       "Relink it before syncing.")
+    existing = _api(session, "GET", f"customer/{_entity_id(customer.qbo_customer_id)}")
+    current = existing.get("Customer", {})
+    token = current.get("SyncToken", "0")
+    payload = {"Id": str(customer.qbo_customer_id), "SyncToken": str(token), "sparse": True}
+    for field, value in fields.items():
+        if field not in CUSTOMER_FIELDS:
+            raise QboError("Unknown QuickBooks customer field.")
+        payload.update(_customer_field_body(field, value))
+    resp = _api(session, "POST", "customer", payload)
+    updated = resp.get("Customer", {})
+    if not updated.get("Id"):
+        raise QboError("QuickBooks did not confirm the customer update.")
+    return updated

@@ -667,6 +667,9 @@
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">QuickBooks Online</h2>
           {% if qbo_result.qbo_ok %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">QuickBooks connected.</div>{% endif %}
+          {% if qbo_result.qbo_items_created is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Item setup: {{ qbo_result.qbo_items_created }} created{% if qbo_result.qbo_items_adopted %}, {{ qbo_result.qbo_items_adopted }} already existed and were linked{% endif %}. Mapping saved.</div>{% endif %}
+          {% if qbo_result.qbo_pushed is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer push: {{ qbo_result.qbo_pushed }} created, {{ qbo_result.qbo_linked }} linked to existing QuickBooks customers, {{ qbo_result.qbo_updated }} updated{% if qbo_result.qbo_held %}, {{ qbo_result.qbo_held }} left for approval{% endif %}.</div>{% endif %}
+          {% if qbo_result.qbo_imported is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer import: {{ qbo_result.qbo_imported }} created in OpenPoolPro, {{ qbo_result.qbo_linked }} linked{% if qbo_result.qbo_held %}, {{ qbo_result.qbo_held }} skipped{% endif %}.</div>{% endif %}
           {% if qbo_result.qbo_synced is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer sync: {{ qbo_result.qbo_synced }} synced{% if qbo_result.qbo_failed %}, {{ qbo_result.qbo_failed }} failed{% endif %}.</div>{% endif %}
           {% if qbo_result.qbo_error and qbo_last_error %}<div class="mb-3 rounded-lg border border-safety/40 bg-safety/10 p-2 text-sm text-safety">{{ qbo_last_error }}</div>{% endif %}
 
@@ -713,13 +716,39 @@
               {% endfor %}
               <button class="btn-secondary sm:col-span-2">Save item mapping</button>
             </form>
+
+            {% if qbo_accounts %}
+            <details class="mt-3 border-t border-seam pt-3">
+              <summary class="cursor-pointer text-xs font-semibold">Don't have these items? Create them</summary>
+              <p class="my-2 text-xs text-mist">Creates two QuickBooks service items and maps them here.
+                If items with these names already exist, they're linked instead of duplicated.</p>
+              <form method="post" action="/settings/qbo/items-provision" class="grid gap-2 sm:grid-cols-2">
+                {% for field, label, default in [
+                     ("name_service","Service / labor item name",qbo_default_item_names["service"]),
+                     ("name_chem","Chemicals item name",qbo_default_item_names["chemical"])] %}
+                <label class="block"><span class="field-label">{{ label }}</span>
+                  <input name="{{ field }}" value="{{ default }}" maxlength="100" class="field"></label>
+                {% endfor %}
+                <label class="block sm:col-span-2"><span class="field-label">Post revenue to</span>
+                  <select name="income_account" class="field" required>
+                    <option value="">— choose an income account —</option>
+                    {% for a in qbo_accounts %}<option value="{{ a.id }}">{{ a.name }}{% if a.subtype %} ({{ a.subtype }}){% endif %}</option>{% endfor %}
+                  </select></label>
+                <button class="btn-secondary sm:col-span-2"
+                        data-confirm="Create these items in QuickBooks and map them?">Create items and map them</button>
+              </form>
+            </details>
+            {% else %}
+            <p class="mt-3 border-t border-seam pt-3 text-xs text-mist">No income accounts found in this
+              QuickBooks company, so new items can't be created here. Add an income account in QuickBooks,
+              then load items again.</p>
+            {% endif %}
             {% endif %}
           </div>
 
-          <form method="post" action="/settings/qbo/sync-customers"
-                data-confirm="Push all active customers to QuickBooks now? This creates or updates them in QuickBooks.">
-            <button class="btn-primary">Sync customers to QuickBooks</button>
-          </form>
+          <a class="btn-primary inline-block" href="/settings/qbo/customers">Review customer sync</a>
+          <p class="mt-1 text-xs text-mist">Shows what would change in each direction before anything
+            is written. QuickBooks values are never overwritten without your approval.</p>
           {% elif qbo_configured %}
           <form method="post" action="/settings/qbo/connect">
             <button class="btn-primary">Connect QuickBooks</button>
