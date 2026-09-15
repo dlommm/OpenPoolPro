@@ -168,6 +168,7 @@ COLUMNS = {
         ("longitude", "FLOAT"),
     ],
     "jobs": [
+        ("job_template_id", "INTEGER REFERENCES job_templates(id)"),
         ("assigned_tech_id", "INTEGER REFERENCES users(id)"),
         ("job_type", "VARCHAR(10) DEFAULT 'service'"),
         ("completed_by_id", "INTEGER REFERENCES users(id)"),

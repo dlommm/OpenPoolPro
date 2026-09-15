@@ -26,6 +26,9 @@ def db(engine, monkeypatch):
             "qbo_item_chem_id": "20",
         }.items():
             models.set_setting(session, key, value)
+        # An established connection has already resolved its billing items;
+        # resolution itself is covered in test_qbo_items.py.
+        session.add(models.QBOItemMap(scope="sandbox:123", item_key="service", qbo_item_id="10"))
         owner = models.User(name="Owner", role="admin")
         customer = models.Customer(
             name="Customer", email="customer@example.com", qbo_customer_id="5", qbo_customer_scope="sandbox:123"
@@ -422,3 +425,94 @@ def test_changed_remote_customer_is_never_published_to_original_customer(db, mon
     billing.submit_draft(db, draft.id)
     assert draft.status == "mismatch"
     assert not db.scalars(select(models.QBOInvoiceMirror)).all()
+
+
+# ---------- item granularity through a real draft ----------
+
+def test_a_templated_job_bills_to_its_own_item(db, monkeypatch):
+    """The point of the whole exercise: a green-to-clean must not land on the
+    weekly-service item just because both are labour."""
+    tmpl = models.JobTemplate(title="Green-to-clean recovery", job_type="service")
+    db.add(tmpl)
+    db.flush()
+    prop = db.scalar(select(models.Property))
+    db.add(models.Job(property_id=prop.id, title="Green to clean", status="done",
+                      job_type="service", job_template_id=tmpl.id, labor_cents=15000,
+                      completed_at=datetime(2026, 8, 12, 15, 0)))
+    db.commit()
+
+    created = []
+    monkeypatch.setattr(qbo_api, "find_item_by_name", lambda s, name: None)
+    monkeypatch.setattr(qbo_api, "create_service_item", lambda s, name, account: created.append(
+        name) or {"id": str(300 + len(created)), "name": name, "type": "Service", "active": True})
+    models.set_setting(db, "qbo_income_account_id", "88")
+    db.commit()
+
+    draft = prepare(db)
+    kinds = {line["item_key"] for line in draft.lines}
+    assert kinds == {"service", f"template:{tmpl.id}"}
+
+    billing.approve_draft(db, draft.id, draft.revision, db.get(models.User, 1))
+    db.refresh(draft)
+    items = {line["SalesItemLineDetail"]["ItemRef"]["value"]
+             for line in draft.approved_snapshot["payload"]["Line"]}
+    assert len(items) == 2, "visit labour and the templated job must post to different items"
+    assert created == ["Green-to-clean recovery"]  # "service" was already mapped
+
+
+def test_a_legacy_draft_without_item_keys_still_bills(db, monkeypatch):
+    """Drafts prepared before this change are mid-flight on a running instance
+    and must bill exactly as they were prepared."""
+    monkeypatch.setattr(qbo_api, "find_item_by_name",
+                        lambda *a, **k: pytest.fail("a legacy line must not resolve"))
+    draft = prepare(db)
+    draft.lines = [{**line, "item_key": "", "item_name": ""} for line in draft.lines]
+    db.commit()
+    billing.approve_draft(db, draft.id, draft.revision, db.get(models.User, 1))
+    db.refresh(draft)
+    assert draft.approved_snapshot["payload"]["Line"][0][
+        "SalesItemLineDetail"]["ItemRef"]["value"] == "10"
+
+
+def test_billing_links_an_unsynced_customer_by_exact_name(db, monkeypatch):
+    """No settings trip: an exact match is the same record by QuickBooks' own
+    uniqueness rule."""
+    customer = db.scalar(select(models.Customer))
+    customer.qbo_customer_id, customer.qbo_customer_scope = "", ""
+    db.commit()
+    monkeypatch.setattr(qbo_api, "query_customers",
+                        lambda s, **k: [{"Id": "900", "DisplayName": "Customer"}])
+    monkeypatch.setattr(qbo_api, "create_customer",
+                        lambda *a, **k: pytest.fail("must link, not create"))
+    draft = prepare(db)
+    billing.approve_draft(db, draft.id, draft.revision, db.get(models.User, 1))
+    db.refresh(customer)
+    assert customer.qbo_customer_id == "900"
+
+
+def test_billing_creates_a_customer_that_is_genuinely_absent(db, monkeypatch):
+    customer = db.scalar(select(models.Customer))
+    customer.qbo_customer_id, customer.qbo_customer_scope = "", ""
+    db.commit()
+    monkeypatch.setattr(qbo_api, "query_customers", lambda s, **k: [])
+    monkeypatch.setattr(qbo_api, "create_customer", lambda s, c: "901")
+    draft = prepare(db)
+    billing.approve_draft(db, draft.id, draft.revision, db.get(models.User, 1))
+    db.refresh(customer)
+    assert customer.qbo_customer_id == "901"
+
+
+def test_billing_stops_on_a_near_customer_match_rather_than_duplicating(db, monkeypatch):
+    """A wrong guess here makes a duplicate nobody can delete, so it goes to the
+    review page that exists to decide it."""
+    customer = db.scalar(select(models.Customer))
+    customer.qbo_customer_id, customer.qbo_customer_scope = "", ""
+    customer.name = "Robert Smith"
+    db.commit()
+    monkeypatch.setattr(qbo_api, "query_customers",
+                        lambda s, **k: [{"Id": "900", "DisplayName": "Robert Smithe"}])
+    monkeypatch.setattr(qbo_api, "create_customer",
+                        lambda *a, **k: pytest.fail("must not create a probable duplicate"))
+    draft = prepare(db)
+    with pytest.raises(billing.BillingError, match="looks like an existing QuickBooks customer"):
+        billing.approve_draft(db, draft.id, draft.revision, db.get(models.User, 1))

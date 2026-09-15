@@ -381,7 +381,11 @@ def list_items(session) -> list[dict]:
 
 # Same names the CSV fallback writes in qbo.export_csv, so a company that
 # started on the export and later connected the API keeps one set of items.
-DEFAULT_ITEM_NAMES = {"service": "Pool Service — Labor", "chemical": "Pool Service — Chemicals"}
+DEFAULT_ITEM_NAMES = {
+    "service": "Pool Service — Labor",
+    "chemical": "Pool Service — Chemicals",
+    "repair": "Pool Service — Repair",
+}
 
 # An item we create must be one an invoice line can safely reference. Inventory
 # items track quantity on hand and can make QuickBooks alter or reject a line,

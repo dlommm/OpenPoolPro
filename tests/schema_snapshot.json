@@ -173,6 +173,7 @@
     "description",
     "hours",
     "id",
+    "job_template_id",
     "job_type",
     "labor_cents",
     "labor_override_cents",
@@ -335,6 +336,14 @@
     "status",
     "total_cents",
     "txn_date"
+  ],
+  "qbo_item_map": [
+    "created_at",
+    "id",
+    "item_key",
+    "name",
+    "qbo_item_id",
+    "scope"
   ],
   "qbo_transaction_mirrors": [
     "customer_id",

@@ -668,9 +668,6 @@
           <h2 class="set-h">QuickBooks Online</h2>
           {% if qbo_result.qbo_ok %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">QuickBooks connected.</div>{% endif %}
           {% if qbo_result.qbo_items_created is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Item setup: {{ qbo_result.qbo_items_created }} created{% if qbo_result.qbo_items_adopted %}, {{ qbo_result.qbo_items_adopted }} already existed and were linked{% endif %}. Mapping saved.</div>{% endif %}
-          {% if qbo_result.qbo_pushed is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer push: {{ qbo_result.qbo_pushed }} created, {{ qbo_result.qbo_linked }} linked to existing QuickBooks customers, {{ qbo_result.qbo_updated }} updated{% if qbo_result.qbo_held %}, {{ qbo_result.qbo_held }} left for approval{% endif %}.</div>{% endif %}
-          {% if qbo_result.qbo_imported is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer import: {{ qbo_result.qbo_imported }} created in OpenPoolPro, {{ qbo_result.qbo_linked }} linked{% if qbo_result.qbo_held %}, {{ qbo_result.qbo_held }} skipped{% endif %}.</div>{% endif %}
-          {% if qbo_result.qbo_synced is not none %}<div class="mb-3 rounded-lg border border-pool bg-shallow p-2 text-sm">Customer sync: {{ qbo_result.qbo_synced }} synced{% if qbo_result.qbo_failed %}, {{ qbo_result.qbo_failed }} failed{% endif %}.</div>{% endif %}
           {% if qbo_result.qbo_error and qbo_last_error %}<div class="mb-3 rounded-lg border border-safety/40 bg-safety/10 p-2 text-sm text-safety">{{ qbo_last_error }}</div>{% endif %}
 
           <p class="mb-3 text-sm text-mist">Review charges, approve invoices, and reconcile payments in <a href="/billing" class="text-pool">QuickBooks billing</a>. One-time setup: create a free app at

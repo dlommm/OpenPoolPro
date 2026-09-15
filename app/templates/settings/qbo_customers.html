@@ -6,6 +6,10 @@
   Nothing below has happened yet. OpenPoolPro never deletes, deactivates or merges a QuickBooks
   record, and never overwrites a QuickBooks value without your approval.</p>
 
+{% if result.error and last_error %}<div class="mb-4 rounded-lg border border-safety/40 bg-safety/10 p-3 text-sm text-safety">{{ last_error }}</div>{% endif %}
+{% if result.pushed is not none %}<div class="mb-4 rounded-lg border border-pool bg-shallow p-3 text-sm">Pushed to QuickBooks: {{ result.pushed }} created, {{ result.linked }} linked, {{ result.updated }} updated{% if result.held %}, {{ result.held }} left unapproved and unchanged in QuickBooks{% endif %}.</div>{% endif %}
+{% if result.imported is not none %}<div class="mb-4 rounded-lg border border-pool bg-shallow p-3 text-sm">Imported into OpenPoolPro: {{ result.imported }} created, {{ result.linked }} linked{% if result.held %}, {{ result.held }} skipped{% endif %}.</div>{% endif %}
+
 <div class="card mb-6 p-4">
   <h2 class="font-display text-2xl">OpenPoolPro → QuickBooks</h2>
 

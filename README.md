@@ -356,7 +356,12 @@ One-time setup, in the [Intuit Developer portal](https://developer.intuit.com):
 4. Click **Connect QuickBooks**, approve on Intuit's screen, and you'll return
    to Settings showing "Connected — <company>".
 5. **Load items from QuickBooks** and map your service/labor and chemical
-   charges to QuickBooks items — required before billing can run. No suitable
+   charges to QuickBooks items, choosing the income account new items post to.
+   After that, billing looks after itself: a line posts to an item chosen by
+   the *kind* of work — weekly labor, a job's template, a job type, or the
+   individual chemical — and approving a draft creates whatever is missing and
+   links whatever already exists. The draft lists what approving will add
+   before you approve it, so nothing appears in your books unannounced. No suitable
    items yet? **Don't have these items? Create them** creates the two service
    items against an income account you pick and maps them in one step, linking
    to any that already exist rather than making duplicates.

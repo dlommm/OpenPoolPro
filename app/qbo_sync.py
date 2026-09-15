@@ -481,3 +481,105 @@ def apply_import(session, digest: str, decisions: dict, user_id=None) -> dict:
         session.commit()
 
     return {"created": created, "linked": linked, "skipped": skipped}
+
+
+# ---------- billing items ----------
+#
+# A billing line names the KIND of work it is, not a label. The kind is stable;
+# a label is not. That distinction matters more here than it normally would,
+# because OpenPoolPro never deletes a QuickBooks record -- an item created from
+# an edited job title would be permanent clutter in someone's chart of accounts.
+
+def item_key_for_visit() -> tuple[str, str]:
+    return "service", qbo_api.DEFAULT_ITEM_NAMES["service"]
+
+
+def item_key_for_chemical(chemical) -> tuple[str, str]:
+    return f"chemical:{chemical.id}", (chemical.name or "").strip()
+
+
+def item_key_for_job(job) -> tuple[str, str]:
+    """Template first, job type second. Never the free-text title."""
+    template = getattr(job, "job_template", None)
+    if job.job_template_id and template is not None and (template.title or "").strip():
+        return f"template:{job.job_template_id}", template.title.strip()
+    if job.job_type == "repair":
+        return "jobtype:repair", qbo_api.DEFAULT_ITEM_NAMES["repair"]
+    return "service", qbo_api.DEFAULT_ITEM_NAMES["service"]
+
+
+def mapped_item(session, item_key: str) -> str:
+    """The QuickBooks item id already recorded for this kind, or ''."""
+    row = session.scalar(
+        select(models.QBOItemMap).where(
+            models.QBOItemMap.scope == qbo_api.connection_scope(session),
+            models.QBOItemMap.item_key == item_key))
+    return row.qbo_item_id if row else ""
+
+
+def income_account(session) -> str:
+    account = models.get_setting(session, "qbo_income_account_id", "")
+    if not account:
+        raise SyncError(
+            "Choose the QuickBooks income account new billing items should post to, once, "
+            "in Settings → QuickBooks Online.")
+    return account
+
+
+def resolve_item(session, item_key: str, name: str) -> str:
+    """The QuickBooks item for a billing kind, creating it if it is missing.
+
+    Adopt before create, for the same reason everywhere else does: QuickBooks
+    enforces unique item names, and a name already in use is the operator's
+    existing item for this work, not an obstacle. An existing name of a type an
+    invoice line cannot safely reference is refused rather than mapped -- that
+    would surface as a billing mismatch on a real invoice instead of here.
+
+    Creating is additive and so needs no approval of its own; the operator
+    approves the whole draft, and the draft review lists what will be created.
+    """
+    existing = mapped_item(session, item_key)
+    if existing:
+        return existing
+    name = (name or "").strip()
+    if not name:
+        raise SyncError("A billing item needs a name before it can be created in QuickBooks.")
+    scope = qbo_api.connection_scope(session)
+    remote = qbo_api.find_item_by_name(session, name)
+    if remote is not None:
+        if remote["type"] not in qbo_api.SAFE_ITEM_TYPES:
+            raise SyncError(
+                f'"{name}" already exists in QuickBooks as a {remote["type"]} item, which an '
+                "invoice line cannot safely use. Rename it in QuickBooks, or rename the "
+                "template or chemical it came from.")
+        if not remote["active"]:
+            raise SyncError(
+                f'"{name}" exists in QuickBooks but is inactive. Reactivate it there, or '
+                "rename the template or chemical it came from.")
+        item_id = remote["id"]
+    else:
+        item_id = qbo_api.create_service_item(session, name, income_account(session))["id"]
+    session.add(models.QBOItemMap(scope=scope, item_key=item_key, qbo_item_id=item_id, name=name))
+    # Committed now, not with whatever transaction happens to be open. The item
+    # exists in QuickBooks from this point and cannot be removed; if approval
+    # fails a moment later, the mapping must still be here so the retry reuses
+    # it rather than re-deriving it.
+    session.commit()
+    return item_id
+
+
+def missing_items(session, lines) -> list[tuple[str, str]]:
+    """(key, name) for every billing kind in `lines` with no item yet.
+
+    Read-only: the draft review calls this so an approver sees what approving
+    would create in QuickBooks before they approve it.
+    """
+    out, seen = [], set()
+    for line in lines:
+        key, name = line.get("item_key", ""), line.get("item_name", "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        if not mapped_item(session, key):
+            out.append((key, name))
+    return out

@@ -1,7 +1,20 @@
 from builtins import property as builtin_property
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -310,6 +323,13 @@ class Job(Base):
     job_type: Mapped[str] = mapped_column(String(10), default="service")
     completed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     rule_id: Mapped[int | None] = mapped_column(ForeignKey("maintenance_rules.id"), nullable=True)
+    # Which template this job was raised from, when it was. Records the kind of
+    # work so billing can post it to a matching QuickBooks item; the free-text
+    # title cannot do that job, because an item created from a typo would be
+    # permanent (OpenPoolPro never deletes a QuickBooks record).
+    job_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("job_templates.id"), nullable=True)
+    job_template: Mapped["JobTemplate | None"] = relationship(foreign_keys=[job_template_id])
     hours: Mapped[float] = mapped_column(Float, default=0.0)
     paid_cash: Mapped[bool] = mapped_column(Boolean, default=False)
     property: Mapped[Property] = relationship()
@@ -803,6 +823,25 @@ class QBOTransactionMirror(Base):
     txn_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     raw: Mapped[dict] = mapped_column(JSON, default=dict)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class QBOItemMap(Base):
+    """One OpenPoolPro billing kind -> one QuickBooks item, per connection.
+
+    Replaces the pair of settings rows that could only ever name two items.
+    `item_key` is the stable kind ("service", "chemical:4", "template:2"),
+    never a free-text label, so a rename in OpenPoolPro cannot strand the
+    mapping or provoke a second permanent item in QuickBooks.
+    """
+
+    __tablename__ = "qbo_item_map"
+    __table_args__ = (UniqueConstraint("scope", "item_key", name="uq_qbo_item_map_scope_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scope: Mapped[str] = mapped_column(String(100), index=True)
+    item_key: Mapped[str] = mapped_column(String(80))
+    qbo_item_id: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class QBOBillingSource(Base):

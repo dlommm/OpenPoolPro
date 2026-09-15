@@ -152,11 +152,6 @@ def settings_page(request: Request, rules_created: str | None = None,
             "qbo_failed": _parse_count(request.query_params.get("qbo_failed")),
             "qbo_items_created": _parse_count(request.query_params.get("qbo_items_created")),
             "qbo_items_adopted": _parse_count(request.query_params.get("qbo_items_adopted")),
-            "qbo_pushed": _parse_count(request.query_params.get("qbo_pushed")),
-            "qbo_imported": _parse_count(request.query_params.get("qbo_imported")),
-            "qbo_linked": _parse_count(request.query_params.get("qbo_linked")),
-            "qbo_updated": _parse_count(request.query_params.get("qbo_updated")),
-            "qbo_held": _parse_count(request.query_params.get("qbo_held")),
         },
         "staff_without_2fa": session.scalars(select(models.User).where(
             models.User.active, models.User.totp_enabled.is_(False))).all(),
@@ -931,7 +926,8 @@ async def qbo_items_provision(request: Request, session: Session = Depends(get_s
     try:
         with qbo_api.connection_guard(session, scope):
             resolved = {}
-            for name, setting_key in wanted.values():
+            qbo_items = []
+            for kind, (name, setting_key) in wanted.items():
                 existing = qbo_api.find_item_by_name(session, name)
                 if existing and existing["type"] not in qbo_api.SAFE_ITEM_TYPES:
                     raise qbo_api.QboError(
@@ -947,6 +943,7 @@ async def qbo_items_provision(request: Request, session: Session = Depends(get_s
                 else:
                     item, created = qbo_api.create_service_item(session, name, account), created + 1
                 resolved[setting_key] = item["id"]
+                qbo_items.append((kind, item))
             # Both items are resolved remotely BEFORE any mapping is written.
             # create_service_item commits to freeze its request body, so a
             # mapping written between the two creates would be committed by the
@@ -956,6 +953,15 @@ async def qbo_items_provision(request: Request, session: Session = Depends(get_s
             for setting_key, item_id in resolved.items():
                 models.set_setting(session, setting_key, item_id)
             models.set_setting(session, "qbo_item_scope", scope)
+            # Remember the account so billing can create the items it needs
+            # later without sending the operator back here every month.
+            models.set_setting(session, "qbo_income_account_id", account)
+            for kind, item in qbo_items:
+                key = "chemical" if kind == "chemical" else "service"
+                if not session.scalar(select(models.QBOItemMap).where(
+                        models.QBOItemMap.scope == scope, models.QBOItemMap.item_key == key)):
+                    session.add(models.QBOItemMap(
+                        scope=scope, item_key=key, qbo_item_id=item["id"], name=item["name"]))
             models.audit(session, request.state.user.id, "settings.qbo",
                          detail=f"item provisioning: {created} created, {adopted} adopted")
             models.set_setting(session, "qbo_last_error", "")
@@ -968,10 +974,16 @@ async def qbo_items_provision(request: Request, session: Session = Depends(get_s
         status_code=303)
 
 
+# A form returns to the page it was submitted from. Landing somewhere else
+# loses the operator's place and their sense of what just happened -- only
+# navigate away when the destination IS the outcome (a created job, a login).
+CUSTOMER_REVIEW = "/settings/qbo/customers"
+
+
 def _sync_back(request, session, message: str) -> RedirectResponse:
     models.set_setting(session, "qbo_last_error", message[:300])
     session.commit()
-    return RedirectResponse("/settings?qbo_error=1#system", status_code=303)
+    return RedirectResponse(f"{CUSTOMER_REVIEW}?sync_error=1", status_code=303)
 
 
 @router.get("/settings/qbo/customers")
@@ -992,6 +1004,17 @@ def qbo_customer_review(request: Request, session: Session = Depends(get_session
     return templates.TemplateResponse(request, "settings/qbo_customers.html", {
         "push": push, "pull": pull, "company": models.get_setting(session, "qbo_company_name", ""),
         "environment": models.get_setting(session, "qbo_environment", "sandbox"),
+        # Counts only; the error TEXT comes from the stored setting so a crafted
+        # link cannot render attacker copy inside the admin UI.
+        "result": {
+            "pushed": _parse_count(request.query_params.get("pushed")),
+            "imported": _parse_count(request.query_params.get("imported")),
+            "linked": _parse_count(request.query_params.get("linked")),
+            "updated": _parse_count(request.query_params.get("updated")),
+            "held": _parse_count(request.query_params.get("held")),
+            "error": bool(request.query_params.get("sync_error")),
+        },
+        "last_error": models.get_setting(session, "qbo_last_error", ""),
     })
 
 
@@ -1014,8 +1037,8 @@ async def qbo_customer_push(request: Request, session: Session = Depends(get_ses
     models.set_setting(session, "qbo_last_error", "")
     session.commit()
     return RedirectResponse(
-        f"/settings?qbo_pushed={result['created']}&qbo_linked={result['linked']}"
-        f"&qbo_updated={result['updated']}&qbo_held={result['skipped']}#system",
+        f"{CUSTOMER_REVIEW}?pushed={result['created']}&linked={result['linked']}"
+        f"&updated={result['updated']}&held={result['skipped']}",
         status_code=303)
 
 
@@ -1039,8 +1062,8 @@ async def qbo_customer_import(request: Request, session: Session = Depends(get_s
     models.set_setting(session, "qbo_last_error", "")
     session.commit()
     return RedirectResponse(
-        f"/settings?qbo_imported={result['created']}&qbo_linked={result['linked']}"
-        f"&qbo_held={result['skipped']}#system", status_code=303)
+        f"{CUSTOMER_REVIEW}?imported={result['created']}&linked={result['linked']}"
+        f"&held={result['skipped']}", status_code=303)
 
 
 @router.post("/settings/sign-messages")

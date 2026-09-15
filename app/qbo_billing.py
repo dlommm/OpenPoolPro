@@ -18,8 +18,9 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
-from app import models, qbo, qbo_api, receivables, tax
+from app import models, qbo, qbo_api, qbo_sync, receivables, tax
 
 
 class BillingError(ValueError):
@@ -106,7 +107,8 @@ def _source_lines(session, customer, first, last):
         markup = 0
     lines, sources = [], []
 
-    def add(doc, key, description, amount, item_kind, tax_flag, service_date, **extra):
+    def add(doc, key, description, amount, item_kind, tax_flag, service_date,
+            item_key="", item_name="", **extra):
         if amount < 0:
             raise BillingError(f"{description}: negative charges need review before billing.")
         lines.append(
@@ -115,6 +117,11 @@ def _source_lines(session, customer, first, last):
                 description=description,
                 amount_cents=amount,
                 item_kind=item_kind,
+                # The billing KIND this line posts against, resolved to a
+                # QuickBooks item at approval. Frozen into the draft so a later
+                # rename cannot change what an approved invoice bills to.
+                item_key=item_key,
+                item_name=item_name,
                 taxable=tax.tax_enabled(session) and tax._flag(session, tax_flag),
                 tax_rate_ppm=tax.doc_tax_rate_ppm(session, doc),
                 service_date=service_date.isoformat(),
@@ -149,6 +156,7 @@ def _source_lines(session, customer, first, last):
             "service",
             "tax_weekly",
             visit.date,
+            *qbo_sync.item_key_for_visit(),
         )
         for vc in visit.chemicals:
             add(
@@ -159,6 +167,7 @@ def _source_lines(session, customer, first, last):
                 "chemical",
                 "tax_chems",
                 visit.date,
+                *qbo_sync.item_key_for_chemical(vc.chemical),
                 quantity=vc.amount,
                 unit=vc.chemical.unit,
                 visit_chemical_id=vc.id,
@@ -172,6 +181,7 @@ def _source_lines(session, customer, first, last):
             models.Job.completed_at >= datetime.combine(first - timedelta(days=1), time.min),
             models.Job.completed_at <= datetime.combine(last + timedelta(days=1), time.max),
         )
+        .options(selectinload(models.Job.job_template))
         .order_by(models.Job.completed_at, models.Job.id)
     ).all()
     for job in jobs:
@@ -188,6 +198,7 @@ def _source_lines(session, customer, first, last):
             "service",
             "tax_labor",
             local_date,
+            *qbo_sync.item_key_for_job(job),
             hours=job.hours,
         )
     return lines, sources
@@ -295,23 +306,72 @@ def edit_draft(session, draft_id, revision, lines, email, due_date, hold=False, 
     return row
 
 
+def _line_item(session, line):
+    """The QuickBooks item this line bills to, created if it does not exist yet.
+
+    Drafts prepared before billing carried item keys have none; they keep the
+    original two-item behaviour rather than failing, so work already in flight
+    on a running instance bills exactly as it was prepared.
+    """
+    key, name = line.get("item_key", ""), line.get("item_name", "")
+    if not key:
+        legacy = "qbo_item_chem_id" if line["item_kind"] == "chemical" else "qbo_item_service_id"
+        item = models.get_setting(session, legacy, "")
+        if not item:
+            raise BillingError("Map every service and chemical item before approval.")
+        return item
+    return qbo_sync.resolve_item(session, key, name)
+
+
+def _ensure_customer(session, customer):
+    """Link or create the customer in QuickBooks so billing needs no setup trip.
+
+    Creating is additive, so it needs no approval of its own. A NEAR match is a
+    different matter -- it may be the same person under a different spelling,
+    and a wrong guess makes a duplicate nobody can delete -- so that stops here
+    and sends the operator to the customer review, which exists to decide it.
+    """
+    scope = _scope(session)
+    if customer.qbo_customer_id and customer.qbo_customer_scope == scope:
+        return
+    if customer.qbo_customer_id and customer.qbo_customer_scope != scope:
+        raise BillingError(
+            f"{customer.name} carries a customer id from a different QuickBooks company. "
+            "Resolve it in Settings → QuickBooks Online → Review customer sync.")
+    display = (customer.qb_display_name or customer.name or "").strip()
+    remote = qbo_api.query_customers(session)
+    exact = next((r for r in remote
+                  if qbo_sync._norm(r.get("DisplayName")) == qbo_sync._norm(display)), None)
+    if exact is not None:
+        customer.qbo_customer_id = str(exact.get("Id"))
+        customer.qbo_customer_scope = scope
+        session.flush()
+        return
+    if qbo_sync._best_near_match(display, customer.email, remote) is not None:
+        raise BillingError(
+            f"{customer.name} looks like an existing QuickBooks customer under another name. "
+            "Confirm the match in Settings → QuickBooks Online → Review customer sync "
+            "so billing does not create a duplicate.")
+    customer.qbo_customer_id = qbo_api.create_customer(session, customer)
+    session.flush()
+
+
 def _payload(session, row):
     scope = _scope(session)
     customer = row.customer
-    if row.scope != scope or customer.qbo_customer_scope != scope or not customer.qbo_customer_id:
-        raise BillingError("Sync this customer with the currently connected QuickBooks company first.")
-    if models.get_setting(session, "qbo_item_scope", "") != scope:
-        raise BillingError("Save service and chemical item mappings for this QuickBooks company first.")
+    if row.scope != scope:
+        raise BillingError("This draft belongs to a different QuickBooks connection.")
+    _ensure_customer(session, customer)
     if "@" not in row.email or "\n" in row.email or "\r" in row.email:
         raise BillingError("A customer billing email is required.")
     if row.total_cents <= 0:
         raise BillingError("Only positive invoices can be approved.")
     lines = []
     for line in row.lines:
-        key = "qbo_item_chem_id" if line["item_kind"] == "chemical" else "qbo_item_service_id"
-        item = models.get_setting(session, key, "")
-        if not item:
-            raise BillingError("Map every service and chemical item before approval.")
+        try:
+            item = _line_item(session, line)
+        except qbo_sync.SyncError as exc:
+            raise BillingError(str(exc)) from exc
         lines.append(
             {
                 "DetailType": "SalesItemLineDetail",

@@ -198,6 +198,12 @@ def create_job(request: Request, mode: str = Form("existing"),
     j = models.Job(property_id=pid, title=title, description=description,
                    priority=priority, labor_cents=labor_cents, hours=hrs)
     j.job_type, j.assigned_tech_id = job_type, assigned_id
+    # Remember which template raised this job. The title is free text and can be
+    # edited afterwards; the template is the stable statement of what kind of
+    # work this is, which is what QuickBooks billing posts against.
+    chosen = parse_int_tolerant(template_id)
+    if chosen is not None and session.get(models.JobTemplate, chosen) is not None:
+        j.job_template_id = chosen
     parsed_scheduled = parse_date_tolerant(scheduled_date)
     if parsed_scheduled is not None:
         j.scheduled_date = parsed_scheduled

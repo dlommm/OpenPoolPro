@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app import config, models, qbo_api, qbo_billing
+from app import config, models, qbo_api, qbo_billing, qbo_sync
 from app.db import get_or_404, get_session
 from app.deps import current_user, require_admin, require_perm
 from app.fileio import atomic_write
@@ -145,6 +145,17 @@ def prepare(request: Request, ym: str = Form(...), session: Session = Depends(ge
     )
 
 
+def _will_create_items(session, draft):
+    """Billing kinds on this draft with no QuickBooks item yet. Read-only."""
+    if draft.status not in ("draft", "held") or not qbo_api.connected(session):
+        return []
+    try:
+        return qbo_sync.missing_items(session, draft.lines)
+    except (qbo_sync.SyncError, qbo_api.QboError):
+        # A review page must still render when QuickBooks is unreachable.
+        return []
+
+
 @router.get("/billing/drafts/{draft_id}", dependencies=[Depends(billing_user)])
 def detail(request: Request, draft_id: int, session: Session = Depends(get_session)):
     draft = get_or_404(session, models.QBODraft, draft_id)
@@ -160,6 +171,10 @@ def detail(request: Request, draft_id: int, session: Session = Depends(get_sessi
             "review_hash": qbo_billing.invoice_review_hash(mirror.raw) if mirror else "",
             "draft": draft,
             "editable": draft.status in ("draft", "held", "approved"),
+            # What approving would create in QuickBooks. Creating an item is
+            # additive and needs no approval of its own, but an approver should
+            # never be surprised by a record appearing in their books.
+            "will_create_items": _will_create_items(session, draft),
             "connected": qbo_api.connected(session),
             "enabled": models.get_setting(session, "qbo_billing_enabled", "") == "1",
             "mirror": session.scalar(
