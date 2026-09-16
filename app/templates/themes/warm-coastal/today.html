@@ -79,7 +79,7 @@
   <div class="stop stop-missed p-3">
     <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="block font-semibold">
       {{ m.property.customer.name }} — {{ m.property.label }}</a>
-    <div class="mt-0.5 font-data text-xs text-mist">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+    <div class="mt-0.5 text-xs text-mist">{{ m.date | short_date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
     <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
       <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>
     </form>

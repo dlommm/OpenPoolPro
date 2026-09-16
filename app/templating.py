@@ -9,7 +9,7 @@ main) now import from here; nothing in this module imports the web layer.
 import contextvars
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 
 import jinja2
 from fastapi.templating import Jinja2Templates
@@ -128,7 +128,31 @@ def _short_date(value) -> str:
 
 
 templates.env.filters["month_name"] = _month_name
+def _stamp(value) -> str:
+    """An ISO datetime string as a person reads it: 'Sep 16, 2026 1:00 AM'.
+
+    For the operational timestamps where the time of day carries meaning --
+    when a backup ran, when a token expires -- as opposed to short_date, which
+    is for calendar dates where it does not.
+    """
+    if not value:
+        return "Never recorded"
+    try:
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+        if value.tzinfo is None:
+            # Naive values are stored UTC, as localdt has always assumed.
+            # Formatting one without converting would print UTC as if it were
+            # the operator's wall clock -- a four-hour lie about when a thing
+            # happened. Aware values already carry their offset.
+            value = timefmt.to_local(value)
+        return value.strftime("%b %-d, %Y %-I:%M %p")
+    except (ValueError, TypeError, AttributeError):
+        return str(value)
+
+
 templates.env.filters["short_date"] = _short_date
+templates.env.filters["stamp"] = _stamp
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
 templates.env.globals["has_logo_check"] = lambda: os.path.isfile(

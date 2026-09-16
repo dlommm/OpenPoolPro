@@ -89,11 +89,11 @@
         <td class="p-3 text-mist">{{ c.pool.property.address or c.pool.property.label }} · {{ c.pool.label }}</td>
         <td class="p-3"><span class="tag {{ 'tag-safety' if c.status == 'void' }}">{{ c.status }}</span></td>
         {% if show_money %}<td class="money p-3 text-right">{{ r.value | dollars }}</td>{% endif %}
-        <td class="p-3 font-data text-mist">
+        <td class="p-3 text-mist">
           {% if c.status == "sent" and r.days_out is not none %}sent {{ r.days_out }}d ago
-          {% elif c.status == "signed" %}signed {{ c.signed_at | local_date }}
-          {% elif c.status == "approved" %}approved {{ c.approved_at | local_date }}
-          {% else %}created {{ c.created_at | local_date }}{% endif %}
+          {% elif c.status == "signed" %}signed {{ c.signed_at | local_date | short_date }}
+          {% elif c.status == "approved" %}approved {{ c.approved_at | local_date | short_date }}
+          {% else %}created {{ c.created_at | local_date | short_date }}{% endif %}
         </td>
       </tr>
       {% endfor %}

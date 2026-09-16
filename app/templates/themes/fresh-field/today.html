@@ -85,7 +85,7 @@
       </div>
       <div class="meta">
         <span class="statustag">MISSED</span>
-        <span class="text-xs text-mist font-data">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</span>
+        <span class="text-xs text-mist">{{ m.date | short_date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</span>
       </div>
       <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
         <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>

@@ -8,3 +8,7 @@ app/static/app.css
 
 # pytest-cov local artifact
 .coverage
+
+# Live-instance credentials for manual testing. Never committed.
+tests/prod.test
+*.test

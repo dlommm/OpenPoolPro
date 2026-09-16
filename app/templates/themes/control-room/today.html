@@ -63,7 +63,7 @@
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="17" r="1.1" fill="currentColor"/></svg>
     <div class="min-w-0">
       <div class="a-t">{{ m.property.customer.name }} — {{ m.property.label }}</div>
-      <div class="a-s">{{ m.date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
+      <div class="a-s">{{ m.date | short_date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
     </div>
     <div class="cr-alert-act">
       <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="btn-secondary" style="min-height:44px">Re-dispatch</a>

@@ -10,7 +10,7 @@
     <span>Outstanding <strong>{{ inv.balance_cents | dollars }}</strong></span>
   </div>
   <p class="mt-2 text-sm">Total {{ inv.total_cents | dollars }}{% if inv.allocation_known %} · Paid {{ inv.paid_cents | dollars }} · Credits {{ inv.credit_cents | dollars }}{% else %} · Payment and credit allocation unavailable{% endif %} · Due {{ inv.due_date | short_date }}</p>
-  <p class="text-xs text-mist">Updated {{ inv.last_synced_at | local_date }}{% if inv.last_synced_at < qbo_stale_before %} · Balance may be stale; last update was over 30 minutes ago.{% endif %}</p>
+  <p class="text-xs text-mist">Updated {{ inv.last_synced_at | local_date | short_date }}{% if inv.last_synced_at < qbo_stale_before %} · Balance may be stale; last update was over 30 minutes ago.{% endif %}</p>
   <div class="mt-2 flex flex-wrap gap-2">
     {% set payment_url = safe_payment_link(inv.payment_link) %}
     {% if payment_url and inv.balance_cents > 0 and inv.status not in ('void', 'deleted', 'unavailable') %}<a class="btn-primary" href="{{ payment_url }}" target="_blank" rel="noopener noreferrer">View and pay invoice</a>{% endif %}

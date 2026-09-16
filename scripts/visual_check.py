@@ -9,6 +9,7 @@ Requires: pip install playwright && playwright install chromium
 Exit code 0 = all screens styled; non-zero = a screen failed a check.
 """
 import os
+import re
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -30,8 +31,12 @@ THEME = os.environ.get("THEME", "warm-coastal")
 EXPECTED = {
     "warm-coastal": {"body_font": "system-ui", "display_font": "system-ui",
                      "body_bg": "rgb(243, 237, 227)"},   # tile #F3EDE3
+    # Light-mode tokens, for the same reason fresh-field uses them: with no
+    # `mode` in localStorage no data-mode attribute is set, so the theme
+    # follows prefers-color-scheme, and Playwright's default is light. The
+    # dark tile (#0E141B) is what a device in dark mode gets.
     "control-room": {"body_font": "Helvetica Neue", "display_font": "Helvetica Neue",
-                     "body_bg": "rgb(14, 20, 27)"},       # tile #0E141B
+                     "body_bg": "rgb(234, 239, 244)"},    # tile #EAEFF4 (light)
     "fresh-field": {"body_font": "system-ui", "display_font": "system-ui",
                     "body_bg": "rgb(247, 250, 252)"},     # tile #F7FAFC (light)
 }
@@ -81,6 +86,22 @@ CHECKS = """
 }
 """
 
+# A bare YYYY-MM-DD in body text is a date that was never formatted for a
+# person. /audit is exempt: it is a technical log where a precise, sortable
+# timestamp is the point.
+ISO_EXEMPT = {"/audit"}
+_ISO = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
+
+
+def _raw_iso_dates(page, path):
+    if path in ISO_EXEMPT:
+        return []
+    found = sorted(set(_ISO.findall(page.inner_text("body"))))
+    if not found:
+        return []
+    return [f"raw ISO date shown to the user: {', '.join(found[:3])}"]
+
+
 failures = []
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -95,6 +116,7 @@ with sync_playwright() as p:
         page.goto(f"{BASE}{path}")
         page.wait_for_timeout(600)
         problems = page.evaluate(CHECKS, EXPECT)
+        problems += _raw_iso_dates(page, path)
         if problems:
             failures.append((path, problems))
         if SHOTS:

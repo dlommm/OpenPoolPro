@@ -152,10 +152,13 @@ def test_timeline_renders_date_only_and_localized_instant_times(client, engine):
         s.commit()
 
     detail = client.get(f"/customers/{cid}").text
-    assert "2026-01-15" in detail
-    assert "2026-01-15 00:00" not in detail  # date-only: no fabricated midnight
-    assert "2026-07-20 09:30" in detail      # localized, not raw UTC
-    assert "2026-07-20 13:30" not in detail  # raw naive-UTC must not leak through
+    # Rendered for a person ("Jan 15, 2026"), never as bare ISO. Each guarantee
+    # below is the same one this test has always made, in the new format.
+    assert "Jan 15, 2026" in detail
+    assert "2026-01-15" not in detail           # no bare ISO anywhere
+    assert "Jan 15, 2026 12:00 AM" not in detail  # date-only: no fabricated midnight
+    assert "Jul 20, 2026 9:30 AM" in detail     # localized, not raw UTC
+    assert "Jul 20, 2026 1:30 PM" not in detail  # raw naive-UTC must not leak through
 
 
 def test_reactivate_customer(client, engine):

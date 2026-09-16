@@ -288,7 +288,7 @@
                 {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
               </div>
               {% if e.detail %}<div class="tt" style="font-weight:400;color:var(--color-mist)">{{ e.detail }}</div>{% endif %}
-              <div class="dd">{{ (e.at | local_date) if e.date_only else (e.at | localdt) }}</div>
+              <div class="dd">{{ (e.at | local_date | short_date) if e.date_only else (e.at | stamp) }}</div>
             </div>
           </div>
           {% endfor %}
