@@ -52,6 +52,31 @@ CHECKS = """
   const h1 = document.querySelector("h1");
   if (h1 && !getComputedStyle(h1).fontFamily.includes(exp.display_font))
     probs.push("h1 not display font (want " + exp.display_font + ")");
+
+  // Control geometry. Both of these shipped once and neither is visible in a
+  // 200 or in a font/colour assertion: a button with no horizontal padding
+  // clipped its own label ("Generate for 2026-09"), and a button class that
+  // resolves to `flex` rather than `inline-flex` turns every <a> wearing it
+  // into a full-width bar across the page.
+  const label = (el) => (el.textContent || "").trim().slice(0, 30);
+  for (const el of document.querySelectorAll(".btn-primary, .btn-secondary, .btn-danger")) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    if (parseFloat(cs.paddingLeft) < 8 || parseFloat(cs.paddingRight) < 8)
+      probs.push("button has no horizontal padding: " + label(el));
+    if (el.scrollWidth > el.clientWidth + 1)
+      probs.push("button label is clipped: " + label(el));
+    if (el.matches("a") && r.width > 0.9 * document.documentElement.clientWidth
+        && cs.display === "flex")
+      probs.push("link-as-button stretches full width (use inline-flex): " + label(el));
+  }
+  // Nothing should push the page itself sideways; wide tables scroll in their
+  // own overflow-x container instead.
+  const de = document.documentElement;
+  if (de.scrollWidth > de.clientWidth + 1)
+    probs.push("page scrolls horizontally by " + (de.scrollWidth - de.clientWidth) + "px");
   return probs;
 }
 """

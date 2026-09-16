@@ -49,7 +49,7 @@
         <span>
           <a href="/invoices/{{ inv.id }}/pdf" class="text-pool">{{ inv.number }}</a>
           <span class="text-mist">
-            · due {{ inv.due_date or "—" }}
+            · due {{ inv.due_date | short_date }}
             {% if od %}<span class="text-safety">({{ od }}d late)</span>{% endif %}
             {% if inv.amount_paid_cents %}· {{ inv.amount_paid_cents | dollars }} paid{% endif %}
           </span>
@@ -62,12 +62,12 @@
               class="flex flex-wrap items-center gap-1">
           <input type="hidden" name="back" value="ar">
           <div class="money-in"><span>$</span>
-            <input class="field w-24 font-data" inputmode="decimal" name="amount_dollars"
+            <input class="field w-28 font-data" inputmode="decimal" name="amount_dollars"
                    value="{{ '%.2f'|format(inv.balance_cents / 100) }}"
                    aria-label="Payment amount for {{ inv.number }}"></div>
           <input class="field w-32" type="date" name="received_on" value="{{ today }}"
                  aria-label="Date received">
-          <select name="method" class="field w-24" aria-label="Payment method">
+          <select name="method" class="field w-28" aria-label="Payment method">
             {% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
           </select>
           <input class="field w-28" name="reference" placeholder="Check #"

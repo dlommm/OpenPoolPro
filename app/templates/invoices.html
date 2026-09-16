@@ -18,19 +18,19 @@
   <div class="mt-3 flex flex-wrap gap-1.5">
     <a href="/invoices?ym={{ ym }}" class="tag {{ 'border-pool bg-shallow' if not status }}">All</a>
     {% for s in statuses %}
-    <a href="/invoices?ym={{ ym }}&status={{ s }}" class="tag {{ 'border-pool bg-shallow' if status == s }}">{{ s }}</a>
+    <a href="/invoices?ym={{ ym }}&status={{ s }}" class="tag {{ 'border-pool bg-shallow' if status == s }}">{{ s | capitalize }}</a>
     {% endfor %}
   </div>
 
   <div class="mt-3 flex flex-wrap gap-2">
     <form method="post" action="/invoices/generate">
       <input type="hidden" name="ym" value="{{ ym }}">
-      <button class="btn-primary">Generate for {{ ym }}</button>
+      <button class="btn-primary">Generate for {{ ym | month_name }}</button>
     </form>
     <a href="/invoices/batch.zip?ym={{ ym }}" class="btn-secondary">Download batch (.zip)</a>
     {% if can_email %}
     <form method="post" action="/invoices/email-batch"
-          data-confirm="Email every draft invoice for {{ ym }} to its customer?">
+          data-confirm="Email every draft invoice for {{ ym | month_name }} to its customer?">
       <input type="hidden" name="ym" value="{{ ym }}">
       <button class="btn-secondary">Email all drafts</button>
     </form>
@@ -66,44 +66,45 @@
       <th class="py-1.5 pr-3 font-medium">Due</th>
       <th class="py-1.5 pr-3 font-medium">Status</th>
       <th class="py-1.5 pr-3 font-medium">Generated</th>
-      <th class="py-1.5 font-medium">&nbsp;</th>
     </tr>
   </thead>
   <tbody class="font-data">
     {% for row in rows %}
     {% set inv = row.invoice %}
-    <tr class="border-b border-seam/60">
+    <tr>
       <td class="py-1.5 pr-3 whitespace-nowrap">
         {{ inv.number }}
         {% if row.pdf_missing %}<span class="tag tag-safety ml-1">pdf missing</span>{% endif %}
       </td>
       <td class="py-1.5 pr-3 font-body">{{ inv.customer.name }}</td>
-      <td class="py-1.5 pr-3 whitespace-nowrap">{{ "%04d-%02d" | format(inv.period_year, inv.period_month) }}</td>
+      <td class="py-1.5 pr-3 whitespace-nowrap font-body">{{ "%04d-%02d" | format(inv.period_year, inv.period_month) | month_name }}</td>
       <td class="py-1.5 pr-3 money">{{ inv.total_cents | dollars }}</td>
       <td class="py-1.5 pr-3 money">{{ inv.amount_paid_cents | dollars }}</td>
       <td class="py-1.5 pr-3 money {{ 'text-safety' if inv.days_overdue(today) }}">
         {{ inv.balance_cents | dollars }}</td>
       <td class="py-1.5 pr-3 whitespace-nowrap">
-        {{ inv.due_date or "—" }}
+        <span class="font-body">{{ inv.due_date | short_date }}</span>
         {% set od = inv.days_overdue(today) %}
         {% if od %}<span class="tag tag-safety ml-1">{{ od }}d late</span>{% endif %}
       </td>
       <td class="py-1.5 pr-3">
-        <span class="tag {{ 'tag-safety' if inv.payment_state in ('void', 'unpaid') }}">{{ inv.payment_state }}</span>
-        {% if inv.status == "sent" %}<span class="tag ml-1">sent</span>{% endif %}
+        <span class="tag {{ 'tag-safety' if inv.payment_state in ('void', 'unpaid') }}">{{ inv.payment_state | capitalize }}</span>
+        {% if inv.status == "sent" %}<span class="tag ml-1">Sent</span>{% endif %}
       </td>
-      <td class="py-1.5 pr-3 whitespace-nowrap">{{ inv.generated_at | local_date }}</td>
-      <td class="py-1.5">
+      <td class="py-1.5 pr-3 whitespace-nowrap font-body">{{ inv.generated_at | local_date | short_date }}</td>
+    </tr>
+    <tr class="border-b border-seam/60">
+      <td colspan="9" class="pb-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <a href="/invoices/{{ inv.id }}/pdf" class="btn-secondary">PDF</a>
           {% if inv.status != "void" and inv.balance_cents > 0 %}
           <form method="post" action="/invoices/{{ inv.id }}/payments"
-                class="flex flex-wrap items-center gap-1">
+                class="flex flex-nowrap items-center gap-1">
             <div class="money-in"><span>$</span>
-              <input class="field w-24 font-data" inputmode="decimal" name="amount_dollars"
+              <input class="field w-28 font-data" inputmode="decimal" name="amount_dollars"
                      value="{{ '%.2f'|format(inv.balance_cents / 100) }}"
                      aria-label="Payment amount for {{ inv.number }}"></div>
-            <select name="method" class="field w-24" aria-label="Payment method">
+            <select name="method" class="field w-28" aria-label="Payment method">
               {% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
             </select>
             <button class="btn-primary">Record payment</button>
@@ -136,7 +137,7 @@
           {% for p in inv.payments | sort(attribute="received_on") %}
           <div class="flex items-center gap-1.5">
             <span class="money">{{ p.amount_cents | dollars }}</span>
-            <span>{{ p.received_on }} · {{ p.method }}{{ " · " ~ p.reference if p.reference }}</span>
+            <span>{{ p.received_on | short_date }} · {{ p.method }}{{ " · " ~ p.reference if p.reference }}</span>
             <form method="post" action="/payments/{{ p.id }}/delete"
                   data-confirm="Remove this {{ p.amount_cents | dollars }} payment?">
               <button class="text-safety" aria-label="Remove payment">&times;</button>
@@ -148,7 +149,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="10" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
+    <tr><td colspan="9" class="py-6 text-center text-mist">No invoices for this period.</td></tr>
     {% endfor %}
   </tbody>
 </table>

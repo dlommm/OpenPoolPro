@@ -21,7 +21,7 @@
 </div>
 <div class="card mb-4 p-4">
 <form method="get" action="/billing" class="flex flex-wrap items-end gap-2"><div><label for="ym" class="field-label">Billing month</label><input class="field" id="ym" type="month" name="ym" value="{{ ym }}"></div><button class="btn-secondary">View</button></form>
-<form class="mt-3" method="post" action="/billing/prepare"><input type="hidden" name="ym" value="{{ ym }}"><button class="btn-primary">Prepare billing drafts for {{ ym }}</button></form>
+<form class="mt-3" method="post" action="/billing/prepare"><input type="hidden" name="ym" value="{{ ym }}"><button class="btn-primary">Prepare billing drafts for {{ ym | month_name }}</button></form>
 <p class="mt-2 text-sm text-mist">Preparing drafts requires a connected QuickBooks company but does not contact customers. Periods already reserved for billing are skipped. Drafts are snapshots; review charges before approval.</p>
 </div>
 {% if mapping_customers %}<details class="card mb-4 p-4"><summary class="cursor-pointer font-semibold">Verify existing QuickBooks customer matches</summary><p class="my-2 text-sm">Existing customer IDs must be verified against the connected company before billing. New customers can be synced from Settings.</p><div class="flex flex-wrap gap-2">{% for c in mapping_customers %}<a class="btn-secondary" href="/billing/customers/{{ c.id }}/link">{{ c.name }}</a>{% endfor %}</div></details>{% endif %}

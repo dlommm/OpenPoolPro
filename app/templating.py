@@ -9,6 +9,7 @@ main) now import from here; nothing in this module imports the web layer.
 import contextvars
 import logging
 import os
+from datetime import date
 
 import jinja2
 from fastapi.templating import Jinja2Templates
@@ -98,6 +99,36 @@ templates.env.filters["localdt"] = lambda dt: (
 # this keeps the winning (date-object) semantics but tolerates None, which
 # to_local_date guarded against and local_date did not.
 templates.env.filters["local_date"] = lambda dt: timefmt.local_date(dt) if dt else ""
+def _month_name(ym) -> str:
+    """'2026-09' -> 'September 2026'. A billing period is shown to a person the
+    way the month picker beside it already shows it; the ISO form is what the
+    form posts, not what a button should say."""
+    try:
+        year, month = str(ym).split("-")[:2]
+        return date(int(year), int(month), 1).strftime("%B %Y")
+    except (ValueError, TypeError):
+        return str(ym or "")
+
+
+def _short_date(value) -> str:
+    """A calendar date as a person reads it: 'Sep 30, 2026'.
+
+    Bare ISO belongs in form values and sort keys, not in a table cell a human
+    scans. Anything unparseable is passed through rather than blanked, so a
+    surprising value stays visible instead of silently vanishing.
+    """
+    if not value:
+        return "—"
+    try:
+        if isinstance(value, str):
+            value = date.fromisoformat(value[:10])
+        return value.strftime("%b %-d, %Y")
+    except (ValueError, TypeError, AttributeError):
+        return str(value)
+
+
+templates.env.filters["month_name"] = _month_name
+templates.env.filters["short_date"] = _short_date
 templates.env.filters["minutes_display"] = lambda m: (
     "" if m is None else (f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d}"))
 templates.env.globals["has_logo_check"] = lambda: os.path.isfile(

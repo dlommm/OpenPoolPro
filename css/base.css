@@ -96,16 +96,46 @@
     background-color: var(--color-surface);
   }
 
+  /* Buttons are inline-flex, not flex, and always carry horizontal padding.
+   *
+   * Two bugs lived in the previous rules. Without px-*, a primary button's
+   * label ran to its own edges and clipped ("Generate for 2026-09"). And
+   * `flex` makes an <a> block-level, so every link wearing a button class
+   * stretched across the page as a bare full-width bar.
+   *
+   * inline-flex only changes block contexts: a flex container blockifies its
+   * children regardless, so buttons already sitting in a flex row are
+   * untouched. w-full keeps the mobile-first full-width primary action; it is
+   * released at sm and up, where a content-width button is what belongs. */
   .btn-primary {
-    @apply flex min-h-12 w-full items-center justify-center rounded-xl bg-pool font-display text-lg font-bold uppercase tracking-wider text-white transition active:scale-[0.98] active:bg-pooldeep;
+    @apply inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-pool px-5 font-display text-lg font-bold uppercase tracking-wider text-white transition active:scale-[0.98] active:bg-pooldeep sm:w-auto;
   }
   .btn-secondary {
-    @apply flex min-h-11 items-center justify-center rounded-xl border border-seam px-4 font-medium text-ink transition active:scale-[0.98] active:bg-shallow;
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-seam px-4 font-medium text-ink transition active:scale-[0.98] active:bg-shallow;
     background-color: var(--color-surface);
   }
   .btn-danger {
-    @apply flex min-h-11 w-full items-center justify-center rounded-xl border border-safety/40 font-medium text-safety transition active:scale-[0.98];
+    @apply inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-safety/40 px-5 font-medium text-safety transition active:scale-[0.98] sm:w-auto;
     background-color: var(--color-surface);
+  }
+
+  /* Buttons inside a data table are read, not thumbed. At touch size they
+   * wrap into a vertical stack and a one-line invoice becomes a 250px-tall
+   * block. Compact them from sm up, where a pointer is doing the clicking;
+   * below that they keep the full 44px target and the table scrolls. */
+  @media (min-width: 640px) {
+    td .btn-primary, td .btn-secondary, td .btn-danger {
+      min-height: 2rem;
+      padding-inline: 0.7rem;
+      font-size: 13px;
+    }
+    td .btn-primary {
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+    td .field {
+      min-height: 2rem;
+    }
   }
 
   .field {

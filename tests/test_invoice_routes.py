@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import config, invoicing, models, qbo, seeds
+from app.templating import _short_date
 from app.timefmt import to_local_date
 from tests.test_analytics import _fix
 
@@ -286,7 +287,8 @@ def test_register_shows_generated_column(client, engine):
     _generate(client)
     with Session(engine) as s:
         inv = s.scalars(select(models.Invoice)).first()
-        expected = to_local_date(inv.generated_at)
+        # Rendered the way a person reads a date, not as bare ISO.
+        expected = _short_date(to_local_date(inv.generated_at))
 
     r = client.get(f"/invoices?ym={YM}")
     assert r.status_code == 200
