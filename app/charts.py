@@ -47,14 +47,26 @@ def bar_chart(items, *, kind="money", height=220, max_bars=12, empty="No data"):
     if not items or all((v or 0) <= 0 for _, v in items):
         return _empty(empty, height)
     vals = [max(0, v or 0) for _, v in items]
-    vmax = max(vals) or 1
+    # Headroom, so the tallest bar never touches the ceiling. Scaled to the bare
+    # maximum, a series of equal values renders every bar as a full-height slab
+    # with its value label jammed against the top edge -- which reads as a
+    # rendering fault rather than as data.
+    vmax = (max(vals) or 1) * 1.12
     pad_l, pad_r, pad_t, pad_b = 8, 8, 22, 34
     w = 760
     plot_w = w - pad_l - pad_r
     plot_h = height - pad_t - pad_b
     n = len(items)
     gap = 10
-    bw = max(6, (plot_w - gap * (n - 1)) / n)
+    # Cap the bar width and centre the group. Left to fill the plot, a series of
+    # two or three points renders each bar as a ~360px slab, which reads as a
+    # block of colour rather than as a magnitude to compare.
+    bw = max(6, min(96.0, (plot_w - gap * (n - 1)) / n))
+    group_w = bw * n + gap * (n - 1)
+    # Offset the BARS only. Shifting pad_l itself would drag the baseline's left
+    # end in with them while its right end stayed put, leaving the axis visibly
+    # off-centre under a centred group.
+    bars_x = pad_l + max(0, (plot_w - group_w) / 2)
     parts = [f'<svg viewBox="0 0 {w} {height}" class="w-full" role="img" '
              f'preserveAspectRatio="xMidYMid meet" style="max-height:{height}px">']
     # baseline
@@ -63,7 +75,7 @@ def bar_chart(items, *, kind="money", height=220, max_bars=12, empty="No data"):
                  f'stroke="var(--color-seam)" stroke-width="1"/>')
     for i, (label, v) in enumerate(items):
         v = max(0, v or 0)
-        x = pad_l + i * (bw + gap)
+        x = bars_x + i * (bw + gap)
         bh = (v / vmax) * plot_h if vmax else 0
         y = y0 - bh
         parts.append(

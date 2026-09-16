@@ -109,7 +109,7 @@
   <tbody class="font-data">
     {% for r in rows %}
     <tr class="border-b border-seam/60">
-      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date | short_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
       <td class="py-1.5 pr-3">{{ r.labor_cents | dollars }}</td>
       <td class="py-1.5 pr-3 text-mist">{{ r.chem_cost_cents | dollars }}</td>
       <td class="py-1.5 pr-3">{{ r.chem_billable_cents | dollars }}</td>
@@ -243,7 +243,7 @@
   <tbody class="font-data">
     {% for r in rows %}
     <tr class="border-b border-seam/60">
-      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">{{ r.week_start_date | short_date }} <span class="text-mist">W{{ r.iso_week }}</span></td>
       <td class="py-1.5 pr-3">{{ r.done }}</td>
       <td class="py-1.5 pr-3">{{ r.skipped }}</td>
       <td class="py-1.5">{{ r.avg_minutes if r.avg_minutes is not none else "—" }}</td>

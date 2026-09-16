@@ -18,8 +18,13 @@ BASE = os.environ.get("APP_URL", "http://localhost:8000")
 PASSWORD = os.environ.get("APP_PASSWORD", "coastline-demo")
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
-SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/money", "/settings",
-           "/account", "/audit", "/inventory", "/routes/balance"]
+# Every page a staff user can reach. The list was previously 11 screens, and
+# /analytics -- which renders a bare ISO week-start date -- sat in the gap.
+# A check is only worth what it covers.
+SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/quotes", "/contracts",
+           "/money", "/invoices", "/ar", "/analytics", "/inventory", "/settings",
+           "/billing", "/audit", "/account", "/routes/balance", "/operations",
+           "/users", "/followups", "/water-alerts"]
 
 # Per-theme expected computed styles. THEME selects which theme is active
 # (set it via the Settings control or `set_setting` before running); the map
