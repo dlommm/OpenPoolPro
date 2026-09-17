@@ -14,6 +14,7 @@
 
 <a href="/today/print" class="btn-secondary hidden lg:inline-flex no-print mb-3">Print route sheet</a>
 
+{% if total or missed %}
 <div class="gauge mb-1" role="progressbar" aria-valuenow="{{ done }}" aria-valuemax="{{ total }}"
      aria-label="Route progress" style="--ticks: {{ total if total else 1 }}">
   <div class="gauge-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
@@ -21,6 +22,7 @@
   <div class="gauge-label">{{ done }} of {{ total }} done</div>
 </div>
 <p class="mb-5 font-data text-[11px] uppercase tracking-[0.18em] text-mist">Route level</p>
+{% endif %}
 
 {% if techs %}
 <div class="mb-4 flex flex-wrap gap-1.5">

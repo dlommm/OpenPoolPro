@@ -30,6 +30,16 @@ def test_warm_coastal_hero_screens_render_with_signature(client, engine):
     with Session(engine) as s:
         cid = s.scalars(select(models.Customer)).one().id
 
+    # A route with a stop on it, so the progress hero has something to show.
+    # It is hidden on an empty route by design -- a gauge reading 0 of 0 above
+    # a "no stops today" card says nothing twice -- so without this the
+    # assertion below would measure that empty state instead of the hero.
+    # Seeded after the lookup above, which requires exactly one customer.
+    from datetime import date
+
+    from tests.test_today import seed_route
+    seed_route(engine, date.today())
+
     # route -> a bespoke wc- marker class unique to that hero template.
     markers = {
         "/": "wc-tide",                  # Route: rising tide-line gauge

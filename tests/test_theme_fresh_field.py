@@ -29,6 +29,16 @@ def test_fresh_field_theme_renders_all_hero_screens(client, engine):
     _activate_fresh_field(engine)
     cid = _make_customer(client, engine)
 
+    # A route with a stop on it, so the progress hero has something to show.
+    # It is hidden on an empty route by design -- a ring reading 0/0 above a
+    # "no stops today" card says nothing twice -- so without this the
+    # assertion below would measure that empty state instead of the hero.
+    # Seeded after _make_customer, which requires exactly one customer.
+    from datetime import date
+
+    from tests.test_today import seed_route
+    seed_route(engine, date.today())
+
     cases = [
         ("/", "ff-progress-card"),          # Route: water-fill ring
         ("/dashboard", "ff-hero-rev"),      # Dashboard: gradient revenue hero

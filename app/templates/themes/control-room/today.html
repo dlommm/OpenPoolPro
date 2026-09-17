@@ -38,6 +38,7 @@
 {% set skipped_count = stops | selectattr('status', 'equalto', 'skipped') | list | length %}
 {% set next_count = 1 if due_count > 0 else 0 %}
 
+{% if total or missed %}
 <div class="cr-opsrow">
   <div class="cr-gauge" role="img" aria-label="Route progress: {{ done }} of {{ total }} stops done{% if skipped_count %}, {{ skipped_count }} skipped{% endif %}">
     <div class="cr-gauge-ring" style="background: {{ ring }}"></div>
@@ -53,6 +54,7 @@
     <div class="cr-lg"><i style="background:var(--color-safety)"></i><span class="k">Skipped</span><span class="v" style="color:var(--color-safety)">{{ skipped_count }}</span></div>
   </div>
 </div>
+{% endif %}
 
 {# ---- missed re-dispatch alerts (prior-day unresolved stops) ---- #}
 {% if missed %}

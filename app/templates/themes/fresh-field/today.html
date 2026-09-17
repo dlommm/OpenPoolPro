@@ -31,6 +31,7 @@
 <!-- SIGNATURE 1: water-fill progress ring (fills like a pool) -->
 {% set pct = (done / total) if total else 0 %}
 {% set circ = 326.726 %}
+{% if total or missed %}
 <div class="ff-progress-card mb-1"
      role="progressbar" aria-valuenow="{{ done }}" aria-valuemin="0" aria-valuemax="{{ total }}"
      aria-label="Route progress">
@@ -56,6 +57,7 @@
   </div>
 </div>
 <p class="mb-5 mt-1 ff-eyebrow">Route level</p>
+{% endif %}
 
 {% if techs %}
 <div class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter by tech">

@@ -25,7 +25,12 @@
 
 <a href="/today/print" class="btn-secondary hidden lg:inline-flex no-print mb-3">Print route sheet</a>
 
-{# ---- Rising tide-line gauge (signature): water fills to done/total ---- #}
+{# ---- Rising tide-line gauge (signature): water fills to done/total ----
+   Only when there is a route to measure. At 0 of 0 the gauge is an empty
+   basin with its numeral stranded against pale sand above the scrim line,
+   sitting directly on top of the "no stops today" card that already says the
+   same thing more clearly. #}
+{% if total or missed %}
 <div class="wc-tide mb-1" role="img" aria-label="Route progress: {{ done }} of {{ total }} done">
   <span class="wc-tide-sun"></span>
   <div class="wc-tide-water" style="height: {{ (done / total * 100) if total else 0 }}%">
@@ -55,6 +60,7 @@
   <span class="wc-lg"><i style="background:var(--wc-upcoming)"></i>Upcoming</span>
   <span class="wc-lg"><i style="background:var(--color-safety)"></i>Missed</span>
 </div>
+{% endif %}
 
 {# ---- Tech filter chips (only for view_all_routes; techs never see them) ---- #}
 {% if techs %}
