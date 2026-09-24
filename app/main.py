@@ -380,6 +380,26 @@ def create_app(engine=None) -> FastAPI:
             return _RR("/login", status_code=303)
         if exc.status_code == 403:
             return templates.TemplateResponse(request, "403.html", {}, status_code=403)
+        # Anything else raised from a staff page used to reach the browser as a
+        # raw {"detail": "..."} blob filling the whole window -- the same
+        # failure the 422 handler above already fixes, and just as opaque:
+        # "Create portal link" answered a legitimate setup problem with JSON.
+        # The detail text these routes raise is written for an operator, so
+        # show it. htmx and non-HTML callers keep the structured default.
+        accept = request.headers.get("accept", "")
+        if (not request.headers.get("hx-request") and "text/html" in accept
+                and 400 <= exc.status_code < 600):
+            headings = {400: "That didn't work", 404: "Not found",
+                        409: "Something changed", 429: "Too many requests"}
+            detail = exc.detail if isinstance(exc.detail, str) else ""
+            return templates.TemplateResponse(
+                request, "error.html",
+                {"status": exc.status_code,
+                 "heading": headings.get(exc.status_code,
+                                         "Something went wrong" if exc.status_code >= 500
+                                         else "That didn't work"),
+                 "detail": detail or "The app couldn't complete that request."},
+                status_code=exc.status_code)
         from fastapi.exception_handlers import http_exception_handler
         return await http_exception_handler(request, exc)
 

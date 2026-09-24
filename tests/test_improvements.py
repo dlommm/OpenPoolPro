@@ -300,3 +300,64 @@ def test_portal_staff_controls_are_admin_only(client, tech_client, engine):
     assert tech.get(f'/customers/{cid}/portal').status_code == 403
     assert tech.post(f'/customers/{cid}/portal/issue').status_code == 403
     assert tech.post(f'/customers/{cid}/portal/revoke').status_code == 403
+
+
+# ---------- error pages ----------
+
+def test_a_failed_staff_action_renders_a_page_not_a_json_blob(client, engine):
+    """Regression: "Create portal link" without an HTTPS base URL answered a
+    legitimate setup problem with {"detail": "..."} filling the whole window.
+    The 422 handler already treated browser posts this way; 4xx/5xx did not.
+    """
+    cid, _ = seed(engine)
+    r = client.post(f"/customers/{cid}/portal/issue", data={"days": 7},
+                    headers={"Accept": "text/html"})
+    assert r.status_code == 400
+    assert not r.text.lstrip().startswith("{"), "raw JSON reached the browser"
+    assert "<html" in r.text
+    # The detail these routes raise is written for an operator -- show it.
+    assert "HTTPS Public base URL" in r.text
+    assert "Go back" in r.text
+
+
+def test_non_browser_callers_still_get_structured_errors(client, engine):
+    """htmx and API clients parse the body; a rendered page would break them."""
+    cid, _ = seed(engine)
+    for headers in ({"Accept": "application/json"}, {"Accept": "text/html", "HX-Request": "true"}):
+        r = client.post(f"/customers/{cid}/portal/issue", data={"days": 7}, headers=headers)
+        assert r.status_code == 400
+        assert r.json()["detail"]
+
+
+# ---------- the customer's own page ----------
+
+def test_portal_shows_dates_the_way_a_customer_reads_them(client, engine):
+    """The portal is the one page a customer ever sees. A bare ISO date is a
+    developer's format, and every visit heading carried one."""
+    from datetime import date
+
+    cid, pid = seed(engine)
+    with Session(engine) as s:
+        s.add(models.Visit(property_id=pid, date=date(2026, 9, 17), status="done",
+                           fc=3.4, ph=7.6))
+        s.commit()
+    body = client.get(f"/portal/{token_for(engine, cid)}").text
+    assert "Sep 17, 2026" in body
+    assert not re.search(r"\b20\d{2}-\d{2}-\d{2}\b", body), "bare ISO date on the portal"
+
+
+def test_portal_hides_the_quickbooks_section_when_there_is_nothing_in_it(client, engine):
+    """A company that does not bill through QuickBooks should not show every
+    customer a second, permanently empty invoice heading."""
+    cid, _ = seed(engine)
+    body = client.get(f"/portal/{token_for(engine, cid)}").text
+    assert "QuickBooks invoices" not in body
+    assert body.count("Invoices") >= 1  # the local section still has its heading
+
+
+def test_an_invalid_portal_link_is_a_finished_page(client, engine):
+    r = client.get("/portal/not-a-real-token")
+    assert r.status_code == 404
+    assert "Customer portal" in r.text
+    # No route back into the app: a customer holding a dead link has no account.
+    assert 'href="/"' not in r.text

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="flex min-h-[60vh] flex-col items-center justify-center text-center">
+  <p class="page-eyebrow">{{ status }}</p>
+  <h1 class="page-title mt-1">{{ heading }}</h1>
+  {# The detail is written by the route that raised it -- an operator-facing
+     sentence such as "Set an HTTPS Public base URL in Settings before creating
+     a portal link." Autoescaped, and never assembled from user input. #}
+  <p class="mt-3 max-w-md text-sm text-mist">{{ detail }}</p>
+  <div class="mt-6 flex flex-wrap items-center justify-center gap-2">
+    <button type="button" data-back class="btn-secondary px-6">Go back</button>
+    <a href="/" class="btn-secondary px-6">Back to today</a>
+  </div>
+</div>
+{% endblock %}

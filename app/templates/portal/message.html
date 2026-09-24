@@ -1,1 +1,12 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head><body class="bg-surface text-ink"><main class="mx-auto max-w-lg p-6"><h1 class="mb-4 font-display text-2xl font-bold">Customer portal</h1><p>{{ message }}</p></main></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head>
+<body class="bg-surface text-ink">
+{# Centred and finished, like the staff 403/422 pages. Offers no navigation:
+   a customer holding a dead link has no account to return to, and a "go home"
+   button would only land them on a staff login. #}
+<main class="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center p-6 text-center">
+  {% if company %}<p class="text-sm text-mist">{{ company }}</p>{% endif %}
+  <h1 class="mt-1 font-display text-3xl font-bold">Customer portal</h1>
+  <p class="mt-3 text-mist">{{ message }}</p>
+</main>
+</body></html>
