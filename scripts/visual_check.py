@@ -7,6 +7,11 @@ broken (naked-HTML pages). Run against a live instance:
 
 Requires: pip install playwright && playwright install chromium
 Exit code 0 = all screens styled; non-zero = a screen failed a check.
+
+Point this at a disposable instance (CI, a dev box) -- not production. To
+reach the screens only a real session can reach, it writes: it creates a
+"Visual Tech" staff member, and it issues then revokes a portal link for
+customer 1, restoring the Public base URL it borrowed to do so.
 """
 import os
 import re
@@ -21,10 +26,15 @@ SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 # Every page a staff user can reach. The list was previously 11 screens, and
 # /analytics -- which renders a bare ISO week-start date -- sat in the gap.
 # A check is only worth what it covers.
-SCREENS = ["/", "/week", "/customers", "/customers/1", "/jobs", "/quotes", "/contracts",
-           "/money", "/invoices", "/ar", "/analytics", "/inventory", "/settings",
-           "/billing", "/audit", "/account", "/routes/balance", "/operations",
-           "/users", "/followups", "/water-alerts"]
+SCREENS = ["/", "/dashboard", "/week", "/customers", "/customers/1", "/jobs", "/quotes",
+           "/contracts", "/money", "/invoices", "/ar", "/analytics", "/inventory", "/settings",
+           "/billing", "/audit", "/account", "/routes/balance", "/routes/plan", "/operations",
+           "/users", "/followups", "/water-alerts", "/search", "/today/print",
+           "/customers/1/portal",
+           # Form pages. They are screens like any other -- a form that renders
+           # its own page can clip a label or stretch a button just as a list can.
+           "/customers/new", "/customers/import", "/jobs/new", "/quotes/new",
+           "/contracts/new", "/contracts/renew", "/users/new"]
 
 # Per-theme expected computed styles. THEME selects which theme is active
 # (set it via the Settings control or `set_setting` before running); the map
@@ -46,6 +56,13 @@ EXPECTED = {
                     "body_bg": "rgb(247, 250, 252)"},     # tile #F7FAFC (light)
 }
 EXPECT = EXPECTED.get(THEME, EXPECTED["warm-coastal"])
+STAFF = {**EXPECT, "chrome": "staff"}
+CUSTOMER = {**EXPECT, "chrome": "none"}
+
+# /settings is seven panels behind CSS radio tabs, and only the first one is
+# rendered by a plain visit -- six screens' worth of controls sat outside this
+# check while looking covered by the "/settings" entry above.
+SETTINGS_TABS = ["business", "pricing", "chemistry", "service", "crew", "system", "contract"]
 
 # Computed-style assertions: proves app.css APPLIED, not merely returned 200.
 # Expected values are passed in per theme (see EXPECT above).
@@ -56,10 +73,19 @@ CHECKS = """
   if (!body.fontFamily.includes(exp.body_font)) probs.push("body font not " + exp.body_font + ": " + body.fontFamily);
   if (body.backgroundColor !== exp.body_bg)
     probs.push("bg not tile (want " + exp.body_bg + "): " + body.backgroundColor);
+  // exp.chrome says which shell this page is supposed to wear. Staff pages
+  // ride the sticky topbar; the customer portal has no account behind it and
+  // must never render staff navigation -- a link into /money it cannot open
+  // would be the giveaway that the wrong base template got picked up.
   const topbar = document.querySelector("#topbar");
-  if (!topbar) probs.push("topbar missing");
-  else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
+  if (exp.chrome === "staff") {
+    if (!topbar) probs.push("topbar missing");
+    else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
+  } else if (topbar || document.querySelector("#sidebar")) {
+    probs.push("customer page renders staff navigation");
+  }
   const h1 = document.querySelector("h1");
+  if (!h1 && exp.chrome === "none") probs.push("customer page has no heading");
   if (h1 && !getComputedStyle(h1).fontFamily.includes(exp.display_font))
     probs.push("h1 not display font (want " + exp.display_font + ")");
 
@@ -120,7 +146,7 @@ with sync_playwright() as p:
     for path in SCREENS:
         page.goto(f"{BASE}{path}")
         page.wait_for_timeout(600)
-        problems = page.evaluate(CHECKS, EXPECT)
+        problems = page.evaluate(CHECKS, STAFF)
         problems += _raw_iso_dates(page, path)
         if problems:
             failures.append((path, problems))
@@ -148,10 +174,92 @@ with sync_playwright() as p:
     for forbidden in ['href="/money"', 'href="/settings"']:
         if forbidden in content:
             failures.append(("/ (tech)", [f"tech nav leaks {forbidden}"]))
-    probs = tpage.evaluate(CHECKS, EXPECT)
+    probs = tpage.evaluate(CHECKS, STAFF)
     if probs:
         failures.append(("/ (tech)", probs))
+
+    # The permission wall is a screen too: a tech who taps through to /money
+    # should land on the styled 403, not a raw JSON blob.
+    resp = tpage.goto(f"{BASE}/money")
+    if resp.status != 403:
+        failures.append(("/money (tech)", [f"admin-only page answered {resp.status}, not 403"]))
+    probs = tpage.evaluate(CHECKS, STAFF)
+    if probs:
+        failures.append(("/money (tech 403)", probs))
+    if SHOTS:
+        tpage.screenshot(path=f"{SHOTS}/403.png", full_page=True)
     tctx.close()
+
+    # Every settings panel, not just the one the radio tabs open on.
+    page.goto(f"{BASE}/settings")
+    for tab in SETTINGS_TABS:
+        page.click(f"label.tab-label[for=settab-{tab}]")
+        page.wait_for_timeout(250)
+        problems = page.evaluate(CHECKS, STAFF)
+        problems += _raw_iso_dates(page, f"/settings#{tab}")
+        if problems:
+            failures.append((f"/settings#{tab}", problems))
+        if SHOTS:
+            page.screenshot(path=f"{SHOTS}/settings_{tab}.png", full_page=True)
+
+    # The staff error page. Until v1.24.5 these routes answered a browser with
+    # raw JSON filling the window, and nothing here would have noticed.
+    resp = page.goto(f"{BASE}/customers/99999999")
+    if resp.status != 404:
+        failures.append(("/customers/<missing>", [f"answered {resp.status}, not 404"]))
+    problems = page.evaluate(CHECKS, STAFF)
+    if not page.query_selector(".page-eyebrow"):
+        problems.append("404 rendered without the error page shell (raw JSON?)")
+    if problems:
+        failures.append(("/customers/<missing> (404)", problems))
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/404.png", full_page=True)
+
+    # --- Customer portal --------------------------------------------------
+    # The one surface a customer ever sees, and nothing checked it: this
+    # script signs in as staff, and the portal opens on a customer token.
+    # Issue one through the staff UI, then open it in a context holding no
+    # session at all -- which is how a customer arrives.
+    page.goto(f"{BASE}/settings")
+    page.click("label.tab-label[for=settab-system]")
+    saved_public_base = page.input_value("input[name=public_base_url]")
+    # Issuing refuses a base URL that isn't HTTPS. The value only shapes the
+    # link text; the token is the part that matters, and it is opened on BASE.
+    page.fill("input[name=public_base_url]", "https://visual-check.example")
+    page.click("form[action='/settings/public-url'] button")
+    page.wait_for_load_state("networkidle")
+    page.goto(f"{BASE}/customers/1/portal")
+    page.click("form[action$='/portal/issue'] button")
+    page.wait_for_load_state("networkidle")
+    token = page.input_value("#portal-link").rsplit("/", 1)[-1]
+
+    cctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    cpage = cctx.new_page()
+    # A live link, then a dead one: the customer holding an expired or mistyped
+    # link gets a finished page too, and it is the page nobody ever looks at.
+    for name, path in [("portal", f"/portal/{token}"),
+                       ("portal_invalid", "/portal/" + "z" * 48)]:
+        resp = cpage.goto(f"{BASE}{path}")
+        cpage.wait_for_timeout(600)
+        probs = cpage.evaluate(CHECKS, CUSTOMER)
+        probs += _raw_iso_dates(cpage, path)
+        if name == "portal_invalid" and resp.status != 404:
+            probs.append(f"dead portal link answered {resp.status}, not 404")
+        if probs:
+            failures.append((f"/{name}", probs))
+        if SHOTS:
+            cpage.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+    cctx.close()
+
+    # Put the instance back the way it was found.
+    page.goto(f"{BASE}/customers/1/portal")
+    page.click("form[action$='/portal/revoke'] button")
+    page.wait_for_load_state("networkidle")
+    page.goto(f"{BASE}/settings")
+    page.click("label.tab-label[for=settab-system]")
+    page.fill("input[name=public_base_url]", saved_public_base)
+    page.click("form[action='/settings/public-url'] button")
+    page.wait_for_load_state("networkidle")
 
     # Tablet-portrait pass (iPad): topbar still in charge, md: width tier applied.
     tabctx = browser.new_context(viewport={"width": 834, "height": 1194}, device_scale_factor=2)
@@ -215,4 +323,5 @@ if failures:
     for path, problems in failures:
         print(f"FAIL {path}: {'; '.join(problems)}")
     sys.exit(1)
-print(f"OK — {len(SCREENS)} screens styled correctly for theme '{THEME}'")
+print(f"OK — {len(SCREENS) + len(SETTINGS_TABS) + 4} screens styled correctly "
+      f"for theme '{THEME}' (staff, error pages and the customer portal)")

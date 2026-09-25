@@ -463,8 +463,16 @@ See [setup, permissions, and behavior](docs/application-improvements.md).
 ## Visual smoke check
 
 Proves every screen renders with the design system applied (catches stale
-service-worker CSS):
+service-worker CSS). Covers the staff screens and their form pages, all seven
+Settings panels, the 403/404 error pages, and the customer portal — the last
+opened on a freshly issued token in a browser context with no session, which
+is how a customer arrives:
 
     APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py
+
+Point it at a disposable instance: to reach those screens it creates a
+"Visual Tech" staff member and issues then revokes a portal link for customer 1,
+restoring the Public base URL it borrows to do so. Pass `THEME=control-room`
+(with that theme active in Settings) to check a non-default theme.
 
 Requires `pip install playwright && playwright install chromium`.
