@@ -1,6 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head>
-<body class="bg-surface text-ink">
+{% set active_theme = (request.state.active_theme if request else none) or 'warm-coastal' %}
+<html lang="en" data-theme="{{ active_theme }}"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head>
+<body>
 {# Centred and finished, like the staff 403/422 pages. Offers no navigation:
    a customer holding a dead link has no account to return to, and a "go home"
    button would only land them on a staff login. #}

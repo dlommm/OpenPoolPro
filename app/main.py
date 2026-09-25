@@ -196,6 +196,18 @@ def create_app(engine=None) -> FastAPI:
         # resolve. Authenticated requests below override with the saved theme.
         request.state.active_theme = DEFAULT_THEME
         active_theme_var.set(DEFAULT_THEME)
+        # The customer-facing pages are exempt from auth but they are still
+        # this company's storefront: a company on control-room was emailing
+        # portal and e-sign links that opened in warm-coastal, a skin the
+        # customer had never seen. Resolve the saved theme for those two
+        # prefixes only -- /static/ must not pay a DB read per asset.
+        if path.startswith(("/sign/", "/portal/")):
+            from sqlalchemy.orm import Session as _S
+            with _S(app.state.engine) as s:
+                theme = models.get_setting(s, "active_theme", DEFAULT_THEME)
+            if theme in ALLOWED_THEMES:
+                request.state.active_theme = theme
+                active_theme_var.set(theme)
         if not exempt:
             uid = request.session.get("user_id")
             # Missing "epoch" (cookie issued before this field existed) is
