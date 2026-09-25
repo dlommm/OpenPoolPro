@@ -466,7 +466,9 @@ Proves every screen renders with the design system applied (catches stale
 service-worker CSS). Covers the staff screens and their form pages, all seven
 Settings panels, the 403/404 error pages, and the customer portal — the last
 opened on a freshly issued token in a browser context with no session, which
-is how a customer arrives:
+is how a customer arrives. Every staff screen and the portal are rendered
+twice, once on a light device and once on a dark one, and each render is held
+to a 7:1 body-text contrast ratio:
 
     APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py
 

@@ -339,3 +339,65 @@ def test_customer_csv_export_neutralizes_enum_looking_columns(client, engine):
     assert csv_safe("+1") == "'+1"
     assert csv_safe("@SUM(1)") == "'@SUM(1)"
     assert csv_safe("weekly") == "weekly"
+
+
+# --- The boot guard -------------------------------------------------------
+# validate_secrets() is the reason a deployment that never set SECRET_KEY
+# cannot start. SECRET_KEY signs the session cookie and the pre-auth 2FA
+# token, so a shipped default is a full auth bypass -- and the guard had no
+# test at all.
+
+
+def _validate(monkeypatch, *, secret="0" * 64, password="a-real-owner-password", cookie_secure=True):
+    monkeypatch.setattr(config, "SECRET_KEY", secret)
+    monkeypatch.setattr(config, "APP_PASSWORD", password)
+    monkeypatch.setattr(config, "COOKIE_SECURE", cookie_secure)
+    return config.validate_secrets()
+
+
+def test_real_secrets_boot(monkeypatch):
+    assert _validate(monkeypatch) is None
+
+
+@pytest.mark.parametrize("placeholder", sorted(config._INSECURE_SECRET_KEYS))
+def test_every_placeholder_secret_key_refuses_to_boot(monkeypatch, placeholder):
+    with pytest.raises(RuntimeError) as exc:
+        _validate(monkeypatch, secret=placeholder)
+    assert "SECRET_KEY" in str(exc.value)
+
+
+@pytest.mark.parametrize("placeholder", sorted(config._INSECURE_APP_PASSWORDS))
+def test_every_placeholder_app_password_refuses_to_boot(monkeypatch, placeholder):
+    with pytest.raises(RuntimeError) as exc:
+        _validate(monkeypatch, password=placeholder)
+    assert "APP_PASSWORD" in str(exc.value)
+
+
+def test_both_placeholders_are_reported_together(monkeypatch):
+    """An operator who set neither should be told both, not sent round twice."""
+    with pytest.raises(RuntimeError) as exc:
+        _validate(monkeypatch, secret="", password="")
+    message = str(exc.value)
+    assert "SECRET_KEY" in message and "APP_PASSWORD" in message
+    assert "openssl rand -hex 32" in message
+
+
+def test_the_modules_own_defaults_are_treated_as_placeholders():
+    """config.py falls back to literals when the env vars are unset. If one of
+    those fallbacks ever drifts out of the refuse-list, an unconfigured box
+    boots with a known signing key and nothing says a word."""
+    import inspect
+    source = inspect.getsource(config)
+    for name, blocked in (("SECRET_KEY", config._INSECURE_SECRET_KEYS),
+                          ("APP_PASSWORD", config._INSECURE_APP_PASSWORDS)):
+        line = next(ln for ln in source.splitlines() if ln.startswith(f"{name} = os.environ.get("))
+        fallback = line.split('", "')[1].rstrip('")')
+        assert fallback in blocked, f"{name} default {fallback!r} is not in the refuse-list"
+
+
+def test_plain_http_cookies_warn_but_still_boot(monkeypatch, caplog):
+    """A LAN box on plain HTTP is a legitimate self-hosted choice, so this
+    warns rather than refusing -- but it must not pass in silence."""
+    with caplog.at_level("WARNING", logger="app.config"):
+        assert _validate(monkeypatch, cookie_secure=False) is None
+    assert any("COOKIE_SECURE=0" in r.message for r in caplog.records)

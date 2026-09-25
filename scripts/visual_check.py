@@ -17,6 +17,7 @@ import os
 import re
 import sys
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("APP_URL", "http://localhost:8000")
@@ -43,21 +44,25 @@ SCREENS = ["/", "/dashboard", "/week", "/customers", "/customers/1", "/jobs", "/
 # is filled in. fresh-field values are its light-mode tokens (Playwright's
 # default color scheme is light).
 THEME = os.environ.get("THEME", "warm-coastal")
+# body_bg is the light tile, dark_bg the dark one: with no `mode` in
+# localStorage no data-mode attribute is set, so the theme follows
+# prefers-color-scheme, and the dark pass below drives that directly.
 EXPECTED = {
     "warm-coastal": {"body_font": "system-ui", "display_font": "system-ui",
-                     "body_bg": "rgb(243, 237, 227)"},   # tile #F3EDE3
-    # Light-mode tokens, for the same reason fresh-field uses them: with no
-    # `mode` in localStorage no data-mode attribute is set, so the theme
-    # follows prefers-color-scheme, and Playwright's default is light. The
-    # dark tile (#0E141B) is what a device in dark mode gets.
+                     "body_bg": "rgb(243, 237, 227)",     # tile #F3EDE3
+                     "dark_bg": "rgb(18, 32, 31)"},       # tile #12201F
     "control-room": {"body_font": "Helvetica Neue", "display_font": "Helvetica Neue",
-                     "body_bg": "rgb(234, 239, 244)"},    # tile #EAEFF4 (light)
+                     "body_bg": "rgb(234, 239, 244)",     # tile #EAEFF4
+                     "dark_bg": "rgb(14, 20, 27)"},       # tile #0E141B
     "fresh-field": {"body_font": "system-ui", "display_font": "system-ui",
-                    "body_bg": "rgb(247, 250, 252)"},     # tile #F7FAFC (light)
+                    "body_bg": "rgb(247, 250, 252)",      # tile #F7FAFC
+                    "dark_bg": "rgb(11, 18, 32)"},        # tile #0B1220
 }
 EXPECT = EXPECTED.get(THEME, EXPECTED["warm-coastal"])
 STAFF = {**EXPECT, "chrome": "staff"}
 CUSTOMER = {**EXPECT, "chrome": "none"}
+DARK = {**STAFF, "body_bg": EXPECT["dark_bg"]}
+DARK_CUSTOMER = {**CUSTOMER, "body_bg": EXPECT["dark_bg"]}
 
 # /settings is seven panels behind CSS radio tabs, and only the first one is
 # rendered by a plain visit -- six screens' worth of controls sat outside this
@@ -66,7 +71,7 @@ SETTINGS_TABS = ["business", "pricing", "chemistry", "service", "crew", "system"
 
 # Computed-style assertions: proves app.css APPLIED, not merely returned 200.
 # Expected values are passed in per theme (see EXPECT above).
-CHECKS = """
+CHECKS = r"""
 (exp) => {
   const body = getComputedStyle(document.body);
   const probs = [];
@@ -113,6 +118,21 @@ CHECKS = """
   const de = document.documentElement;
   if (de.scrollWidth > de.clientWidth + 1)
     probs.push("page scrolls horizontally by " + (de.scrollWidth - de.clientWidth) + "px");
+
+  // Readability, not taste. A palette that was only half filled in for a mode
+  // renders as pale-grey-on-white, which passes every check above.
+  const chans = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+  const lum = ([r, g, b]) => {
+    const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const l1 = lum(chans(body.color)), l2 = lum(chans(body.backgroundColor));
+  const contrast = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  // Every theme currently lands at 11.9:1 light and 14.7:1 dark, so the bar is
+  // WCAG AAA (7:1) rather than the AA minimum: it still leaves real headroom,
+  // and a palette that drops below it has regressed, not merely been restyled.
+  if (contrast < 7)
+    probs.push("body text contrast is " + contrast.toFixed(1) + ":1 (want 7:1)");
   return probs;
 }
 """
@@ -133,18 +153,30 @@ def _raw_iso_dates(page, path):
     return [f"raw ISO date shown to the user: {', '.join(found[:3])}"]
 
 
+def visit(page, url):
+    """goto with one retry. Chromium occasionally aborts a navigation while the
+    service worker is installing (net::ERR_ABORTED) -- a flake, not a defect,
+    and a check that cries wolf stops being read."""
+    try:
+        return page.goto(url)
+    except PlaywrightError:
+        page.wait_for_timeout(500)
+        return page.goto(url)
+
+
 failures = []
+checked = 0
 with sync_playwright() as p:
     browser = p.chromium.launch()
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
     page = ctx.new_page()
-    page.goto(f"{BASE}/login")
+    visit(page, f"{BASE}/login")
     page.fill("input[name=username]", "owner")
     page.fill("input[name=password]", PASSWORD)
     page.click("button")
     page.wait_for_load_state("networkidle")
     for path in SCREENS:
-        page.goto(f"{BASE}{path}")
+        visit(page, f"{BASE}{path}")
         page.wait_for_timeout(600)
         problems = page.evaluate(CHECKS, STAFF)
         problems += _raw_iso_dates(page, path)
@@ -153,23 +185,24 @@ with sync_playwright() as p:
         if SHOTS:
             name = path.strip("/").replace("/", "_") or "today"
             page.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+        checked += 1
 
     # Tech pass
-    page.goto(f"{BASE}/users")
+    visit(page, f"{BASE}/users")
     if "visual-tech" not in page.content():
-        page.goto(f"{BASE}/users/new")
+        visit(page, f"{BASE}/users/new")
         page.fill("input[name=name]", "Visual Tech")
         page.fill("input[name=username]", "visual-tech")
         page.fill("input[name=password]", os.environ.get("VC_TECH_PASSWORD", "visual-pass-1"))
         page.click("button.btn-primary")
     tctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
     tpage = tctx.new_page()
-    tpage.goto(f"{BASE}/login")
+    visit(tpage, f"{BASE}/login")
     tpage.fill("input[name=username]", "visual-tech")
     tpage.fill("input[name=password]", os.environ.get("VC_TECH_PASSWORD", "visual-pass-1"))
     tpage.click("button")
     tpage.wait_for_load_state("networkidle")
-    tpage.goto(f"{BASE}/")
+    visit(tpage, f"{BASE}/")
     content = tpage.content()
     for forbidden in ['href="/money"', 'href="/settings"']:
         if forbidden in content:
@@ -177,10 +210,11 @@ with sync_playwright() as p:
     probs = tpage.evaluate(CHECKS, STAFF)
     if probs:
         failures.append(("/ (tech)", probs))
+    checked += 1
 
     # The permission wall is a screen too: a tech who taps through to /money
     # should land on the styled 403, not a raw JSON blob.
-    resp = tpage.goto(f"{BASE}/money")
+    resp = visit(tpage, f"{BASE}/money")
     if resp.status != 403:
         failures.append(("/money (tech)", [f"admin-only page answered {resp.status}, not 403"]))
     probs = tpage.evaluate(CHECKS, STAFF)
@@ -188,10 +222,11 @@ with sync_playwright() as p:
         failures.append(("/money (tech 403)", probs))
     if SHOTS:
         tpage.screenshot(path=f"{SHOTS}/403.png", full_page=True)
+    checked += 1
     tctx.close()
 
     # Every settings panel, not just the one the radio tabs open on.
-    page.goto(f"{BASE}/settings")
+    visit(page, f"{BASE}/settings")
     for tab in SETTINGS_TABS:
         page.click(f"label.tab-label[for=settab-{tab}]")
         page.wait_for_timeout(250)
@@ -201,10 +236,11 @@ with sync_playwright() as p:
             failures.append((f"/settings#{tab}", problems))
         if SHOTS:
             page.screenshot(path=f"{SHOTS}/settings_{tab}.png", full_page=True)
+        checked += 1
 
     # The staff error page. Until v1.24.5 these routes answered a browser with
     # raw JSON filling the window, and nothing here would have noticed.
-    resp = page.goto(f"{BASE}/customers/99999999")
+    resp = visit(page, f"{BASE}/customers/99999999")
     if resp.status != 404:
         failures.append(("/customers/<missing>", [f"answered {resp.status}, not 404"]))
     problems = page.evaluate(CHECKS, STAFF)
@@ -214,13 +250,14 @@ with sync_playwright() as p:
         failures.append(("/customers/<missing> (404)", problems))
     if SHOTS:
         page.screenshot(path=f"{SHOTS}/404.png", full_page=True)
+    checked += 1
 
     # --- Customer portal --------------------------------------------------
     # The one surface a customer ever sees, and nothing checked it: this
     # script signs in as staff, and the portal opens on a customer token.
     # Issue one through the staff UI, then open it in a context holding no
     # session at all -- which is how a customer arrives.
-    page.goto(f"{BASE}/settings")
+    visit(page, f"{BASE}/settings")
     page.click("label.tab-label[for=settab-system]")
     saved_public_base = page.input_value("input[name=public_base_url]")
     # Issuing refuses a base URL that isn't HTTPS. The value only shapes the
@@ -228,7 +265,7 @@ with sync_playwright() as p:
     page.fill("input[name=public_base_url]", "https://visual-check.example")
     page.click("form[action='/settings/public-url'] button")
     page.wait_for_load_state("networkidle")
-    page.goto(f"{BASE}/customers/1/portal")
+    visit(page, f"{BASE}/customers/1/portal")
     page.click("form[action$='/portal/issue'] button")
     page.wait_for_load_state("networkidle")
     token = page.input_value("#portal-link").rsplit("/", 1)[-1]
@@ -239,7 +276,7 @@ with sync_playwright() as p:
     # link gets a finished page too, and it is the page nobody ever looks at.
     for name, path in [("portal", f"/portal/{token}"),
                        ("portal_invalid", "/portal/" + "z" * 48)]:
-        resp = cpage.goto(f"{BASE}{path}")
+        resp = visit(cpage, f"{BASE}{path}")
         cpage.wait_for_timeout(600)
         probs = cpage.evaluate(CHECKS, CUSTOMER)
         probs += _raw_iso_dates(cpage, path)
@@ -249,28 +286,69 @@ with sync_playwright() as p:
             failures.append((f"/{name}", probs))
         if SHOTS:
             cpage.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+        checked += 1
     cctx.close()
 
+    # The same portal at night, on the customer's own phone. This has to run
+    # while the link is still live, hence here rather than with the dark staff
+    # pass below.
+    dkcctx = browser.new_context(viewport={"width": 390, "height": 844},
+                                 device_scale_factor=2, color_scheme="dark")
+    dkcpage = dkcctx.new_page()
+    visit(dkcpage, f"{BASE}/portal/{token}")
+    dkcpage.wait_for_timeout(400)
+    problems = dkcpage.evaluate(CHECKS, DARK_CUSTOMER)
+    if problems:
+        failures.append(("/portal (dark)", problems))
+    if SHOTS:
+        dkcpage.screenshot(path=f"{SHOTS}/portal_dark.png", full_page=True)
+    checked += 1
+    dkcctx.close()
+
     # Put the instance back the way it was found.
-    page.goto(f"{BASE}/customers/1/portal")
+    visit(page, f"{BASE}/customers/1/portal")
     page.click("form[action$='/portal/revoke'] button")
     page.wait_for_load_state("networkidle")
-    page.goto(f"{BASE}/settings")
+    visit(page, f"{BASE}/settings")
     page.click("label.tab-label[for=settab-system]")
     page.fill("input[name=public_base_url]", saved_public_base)
     page.click("form[action='/settings/public-url'] button")
     page.wait_for_load_state("networkidle")
 
+    # Dark mode. Every theme ships a dark palette and nothing had ever
+    # rendered one -- Playwright reports a light device, so a dark tile that
+    # was never filled in looked exactly like a pass. This drives the device
+    # preference directly, which is what a customer's phone does at night.
+    dkctx = browser.new_context(viewport={"width": 390, "height": 844},
+                                device_scale_factor=2, color_scheme="dark")
+    dkpage = dkctx.new_page()
+    visit(dkpage, f"{BASE}/login")
+    dkpage.fill("input[name=username]", "owner")
+    dkpage.fill("input[name=password]", PASSWORD)
+    dkpage.click("button")
+    dkpage.wait_for_load_state("networkidle")
+    for path in SCREENS:
+        visit(dkpage, f"{BASE}{path}")
+        dkpage.wait_for_timeout(400)
+        problems = dkpage.evaluate(CHECKS, DARK)
+        if problems:
+            failures.append((f"{path} (dark)", problems))
+        if SHOTS:
+            name = (path.strip("/").replace("/", "_") or "today") + "_dark"
+            dkpage.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+        checked += 1
+    dkctx.close()
+
     # Tablet-portrait pass (iPad): topbar still in charge, md: width tier applied.
     tabctx = browser.new_context(viewport={"width": 834, "height": 1194}, device_scale_factor=2)
     tabpage = tabctx.new_page()
-    tabpage.goto(f"{BASE}/login")
+    visit(tabpage, f"{BASE}/login")
     tabpage.fill("input[name=username]", "owner")
     tabpage.fill("input[name=password]", PASSWORD)
     tabpage.click("button")
     tabpage.wait_for_load_state("networkidle")
     for path in ["/", "/week", "/dashboard"]:
-        tabpage.goto(f"{BASE}{path}")
+        visit(tabpage, f"{BASE}{path}")
         tabpage.wait_for_timeout(600)
         tablet_probs = tabpage.evaluate("""
 () => {
@@ -291,17 +369,18 @@ with sync_playwright() as p:
         if SHOTS:
             name = (path.strip("/").replace("/", "_") or "today") + "_tablet"
             tabpage.screenshot(path=f"{SHOTS}/{name}.png", full_page=True)
+        checked += 1
     tabctx.close()
 
     # Desktop pass: sidebar visible, tab bar hidden at lg: viewport.
     dctx = browser.new_context(viewport={"width": 1280, "height": 900})
     dpage = dctx.new_page()
-    dpage.goto(f"{BASE}/login")
+    visit(dpage, f"{BASE}/login")
     dpage.fill("input[name=username]", "owner")
     dpage.fill("input[name=password]", PASSWORD)
     dpage.click("button")
     dpage.wait_for_load_state("networkidle")
-    dpage.goto(f"{BASE}/")
+    visit(dpage, f"{BASE}/")
     dpage.wait_for_timeout(600)
     desktop_probs = dpage.evaluate("""
 () => {
@@ -315,6 +394,7 @@ with sync_playwright() as p:
 """)
     if desktop_probs:
         failures.append(("/ (desktop)", desktop_probs))
+    checked += 1
     dctx.close()
 
     browser.close()
@@ -323,5 +403,6 @@ if failures:
     for path, problems in failures:
         print(f"FAIL {path}: {'; '.join(problems)}")
     sys.exit(1)
-print(f"OK — {len(SCREENS) + len(SETTINGS_TABS) + 4} screens styled correctly "
-      f"for theme '{THEME}' (staff, error pages and the customer portal)")
+print(f"OK — {checked} renders styled correctly for theme '{THEME}': staff screens "
+      f"light and dark, settings panels, error pages, the customer portal, "
+      f"and the tablet and desktop layouts")
