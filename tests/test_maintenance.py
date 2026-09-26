@@ -265,3 +265,29 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
         assert "interval" in str(mail_job.trigger) or "0:05:00" in str(mail_job.trigger)
     finally:
         app.state.scheduler.shutdown(wait=False)
+
+
+def test_app_shutdown_stops_scheduler_and_waits(engine, monkeypatch, tmp_path):
+    # A redeploy's SIGTERM must let a running backup or mail flush finish
+    # rather than kill it mid-write: the lifespan exit shuts down with wait.
+    from fastapi.testclient import TestClient
+
+    import app.config as config
+    from app.main import create_app
+
+    monkeypatch.setattr(config, "RUN_SCHEDULER", True)
+    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    app = create_app(engine=engine)
+    sched = app.state.scheduler
+    real_shutdown = sched.shutdown
+    calls = []
+
+    def shutdown(wait=True):
+        calls.append(wait)
+        real_shutdown(wait=False)
+
+    monkeypatch.setattr(sched, "shutdown", shutdown)
+    with TestClient(app):
+        assert calls == []
+    assert calls == [True]

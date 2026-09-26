@@ -1,6 +1,7 @@
 import ipaddress
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
@@ -89,13 +90,23 @@ def _acquire_single_instance_lock(app) -> None:
     app.state.instance_lock = lock  # keep the fd alive for the process lifetime
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    yield
+    # Stop APScheduler on SIGTERM (docker restart/redeploy) so a running
+    # backup or mailer flush finishes instead of being killed mid-write.
+    sched = getattr(app.state, "scheduler", None)
+    if sched is not None:
+        sched.shutdown(wait=True)
+
+
 def create_app(engine=None) -> FastAPI:
     # First thing, so anything below (migrations, seeding, scheduler wiring)
     # that fails during boot fails somewhere an operator can read.
     observability.configure_logging()
     log.info("OpenPoolPro %s starting (tz=%s, scheduler=%s)",
              config.APP_VERSION, config.TIMEZONE, config.RUN_SCHEDULER)
-    app = FastAPI(title="OpenPoolPro")
+    app = FastAPI(title="OpenPoolPro", lifespan=_lifespan)
     # A real boot builds its own file-backed engine; the test suite always
     # injects an in-memory engine. Enforce secure secrets only on the former,
     # so a deployment can never run on the shipped placeholder SECRET_KEY.
@@ -497,13 +508,5 @@ def create_app(engine=None) -> FastAPI:
         # copies of one stale day. Never raises — a failure lands in
         # last_backup_error rather than stopping the app from starting.
         backup_if_stale(app.state.engine)
-
-        @app.on_event("shutdown")
-        def _stop_scheduler():
-            # Stop APScheduler on SIGTERM (docker restart/redeploy) so a running
-            # backup or mailer flush finishes instead of being killed mid-write.
-            sched = getattr(app.state, "scheduler", None)
-            if sched is not None:
-                sched.shutdown(wait=True)
 
     return app
