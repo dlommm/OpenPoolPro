@@ -361,3 +361,13 @@ def test_an_invalid_portal_link_is_a_finished_page(client, engine):
     assert "Customer portal" in r.text
     # No route back into the app: a customer holding a dead link has no account.
     assert 'href="/"' not in r.text
+
+
+def test_failed_offbox_sync_is_surfaced_in_settings_and_operations(client, engine, monkeypatch):
+    monkeypatch.setattr(config, 'BACKUP_SYNC_CMD', 'rclone copy "$BACKUP_FILE" remote:')
+    assert 'Configured; verify copies at destination' in client.get('/operations').text
+    with Session(engine) as s:
+        models.set_setting(s, 'last_backup_sync_error', 'CalledProcessError (exit 3)')
+        s.commit()
+    assert 'Off-box copy: Last attempt failed' in client.get('/operations').text
+    assert 'Off-box backup sync failed (CalledProcessError (exit 3))' in client.get('/settings').text
