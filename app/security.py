@@ -14,7 +14,7 @@ import pyotp
 import segno
 
 from app import config
-from app.auth_core import pwd_context
+from app.auth_core import hash_secret, verify_secret
 
 ISSUER = "OpenPoolPro"
 _PENDING_2FA_SALT = "cpp-2fa-pending"
@@ -76,12 +76,12 @@ def make_backup_codes() -> list[str]:
 def hash_code(code: str) -> str:
     """Bcrypt hash of a normalized (lowercased, stripped) code.
 
-    Reuses the app's configured passlib CryptContext (see app.auth_core) so
+    Reuses the app's password hashing (see app.auth_core) so
     backup codes get the same salted, slow-to-brute-force treatment as
     passwords rather than a bare, unsalted digest.
     """
     normalized = code.strip().lower()
-    return pwd_context.hash(normalized)
+    return hash_secret(normalized)
 
 
 def verify_code(code: str | None, code_hash: str | None) -> bool:
@@ -95,7 +95,7 @@ def verify_code(code: str | None, code_hash: str | None) -> bool:
         return False
     normalized = code.strip().lower()
     try:
-        return pwd_context.verify(normalized, code_hash)
+        return verify_secret(normalized, code_hash)
     except Exception:
         return False
 

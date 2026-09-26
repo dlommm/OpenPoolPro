@@ -6,8 +6,7 @@ sqlalchemy>=2.0
 itsdangerous>=2.1
 apscheduler>=3.10
 pillow>=10.0
-passlib[bcrypt]>=1.7
-bcrypt<4.1
+bcrypt>=4.2
 pyotp>=2.9
 segno>=1.6
 reportlab>=4.0
