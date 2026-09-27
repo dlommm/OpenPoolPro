@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 ADMIN_ONLY = [
@@ -164,6 +166,9 @@ def test_property_form_rate_hidden_and_preserved(client, tech_client, engine):
         "rate_override_dollars": "88", "assigned_tech_id": ""})
     t = tech_client(name="mgrnomoney", manage_customers=True)
     html = t.get("/properties/1/edit").text
+    # The per-request CSP nonce is random base64 and contains "88" about one
+    # render in 200; strip it so only real page content is checked.
+    html = re.sub(r'nonce="[^"]*"', "", html)
     assert "$" not in html and "88" not in html
     t.post("/properties/1/edit", data={
         "label": "Home2", "address": "", "gate_code": "", "dog_note": "", "notes": "",
