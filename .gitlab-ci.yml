@@ -127,7 +127,10 @@ build-smoke:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
   variables:
-    SMOKE: "openpoolpro-smoke-$CI_COMMIT_SHORT_SHA"
+    # Per JOB, not per commit: pushing a branch with an open MR runs a branch
+    # and an MR pipeline on the same sha and docker host, and a shared name
+    # let one job's after_script delete the other's container mid-check.
+    SMOKE: "openpoolpro-smoke-$CI_JOB_ID"
   script:
     - docker build --build-arg APP_VERSION=ci-smoke -t "$SMOKE" .
     - docker run -d --name "$SMOKE"
