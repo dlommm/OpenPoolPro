@@ -48,5 +48,24 @@ def overview(session, app):
         "mail_configured": mailer.smtp_configured(session), "o365_connected": msoauth.connected(session),
         "qbo_connected": bool(models.get_setting(session, "qbo_refresh_token", "")),
         "qbo_error": bool(models.get_setting(session, "qbo_last_error", "")),
+        **_testers(session),
         "maps_configured": bool(models.get_setting(session, "geoapify_key", "")),
         "runs": runs}
+
+
+def _testers(session) -> dict:
+    from app import tester_clients, water_readings
+    st = tester_clients.status(session)
+    waiting = session.scalar(select(func.count()).select_from(models.DeviceReading).where(
+        models.DeviceReading.property_id.is_(None), models.DeviceReading.status == "new")) or 0
+    configured = {
+        "labcom": bool(models.get_setting(session, "labcom_token", "")),
+        "ondilo": bool(models.get_setting(session, "ondilo_refresh_token", "")),
+        "iopool": session.scalar(select(models.TesterLink.id).where(
+            models.TesterLink.source == "iopool").limit(1)) is not None,
+    }
+    # A removed token leaves its last error behind; only sources still
+    # configured can need attention.
+    return {"tester_errors": [water_readings.SOURCES[s].split(" (")[0]
+                              for s, v in st.items() if v["error"] and configured[s]],
+            "testers_connected": any(configured.values()), "tests_waiting": waiting}

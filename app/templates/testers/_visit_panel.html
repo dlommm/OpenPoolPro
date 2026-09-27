@@ -1,0 +1,18 @@
+{% if rows %}
+<p class="mb-2 text-sm text-mist">Readings tied to this pool, and unassigned tests from your own tester in the last few hours. Pick the one you just took.</p>
+<div class="space-y-2">
+{% for r in rows %}
+  <article class="card p-3 {{ 'border-safety/60' if warn[r.id] }}">
+    <p class="font-semibold">{{ r.measured_at | stamp }} · {{ sources[r.source] }}{% if r.kind == 'monitor' %} (in-pool){% endif %}{% if r.device_serial %} · #{{ r.device_serial }}{% endif %}</p>
+    {% if r.external_label %}<p class="text-sm">Tester name: {{ r.external_label }}</p>{% endif %}
+    <p class="text-sm">{% if r.property_id == v.property_id %}Tied to this pool ({{ {'link': 'linked account', 'visit': 'chosen on a visit', 'manual': 'assigned by the office'}[r.match_method] or 'assigned' }}){% else %}Not tied to any pool yet — from your tester{% endif %}</p>
+    <p class="mt-1 font-data text-sm">{% for label, val in show(r.values) %}{{ label }} {{ val }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+    {% if warn[r.id] %}<p class="mt-1 text-sm text-safety" role="alert">{{ warn[r.id] }}</p>{% endif %}
+    <button type="button" class="btn-primary mt-2" hx-get="/tester-readings/visit/{{ v.id }}/use/{{ r.id }}"
+            hx-include="closest form" hx-target="#readings-grid" hx-swap="outerHTML">Use these readings</button>
+  </article>
+{% endfor %}
+</div>
+{% else %}
+<p class="card p-3 text-sm">No tester readings for this pool yet. Handheld tests appear once your tester app has synced (open the LabCOM app with signal). You can also <a class="text-pool underline" href="/water-tests/import">import a file</a> from your tester's app, or type the readings in.</p>
+{% endif %}

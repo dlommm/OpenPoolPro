@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Water tests imported{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Water tests", "Import finished") }}
+<div class="card space-y-1 p-4">
+  <p><strong>{{ created }}</strong> new test(s) imported{% if matched %}, {{ matched }} tied to a pool through an existing link{% endif %}.</p>
+  {% if duplicates %}<p class="text-sm text-mist">{{ duplicates }} test(s) were already imported and were skipped.</p>{% endif %}
+  {% if skipped %}<p class="text-sm text-mist">{{ skipped }} row(s) had no readable date or readings and were skipped.</p>{% endif %}
+</div>
+<div class="mt-4 flex flex-wrap gap-2">{% if can_inbox %}<a class="btn-primary" href="/water-tests">Open the water-tests inbox</a>{% endif %}<a class="btn-secondary" href="/">Back to today</a></div>
+{% endblock %}

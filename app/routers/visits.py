@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, mailer, models, qbo, tax
+from app import dosing, inventory, mailer, models, qbo, tax, water_readings
 from app.db import get_or_404, get_session
 from app.rates import effective_rate_cents
 from app.templating import templates
@@ -242,7 +242,9 @@ def visit_form(request: Request, property_id: int, visit_date: date,
         "v": v, "prop": v.property, "chems": chems, "task_templates": tasks,
         "photos": photos, "rate": effective_rate_cents(session, v.property),
         "existing": existing, "show_money": request.state.user.can("view_money"),
-        "collect": collect, "can_cash": request.state.user.can("mark_cash")})
+        "collect": collect, "can_cash": request.state.user.can("mark_cash"),
+        "tester_reading": water_readings.visit_reading(session, v.id),
+        "tester_sources": water_readings.SOURCES})
 
 
 @router.post("/visit/{visit_id}/complete")
@@ -349,6 +351,11 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
             total_cost_cents=round(amount * frozen)))
         new_stock[chem.id] = new_stock.get(chem.id, 0.0) + amount
     inventory.apply_visit_delta(session, v.id, prior_stock, new_stock)
+    session.flush()
+    # The tester reading the tech chose (if any) is credited as the source of
+    # these numbers. Refusal (wrong pool, someone else's tester, too old)
+    # never blocks the completion -- see water_readings.attach_to_visit.
+    water_readings.attach_to_visit(session, v, form.get("device_reading_id"), request.state.user)
     customer = v.property.customer
     # Email only on the due→done transition. A re-complete (fixing a pH typo)
     # must not spam the homeowner with a second "visit completed"; nor may an

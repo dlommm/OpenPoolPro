@@ -1,0 +1,21 @@
+{# Readings inputs. Rendered inside the visit form, and swapped in whole by
+   /tester-readings/.../use/<id> when the tech picks a tester reading. #}
+<div id="readings-grid">
+  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+    {% for name, label in [("fc","Free Chlorine"),("ph","pH"),("ta","Total Alkalinity"),("cya","Cyanuric Acid"),("salt","Salt")] %}
+    <label class="block text-center"><span class="field-label font-data leading-tight">{{ label }}</span>
+      <input inputmode="decimal" name="{{ name }}" value="{{ values[name] }}"
+             hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="input changed delay:400ms"
+             class="field text-center font-data text-lg"></label>
+    {% endfor %}
+  </div>
+  {% if reading %}
+  <input type="hidden" name="device_reading_id" value="{{ reading.id }}">
+  <p class="mt-2 text-sm" role="status">Filled from <strong>{{ sources[reading.source] }}</strong>{% if reading.device_serial %} #{{ reading.device_serial }}{% endif %}, tested {{ reading.measured_at | stamp }}. Check the numbers before marking done — anything you change is recorded as edited.</p>
+  {% if extra %}<p class="text-sm text-mist">Also measured: {% for label, val in extra %}{{ label }} {{ val }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+  <div hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="load"></div>
+  {# Close the candidate list once one is chosen, so a second tap can't swap
+     in a different pool's test by accident; "Find tester readings" reopens it. #}
+  <div id="tester-panel" class="mt-2" aria-live="polite" hx-swap-oob="true"></div>
+  {% endif %}
+</div>

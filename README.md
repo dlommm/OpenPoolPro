@@ -460,6 +460,15 @@ also has **Customer portal** access controls.
 
 See [setup, permissions, and behavior](docs/application-improvements.md).
 
+## Water testers
+
+Readings can come straight from digital testers instead of being typed:
+LabCOM-connected photometers (PoolLab, PoolWaterLAB, PrimeLab), Ondilo ICO and
+iopool in-pool monitors, and CSV exports from eXact iDip, Hanna Lab, LaMotte
+WaterLink Connect or any other tester app. A reading is only tied to a pool by
+an explicit link, by the tech choosing it on that pool's visit, or by the office
+in the water-tests inbox. See [supported testers and setup](docs/water-testers.md).
+
 ## Visual smoke check
 
 Proves every screen renders with the design system applied (catches stale

@@ -623,6 +623,8 @@ ENCRYPTED_SETTING_KEYS = frozenset({
     "qbo_client_secret",          # QuickBooks app secret
     "qbo_refresh_token",          # QuickBooks refresh token
     "geoapify_key",               # Geoapify API key
+    "labcom_token",               # LabCOM cloud API token (PoolLab testers)
+    "ondilo_refresh_token",       # Ondilo ICO OAuth refresh token
 })
 
 
@@ -849,3 +851,78 @@ class QBOBillingSource(Base):
     __tablename__ = "qbo_billing_sources"
     source_key: Mapped[str] = mapped_column(String(80), primary_key=True)
     draft_id: Mapped[int] = mapped_column(ForeignKey("qbo_billing_drafts.id"), index=True)
+
+
+# --- Water testers ------------------------------------------------------------
+# Readings arrive from handheld testers (LabCOM cloud: PoolLab / PoolWaterLAB /
+# PrimeLab), in-pool monitors (Ondilo ICO, iopool) and exported files (eXact
+# iDip, Hanna Lab, LaMotte WaterLink Connect, anything CSV). None of them know
+# which customer they belong to, so every reading lands here first and is tied
+# to a pool only by an explicit TesterLink, a tech choosing it on that pool's
+# visit, or an office user assigning it. See app/water_readings.py.
+
+class TesterDevice(Base):
+    """A physical tester, auto-registered the first time its serial is seen.
+    Assigning it to a tech is what lets that tech pull its unassigned readings
+    onto a visit — nobody else's tester shows up on their visit form."""
+    __tablename__ = "tester_devices"
+    __table_args__ = (UniqueConstraint("source", "serial", name="uq_tester_devices_source_serial"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(16))
+    serial: Mapped[str] = mapped_column(String(80))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    user: Mapped["User | None"] = relationship()
+
+
+class TesterLink(Base):
+    """An external account/pool/label that always means one of our pools:
+    a LabCOM account, an Ondilo or iopool pool, or a customer name as it
+    appears in an imported file."""
+    __tablename__ = "tester_links"
+    __table_args__ = (UniqueConstraint("source", "external_key", name="uq_tester_links_source_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(16))
+    external_key: Mapped[str] = mapped_column(String(160))
+    external_label: Mapped[str] = mapped_column(String(200), default="")
+    property_id: Mapped[int] = mapped_column(ForeignKey("properties.id"), index=True)
+    # iopool issues one API key per homeowner account; it is stored with the
+    # pool it reads, encrypted like every other credential (app/secretbox).
+    secret: Mapped[str] = mapped_column(Text, default="")
+    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    property: Mapped[Property] = relationship()
+
+
+class DeviceReading(Base):
+    """One water test: every parameter measured in one sitting.
+
+    property_id is None until the reading is tied to a pool; visit_id is set
+    once a completed visit used it (UNIQUE: a reading fills one visit, ever).
+    `edited` records that the tech changed a value before saving, so the
+    visit's provenance never claims a number the tester did not produce."""
+    __tablename__ = "device_readings"
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_device_readings_source_ext"),
+        UniqueConstraint("visit_id", name="uq_device_readings_visit"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(16))            # labcom|ondilo|iopool|file
+    kind: Mapped[str] = mapped_column(String(8), default="handheld")  # handheld|monitor
+    external_id: Mapped[str] = mapped_column(String(200))
+    device_serial: Mapped[str] = mapped_column(String(80), default="")
+    external_key: Mapped[str] = mapped_column(String(160), default="")
+    external_label: Mapped[str] = mapped_column(String(200), default="")
+    measured_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    values: Mapped[dict] = mapped_column(JSON, default=dict)
+    property_id: Mapped[int | None] = mapped_column(ForeignKey("properties.id"), nullable=True, index=True)
+    visit_id: Mapped[int | None] = mapped_column(ForeignKey("visits.id"), nullable=True)
+    match_method: Mapped[str] = mapped_column(String(8), default="")  # link|visit|manual
+    status: Mapped[str] = mapped_column(String(8), default="new")     # new|ignored
+    edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    uploaded_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    property: Mapped["Property | None"] = relationship()
+    visit: Mapped["Visit | None"] = relationship()
