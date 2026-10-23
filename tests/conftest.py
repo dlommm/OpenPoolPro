@@ -8,11 +8,10 @@ from app import auth_core
 # every `client` fixture rebuilds the app (seeds.run hashes APP_PASSWORD) and
 # then logs in (a verify), so 500+ tests each paid ~0.5 s of pure KDF.
 #
-# Mutate the shared CryptContext IN PLACE rather than rebinding it: app/security.py
-# does `from app.auth_core import pwd_context`, so a rebind would leave backup-code
-# hashing on the old context. The scheme stays bcrypt — only the work factor moves,
-# so every code path under test behaves identically.
-auth_core.pwd_context.update(bcrypt__rounds=4)
+# auth_core reads BCRYPT_ROUNDS at call time, so passwords and backup codes
+# (app/security.py) both pick this up. The scheme stays bcrypt — only the work
+# factor moves, so every code path under test behaves identically.
+auth_core.BCRYPT_ROUNDS = 4
 
 # The TestClient speaks plain http://testserver, and httpx's cookie jar rightly
 # refuses to store Secure cookies from an insecure origin — under the

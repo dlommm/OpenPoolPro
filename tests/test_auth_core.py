@@ -2,8 +2,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import app.config as config
-from app import models, seeds
-from app.auth_core import hash_password, verify_password
+from app import models, security, seeds
+from app.auth_core import MAX_PASSWORD_LEN, hash_password, verify_password
 
 
 def test_hash_and_verify_roundtrip():
@@ -13,6 +13,28 @@ def test_hash_and_verify_roundtrip():
     assert verify_password("wrong", h) is False
     assert verify_password("x", None) is False
     assert verify_password("x", "not-a-hash") is False
+
+
+# Produced by passlib 1.7.4 (CryptContext(schemes=["bcrypt"]), bcrypt 4.0.1),
+# which hashed every password and backup code stored before auth_core called
+# bcrypt directly. Those rows must keep verifying after the switch.
+_PASSLIB_HASH = "$2b$04$uo/GLXyUBcNionKvjGXJKuM62vh0nOqH1zYYP8xGWJWqNb1C.8kgq"
+_PASSLIB_LONG_PW = "é" * 50 + "tail"  # 104 UTF-8 bytes: past bcrypt's 72
+_PASSLIB_LONG_HASH = "$2b$04$7A3K7jHD5QZYIK9hRatwh.wDEYVpTurgye5UflJCKj0nE3pBQQJYO"
+
+
+def test_passlib_era_hashes_still_verify():
+    assert verify_password("correct horse", _PASSLIB_HASH) is True
+    assert verify_password("correct horsE", _PASSLIB_HASH) is False
+    assert security.verify_code("Correct Horse ", _PASSLIB_HASH) is True
+
+
+def test_long_password_truncates_like_passlib_instead_of_raising():
+    # passlib silently used the first 72 bytes; bcrypt>=5 raises on longer
+    # input. A long password must hash (no 500) and old long hashes verify.
+    assert verify_password(_PASSLIB_LONG_PW, _PASSLIB_LONG_HASH) is True
+    pw = "x" * MAX_PASSWORD_LEN
+    assert verify_password(pw, hash_password(pw)) is True
 
 
 def _prep(engine, monkeypatch, password):
