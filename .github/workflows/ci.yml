@@ -236,6 +236,7 @@ jobs:
             --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.licenses=AGPL-3.0-only \
             -t "$IMAGE:latest" .
           docker push "$IMAGE:latest"
       - name: Push :vX.Y.Z and publish the Release
