@@ -40,8 +40,9 @@ folder.
 
 ### Deploy the published image (Unraid)
 
-CI publishes `ghcr.io/dlommm/openpoolpro:latest` on every merge to `main`, plus an
-immutable `:vX.Y.Z` per release. `docker-compose.unraid.yml` is a ready-made stack
+CI publishes `:latest` on every merge to `main`, plus an immutable `:vX.Y.Z` per
+release, to both `ghcr.io/dlommm/openpoolpro` and Docker Hub
+(`dendlomm/openpoolpro`). `docker-compose.unraid.yml` is a ready-made stack
 for Unraid's Docker Compose Manager — read the SETUP notes at the top of the file
 (cache-only appdata share, required `APP_PASSWORD`/`SECRET_KEY`), then:
 

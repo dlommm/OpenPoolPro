@@ -14,7 +14,9 @@
 #   4. Start the stack. Open the WebUI from the Unraid Docker tab.
 #
 # Image is pulled from GitHub Container Registry (ghcr.io), published by CI on
-# every merge to main. If the package is private, log in on the Unraid terminal
+# every merge to main. The same image is on Docker Hub — swap the image line
+# below for `dendlomm/openpoolpro:latest` to pull from there instead. Both are
+# public; if you make the GHCR package private, log in on the Unraid terminal
 # first with a classic PAT that has the read:packages scope:
 #   docker login ghcr.io -u <github-user> -p <PAT>
 # (The Compose Manager pulls with the host Docker's stored credentials.)
