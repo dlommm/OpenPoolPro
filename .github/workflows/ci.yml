@@ -1,0 +1,254 @@
+# CI/CD for OpenPoolPro — GitHub Actions on GitHub-hosted ubuntu runners.
+#
+# Pull requests and pushes to main run the checks. On a push to main, once every
+# gating check is green:
+#   release — always (re)build & push the image to GHCR as `:latest`; when
+#             conventional commits since the last tag warrant a version bump, also
+#             push `:vX.Y.Z` and create the git tag + GitHub Release.
+# Auth is the built-in GITHUB_TOKEN — no extra secret required. See docs/ci-cd.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same PR/branch supersedes the running checks. Releases are
+# serialized separately below and never cancelled mid-push.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The suite assumes the runner's clock is in the app's default business
+  # timezone (APP_TZ=America/New_York): several Today/route-sheet tests seed
+  # "today" via date.today() and one test asserts the ET->UTC evening rollover.
+  # On a UTC runner those tests break on the UTC/ET date boundary.
+  TZ: America/New_York
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Keeps the public repo to the app, its tests, and operator docs: fails if
+  # agent/assistant tooling, secrets, or local artifacts get committed, or if a
+  # commit message carries an AI co-author trailer.
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No agent tooling, secrets, or local artifacts tracked
+        run: |
+          bad=$(git ls-files | grep -E \
+            -e '(^|/)\.(claude|agents|codex|cursor|gemini|continue|windsurf|planning|superpowers)(/|$)' \
+            -e '(^|/)(CLAUDE|CLAUDE\.local|AGENTS|GEMINI)\.md$' \
+            -e '(^|/)\.(cursorrules|windsurfrules)$' \
+            -e '^docs/superpowers/' \
+            -e '(^|/)\.env$' -e '(^|/)\.env\.[^e]' \
+            -e '(^|/)\.DS_Store$' -e '(^|/)\.coverage$' -e '(^|/)__pycache__/' \
+            -e '\.(db|sqlite|sqlite3|pem|key|test)$' \
+            -e '^data/' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::These files must not be committed (see .gitignore):"
+            echo "$bad"
+            exit 1
+          fi
+      - name: Every tracked file is honored by .gitignore
+        run: |
+          # A file that is tracked but matches .gitignore was force-added or
+          # predates the rule — either way it is about to be published by mistake.
+          ignored=$(git ls-files -ci --exclude-standard)
+          if [ -n "$ignored" ]; then
+            echo "::error::Tracked files that .gitignore says to ignore:"
+            echo "$ignored"
+            exit 1
+          fi
+      - name: No AI co-author trailers in commit messages
+        run: |
+          hits=$(git log --format='%H %s%n%b' HEAD \
+            | grep -iE 'co-authored-by:.*(claude|anthropic|codex|copilot|openai|cursor|gemini)|generated with .*(claude|codex|copilot)' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Commit messages contain AI attribution:"
+            echo "$hits"
+            exit 1
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -q ruff
+      - run: ruff check app/ tests/ scripts/
+
+  # A new upstream CVE must be VISIBLE without blocking an unrelated urgent fix
+  # from merging — pip-audit failures warn, not gate.
+  audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -q pip-audit
+      - run: pip-audit --no-deps -r requirements.lock
+
+  # tests/test_audit_regressions.py executes sw.js in node:vm rather than
+  # string-matching it, so it is the only real guard on offline replay — the area
+  # that already produced a High-severity data-loss bug. REQUIRE_JS_TESTS=1 turns
+  # a missing Node into a failure instead of a skip: a guard that quietly stops
+  # running is worse than no guard.
+  test:
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_JS_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --version
+      # The locks are what the Dockerfile installs — test exactly those pins.
+      - run: pip install -r requirements-dev.lock
+      - run: python -m pytest -q -n auto --cov=app --cov-report=term --cov-fail-under=90
+
+  # The design-system smoke proves app.css actually APPLIED (computed styles), not
+  # merely that a page returned 200 — the naked-HTML failure class. It needs a
+  # live seeded instance, so: boot the app (which migrates), seed demo data, then
+  # drive Chromium against it.
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      DATA_DIR: ${{ github.workspace }}/.ci-visual
+      APP_URL: http://127.0.0.1:8000
+      APP_PASSWORD: ci-smoke-only-not-a-real-password
+      SECRET_KEY: cismoke0000000000000000000000000000000000000000000000000000000000
+      PYTHONPATH: "."
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - run: pip install -r requirements-dev.lock
+      - run: pip install -q playwright pytailwindcss
+      - run: playwright install --with-deps chromium
+      # app/static/app.css is a BUILD ARTIFACT (gitignored) — the Dockerfile
+      # builds it in its own stage, so a native run from a fresh checkout has no
+      # stylesheet at all. Mirror the Dockerfile: the first tailwindcss call
+      # downloads the binary.
+      - name: Build CSS
+        run: |
+          tailwindcss --help >/dev/null 2>&1 || true
+          tailwindcss -i tailwind.css -o app/static/app.css --minify
+      - name: Boot the app
+        run: |
+          mkdir -p "$DATA_DIR"
+          # Migrations run at app startup, so the schema must exist before seeding.
+          nohup uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log \
+            > "$RUNNER_TEMP/app.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS "$APP_URL/health" >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "app never became healthy"; cat "$RUNNER_TEMP/app.log"; exit 1
+      - run: python scripts/seed_sample_data.py
+      - run: python scripts/visual_check.py
+      - name: App log
+        if: failure()
+        run: cat "$RUNNER_TEMP/app.log"
+
+  # Build the image per-PR and prove the container actually boots to a healthy
+  # /health (the baked HEALTHCHECK curls the DB-backed endpoint), so a broken
+  # Dockerfile/entrypoint fails the PR instead of the release.
+  build-smoke:
+    runs-on: ubuntu-latest
+    env:
+      SMOKE: openpoolpro-smoke-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --build-arg APP_VERSION=ci-smoke -t "$SMOKE" .
+      - name: Boot to healthy
+        run: |
+          docker run -d --name "$SMOKE" \
+            -e APP_PASSWORD=ci-smoke-only-not-a-real-password \
+            -e SECRET_KEY=cismoke0000000000000000000000000000000000000000000000000000000000 \
+            "$SMOKE"
+          # HEALTHCHECK: 20s start-period, 30s interval — allow ~2 min total.
+          for i in $(seq 1 24); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$SMOKE")"
+            echo "health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            [ "$status" = "unhealthy" ] && break
+            sleep 5
+          done
+          echo "--- container logs ---"; docker logs "$SMOKE"; exit 1
+      - name: Clean up
+        if: always()
+        run: docker rm -f "$SMOKE" >/dev/null 2>&1 || true
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [hygiene, lint, test, browser, build-smoke]
+    runs-on: ubuntu-latest
+    # Serialize releases: two quick merges to main otherwise run concurrent
+    # release jobs that compute the SAME version and race to push :latest.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write   # create the tag + GitHub Release
+      packages: write   # push to ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so next-version.sh can read the last tag and commit range
+      - name: Compute version
+        run: |
+          git fetch --tags --force
+          bash scripts/next-version.sh >> "$GITHUB_ENV"
+          bash scripts/next-version.sh
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Always refresh :latest (carries the baked APP_VERSION). --pull so base
+      # image security patches (python:3.12-slim) reach production.
+      - name: Build and push :latest
+        run: |
+          docker build --pull --build-arg APP_VERSION="$VERSION" \
+            --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="$VERSION" \
+            -t "$IMAGE:latest" .
+          docker push "$IMAGE:latest"
+      - name: Push :vX.Y.Z and publish the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$BUMP" = "none" ]; then
+            echo "No feat/fix/breaking commits since last tag — pushed :latest only, no new release."
+            exit 0
+          fi
+          docker tag "$IMAGE:latest" "$IMAGE:$VERSION"
+          docker push "$IMAGE:$VERSION"
+          # Creates the tag at this commit. Tags pushed with GITHUB_TOKEN do not
+          # trigger workflows, and this workflow only runs on branches anyway.
+          gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes \
+            --notes "Docker image \`$IMAGE:$VERSION\` (also \`:latest\`). Built from ${GITHUB_SHA::7}."

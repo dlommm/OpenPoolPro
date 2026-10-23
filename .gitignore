@@ -1,14 +1,75 @@
+# --- Python / tooling caches -------------------------------------------------
 __pycache__/
-*.pyc
-data/
+*.py[cod]
 .venv/
-app/static/app.css
-.env
-.DS_Store
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+*.egg-info/
+build/
+dist/
 
-# pytest-cov local artifact
+# pytest-cov local artifacts
 .coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
+# --- Runtime data & build output ---------------------------------------------
+# All instance data (SQLite DB, photos, backups) lives here. Never committed.
+data/
+*.db
+*.sqlite
+*.sqlite3
+# CI browser-smoke scratch instance
+.ci-visual/
+# Tailwind build artifact (built by the Dockerfile / scripts/build_css.py)
+app/static/app.css
+# Visual-check screenshots
+screenshots/
+
+# --- Secrets -------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 # Live-instance credentials for manual testing. Never committed.
 tests/prod.test
 *.test
+
+# --- AI assistants / agent tooling -------------------------------------------
+# Local-only. Only the application, its tests, and operator docs are published.
+.claude/
+.agents/
+.codex/
+.cursor/
+.gemini/
+.aider*
+.continue/
+.windsurf/
+.planning/
+.superpowers/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+docs/superpowers/
+
+# --- Internal notes (kept locally, not published) -----------------------------
+docs/application-improvements.md
+docs/iphone-checklist.md
+docs/production-review-*.md
+docs/quickbooks-sandbox-testing.md
+
+# --- OS / editor -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

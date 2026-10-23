@@ -1,31 +1,47 @@
 # CI/CD & Releases
 
-Automated testing, versioning, image builds, and releases for OpenPoolPro on the
-self-hosted GitLab at `github.com`. Pipeline lives in `.gitlab-ci.yml`.
+Automated testing, versioning, image builds, and releases for OpenPoolPro run on
+GitHub Actions. The pipeline lives in `.github/workflows/ci.yml`.
 
-## What happens on a push to `main`
+## What runs, and when
 
-1. **test stage** — four parallel jobs, all of which must pass before release
-   (except `audit`, which warns):
-   - **lint** — `ruff check app/ tests/ scripts/` (config in `pyproject.toml`).
-   - **audit** — `pip-audit` against `requirements.lock`; `allow_failure: true`
-     so a brand-new upstream CVE turns the pipeline yellow without blocking an
-     unrelated urgent fix.
-   - **test** — the full `pytest` suite (`-n auto`, with coverage; floor 90%)
-     inside a throwaway `python:3.12-slim` container, installed from
-     `requirements-dev.lock` so CI tests exactly the pins the image ships.
-   - **build-smoke** — builds the Docker image and runs it until its baked
-     HEALTHCHECK reports healthy, so a broken Dockerfile/entrypoint fails the
-     MR instead of the release.
-2. **release** —
-   - Computes the next version from **conventional commits** since the last tag
-     (`scripts/next-version.sh`).
-   - **Always** rebuilds and pushes `ghcr.io/dlommm/openpoolpro:latest`
-     (the image bakes the version in via `--build-arg APP_VERSION`).
-   - **On a version bump only**: also pushes `:vX.Y.Z`, creates and pushes the git
-     tag `vX.Y.Z`, and publishes a GitLab **Release**.
+Every pull request and every push to `main` runs the checks below in parallel on
+GitHub-hosted `ubuntu-latest` runners (clock set to `America/New_York`, which the
+date-boundary tests depend on):
 
-Merge requests run the **test stage** only.
+- **hygiene** — keeps the public repo to the application, its tests, and operator
+  docs. Fails if agent/assistant tooling (`.claude/`, `.agents/`, `.codex/`,
+  `CLAUDE.md`, `AGENTS.md`, `docs/superpowers/` …), secrets (`.env`, keys),
+  databases, or local artifacts are tracked; if any tracked file matches
+  `.gitignore` (i.e. was force-added); or if a commit message carries an AI
+  co-author trailer.
+- **lint** — `ruff check app/ tests/ scripts/` (config in `pyproject.toml`).
+- **audit** — `pip-audit` against `requirements.lock`. Marked
+  `continue-on-error`, so a brand-new upstream CVE shows up without blocking an
+  unrelated urgent fix.
+- **test** — the full `pytest` suite (`-n auto`, with coverage; floor 90%),
+  installed from `requirements-dev.lock` so CI tests exactly the pins the image
+  ships. Node is installed and `REQUIRE_JS_TESTS=1` is set, so the service-worker
+  tests fail instead of silently skipping.
+- **browser** — builds the Tailwind CSS, boots the app, seeds demo data, and runs
+  `scripts/visual_check.py` in Chromium to prove every screen renders with the
+  design system applied.
+- **build-smoke** — builds the Docker image and runs it until its baked
+  HEALTHCHECK reports healthy, so a broken Dockerfile/entrypoint fails the PR
+  instead of the release.
+
+On a push to `main`, once hygiene, lint, test, browser, and build-smoke are all
+green, the **release** job runs:
+
+- Computes the next version from **conventional commits** since the last tag
+  (`scripts/next-version.sh`).
+- **Always** rebuilds and pushes `ghcr.io/dlommm/openpoolpro:latest` (the image
+  bakes the version in via `--build-arg APP_VERSION`).
+- **On a version bump only**: also pushes `:vX.Y.Z` and publishes a GitHub
+  **Release**, which creates the git tag `vX.Y.Z` at that commit.
+
+Releases are serialized (`concurrency: release`), so two quick merges can't race
+to the same version. Never create version tags by hand.
 
 ## Dependency locks
 
@@ -46,7 +62,7 @@ regenerate and commit both locks:
 |------------------------------------------|-------|----------------|
 | `feat!:` / `type!:` / `BREAKING CHANGE`  | major | v1.4.2 → v2.0.0 |
 | `feat: ...`                              | minor | v1.4.2 → v1.5.0 |
-| `fix: ...`                              | patch | v1.4.2 → v1.4.3 |
+| `fix: ...`                               | patch | v1.4.2 → v1.4.3 |
 | only `docs/chore/refactor/test/...`      | none  | no new release; `:latest` still refreshed |
 | no tags yet                              | —     | bootstraps **v1.0.0** |
 
@@ -55,10 +71,10 @@ So: keep using `feat:` / `fix:` / `feat!:` commit prefixes and versions bump the
 ## Docker tags
 
 - `:latest` — always the newest build of `main`.
-- `:vX.Y.Z` — immutable, one per release, matches the git tag and the GitLab Release.
+- `:vX.Y.Z` — immutable, one per release, matches the git tag and the GitHub Release.
 
-Deploy target is **Unraid (amd64)**. The GitLab runner is amd64, so CI builds natively.
-(Building on an Apple-Silicon Mac needs `--build-arg APP_VERSION=… --platform linux/amd64`.)
+Deploy target is **Unraid (amd64)**. GitHub-hosted runners are amd64, so CI builds natively.
+(Building on an Apple-Silicon Mac needs `--platform linux/amd64`.)
 
 ## In-app version
 
@@ -66,30 +82,36 @@ Deploy target is **Unraid (amd64)**. The GitLab runner is amd64, so CI builds na
 sets it from the `APP_VERSION` build-arg, and CI passes the computed version. It renders on
 the **Settings** page ("OpenPoolPro vX.Y.Z"), theme-agnostic. Local/dev shows `dev`.
 
-## One-time setup (required for the pipeline to work)
+## One-time setup
 
-1. **Docker-executor runner** assigned to this project, with a reachable docker daemon
-   (the `test` job runs in a `python:3.12-slim` image; the `release` job runs in
-   `docker:27-cli` and builds via `docker build`). The project's existing runner already
-   provides this — no volume mounts are used (an earlier shell-runner assumption is gone).
-**No extra secret is required.** The release job creates the git tag + GitLab Release via
-the Releases API using the built-in `CI_JOB_TOKEN` (`POST /releases` with a `ref` creates
-the tag at the commit and the Release). Docker registry auth also uses `CI_JOB_TOKEN`.
+**No secret is required.** The release job authenticates to GHCR and creates the
+Release with the built-in `GITHUB_TOKEN` (the workflow requests `contents: write`
+and `packages: write` for that job only).
 
-Until a docker runner is assigned, pushes to `main` won't build/release automatically — use
-the manual fallback below.
+After the first release publishes the package:
 
-## Manual release fallback (no runner / one-off)
+1. Open **GitHub → your profile → Packages → openpoolpro → Package settings**.
+2. Under *Manage Actions access*, confirm the `OpenPoolPro` repository has
+   **Write** (it is linked automatically through the image's
+   `org.opencontainers.image.source` label).
+3. Either set the package visibility to **Public** so Unraid can pull without
+   credentials, or keep it private and `docker login ghcr.io` on the Unraid host
+   with a classic PAT that has `read:packages`.
 
-From a checkout, logged into the registry (`docker login ghcr.io`):
+Recommended branch protection on `main`: require pull requests, and require the
+`hygiene`, `lint`, `test`, `browser`, and `build-smoke` checks to pass.
+
+## Manual release fallback
+
+From a checkout, logged into GHCR (`echo $PAT | docker login ghcr.io -u <user> --password-stdin`,
+PAT with `write:packages`):
 
 ```bash
 VERSION=v1.2.3
-# amd64 image for Unraid (add --platform linux/amd64 when building on Apple Silicon)
 docker buildx build --platform linux/amd64 --build-arg APP_VERSION="$VERSION" \
   -t ghcr.io/dlommm/openpoolpro:latest \
   -t ghcr.io/dlommm/openpoolpro:"$VERSION" --push .
-git tag -a "$VERSION" -m "Release $VERSION" && git push origin "$VERSION"
+gh release create "$VERSION" --target main --title "$VERSION" --generate-notes
 ```
 
 ## Deploy on Unraid

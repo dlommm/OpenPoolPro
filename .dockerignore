@@ -1,4 +1,5 @@
 .git
+.github
 .venv
 data
 tests
@@ -8,8 +9,20 @@ docs
 __pycache__
 **/__pycache__
 .pytest_cache
+.ruff_cache
+.cache
+.coverage
+.ci-visual
 assets
 .env
 .env.example
 .DS_Store
 *.pyc
+# AI assistant / agent tooling never belongs in the image.
+.claude
+.agents
+.codex
+.cursor
+.planning
+CLAUDE.md
+AGENTS.md

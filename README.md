@@ -6,16 +6,21 @@
 
 ---
 
-Self-hosted pool-route app. Phase 0: customers, properties, pools, routes,
-visits with chemistry costs and dose suggestions, jobs, analytics with income breakdowns and rate management, admin console with
-dashboard and global search, company branding, branded PDF invoices with
-month generation and batch zip, monthly QuickBooks Online CSV export, a
-customer-360 timeline (visits, jobs, photos, comm log, quotes) with tags and
-reactivation, seasonal service holds, per-property checklists, recurring
-maintenance rules with an auto-job engine, equipment warranty alerts,
-before/after/issue photo tags, quotes that convert to jobs, and chemical
-inventory with stock levels, purchase logging feeding catalog costs,
-auto-decrement from visit usage, and low-stock alerts.
+Self-hosted pool-route app for small pool-service companies, built to run on
+one box (Docker + SQLite) and to be used from an iPhone in the field.
+
+- **Field:** Today and route sheets, visits with water chemistry, dose
+  suggestions and chemical costs, per-property checklists, before/after/issue
+  photos, and an offline-capable PWA that queues work without signal.
+- **Office:** customers, properties, pools and spas, recurring routes and
+  service holds, jobs and quotes, maintenance rules with an auto-job engine,
+  equipment warranty alerts, chemical inventory, contracts with e-signing, and a
+  customer-360 timeline.
+- **Billing:** branded PDF invoices, QuickBooks Online (reviewed billing and CSV
+  export), sales tax, accounts receivable, and payment follow-ups.
+- **Admin:** crew and permissions, 2FA, analytics and rate management, route
+  planning, customer portals, water alerts, an operations dashboard, email (SMTP
+  or Office 365), and nightly backups with optional off-box sync.
 
 ## Run
 
@@ -33,6 +38,16 @@ auto-decrement from visit usage, and low-stock alerts.
 All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
 folder.
 
+### Deploy the published image (Unraid)
+
+CI publishes `ghcr.io/dlommm/openpoolpro:latest` on every merge to `main`, plus an
+immutable `:vX.Y.Z` per release. `docker-compose.unraid.yml` is a ready-made stack
+for Unraid's Docker Compose Manager — read the SETUP notes at the top of the file
+(cache-only appdata share, required `APP_PASSWORD`/`SECRET_KEY`), then:
+
+    docker compose -f docker-compose.unraid.yml pull
+    docker compose -f docker-compose.unraid.yml up -d
+
 ## Develop
 
     python3.12 -m venv .venv && source .venv/bin/activate
@@ -41,6 +56,12 @@ folder.
     APP_PASSWORD=dev COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
     ruff check app/ tests/ scripts/   # same gate CI runs
     pytest -n auto
+
+CI runs on GitHub Actions for every pull request and push to `main`: lint,
+tests (90% coverage floor), a browser smoke check, a Docker build-and-boot check,
+a dependency audit, and a repo-hygiene check. Merges to `main` publish the image
+and cut a release automatically from conventional commit prefixes (`feat:`,
+`fix:`, `feat!:`). See [CI/CD & releases](docs/ci-cd.md).
 
 ## Security
 
@@ -402,9 +423,7 @@ not a verified override of company-level automation, so that check is yours to
 make, not something the app can assert for you.
 
 See [the billing workflow](docs/quickbooks-billing.md) for the monthly
-routine and its operational limits, [the sandbox test
-plan](docs/quickbooks-sandbox-testing.md) for the step-by-step end-to-end
-validation to run before enabling production billing, and [the transport
+routine and its operational limits, and [the transport
 contract](docs/quickbooks-api-contract.md) for what the API client does and
 does not guarantee.
 
@@ -448,17 +467,23 @@ Open **Operations** in the administrator menu for route planning, payment
 follow-ups, water alerts, and operational health. Each customer detail page
 also has **Customer portal** access controls.
 
-- **Route planner:** editable suggested stop order and approximate travel estimates.
-- **Customer portal:** expiring, revocable links to completed service records,
-  sent invoices, agreements, and explicitly shared photos. Set an HTTPS Public
-  base URL and allow `/portal/` through the proxy's public path rule.
-- **Payment follow-ups:** configurable overdue thresholds, full message previews,
-  explicit approval, delivery history, and cancellation when invoice data changes.
+- **Route planner** (`/routes/plan`): editable suggested stop order and
+  approximate travel estimates (great-circle distance × 1.3 at 25 mph, no
+  external API). Saving changes the recurring weekday order used by Today and Week.
+- **Customer portal:** expiring (7/30/90-day), revocable, read-only links to
+  completed service records, sent invoices, agreements, and explicitly shared
+  photos. Set **Settings → System → Public base URL** to the public HTTPS origin,
+  and let the proxy pass `/portal/` and `/static/` without staff authentication
+  (as it already does for `/sign/`). Treat a link as a credential.
+- **Payment follow-ups** (`/followups`): configurable overdue thresholds, full
+  message previews, explicit approval, delivery history, and cancellation when
+  invoice data changes. Nothing is sent until a preview is approved.
 - **Water alerts:** repeated or worsening readings with staff-created inspection jobs.
 - **Operations:** backup/storage/mail/scheduler status, integration configuration,
   and unsynced work on the current device.
 
-See [setup, permissions, and behavior](docs/application-improvements.md).
+All of these require an administrator, except the route planner, which needs
+`view_all_routes`.
 
 ## Visual smoke check
 
@@ -478,3 +503,9 @@ restoring the Public base URL it borrows to do so. Pass `THEME=control-room`
 (with that theme active in Settings) to check a non-default theme.
 
 Requires `pip install playwright && playwright install chromium`.
+
+## Documentation
+
+- [CI/CD & releases](docs/ci-cd.md) — pipeline, versioning, image tags, deploy
+- [QuickBooks billing](docs/quickbooks-billing.md) — monthly reviewed-billing routine
+- [QuickBooks transport contract](docs/quickbooks-api-contract.md) — API client guarantees
