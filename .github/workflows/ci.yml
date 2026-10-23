@@ -202,7 +202,7 @@ jobs:
         run: docker rm -f "$SMOKE" >/dev/null 2>&1 || true
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [hygiene, lint, test, browser, build-smoke]
     runs-on: ubuntu-latest
     # Serialize releases: two quick merges to main otherwise run concurrent
@@ -236,6 +236,7 @@ jobs:
             --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.licenses=AGPL-3.0-only \
             -t "$IMAGE:latest" .
           docker push "$IMAGE:latest"
       - name: Push :vX.Y.Z and publish the Release

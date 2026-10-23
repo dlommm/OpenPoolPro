@@ -519,3 +519,10 @@ Requires `pip install playwright && playwright install chromium`.
 - [QuickBooks billing](docs/quickbooks-billing.md) — monthly reviewed-billing routine
 - [QuickBooks transport contract](docs/quickbooks-api-contract.md) — API client guarantees
 - [Water testers](docs/water-testers.md) — supported testers and monitors, and setup
+
+## License
+
+OpenPoolPro is licensed under the [GNU Affero General Public License v3.0](LICENSE)
+(AGPL-3.0-only). You may use, modify, and self-host it; if you run a modified
+version that other people use over a network, you must offer them the source of
+your modified version under the same license.
