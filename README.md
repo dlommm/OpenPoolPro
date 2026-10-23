@@ -518,3 +518,4 @@ Requires `pip install playwright && playwright install chromium`.
 - [CI/CD & releases](docs/ci-cd.md) — pipeline, versioning, image tags, deploy
 - [QuickBooks billing](docs/quickbooks-billing.md) — monthly reviewed-billing routine
 - [QuickBooks transport contract](docs/quickbooks-api-contract.md) — API client guarantees
+- [Water testers](docs/water-testers.md) — supported testers and monitors, and setup
