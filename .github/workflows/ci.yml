@@ -202,7 +202,7 @@ jobs:
         run: docker rm -f "$SMOKE" >/dev/null 2>&1 || true
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [hygiene, lint, test, browser, build-smoke]
     runs-on: ubuntu-latest
     # Serialize releases: two quick merges to main otherwise run concurrent
