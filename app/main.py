@@ -47,6 +47,7 @@ from app.routers import (  # noqa: E402
     routes,
     settings,
     sign,
+    testers,
     today,
     users,
     visits,
@@ -60,7 +61,7 @@ ROUTERS = (
     console.router, users.router, account.router, audit.router,
     analytics.router, inventory.router, invoices.router, routes.router,
     contracts.router, contract_template.router, sign.router,
-    improvements.router, portal.router, qbo_billing.router,
+    improvements.router, portal.router, qbo_billing.router, testers.router,
 )
 
 
@@ -502,6 +503,12 @@ def create_app(engine=None) -> FastAPI:
         app.state.scheduler.add_job(observability.logged_job(qbo_billing.sync_job),
                                     "interval", minutes=5, args=[app.state.engine],
                                     id="qbo_billing_sync", max_instances=1, coalesce=True)
+        from app import tester_clients
+        # Ondilo is further throttled to hourly inside sync_all (its quota is
+        # 30 requests/hour); LabCOM and iopool are cheap single calls.
+        app.state.scheduler.add_job(observability.logged_job(tester_clients.sync_job),
+                                    "interval", minutes=15, args=[app.state.engine],
+                                    id="tester_sync", max_instances=1, coalesce=True)
         # The scheduler is in-process and non-persistent: a box that was down at
         # 01:00 (night deploy, Unraid reboot) silently skips that night and
         # nothing notices, so "14 daily generations" can quietly become 14

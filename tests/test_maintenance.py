@@ -239,7 +239,7 @@ def test_warranty_alerts_excludes_inactive_customer(engine):
 
 def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_path):
     import app.config as config
-    from app import mailer
+    from app import mailer, tester_clients
     from app.backup import run_backup
     from app.main import create_app
     from app.routers import qbo_billing
@@ -250,7 +250,7 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     app = create_app(engine=engine)
     try:
         jobs = app.state.scheduler.get_jobs()
-        assert len(jobs) == 4
+        assert len(jobs) == 5
         # create_app registers every job through observability.logged_job, so
         # the scheduled callable is the wrapper -- unwrap to identify the target.
         funcs = {getattr(j.func, "__wrapped__", j.func) for j in jobs}
@@ -258,6 +258,7 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
         assert run_nightly in funcs
         assert mailer.flush_job in funcs
         assert qbo_billing.sync_job in funcs
+        assert tester_clients.sync_job in funcs
 
         mail_job = next(j for j in jobs
                         if getattr(j.func, "__wrapped__", None) is mailer.flush_job)

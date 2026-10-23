@@ -89,6 +89,25 @@
     "qbo_customer_scope",
     "tags"
   ],
+  "device_readings": [
+    "assigned_by_id",
+    "created_at",
+    "device_serial",
+    "edited",
+    "external_id",
+    "external_key",
+    "external_label",
+    "id",
+    "kind",
+    "match_method",
+    "measured_at",
+    "property_id",
+    "source",
+    "status",
+    "uploaded_by_id",
+    "values",
+    "visit_id"
+  ],
   "email_outbox": [
     "attempts",
     "body",
@@ -431,6 +450,24 @@
     "note",
     "start_date",
     "user_id"
+  ],
+  "tester_devices": [
+    "first_seen_at",
+    "id",
+    "serial",
+    "source",
+    "user_id"
+  ],
+  "tester_links": [
+    "created_at",
+    "created_by_id",
+    "external_key",
+    "external_label",
+    "id",
+    "last_polled_at",
+    "property_id",
+    "secret",
+    "source"
   ],
   "users": [
     "active",

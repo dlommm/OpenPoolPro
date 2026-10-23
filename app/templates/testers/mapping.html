@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Import water tests{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Water tests", "Check the columns") }}
+<p class="mb-3 text-sm text-mist">{{ count }} row(s) found. Each column's meaning was guessed from its heading — correct any that are wrong. Use either one column per reading, or the parameter + result columns when the file has one row per reading.</p>
+{% if error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/water-tests/import/{{ token }}" class="space-y-3">
+  {# One row per column rather than a wide table: this is done on a phone,
+     where a sideways-scrolling table hides most of the columns. #}
+  <div class="space-y-2">
+    {% for h in headers %}{% set i = loop.index0 %}
+    <label class="card block p-3">
+      <span class="block font-semibold">{{ h or ('Column ' ~ loop.index) }}</span>
+      <span class="block truncate font-data text-sm text-mist">{% for row in preview[:3] %}{{ row[i] or '—' }}{{ ' · ' if not loop.last }}{% endfor %}</span>
+      <select name="role_{{ i }}" class="field mt-2 w-full">{% for value, label in options %}<option value="{{ value }}" {{ 'selected' if value == roles[i] }}>{{ label }}</option>{% endfor %}</select>
+    </label>
+    {% endfor %}
+  </div>
+  <button class="btn-primary">Import tests</button>
+</form>
+{% endblock %}

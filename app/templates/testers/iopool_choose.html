@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Choose iopool pool{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Water testers", "Which iopool pool?") }}
+<p class="mb-3 text-sm">That iopool account has several pools. Choose the one at <strong>{{ prop.customer.name }} — {{ prop.label }}</strong>.</p>
+<form method="post" action="/testers/iopool" class="card space-y-2 p-4">
+  <input type="hidden" name="api_key" value="{{ api_key }}"><input type="hidden" name="property_id" value="{{ prop.id }}">
+  {% for c in choices %}<label class="flex items-center gap-2"><input type="radio" name="pool_key" value="{{ c.key }}" required> {{ c.label }}</label>{% endfor %}
+  <button class="btn-primary">Link this pool</button>
+</form>
+{% endblock %}

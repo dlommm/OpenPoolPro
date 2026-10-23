@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Water testers{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{{ ui.page_header("Connections", "Water testers") }}
+<p class="mb-4 text-sm text-mist">Readings from testers and in-pool monitors are only ever tied to a pool by a link below, by a tech choosing them on that pool's visit, or by the office in the <a class="text-pool underline" href="/water-tests">water-tests inbox</a>. <a class="text-pool underline" href="/water-tests/import">Import a file</a> for testers that export a spreadsheet (eXact iDip, Hanna Lab, LaMotte WaterLink Connect).</p>
+{% if flash %}<p class="card mb-4 p-3 text-sm {{ 'border-safety/40 bg-safety/5 text-safety' if flash.error }}" role="status">{{ flash.message }}</p>{% endif %}
+
+<form method="post" action="/testers/sync" class="mb-5"><button class="btn-primary">Sync now</button></form>
+
+<div class="grid gap-4 lg:grid-cols-2">
+<section class="card p-4" id="labcom">
+  <h2 class="font-display text-xl font-bold">PoolLab · PoolWaterLAB · PrimeLab</h2>
+  <p class="mt-1 text-sm text-mist">Handheld photometers that sync each test to the LabCOM cloud. In the LabCOM app, create an account per customer (or use one account and let techs pick readings on the visit). Copy the API token from labcom.cloud → user settings.</p>
+  {% set s = status.labcom %}
+  <p class="mt-2 text-sm">{{ 'Token saved' if labcom_set else 'Not connected' }}{% if labcom_set and s.synced %} · last sync {{ s.synced | stamp }}{% endif %}</p>
+  {% if s.error %}<p class="mt-1 text-sm text-safety">{{ s.error }}</p>{% endif %}
+  <form method="post" action="/testers/labcom" class="mt-3 space-y-2">
+    <label class="block"><span class="field-label">API token</span>
+      <input type="password" name="token" autocomplete="off" class="field" placeholder="{{ 'Leave blank to keep the saved token' if labcom_set else 'Paste the LabCOM token' }}"></label>
+    <button class="btn-primary">Save token</button>
+  </form>
+  {% if labcom_set %}<form method="post" action="/testers/labcom" class="mt-2" data-confirm="Remove the LabCOM token? Tests stop syncing."><input type="hidden" name="clear" value="1"><button class="btn-secondary">Remove token</button></form>{% endif %}
+  {% if labcom_accounts %}
+  <h3 class="mt-4 font-semibold">LabCOM accounts not linked yet</h3>
+  <div class="mt-2 space-y-2">{% for key, label in labcom_accounts %}
+    <form method="post" action="/testers/link" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="source" value="labcom"><input type="hidden" name="external_key" value="{{ key }}"><input type="hidden" name="external_label" value="{{ label }}">
+      <span class="w-full text-sm font-semibold">{{ label }}</span>
+      <select name="property_id" class="field min-w-0 flex-1" required><option value="">Choose the pool…</option>{% for pid, plabel in properties %}<option value="{{ pid }}">{{ plabel }}</option>{% endfor %}</select>
+      <button class="btn-secondary">Link</button>
+    </form>{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card p-4" id="ondilo">
+  <h2 class="font-display text-xl font-bold">Ondilo ICO</h2>
+  <p class="mt-1 text-sm text-mist">In-pool monitor (pH, ORP, salt, temperature). Connect your company's Ondilo login once; each homeowner shares their pool with that login in the ICO app. Read at most hourly (Ondilo allows 30 requests per hour).</p>
+  {% set s = status.ondilo %}
+  <p class="mt-2 text-sm">{{ 'Connected' if ondilo_connected else 'Not connected' }}{% if ondilo_connected and s.synced %} · last sync {{ s.synced | stamp }}{% endif %}</p>
+  {% if s.error %}<p class="mt-1 text-sm text-safety">{{ s.error }}</p>{% endif %}
+  {% if not public_base %}<p class="mt-1 text-sm text-mist">Set Settings → System → Public base URL first if staff reach this app by a LAN address; Ondilo sends you back to it after sign-in.</p>{% endif %}
+  <div class="mt-3 flex flex-wrap gap-2">
+    <form method="post" action="/testers/ondilo/connect"><button class="btn-primary">{{ 'Reconnect' if ondilo_connected else 'Connect Ondilo' }}</button></form>
+    {% if ondilo_connected %}
+    <form method="post" action="/testers/ondilo/pools"><button class="btn-secondary">Load shared pools</button></form>
+    <form method="post" action="/testers/ondilo/disconnect" data-confirm="Disconnect Ondilo? Monitor readings stop until it is reconnected."><button class="btn-secondary">Disconnect</button></form>
+    {% endif %}
+  </div>
+  {% if ondilo_pools %}
+  <div class="mt-3 space-y-2">{% for p in ondilo_pools %}
+    <form method="post" action="/testers/link" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="source" value="ondilo"><input type="hidden" name="external_key" value="{{ p.key }}"><input type="hidden" name="external_label" value="{{ p.label }}">
+      <span class="w-full text-sm font-semibold">{{ p.label }}</span>
+      <select name="property_id" class="field min-w-0 flex-1" required><option value="">Choose the pool…</option>{% for pid, plabel in properties %}<option value="{{ pid }}">{{ plabel }}</option>{% endfor %}</select>
+      <button class="btn-secondary">Link</button>
+    </form>{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card p-4" id="iopool">
+  <h2 class="font-display text-xl font-bold">iopool</h2>
+  <p class="mt-1 text-sm text-mist">In-pool monitor (pH, ORP, temperature). The homeowner copies their API key from the iopool app (More → Settings → API key). The key is checked with iopool and stored encrypted.</p>
+  {% set s = status.iopool %}
+  {% if s.synced %}<p class="mt-2 text-sm">Last sync {{ s.synced | stamp }}</p>{% endif %}
+  {% if s.error %}<p class="mt-1 text-sm text-safety">{{ s.error }}</p>{% endif %}
+  <form method="post" action="/testers/iopool" class="mt-3 space-y-2">
+    <label class="block"><span class="field-label">Owner's iopool API key</span><input type="password" name="api_key" autocomplete="off" class="field" required></label>
+    <label class="block"><span class="field-label">Their pool here</span><select name="property_id" class="field" required><option value="">Choose the pool…</option>{% for pid, plabel in properties %}<option value="{{ pid }}">{{ plabel }}</option>{% endfor %}</select></label>
+    <button class="btn-primary">Link iopool</button>
+  </form>
+</section>
+
+<section class="card p-4" id="devices">
+  <h2 class="font-display text-xl font-bold">Testers and who carries them</h2>
+  <p class="mt-1 text-sm text-mist">Testers appear here the first time they sync. A tech can only pull unassigned readings from a tester assigned to them.</p>
+  <div class="mt-3 space-y-2">{% for d in devices %}
+    <form method="post" action="/testers/devices/{{ d.id }}" class="flex flex-wrap items-end gap-2">
+      <span class="w-full text-sm"><strong>#{{ d.serial }}</strong> · {{ sources[d.source] }} · first seen {{ d.first_seen_at | stamp }}</span>
+      <select name="user_id" class="field min-w-0 flex-1"><option value="">Nobody</option>{% for u in users %}<option value="{{ u.id }}" {{ 'selected' if d.user_id == u.id }}>{{ u.name }}</option>{% endfor %}</select>
+      <button class="btn-secondary">Save</button>
+    </form>{% else %}<p class="text-sm text-mist">No testers have synced yet.</p>{% endfor %}</div>
+</section>
+</div>
+
+<section class="card mt-4 p-4" id="links">
+  <h2 class="font-display text-xl font-bold">Links</h2>
+  <p class="mt-1 text-sm text-mist">Readings from each of these always go to the pool shown. Removing a link leaves readings already tied where they are.</p>
+  <div class="mt-3 space-y-2">{% for l in links %}
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-seam pb-2">
+      <p class="text-sm"><strong>{{ l.external_label or l.external_key }}</strong> · {{ sources[l.source] }}<br>→ {{ l.property.customer.name }} — {{ l.property.label }}</p>
+      <form method="post" action="/testers/link/{{ l.id }}/delete" data-confirm="Remove this link?"><button class="btn-secondary">Remove</button></form>
+    </div>{% else %}<p class="text-sm text-mist">No links yet.</p>{% endfor %}</div>
+</section>
+{% endblock %}

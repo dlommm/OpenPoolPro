@@ -31,7 +31,7 @@ SCREENS = ["/", "/dashboard", "/week", "/customers", "/customers/1", "/jobs", "/
            "/contracts", "/money", "/invoices", "/ar", "/analytics", "/inventory", "/settings",
            "/billing", "/audit", "/account", "/routes/balance", "/routes/plan", "/operations",
            "/users", "/followups", "/water-alerts", "/search", "/today/print",
-           "/customers/1/portal",
+           "/customers/1/portal", "/testers", "/water-tests", "/water-tests/import",
            # Form pages. They are screens like any other -- a form that renders
            # its own page can clip a label or stretch a button just as a list can.
            "/customers/new", "/customers/import", "/jobs/new", "/quotes/new",

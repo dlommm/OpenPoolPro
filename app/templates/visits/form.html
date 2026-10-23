@@ -23,13 +23,16 @@
 
   <div>
     <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Readings</h2>
-    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-      {% for name, label in [("fc","Free Chlorine"),("ph","pH"),("ta","Total Alkalinity"),("cya","Cyanuric Acid"),("salt","Salt")] %}
-      <label class="block text-center"><span class="field-label font-data leading-tight">{{ label }}</span>
-        <input inputmode="decimal" name="{{ name }}" value="{{ v|attr(name) if v|attr(name) is not none else '' }}"
-               hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="input changed delay:400ms"
-               class="field text-center font-data text-lg"></label>
-      {% endfor %}
+    {% if tester_reading %}<p class="mb-2 text-sm text-mist">Saved readings came from {{ tester_sources[tester_reading.source] }}{% if tester_reading.device_serial %} #{{ tester_reading.device_serial }}{% endif %}, tested {{ tester_reading.measured_at | stamp }}{% if tester_reading.edited %} — edited by hand before saving{% endif %}.</p>{% endif %}
+    {% set values = {} %}
+    {% for name in ["fc","ph","ta","cya","salt"] %}{% set _ = values.update({name: v|attr(name) if v|attr(name) is not none else ''}) %}{% endfor %}
+    {% include "visits/_readings.html" %}
+    <div class="mt-2">
+      {# The panel fetches on tap only: listing candidates may refresh the
+         LabCOM cloud and this pool's monitors, which a page render must not. #}
+      <button type="button" class="btn-secondary" hx-get="/tester-readings/visit/{{ v.id }}"
+              hx-target="#tester-panel" hx-swap="innerHTML">Find tester readings</button>
+      <div id="tester-panel" class="mt-2" aria-live="polite"></div>
     </div>
   </div>
 
