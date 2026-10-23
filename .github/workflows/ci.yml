@@ -2,10 +2,11 @@
 #
 # Pull requests and pushes to main run the checks. On a push to main, once every
 # gating check is green:
-#   release — always (re)build & push the image to GHCR as `:latest`; when
+#   release — always (re)build & push the image to GHCR and Docker Hub as `:latest`; when
 #             conventional commits since the last tag warrant a version bump, also
 #             push `:vX.Y.Z` and create the git tag + GitHub Release.
-# Auth is the built-in GITHUB_TOKEN — no extra secret required. See docs/ci-cd.md.
+# GHCR auth is the built-in GITHUB_TOKEN; Docker Hub uses the DOCKERHUB_USERNAME /
+# DOCKERHUB_TOKEN repo secrets. See docs/ci-cd.md.
 
 name: CI
 
@@ -223,13 +224,21 @@ jobs:
           bash scripts/next-version.sh >> "$GITHUB_ENV"
           bash scripts/next-version.sh
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "HUB_IMAGE=docker.io/dendlomm/openpoolpro" >> "$GITHUB_ENV"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Always refresh :latest (carries the baked APP_VERSION). --pull so base
-      # image security patches (python:3.12-slim) reach production.
+      # Docker Hub mirror. DOCKERHUB_TOKEN is a Docker Hub access token with
+      # Read & Write scope on dendlomm/openpoolpro.
+      - uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Always refresh :latest (carries the baked APP_VERSION) in both registries.
+      # --pull so base image security patches (python:3.12-slim) reach production.
       - name: Build and push :latest
         run: |
           docker build --pull --build-arg APP_VERSION="$VERSION" \
@@ -237,19 +246,30 @@ jobs:
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             --label org.opencontainers.image.version="$VERSION" \
             --label org.opencontainers.image.licenses=AGPL-3.0-only \
-            -t "$IMAGE:latest" .
+            -t "$IMAGE:latest" -t "$HUB_IMAGE:latest" .
           docker push "$IMAGE:latest"
+          docker push "$HUB_IMAGE:latest"
       - name: Push :vX.Y.Z and publish the Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "$BUMP" = "none" ]; then
             echo "No feat/fix/breaking commits since last tag — pushed :latest only, no new release."
+            # Versioned tags are immutable, so never rebuild one. If Docker Hub
+            # is missing the current release (it was cut before the mirror
+            # existed), copy GHCR's exact image across instead.
+            if ! docker manifest inspect "$HUB_IMAGE:$VERSION" >/dev/null 2>&1 \
+               && docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+              docker buildx imagetools create -t "$HUB_IMAGE:$VERSION" "$IMAGE:$VERSION"
+              echo "Mirrored $IMAGE:$VERSION to Docker Hub."
+            fi
             exit 0
           fi
-          docker tag "$IMAGE:latest" "$IMAGE:$VERSION"
-          docker push "$IMAGE:$VERSION"
+          for img in "$IMAGE" "$HUB_IMAGE"; do
+            docker tag "$IMAGE:latest" "$img:$VERSION"
+            docker push "$img:$VERSION"
+          done
           # Creates the tag at this commit. Tags pushed with GITHUB_TOKEN do not
           # trigger workflows, and this workflow only runs on branches anyway.
           gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes \
-            --notes "Docker image \`$IMAGE:$VERSION\` (also \`:latest\`). Built from ${GITHUB_SHA::7}."
+            --notes "Docker image \`$IMAGE:$VERSION\` or \`$HUB_IMAGE:$VERSION\` (both also \`:latest\`). Built from ${GITHUB_SHA::7}."

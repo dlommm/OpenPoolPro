@@ -35,10 +35,14 @@ green, the **release** job runs:
 
 - Computes the next version from **conventional commits** since the last tag
   (`scripts/next-version.sh`).
-- **Always** rebuilds and pushes `ghcr.io/dlommm/openpoolpro:latest` (the image
-  bakes the version in via `--build-arg APP_VERSION`).
-- **On a version bump only**: also pushes `:vX.Y.Z` and publishes a GitHub
-  **Release**, which creates the git tag `vX.Y.Z` at that commit.
+- **Always** rebuilds and pushes `:latest` to both registries (the image bakes
+  the version in via `--build-arg APP_VERSION`):
+  - `ghcr.io/dlommm/openpoolpro`
+  - `docker.io/dendlomm/openpoolpro` (Docker Hub)
+- **On a version bump only**: also pushes `:vX.Y.Z` to both and publishes a
+  GitHub **Release**, which creates the git tag `vX.Y.Z` at that commit.
+- **No bump**: if Docker Hub is missing the current `:vX.Y.Z`, the exact GHCR
+  image is copied across (never rebuilt), so the two registries stay in step.
 
 Releases are serialized (`concurrency: release`), so two quick merges can't race
 to the same version. Never create version tags by hand.
@@ -73,6 +77,8 @@ So: keep using `feat:` / `fix:` / `feat!:` commit prefixes and versions bump the
 - `:latest` — always the newest build of `main`.
 - `:vX.Y.Z` — immutable, one per release, matches the git tag and the GitHub Release.
 
+Both tags are identical in GHCR and Docker Hub; pull from whichever you prefer.
+
 Deploy target is **Unraid (amd64)**. GitHub-hosted runners are amd64, so CI builds natively.
 (Building on an Apple-Silicon Mac needs `--platform linux/amd64`.)
 
@@ -84,11 +90,16 @@ the **Settings** page ("OpenPoolPro vX.Y.Z"), theme-agnostic. Local/dev shows `d
 
 ## One-time setup
 
-**No secret is required.** The release job authenticates to GHCR and creates the
-Release with the built-in `GITHUB_TOKEN` (the workflow requests `contents: write`
-and `packages: write` for that job only).
+The release job authenticates to GHCR and creates the Release with the built-in
+`GITHUB_TOKEN` (the workflow requests `contents: write` and `packages: write` for
+that job only). Docker Hub needs two repository secrets
+(**Settings → Secrets and variables → Actions**):
 
-After the first release publishes the package:
+- `DOCKERHUB_USERNAME` — the Docker Hub account that owns `dendlomm/openpoolpro`.
+- `DOCKERHUB_TOKEN` — a Docker Hub personal access token with **Read & Write**
+  scope (Docker Hub → Account settings → Personal access tokens).
+
+For GHCR, after the first release publishes the package:
 
 1. Open **GitHub → your profile → Packages → openpoolpro → Package settings**.
 2. Under *Manage Actions access*, confirm the `OpenPoolPro` repository has
@@ -98,8 +109,8 @@ After the first release publishes the package:
    credentials, or keep it private and `docker login ghcr.io` on the Unraid host
    with a classic PAT that has `read:packages`.
 
-Recommended branch protection on `main`: require pull requests, and require the
-`hygiene`, `lint`, `test`, `browser`, and `build-smoke` checks to pass.
+Branch protection on `main` requires a pull request and the `hygiene`, `lint`,
+`test`, `browser`, and `build-smoke` checks; admins can still bypass in an emergency.
 
 ## Manual release fallback
 
@@ -121,4 +132,5 @@ docker compose -f docker-compose.unraid.yml pull
 docker compose -f docker-compose.unraid.yml up -d
 ```
 Data persists via the `/data` volume. Pin a specific version by setting the image to
-`ghcr.io/dlommm/openpoolpro:vX.Y.Z` instead of `:latest`.
+`ghcr.io/dlommm/openpoolpro:vX.Y.Z` instead of `:latest`; to pull from Docker Hub
+instead, use `dendlomm/openpoolpro:latest` (or `:vX.Y.Z`).
