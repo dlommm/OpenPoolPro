@@ -5,12 +5,12 @@ python-multipart>=0.0.9
 sqlalchemy>=2.0
 itsdangerous>=2.1
 apscheduler>=3.10
-pillow>=10.0
+pillow>=13.0.0
 passlib[bcrypt]>=1.7
 bcrypt<4.1
 pyotp>=2.9
 segno>=1.6
 reportlab>=4.0
-pypdf>=4.0
+pypdf>=6.21.1
 cryptography>=42
 openpyxl>=3.1

@@ -44,7 +44,7 @@ openpyxl==3.1.5
     # via -r requirements.txt
 passlib==1.7.4
     # via -r requirements.txt
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   -r requirements.txt
     #   reportlab
@@ -56,7 +56,7 @@ pydantic-core==2.46.5
     # via pydantic
 pyotp==2.10.0
     # via -r requirements.txt
-pypdf==6.16.2
+pypdf==6.21.2
     # via -r requirements.txt
 python-dotenv==1.2.3
     # via uvicorn
