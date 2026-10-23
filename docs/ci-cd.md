@@ -15,6 +15,10 @@ date-boundary tests depend on):
   databases, or local artifacts are tracked; if any tracked file matches
   `.gitignore` (i.e. was force-added); or if a commit message carries an AI
   co-author trailer.
+- **commits** (PRs only) — fails if any commit in the PR lacks a conventional
+  prefix (`feat:`, `fix:`, `docs:` …; see below), because an unprefixed commit
+  would silently ship without a version bump. It also writes a **release
+  preview** to the run summary: the exact version merging the PR will release.
 - **lint** — `ruff check app/ tests/ scripts/` (config in `pyproject.toml`).
 - **audit** — `pip-audit` against `requirements.lock`. Marked
   `continue-on-error`, so a brand-new upstream CVE shows up without blocking an
@@ -66,9 +70,15 @@ regenerate and commit both locks:
 |------------------------------------------|-------|----------------|
 | `feat!:` / `type!:` / `BREAKING CHANGE`  | major | v1.4.2 → v2.0.0 |
 | `feat: ...`                              | minor | v1.4.2 → v1.5.0 |
-| `fix: ...`                               | patch | v1.4.2 → v1.4.3 |
+| `fix:` / `perf:` / `revert:` / `Revert "…"` | patch | v1.4.2 → v1.4.3 |
 | only `docs/chore/refactor/test/...`      | none  | no new release; `:latest` still refreshed |
 | no tags yet                              | —     | bootstraps **v1.0.0** |
+
+The highest bump in the range wins (one `feat:` among ten `fix:` commits is a
+minor release). Allowed prefixes, with an optional `(scope)` and `!`: `feat`,
+`fix`, `perf`, `revert`, `refactor`, `docs`, `test`, `chore`, `ci`, `build`,
+`style`, `merge`; git's own `Merge …` / `Revert "…"` subjects are accepted too.
+The rules are pinned by `tests/test_next_version.py`.
 
 So: keep using `feat:` / `fix:` / `feat!:` commit prefixes and versions bump themselves.
 
@@ -109,8 +119,8 @@ For GHCR, after the first release publishes the package:
    credentials, or keep it private and `docker login ghcr.io` on the Unraid host
    with a classic PAT that has `read:packages`.
 
-Branch protection on `main` requires a pull request and the `hygiene`, `lint`,
-`test`, `browser`, and `build-smoke` checks; admins can still bypass in an emergency.
+Branch protection on `main` requires a pull request and the `hygiene`, `commits`,
+`lint`, `test`, `browser`, and `build-smoke` checks; admins can still bypass in an emergency.
 
 ## Manual release fallback
 

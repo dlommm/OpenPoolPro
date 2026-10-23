@@ -79,6 +79,46 @@ jobs:
             exit 1
           fi
 
+  # Release versions are computed from commit subjects (scripts/next-version.sh),
+  # so a PR commit without a conventional prefix would silently ship without a
+  # version bump. Reject those, and show what merging this PR would release.
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Conventional commit subjects
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=$(git log --format='%h %s' "$BASE..$HEAD_SHA" | grep -vE \
+            -e '^[0-9a-f]+ (feat|fix|perf|refactor|docs|test|tests|chore|ci|build|style|revert|merge)(\([^)]+\))?!?: .+' \
+            -e '^[0-9a-f]+ (Merge|Revert) ' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Commit subjects must start with a conventional type (feat:, fix:, docs:, ...):"
+            echo "$bad"
+            echo "Rename with: git rebase -i $BASE  (reword), then force-push the branch."
+            exit 1
+          fi
+      - name: Release preview
+        run: |
+          # The PR checkout is GitHub's test merge into the base branch, so this
+          # is exactly the version the release job will compute after merging.
+          git fetch --tags --force
+          eval "$(bash scripts/next-version.sh)"
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo none)
+          if [ "$BUMP" = "none" ]; then
+            msg="Merging this PR releases **no new version** (last: \`$last\`) — only \`:latest\` is refreshed."
+          else
+            msg="Merging this PR releases **$VERSION** (\`$BUMP\` bump from \`$last\`)."
+          fi
+          echo "$msg"
+          echo "### Release preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
   lint:
     runs-on: ubuntu-latest
     steps:
