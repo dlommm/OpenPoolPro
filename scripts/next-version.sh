@@ -8,7 +8,7 @@
 # Rules (conventional commits, scanning commits in <last-tag>..HEAD):
 #   - "feat!:" / "type!:" / a "BREAKING CHANGE" footer  -> major
 #   - "feat:"                                            -> minor
-#   - "fix:"                                             -> patch
+#   - "fix:" / "perf:" / "revert:" / a git `Revert "..."` -> patch
 #   - anything else only                                -> none (no new release; keep last tag)
 #   - no tags yet                                        -> bootstrap v1.0.0 (initial)
 #
@@ -33,7 +33,7 @@ if printf '%s\n' "$subjects" | grep -qE '^[a-z]+(\([^)]+\))?!:' \
   bump=major
 elif printf '%s\n' "$subjects" | grep -qE '^feat(\([^)]+\))?:'; then
   bump=minor
-elif printf '%s\n' "$subjects" | grep -qE '^fix(\([^)]+\))?:'; then
+elif printf '%s\n' "$subjects" | grep -qE '^(fix|perf|revert)(\([^)]+\))?:|^Revert "'; then
   bump=patch
 fi
 
