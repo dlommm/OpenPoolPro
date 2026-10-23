@@ -13,9 +13,10 @@
 #   3. Adjust the host port (left side of 8000:8000) if 8000 is taken.
 #   4. Start the stack. Open the WebUI from the Unraid Docker tab.
 #
-# Image is pulled from your private GitLab registry (ghcr.io).
-# If the registry needs auth, log in on the Unraid terminal first:
-#   docker login ghcr.io -u <user> -p <deploy-token-or-PAT>
+# Image is pulled from GitHub Container Registry (ghcr.io), published by CI on
+# every merge to main. If the package is private, log in on the Unraid terminal
+# first with a classic PAT that has the read:packages scope:
+#   docker login ghcr.io -u <github-user> -p <PAT>
 # (The Compose Manager pulls with the host Docker's stored credentials.)
 
 services:
@@ -111,6 +112,4 @@ services:
     # Unraid Docker-tab integration: WebUI button + icon
     labels:
       net.unraid.docker.webui: "http://[IP]:[PORT:8000]/"
-      # Point at a raw icon URL on your GitLab web host (registry host != web host).
-      # e.g. https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/app/static/icons/icon-192.png
       net.unraid.docker.icon: "https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/app/static/icons/icon-192.png"

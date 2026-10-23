@@ -47,5 +47,5 @@ No live invoice creation, email delivery, or customer payment was performed duri
 implementation. Mocked transport tests verify wire format and failure handling;
 connected-account acceptance testing remains necessary before production enablement.
 
-[The sandbox test plan](quickbooks-sandbox-testing.md) is the procedure for that
-acceptance run.
+Run that acceptance pass against an Intuit sandbox company before enabling
+production billing.
