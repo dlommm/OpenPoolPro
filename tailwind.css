@@ -11,3 +11,8 @@
 @source "./app/templates";
 @import "./css/base.css";
 @import "./css/v2.css" layer(components);
+@import "./css/v2-emails.css" layer(components);
+@import "./css/v2-contracts.css" layer(components);
+@import "./css/v2-billing.css" layer(components);
+@import "./css/v2-analytics.css" layer(components);
+@import "./css/v2-routes.css" layer(components);
