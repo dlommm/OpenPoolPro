@@ -245,7 +245,6 @@ def test_nightly_scheduler_includes_maintenance_rules(engine, monkeypatch, tmp_p
     from app.routers import qbo_billing
 
     monkeypatch.setattr(config, "RUN_SCHEDULER", True)
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
     app = create_app(engine=engine)
     try:
@@ -277,7 +276,6 @@ def test_app_shutdown_stops_scheduler_and_waits(engine, monkeypatch, tmp_path):
     from app.main import create_app
 
     monkeypatch.setattr(config, "RUN_SCHEDULER", True)
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
     app = create_app(engine=engine)
     sched = app.state.scheduler

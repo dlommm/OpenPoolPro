@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, mailer, models, qbo, tax, water_readings
+from app import chem_targets, dosing, inventory, mailer, models, qbo, tax, water_readings
 from app.db import get_or_404, get_session
 from app.rates import effective_rate_cents
 from app.templating import templates
@@ -16,8 +16,8 @@ from app.timefmt import business_today, from_local_hhmm, local_date
 router = APIRouter()
 
 
-def service_report(session, v, business: str, tech_name: str) -> str:
-    """The plain-text visit summary the homeowner receives.
+def service_mail(session, v, business: str, tech_name: str, signoff: str = ""):
+    """The visit summary the homeowner receives, as an email_brand.Mail.
 
     Proof of work is what answers "did anyone actually come?", justifies a rate
     increase, and settles a dispute — so it includes what was measured and what
@@ -27,21 +27,17 @@ def service_report(session, v, business: str, tech_name: str) -> str:
     Deliberately excludes money: this goes out automatically on every visit,
     and pricing conversations belong on the invoice, not in a service note.
     """
-    from app import water_history
+    from app import email_brand, email_templates, water_history
 
     tgt = water_history.targets(session)
-    lines = [f"{business}", f"{v.property.label} — {v.date.strftime('%B %-d, %Y')}", ""]
-
     readings = []
     for key, label, unit, *_ in water_history.METRICS:
         value = getattr(v, key, None)
         if value is None:
             continue
         target = tgt.get(key)
-        suffix = f" (target {target:g})" if target is not None else ""
-        readings.append(f"  {label}: {value:g}{' ' + unit if unit else ''}{suffix}")
-    if readings:
-        lines += ["Water test:"] + readings + [""]
+        readings.append((label, f"{value:g}{' ' + unit if unit else ''}",
+                         f"target {target:g}" if target is not None else ""))
 
     # Queried rather than read off v.chemicals: complete() inserts the new lines
     # by visit_id, so the already-loaded relationship collection is stale at
@@ -49,20 +45,17 @@ def service_report(session, v, business: str, tech_name: str) -> str:
     session.flush()
     added = session.scalars(select(models.VisitChemical).where(
         models.VisitChemical.visit_id == v.id)).all()
-    if added:
-        lines.append("Chemicals added:")
-        for vc in added:
-            lines.append(f"  {vc.chemical.name}: {vc.amount:g} {vc.chemical.unit}")
-        lines.append("")
+    chemicals = [(vc.chemical.name, f"{vc.amount:g} {vc.chemical.unit}") for vc in added]
+    return email_brand.visit_mail(
+        business=business, property_label=v.property.label, day=v.date, tech_name=tech_name,
+        readings=readings, chemicals=chemicals, tasks=list(v.tasks_done or []),
+        notes=v.notes or "", signoff=signoff, customer_name=v.property.customer.name,
+        doc=email_templates.doc(session, "visit"))
 
-    if v.tasks_done:
-        lines += ["Completed:"] + [f"  {t}" for t in v.tasks_done] + [""]
 
-    if v.notes:
-        lines += ["Notes:", f"  {v.notes}", ""]
-
-    lines.append(f"Technician: {tech_name}")
-    return "\n".join(lines)
+def service_report(session, v, business: str, tech_name: str) -> str:
+    """The plain-text part of the visit summary (see service_mail)."""
+    return service_mail(session, v, business, tech_name).text
 
 
 def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
@@ -165,20 +158,9 @@ def visit_doses(request: Request, visit_id: int,
     if all(val is None for val in readings.values()):
         return templates.TemplateResponse(request, "visits/_doses.html",
                                           {"doses": None, "hint": "Enter readings to get dose suggestions"})
-    try:
-        targets = {
-            "fc": float(models.get_setting(session, "target_fc", "4.0")),
-            "ph": float(models.get_setting(session, "target_ph", "7.5")),
-            "ta": float(models.get_setting(session, "target_ta", "90")),
-            "cya": float(models.get_setting(session, "target_cya", "50")),
-            "salt": float(models.get_setting(session, "target_salt", "3200")),
-        }
-        if not all(math.isfinite(v) for v in targets.values()):
-            raise ValueError("non-finite target")
-    except (ValueError, OverflowError):
-        targets = {"fc": 4.0, "ph": 7.5, "ta": 90.0, "cya": 50.0, "salt": 3200.0}
+    targets, bands = chem_targets.current(session)
     chems = session.scalars(select(models.Chemical).where(models.Chemical.active)).all()
-    doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets)
+    doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets, bands)
     return templates.TemplateResponse(request, "visits/_doses.html",
                                       {"doses": doses, "hint": None})
 
@@ -244,7 +226,12 @@ def visit_form(request: Request, property_id: int, visit_date: date,
         "existing": existing, "show_money": request.state.user.can("view_money"),
         "collect": collect, "can_cash": request.state.user.can("mark_cash"),
         "tester_reading": water_readings.visit_reading(session, v.id),
-        "tester_sources": water_readings.SOURCES})
+        "tester_sources": water_readings.SOURCES,
+        "last_visit": session.scalars(
+            select(models.Visit).where(models.Visit.property_id == v.property_id,
+                                       models.Visit.status == "done",
+                                       models.Visit.date < v.date)
+            .order_by(models.Visit.date.desc())).first()})
 
 
 @router.post("/visit/{visit_id}/complete")
@@ -363,10 +350,13 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     # arrives against an already-done visit and either 409s above or, matching,
     # is a deliberate edit that still shouldn't re-send.
     if was_due and customer.email and customer.notify_email:
+        from app import email_brand
+
         business = models.get_setting(session, "business_name", "OpenPoolPro") or "OpenPoolPro"
-        mailer.queue(session, customer.email, f"{business} — service visit completed",
-                     service_report(session, v, business, request.state.user.name),
-                     customer_id=customer.id)
+        mail = service_mail(session, v, business, request.state.user.name,
+                            email_brand.look(session)["signoff"])
+        mailer.queue(session, customer.email, mail.subject, mail.text,
+                     customer_id=customer.id, html=email_brand.html_for(session, mail))
     session.commit()
     return RedirectResponse("/", status_code=303)
 

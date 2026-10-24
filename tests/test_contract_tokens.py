@@ -12,7 +12,7 @@ def _fixtures():
     customer = SimpleNamespace(name="Marcus Alvarez")
     prop = SimpleNamespace(label="Home", address="88 Gulfshore Blvd, Cocoa Beach, FL 32931",
                            gate_code="4417", city="Cocoa Beach", state="FL", zip="32931")
-    company = {"business_name": "Coastline Pools", "company_address": "142 Marina Way",
+    company = {"business_name": "Example Pool Co.", "company_address": "142 Marina Way",
                "company_phone": "(239) 555-0142", "company_email": "svc@x.example",
                "company_license": "CPC-1458792"}
     return contract, pool, prop, customer, company
@@ -21,7 +21,7 @@ def _fixtures():
 def test_resolve_formats_money_and_fields():
     contract, pool, prop, customer, company = _fixtures()
     ctx = ct.resolve_tokens(contract, pool, prop, customer, company, tax_rate_ppm=66250)
-    assert ctx["company_name"] == "Coastline Pools"
+    assert ctx["company_name"] == "Example Pool Co."
     assert ctx["customer_name"] == "Marcus Alvarez"
     assert ctx["pool_label"] == "Main"
     assert ctx["pool_gallons"] == "18,432"
@@ -34,9 +34,9 @@ def test_resolve_formats_money_and_fields():
 
 
 def test_apply_substitutes_known_leaves_unknown_blank_and_whitespace_tolerant():
-    ctx = {"company_name": "Coastline Pools", "weekly_price": "$85.00"}
+    ctx = {"company_name": "Example Pool Co.", "weekly_price": "$85.00"}
     out = ct.apply_tokens("{{company_name}} charges {{ weekly_price }}/week; {{bogus}}!", ctx)
-    assert out == "Coastline Pools charges $85.00/week; !"
+    assert out == "Example Pool Co. charges $85.00/week; !"
 
 
 def test_apply_tolerates_none():

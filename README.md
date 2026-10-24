@@ -4,6 +4,8 @@
 
 <p align="center"><em>Self-hosted pool-service management — routes, water chemistry, invoicing, and crew.</em></p>
 
+<p align="center"><a href="https://dlommm.github.io/OpenPoolPro/">Website</a> · <a href="https://hub.docker.com/r/dendlomm/openpoolpro">Docker Hub</a> · <a href="https://github.com/dlommm/OpenPoolPro/releases">Releases</a></p>
+
 ---
 
 Self-hosted pool-route app for small pool-service companies, built to run on
@@ -24,19 +26,28 @@ one box (Docker + SQLite) and to be used from an iPhone in the field.
 
 ## Run
 
-    cp .env.example .env   # set APP_PASSWORD and SECRET_KEY
+    cp .env.example .env   # set SECRET_KEY (openssl rand -hex 32)
     docker compose up -d
+    # (builds from source; to run the published image instead use
+    #  deploy/docker-compose.yml, which pulls dendlomm/openpoolpro:latest)
     # Put a TLS reverse proxy in front — the compose file binds the app to
     # 127.0.0.1:8000 ON PURPOSE (the app trusts X-Forwarded-* from the proxy),
     # so it is NOT reachable from other machines directly. Point the proxy at
     # 127.0.0.1:8000 and set FORWARDED_ALLOW_IPS to the proxy's address.
-    # First login is owner / your APP_PASSWORD
-    # manage crew under Settings → Manage crew
-    # change APP_PASSWORD in .env + restart to reset the owner login (recovery)
+    # Open the app: first-time setup asks for the setup code from
+    #   docker compose logs app | grep "Setup code"
+    # then creates your owner account (your name, username and password).
+    # Forgot the owner password? Print a one-time reset link:
+    #   docker compose exec app python -m app.manage reset-owner [--clear-2fa]
     # on iPhone: Share → Add to Home Screen
 
 All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
 folder.
+
+**Upgrading from a version that used `APP_PASSWORD`:** your `owner` account keeps
+working with its current password. The first time you sign in after the upgrade,
+you're asked to add your name, choose your own username and set a new password.
+After that `APP_PASSWORD` is never read, so remove it from `.env`.
 
 ### Deploy the published image (Unraid)
 
@@ -44,7 +55,7 @@ CI publishes `:latest` on every merge to `main`, plus an immutable `:vX.Y.Z` per
 release, to both `ghcr.io/dlommm/openpoolpro` and Docker Hub
 (`dendlomm/openpoolpro`). `docker-compose.unraid.yml` is a ready-made stack
 for Unraid's Docker Compose Manager — read the SETUP notes at the top of the file
-(cache-only appdata share, required `APP_PASSWORD`/`SECRET_KEY`), then:
+(cache-only appdata share, required `SECRET_KEY`), then:
 
     docker compose -f docker-compose.unraid.yml pull
     docker compose -f docker-compose.unraid.yml up -d
@@ -54,7 +65,8 @@ for Unraid's Docker Compose Manager — read the SETUP notes at the top of the f
     python3.12 -m venv .venv && source .venv/bin/activate
     pip install -r requirements-dev.txt
     python scripts/build_css.py
-    APP_PASSWORD=dev COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
+    COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
+    # the setup code is printed in the log on first start
     ruff check app/ tests/ scripts/   # same gate CI runs
     pytest -n auto
 
@@ -505,7 +517,7 @@ is how a customer arrives. Every staff screen and the portal are rendered
 twice, once on a light device and once on a dark one, and each render is held
 to a 7:1 body-text contrast ratio:
 
-    APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py
+    APP_URL=http://localhost:8000 OWNER_USER=... OWNER_PASSWORD=... python scripts/visual_check.py
 
 Point it at a disposable instance: to reach those screens it creates a
 "Visual Tech" staff member and issues then revokes a portal link for customer 1,

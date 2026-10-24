@@ -46,11 +46,11 @@ def test_all_tabs_admin_200(client, engine):
         assert r.status_code == 200, f"{tab} -> {r.status_code}"
 
 
-def test_unknown_tab_defaults_to_income(client, engine):
+def test_unknown_tab_defaults_to_overview(client, engine):
     _fix(engine)
     r = _get(client, "bogus", RANGE[0].isoformat(), RANGE[1].isoformat())
     assert r.status_code == 200
-    assert "$120.00" in r.text
+    assert 'aria-current="page">Overview' in r.text
 
 
 def test_tech_forbidden(client, engine, tech_client):

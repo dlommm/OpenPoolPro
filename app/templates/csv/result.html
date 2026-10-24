@@ -2,16 +2,21 @@
 {% block title %}Import result{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Import CSV", "Done" if not errors else "Nothing imported") }}
+{% set import_steps = ["Upload", "Map columns", "Dry run", "Done"] %}
+<header class="ph"><div>
+  <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><span>Import</span></p>
+  <h1 class="h1">{{ "Imported" if not errors else "Nothing imported" }}</h1>
+</div></header>
+{{ ui.flow_steps(import_steps, 4) }}
 {% if errors %}
-<div class="card border-safety/40 bg-safety/5 p-4 text-sm">
-  <p class="mb-2 font-medium text-safety">Errors — batch aborted, no rows written:</p>
-  {% for n, why in errors %}<p class="font-data">row {{ n }}: {{ why }}</p>{% endfor %}
-</div>
+<section class="card card-neg"><h2 class="card-t">Errors — batch aborted, no rows written</h2>
+  <ul class="result-list" style="margin-top:8px">{% for n, why in errors %}<li class="error"><span class="num">row {{ n }}</span><span>{{ why }}</span><span></span></li>{% endfor %}</ul>
+</section>
 {% else %}
-<div class="card p-4">
-  <p class="font-data text-lg">{{ created }} created · {{ skipped }} skipped (duplicates)</p>
+<div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr));max-width:520px">
+  <div class="kpi"><div class="l">Created</div><div class="v num">{{ created }}</div></div>
+  <div class="kpi"><div class="l">Skipped</div><div class="v num">{{ skipped }}</div><div class="c">duplicates</div></div>
 </div>
 {% endif %}
-<a href="/customers" class="btn-secondary mt-4 w-full">Back to customers</a>
+<div class="row" style="margin-top:var(--gap)"><a href="/customers" class="btn pri">Back to customers</a>{% if errors %}<a href="/customers/import" class="btn">Try again</a>{% endif %}</div>
 {% endblock %}

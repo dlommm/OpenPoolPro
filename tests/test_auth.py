@@ -1,12 +1,12 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-import app.config as config
 from app.main import create_app
+from tests.conftest import make_owner
 
 
 def make_client(engine, monkeypatch, password="testpass"):
-    monkeypatch.setattr(config, "APP_PASSWORD", password)
+    make_owner(engine, password=password)
     return TestClient(create_app(engine=engine))
 
 

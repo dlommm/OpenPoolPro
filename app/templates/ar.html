@@ -1,42 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Accounts receivable{% endblock %}
 {% block content %}
-<a class="btn-secondary mb-3" href="/followups">Review payment follow-ups</a>
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Money", "Accounts receivable") }}
-{% if qbo_invoices %}<section class="mb-6"><h2 class="mb-3 font-display text-xl">QuickBooks · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section><h2 class="mb-3 font-display text-xl">Local invoices</h2>{% endif %}
-
-<p class="mb-4 font-data text-3xl font-semibold text-brass">
-  {{ totals.total_cents | dollars }}
-  <span class="font-body text-sm font-normal normal-case text-mist">
-    outstanding across {{ totals.customer_count }} customer{{ "s" if totals.customer_count != 1 }}</span>
-</p>
-
-<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-  {% for b in buckets %}
-  <div class="card p-3">
-    <div class="field-label">{{ b }}{{ "" if b == "Current" else " days" }}</div>
-    <div class="mt-0.5 font-data text-lg font-semibold
-                {{ 'text-safety' if b in ('61-90', '90+') and totals.buckets[b] }}">
-      {{ totals.buckets[b] | dollars }}</div>
+<header class="ph">
+  <div><h1 class="h1">Receivables</h1><p class="lede">{{ totals.total_cents | dollars }} outstanding across {{ totals.customer_count }} customer{{ "s" if totals.customer_count != 1 }}. Invoices are due {{ net_days }} days after their billing period.</p></div>
+  <div class="acts"><a class="btn" href="/followups">{{ ui.icon("mail") }}Payment follow-ups</a><a class="btn" href="/invoices">{{ ui.icon("file") }}Invoices</a></div>
+</header>
+{% set peak = [totals.buckets.values() | max, 1] | max %}
+<section class="card" style="margin-bottom:var(--gap)">
+  <div class="card-h"><h2 class="card-t">By age</h2><span class="muted small num">{{ totals.total_cents | dollars }}</span></div>
+  <div class="hb">
+    {% for b in buckets %}
+    <div class="hb-r"><span class="hb-n">{{ b }}{{ "" if b == "Current" else " days" }}</span><span class="hb-t"><span class="hb-f {{ 'neg' if b in ('61-90', '90+') }}" style="width:{{ (totals.buckets[b] / peak * 100) | round(1) }}%"></span></span><b class="num {{ 'owed-t' if b in ('61-90', '90+') and totals.buckets[b] }}">{{ totals.buckets[b] | dollars }}</b><span class="muted small"></span></div>
+    {% endfor %}
   </div>
-  {% endfor %}
-</div>
-
+</section>
+{% if qbo_invoices %}<section class="card" style="margin-bottom:var(--gap)"><div class="card-h"><h2 class="card-t">QuickBooks</h2><span class="muted small num">{{ qbo_balance_cents | dollars }} outstanding</span></div>{% include "billing/_invoices.html" %}</section>{% endif %}
 {% if request.query_params.get("error") == "email" %}
-<p class="mb-3 text-sm text-safety">No customer email address, or SMTP is not configured in Settings.</p>
+<p class="flash neg" role="alert">No customer email address, or SMTP is not configured in Settings.</p>
 {% elif request.query_params.get("error") == "payment" %}
-<p class="mb-3 text-sm text-safety">Enter a payment amount greater than zero.</p>
+<p class="flash neg" role="alert">Enter a payment amount greater than zero.</p>
 {% endif %}
 
 <div class="rise space-y-2">
   {% for row in rows %}
-  <details class="card p-3.5" {{ "open" if row.oldest_days > 60 }}>
+  <details class="card ar-row" {{ "open" if row.oldest_days > 60 }}>
     <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-2 font-semibold">
       <span class="flex items-center gap-2">
         <a href="/customers/{{ row.customer.id }}" class="text-pool">{{ row.customer.name }}</a>
         {% if row.oldest_days %}
-        <span class="tag tag-safety">{{ row.oldest_days }}d late</span>
+        <span class="pill p-neg">{{ row.oldest_days }}d late</span>
         {% endif %}
       </span>
       <span class="money">{{ row.balance_cents | dollars }}</span>
@@ -92,8 +85,4 @@
   {% endfor %}
 </div>
 
-<p class="mt-4 text-sm text-mist">
-  Invoices are due {{ net_days }} days after the end of their billing period.
-  Change that in Settings &rarr; Business.
-</p>
 {% endblock %}

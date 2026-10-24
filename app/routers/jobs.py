@@ -67,9 +67,12 @@ def list_jobs(request: Request, status: str = "open", page: str = "",
         # every row on the page lazy-loads them individually.
         .options(selectinload(models.Job.property)
                  .selectinload(models.Property.customer))).all()
+    counts = dict(session.execute(select(models.Job.status, func.count())
+                                  .group_by(models.Job.status)).all())
     return templates.TemplateResponse(request, "jobs/list.html",
         {"jobs": jobs, "status": status, "page": p, "total_pages": total_pages,
-         "total": total, "show_money": request.state.user.can("view_money")})
+         "total": total, "counts": counts, "today": business_today(),
+         "show_money": request.state.user.can("view_money")})
 
 
 @router.get("/jobs/new")

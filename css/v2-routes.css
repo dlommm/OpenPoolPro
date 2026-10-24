@@ -1,0 +1,29 @@
+/* V2 routes styles. Kept in their own file so parallel work on other screens never edits the same lines. */
+
+/* Balance grid: technician cells shade by load; owners are set by hand and
+   stay neutral (the .rb-cell.muted outline from v2.css). */
+.rb-wrap{padding:8px 14px 14px}
+.rb-grid th{white-space:nowrap}
+.rb-own .rb-ch{color:var(--m)}
+.rb-none{background:var(--pnb);color:var(--pni)}
+.rb-cell.rb-h1{background:color-mix(in srgb,var(--a) 12%,transparent)}
+.rb-cell.rb-h2{background:color-mix(in srgb,var(--a) 22%,transparent)}
+.rb-cell.rb-h3{background:color-mix(in srgb,var(--a) 34%,transparent)}
+.rb-cell.rb-h4{background:color-mix(in srgb,var(--a) 46%,transparent)}
+.rb-other{gap:8px;flex-wrap:nowrap}
+.rb-other .inp{width:auto;min-width:0;max-width:240px}
+.rb-apply{padding:12px 22px 18px}
+
+/* Route planner: an owner's route is labelled "by hand"; hand a stop to
+   another person's route. */
+.rp-hand-pill{vertical-align:2px;margin-left:6px}
+.rp-hand .card-t{margin-bottom:4px}
+.rp-hand-f{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end;margin-top:12px}
+.rp-hand-f .lbl{margin-bottom:4px}
+
+@media (max-width: 720px){
+  .rp-hand-f{grid-template-columns:minmax(0,1fr)}
+  .rp-hand-f .btn{justify-self:start}
+  .rb-other{flex-wrap:wrap}
+  .rb-other .inp{max-width:100%}
+}

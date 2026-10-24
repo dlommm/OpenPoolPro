@@ -45,7 +45,7 @@ def test_opted_in_with_email_queues_one_row_with_subject_and_body(client, engine
         assert "July 13, 2026" in row.body
         assert "Skim surface" in row.body
         assert "Brush walls" in row.body
-        assert "Technician: Owner" in row.body
+        assert "Serviced by: Owner" in row.body
         assert "$" not in row.body
         assert "cents" not in row.body.lower()
 
@@ -63,7 +63,7 @@ def test_body_omits_task_section_when_no_tasks_completed(client, engine):
         # optional section is omitted rather than rendered with an empty list.
         assert "OpenPoolPro" in body
         assert "Home — July 13, 2026" in body
-        assert "Technician: Owner" in body
+        assert "Serviced by: Owner" in body
         for section in ("Water test:", "Chemicals added:", "Completed:", "Notes:"):
             assert section not in body, f"empty {section!r} section was rendered"
 

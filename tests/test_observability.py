@@ -154,8 +154,11 @@ def test_configure_logging_is_idempotent(monkeypatch):
         observability.configure_logging()
         observability.configure_logging()
 
-        assert len(root.handlers) == 1
-        assert root.handlers[0].stream is sys.stdout  # Docker only keeps stdout
+        # stdout (Docker only keeps stdout) plus the bounded in-memory copy
+        # behind Admin › Logs -- each exactly once.
+        assert len(root.handlers) == 2
+        assert root.handlers[0].stream is sys.stdout
+        assert root.handlers[1] is observability.RECENT
         assert root.level == logging.INFO
 
 
@@ -216,7 +219,6 @@ def test_create_app_wraps_every_scheduler_job(engine, monkeypatch, tmp_path):
     from app.maintenance import run_nightly
 
     monkeypatch.setattr(config, "RUN_SCHEDULER", True)
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
     app = create_app(engine=engine)
     try:
@@ -245,3 +247,16 @@ def test_low_stock_badge_failure_is_logged_but_still_degrades(client, caplog, mo
     assert rec.levelno == logging.WARNING
     assert "low-stock" in rec.getMessage()
     assert "_Boom" in logging.Formatter().format(rec)
+
+
+def test_recent_logs_are_bounded_and_shown_to_admins(client, tech_client):
+    import logging as _logging
+
+    handler = observability.RecentLogs(capacity=3)
+    for i in range(5):
+        handler.emit(_logging.LogRecord("openpoolpro.test", _logging.INFO, __file__, 1,
+                                        f"line {i}", None, None))
+    assert [r["message"] for r in handler.lines] == ["line 2", "line 3", "line 4"]
+    assert client.get("/settings/logs").status_code == 200
+    assert client.get("/settings/about").status_code == 200
+    assert tech_client(name="logtech").get("/settings/logs").status_code == 403

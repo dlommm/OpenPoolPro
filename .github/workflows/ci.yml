@@ -175,7 +175,8 @@ jobs:
     env:
       DATA_DIR: ${{ github.workspace }}/.ci-visual
       APP_URL: http://127.0.0.1:8000
-      APP_PASSWORD: ci-smoke-only-not-a-real-password
+      DEMO_OWNER_PASSWORD: ci-smoke-only-not-a-real-password
+      OWNER_PASSWORD: ci-smoke-only-not-a-real-password
       SECRET_KEY: cismoke0000000000000000000000000000000000000000000000000000000000
       PYTHONPATH: "."
     steps:
@@ -226,7 +227,6 @@ jobs:
       - name: Boot to healthy
         run: |
           docker run -d --name "$SMOKE" \
-            -e APP_PASSWORD=ci-smoke-only-not-a-real-password \
             -e SECRET_KEY=cismoke0000000000000000000000000000000000000000000000000000000000 \
             "$SMOKE"
           # HEALTHCHECK: 20s start-period, 30s interval — allow ~2 min total.

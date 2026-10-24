@@ -1,3 +1,6 @@
+from tests.conftest import make_owner
+
+
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
@@ -7,7 +10,7 @@ def test_health(client):
 def test_get_session_dependency_injects(engine, monkeypatch, tmp_path):
     import app.config as config
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(config, "APP_PASSWORD", "probe-pass")
+    make_owner(engine, password="probe-pass")
     from fastapi import Depends
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import Session

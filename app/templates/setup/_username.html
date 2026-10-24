@@ -1,0 +1,15 @@
+{#- Suggest a username from the name while the username box hasn't been typed in. -#}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  function slug(n) {
+    var w = (n || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "").trim().split(/\s+/).filter(Boolean);
+    if (!w.length) return "";
+    return (w.length > 1 ? w[0] + "." + w[w.length - 1] : w[0]).slice(0, 32);
+  }
+  var src = document.querySelector("[data-name-src]"), out = document.querySelector("[data-user-out]");
+  if (!src || !out) return;
+  var touched = !!out.value;
+  out.addEventListener("input", function () { touched = true; });
+  src.addEventListener("input", function () { if (!touched) out.value = slug(src.value); });
+})();
+</script>

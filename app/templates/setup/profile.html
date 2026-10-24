@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Finish your profile — OpenPoolPro{% endblock %}
+{% set bare = true %}
+{% block content %}
+<div class="auth">
+  <div class="auth-brand">
+    <img src="/static/brand/openpoolpro-mark.png" alt="">
+    <div><b>{{ request.state.ui.get("company") or "OpenPoolPro" }}</b><span>One quick step after the update</span></div>
+  </div>
+  <section class="card auth-card">
+    <h1 class="h1">Finish your profile</h1>
+    <p class="lede">OpenPoolPro no longer uses a shared “owner” sign-in or a password in the .env file. Add your name, pick your own username and set a new password. It's stored only as a secure hash.</p>
+    {% if error %}<p class="flash neg" role="alert" style="margin:14px 0 0">{{ error }}</p>{% endif %}
+    <form method="post" action="/setup/profile" class="stack" style="margin-top:18px;gap:14px">
+      <div><label class="lbl" for="p-name">Your full name</label><input id="p-name" name="name" value="{{ form.name }}" class="inp" autocomplete="name" required data-name-src></div>
+      <div><label class="lbl" for="p-user">New username</label><input id="p-user" name="username" value="{{ form.username }}" class="inp" autocapitalize="none" autocomplete="username" spellcheck="false" data-user-out><p class="help">Left blank, it's made from your name.</p></div>
+      <div><label class="lbl" for="p-cur">Current password</label><input id="p-cur" type="password" name="current_password" class="inp" autocomplete="current-password" required><p class="help">The APP_PASSWORD you've been signing in with.</p></div>
+      <div><label class="lbl" for="p-pw">New password</label><input id="p-pw" type="password" name="password" class="inp" autocomplete="new-password" minlength="12" required><p class="help">At least 12 characters.</p></div>
+      <div><label class="lbl" for="p-pw2">Type it again</label><input id="p-pw2" type="password" name="password_confirm" class="inp" autocomplete="new-password" minlength="12" required></div>
+      <button class="btn pri xl block" type="submit">Save and continue</button>
+    </form>
+    <p class="help" style="margin-top:14px">After this you can remove APP_PASSWORD from your .env file; it isn't read any more.</p>
+  </section>
+</div>
+{% include "setup/_username.html" %}
+{% endblock %}

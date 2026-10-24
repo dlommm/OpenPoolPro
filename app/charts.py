@@ -2,8 +2,8 @@
 
 Self-contained SVG (no client JS, no external libs) so it satisfies the app CSP
 and renders inside the offline PWA. Marks are colored with the active theme's CSS
-custom properties (var(--color-pool) etc.), so one chart reads correctly in every
-theme and in light/dark without per-theme code. All axis/value text uses ink/mist
+custom properties (var(--color-pool), the validated --c1..--c3 categorical slots,
+--band for target bands), so one chart reads correctly in light and dark. All axis/value text uses ink/mist
 tokens — never the series color (dataviz rule). Any caller-supplied label is
 passed through html.escape before it reaches the SVG (customer/tech names are
 user data).
@@ -17,8 +17,7 @@ import html
 # Distinct hue families (teal / gold / green / rose) so they separate for most
 # CVD types; every slice is also directly labelled, which is the secondary
 # encoding the dataviz guidance requires when relying on ≤4 hues.
-_CAT = ["var(--color-pool)", "var(--color-brass)", "var(--cr-green, #10b981)",
-        "var(--color-safety)"]
+_CAT = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--m)"]
 
 
 def _esc(s) -> str:
@@ -268,10 +267,10 @@ def reading_chart(series, *, height=170):
         parts.append(
             f'<rect x="{pad_l}" y="{band_top:.1f}" width="{plot_w}" '
             f'height="{max(1.0, band_bottom - band_top):.1f}" '
-            f'fill="var(--cr-green, #10b981)" opacity="0.12"/>')
+            f'fill="var(--band)" opacity="0.75"/>')
         ty = y_of(series.target)
         parts.append(f'<line x1="{pad_l}" y1="{ty:.1f}" x2="{w - pad_r}" y2="{ty:.1f}" '
-                     f'stroke="var(--cr-green, #10b981)" stroke-width="1" '
+                     f'stroke="var(--m)" stroke-width="1" '
                      f'stroke-dasharray="4 3" opacity="0.8"/>')
 
     for value in (hi, lo):
@@ -305,3 +304,113 @@ def reading_chart(series, *, height=170):
 def _fmt_reading(v) -> str:
     v = float(v)
     return f"{v:.0f}" if abs(v) >= 100 or v == int(v) else f"{v:.1f}"
+
+
+# --- Analytics overview (v0.7) ---------------------------------------------
+# These draw MARKS only. Each SVG stretches to its box (preserveAspectRatio
+# "none") with non-scaling strokes, while every word (axis ticks, month names,
+# readouts) is HTML laid over it by the template, so text stays crisp and
+# legible at phone width instead of shrinking with a viewBox. Dots are
+# zero-length round-capped lines, which stay circles under any stretch. Colours
+# are the fixed colour-blind-safe --c1..--c3 slots, never the company palette.
+
+def _grid_lines(width, fractions=(0, 1 / 3, 2 / 3)):
+    out = []
+    for f in fractions:
+        y = f * 100
+        out.append(f'<line x1="0" y1="{y:.2f}" x2="{width}" y2="{y:.2f}" class="an-grid" '
+                   f'vector-effect="non-scaling-stroke"/>')
+    out.append(f'<line x1="0" y1="100" x2="{width}" y2="100" class="an-base" '
+               f'vector-effect="non-scaling-stroke"/>')
+    return out
+
+
+def stacked_columns(columns, top, *, colours=("var(--c1)", "var(--c2)", "var(--c3)")):
+    """Stacked monthly columns. columns: list of (parts, partial) where parts
+    are bottom-up values in the same order as `colours`. `top` is the axis max."""
+    n = max(1, len(columns))
+    width = n * 100
+    parts = [f'<svg class="an-svg" viewBox="0 0 {width} 100" preserveAspectRatio="none" '
+             f'aria-hidden="true" focusable="false">']
+    parts += _grid_lines(width)
+    gap = 0.9  # ~2px surface gap between segments at the default chart height
+    # Units per bar scale with the column count so a bar reads ~28px wide on a
+    # typical card whether the range is 3 months or 12 (a stretched SVG cannot
+    # cap a width in pixels).
+    bw = min(50.0, 4.4 * n)
+    for i, (values, partial) in enumerate(columns):
+        x = i * 100 + (100 - bw) / 2
+        y = 100.0
+        cls = "an-col cur" if partial else "an-col"
+        parts.append(f'<g class="{cls}">')
+        for value, colour in zip(values, colours):
+            h = (max(0, value or 0) / top * 100) if top else 0
+            if h <= 0:
+                continue
+            seg = max(0.6, h - gap)
+            y -= h
+            parts.append(f'<rect x="{x:.2f}" y="{y + (h - seg):.2f}" width="{bw:.2f}" height="{seg:.2f}" '
+                         f'fill="{colour}"/>')
+        parts.append('</g>')
+    parts.append('</svg>')
+    return "".join(parts)
+
+
+def diverging_columns(pairs, top):
+    """Gained (up, --c1) and lost (down, --c2) per month around a middle line."""
+    n = max(1, len(pairs))
+    width = n * 100
+    parts = [f'<svg class="an-svg" viewBox="0 0 {width} 100" preserveAspectRatio="none" '
+             f'aria-hidden="true" focusable="false">',
+             f'<line x1="0" y1="50" x2="{width}" y2="50" class="an-base" '
+             f'vector-effect="non-scaling-stroke"/>']
+    bw = min(44.0, 3.5 * n)
+    for i, (up, down) in enumerate(pairs):
+        x = i * 100 + (100 - bw) / 2
+        if up and top:
+            h = up / top * 48
+            parts.append(f'<rect x="{x:.2f}" y="{49.5 - h:.2f}" width="{bw:.2f}" height="{h:.2f}" '
+                         f'fill="var(--c1)"/>')
+        if down and top:
+            h = down / top * 48
+            parts.append(f'<rect x="{x:.2f}" y="50.5" width="{bw:.2f}" height="{h:.2f}" '
+                         f'fill="var(--c2)"/>')
+    parts.append('</svg>')
+    return "".join(parts)
+
+
+def scatter_marks(points, threshold=None):
+    """Dots at (x%, y%) from the bottom-left; flagged dots use --c2 and are
+    larger, so the flag never relies on colour alone. threshold: y% of the
+    review line."""
+    parts = ['<svg class="an-svg" viewBox="0 0 100 100" preserveAspectRatio="none" '
+             'aria-hidden="true" focusable="false">']
+    parts += _grid_lines(100)
+    parts.append('<line x1="0" y1="0" x2="0" y2="100" class="an-base" '
+                 'vector-effect="non-scaling-stroke"/>')
+    if threshold is not None:
+        y = 100 - threshold
+        parts.append(f'<line x1="0" y1="{y:.2f}" x2="100" y2="{y:.2f}" class="an-thr" '
+                     f'vector-effect="non-scaling-stroke"/>')
+    for x, y, flag in points:
+        cls = "an-dot flag" if flag else "an-dot"
+        at = f'x1="{x:.2f}" y1="{100 - y:.2f}" x2="{x:.2f}" y2="{100 - y:.2f}"'
+        # A surface-coloured halo first, so overlapping dots stay countable.
+        parts.append(f'<line {at} class="an-halo" vector-effect="non-scaling-stroke"/>')
+        parts.append(f'<line {at} class="{cls}" vector-effect="non-scaling-stroke"/>')
+    parts.append('</svg>')
+    return "".join(parts)
+
+
+def sparkline(values):
+    """(line points, area points) in a 100x32 box for the revenue hero."""
+    vals = [max(0, v or 0) for v in values]
+    if not vals:
+        return "", ""
+    top = max(vals) or 1
+    n = len(vals)
+    pts = [((50.0 if n == 1 else i / (n - 1) * 100), 30 - v / top * 26) for i, v in enumerate(vals)]
+    if n == 1:  # a lone month still draws as a short level line
+        pts = [(0.0, pts[0][1]), (100.0, pts[0][1])]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    return line, f"0,32 {line} 100,32"

@@ -3,7 +3,6 @@ from zoneinfo import ZoneInfo
 
 APP_VERSION = os.environ.get("APP_VERSION", "dev")  # baked at build time via --build-arg APP_VERSION
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "changeme")
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
 # Known placeholder values that MUST NOT reach a real deployment. SECRET_KEY
@@ -13,8 +12,6 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 # ship, so validate_secrets() catches an operator who never set the env vars.
 _INSECURE_SECRET_KEYS = {"", "dev-secret-change-me", "generate-with-openssl-rand-hex-32",
                          "CHANGE_ME_run_openssl_rand_hex_32"}
-_INSECURE_APP_PASSWORDS = {"", "changeme", "pick-a-long-password",
-                           "CHANGE_ME_owner_login_password"}
 
 
 def validate_secrets() -> None:
@@ -24,12 +21,10 @@ def validate_secrets() -> None:
     problems = []
     if SECRET_KEY in _INSECURE_SECRET_KEYS:
         problems.append("SECRET_KEY is unset or a known placeholder")
-    if APP_PASSWORD in _INSECURE_APP_PASSWORDS:
-        problems.append("APP_PASSWORD is unset or a known placeholder")
     if problems:
         raise RuntimeError(
             "Refusing to start with insecure configuration: " + "; ".join(problems)
-            + ". Set SECRET_KEY (openssl rand -hex 32) and APP_PASSWORD in the environment.")
+            + ". Set SECRET_KEY (openssl rand -hex 32) in the environment.")
     if not COOKIE_SECURE:
         # Warn, don't refuse: a plain-HTTP LAN box is a legitimate (if
         # discouraged) self-hosted setup. But the operator must have CHOSEN it
@@ -92,3 +87,15 @@ SMTP_STARTTLS = os.environ.get("SMTP_STARTTLS", "1") != "0"
 
 def tz():
     return ZoneInfo(TIMEZONE)
+
+
+def set_timezone(name: str) -> bool:
+    """Switch the business time zone (the `timezone` setting, chosen in setup
+    or Admin). APP_TZ is only the default before one is saved. Unknown names
+    are ignored so a bad setting can't break every date in the app."""
+    global TIMEZONE
+    from zoneinfo import available_timezones
+    if name and name in available_timezones():
+        TIMEZONE = name
+        return True
+    return False

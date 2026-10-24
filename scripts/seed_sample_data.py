@@ -8,12 +8,14 @@ Run inside the app container after it boots:
 or on the host with the app's data dir:
     DATA_DIR=./data .venv/bin/python scripts/seed_sample_data.py
 """
+import os
 from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import addresses, models
+from app.auth_core import hash_password
 from app.db import make_engine
 from app.rates import effective_rate_cents, gallons
 
@@ -28,12 +30,20 @@ def run() -> None:
             print("existing customers found — refusing to change business data")
             return
 
+        # --- An owner to sign in with (a fresh install has none until
+        # first-run setup). Password from DEMO_OWNER_PASSWORD. ---
+        if s.scalars(select(models.User).where(models.User.role == "admin")).first() is None:
+            s.add(models.User(name="Alex Morgan", username="alex.morgan", role="admin", active=True,
+                              password_hash=hash_password(os.environ.get("DEMO_OWNER_PASSWORD",
+                                                                         "demo-owner-pass-1"))))
+        models.set_setting(s, "setup_status", "done")
+
         # --- Company profile + billing settings ---
         for key, value in [
-            ("business_name", "Coastline Pools"),
-            ("company_address", "142 Marina Way, Naples, FL 34102"),
+            ("business_name", "Example Pool Co."),
+            ("company_address", "100 Example Harbor Way, Naples, FL 34102"),
             ("company_phone", "(239) 555-0142"),
-            ("company_email", "service@coastlinepools.example"),
+            ("company_email", "service@example.com"),
             ("company_license", "CPC-1458792"),
             ("chem_markup_percent", "15"),
         ]:
@@ -75,17 +85,17 @@ def run() -> None:
         # filter/sort have real variety to demonstrate on a fresh install.
         demo = [
             ("Marcus & Lena Alvarez", "(239) 555-0111", "marcus.alvarez@example.com",
-             "88 Gulfshore Blvd", "Cocoa Beach", "FL", "32931", "weekly",
+             "88 Driftwood Ln", "Cocoa Beach", "FL", "32931", "weekly",
              ("Main pool", "rectangle", 32, 16, 5.0, "chlorine", "pebble", "pool"),
              ("Spa", "rectangle", 8, 8, 3.5, "chlorine", "tile", "spa")),
             ("Priya Nair", "(239) 555-0122", "priya.nair@example.com",
-             "17 Seagate Dr", "Melbourne", "FL", "32901", "biweekly",
+             "17 Tidewater Ct", "Melbourne", "FL", "32901", "biweekly",
              ("Backyard", "oval", 30, 15, 4.5, "salt", "plaster", "pool"), None),
             ("The Whitfield Estate", "(239) 555-0133", "estate@whitfield.example",
-             "5 Port Royal Ln", "Satellite Beach", "FL", "32937", "weekly",
+             "5 Heron Cove Ln", "Satellite Beach", "FL", "32937", "weekly",
              ("Lap pool", "rectangle", 40, 20, 5.5, "salt", "tile", "pool"), None),
             ("Dana Cole", "(239) 555-0144", "dana.cole@example.com",
-             "230 Banyan St", "Merritt Island", "FL", "32952", "weekly",
+             "230 Sandpiper Way", "Merritt Island", "FL", "32952", "weekly",
              ("Above-ground", "round", 24, None, 4.33, "chlorine", "vinyl", "pool"), None),
         ]
         if not s.scalars(select(models.Customer)).first():

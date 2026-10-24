@@ -35,6 +35,32 @@ _FORMAT = "%(asctime)s %(levelname)-7s %(name)s %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 
+class RecentLogs(logging.Handler):
+    """The last `capacity` log lines, in memory, for Admin › Logs.
+
+    It sees exactly what stdout sees (same records, same formatter), so the
+    method-and-path-only discipline and redact_path still decide what can
+    appear; nothing new is written anywhere. Bounded, so a noisy day cannot
+    grow memory, and lost on restart by design: the container's own log is
+    the durable record."""
+
+    def __init__(self, capacity: int = 2000):
+        super().__init__()
+        from collections import deque
+        self.lines = deque(maxlen=capacity)
+
+    def emit(self, record):
+        try:
+            self.lines.append({"at": record.created, "level": record.levelname.lower(),
+                               "source": record.name, "message": record.getMessage(),
+                               "line": self.format(record)})
+        except Exception:  # a log line must never take a request down
+            pass
+
+
+RECENT = RecentLogs()
+
+
 def configure_logging() -> None:
     """Point the root logger at stdout at LOG_LEVEL (default INFO).
 
@@ -53,6 +79,8 @@ def configure_logging() -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATEFMT))
     root.addHandler(handler)
+    RECENT.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATEFMT))
+    root.addHandler(RECENT)
     root.setLevel(level)
 
 

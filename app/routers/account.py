@@ -131,6 +131,7 @@ def change_password(request: Request, current_password: str = Form(""),
         return templates.TemplateResponse(request, "account.html", ctx)
 
     user.password_hash = hash_password(new_password)
+    user.must_change_password = False
     limiter.reset(key)
     _bump_epoch(request, user)
     models.audit(session, user.id, "auth.password_changed")

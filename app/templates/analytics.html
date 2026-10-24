@@ -2,68 +2,46 @@
 {% block title %}Analytics{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Business analytics", "Analytics") }}
+<header class="ph">
+  <div><p class="crumbs"><span>Money</span></p><h1 class="h1">Analytics</h1>
+  {% if tab == "overview" %}
+  <p class="lede">{% if ov.has_revenue %}{{ v.whole(ov.revenue_cents) }} from {{ '{:,}'.format(ov.visits) }} visit{{ 's' if ov.visits != 1 }}, {{ ov.span }}.{% else %}Nothing billed in {{ ov.span }} yet.{% endif %}{% if ov.flagged %} {{ ov.flagged | length }} {{ 'property costs' if ov.flagged | length == 1 else 'properties cost' }} 15% or more of the rate in chemicals.{% endif %}</p>
+  {% else %}
+  <p class="lede">{{ start | short_date }} – {{ end | short_date }}. Revenue is billed service, chemicals at your markup and finished jobs.</p>
+  {% endif %}</div>
+  {% if tab == "overview" %}
+  <div class="acts"><a class="btn" href="/analytics/export?tab=income&start={{ start }}&end={{ end }}">{{ ui.icon("document") }}Export CSV</a><a class="btn" href="/analytics/export.pdf?tab=income&start={{ start }}&end={{ end }}">PDF</a></div>
+  {% endif %}
+</header>
+
+<nav class="tabs" aria-label="Analytics views">
+  {% for key, label in tab_labels.items() %}<a href="/analytics?tab={{ key }}{% if key != 'overview' %}&start={{ start }}&end={{ end }}{% endif %}" class="tab {{ 'on' if key == tab }}"{% if key == tab %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+
+{% if tab == "overview" %}
+{% include "_analytics_overview.html" %}
+{% else %}
+
+<div class="afilters" role="group" aria-label="Date range">
+  <span class="muted small">Showing</span>
+  <div class="seg">{% for label, qstart, qend in quick %}<a href="/analytics?tab={{ tab }}&start={{ qstart }}&end={{ qend }}" class="{{ 'on' if start == qstart and end == qend }}">{{ label }}</a>{% endfor %}</div>
+  <form method="get" action="/analytics" class="row" style="gap:6px">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <label class="sr" for="start">Start</label><input class="inp num" type="date" id="start" name="start" value="{{ start }}" style="height:34px;width:auto">
+    <span class="muted">–</span>
+    <label class="sr" for="end">End</label><input class="inp num" type="date" id="end" name="end" value="{{ end }}" style="height:34px;width:auto">
+    <button class="btn sm">Apply</button>
+  </form>
+</div>
 
 {% if summary and not too_large %}
-<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Revenue</p>
-    <p class="mt-1 font-data text-xl font-bold money">{{ summary.revenue_cents | dollars }}</p>
-  </div>
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Profit</p>
-    <p class="mt-1 font-data text-xl font-bold money">{{ summary.profit_cents | dollars }}</p>
-  </div>
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Visits done</p>
-    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.visits_done }}</p>
-  </div>
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Avg / visit</p>
-    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.avg_per_visit_cents | dollars }}</p>
-  </div>
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Customers</p>
-    <p class="mt-1 font-data text-xl font-bold text-ink">{{ summary.customer_count }}</p>
-  </div>
-  <div class="card p-3">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-mist">Top customer</p>
-    {% if summary.top_customer %}
-    <p class="mt-1 truncate text-sm font-semibold text-ink" title="{{ summary.top_customer }}">{{ summary.top_customer }}</p>
-    <p class="font-data text-xs money">{{ summary.top_customer_cents | dollars }}</p>
-    {% else %}
-    <p class="mt-1 text-sm text-mist">—</p>
-    {% endif %}
-  </div>
+<div class="akpis" style="margin-bottom:var(--gap)">
+  <section class="card ahero"><div class="l">Revenue</div><div class="hv num">{{ summary.revenue_cents | dollars }}</div><div class="c">Profit <b class="num">{{ summary.profit_cents | dollars }}</b> after chemical cost</div></section>
+  <section class="card atile"><div class="l">Visits completed</div><div class="v num">{{ summary.visits_done }}</div><div class="c">{{ summary.customer_count }} customers</div></section>
+  <section class="card atile"><div class="l">Revenue per visit</div><div class="v num">{{ summary.avg_per_visit_cents | dollars }}</div><div class="c">All income divided by visits</div></section>
+  <section class="card atile"><div class="l">Top customer</div><div class="v" style="font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ summary.top_customer or '' }}">{{ summary.top_customer or "—" }}</div><div class="c num">{{ summary.top_customer_cents | dollars if summary.top_customer else "" }}</div></section>
 </div>
 {% endif %}
-
-<form method="get" action="/analytics" class="mb-3 flex flex-wrap items-end gap-2">
-  <input type="hidden" name="tab" value="{{ tab }}">
-  <div>
-    <label class="field-label" for="start">Start</label>
-    <input class="field font-data" type="date" id="start" name="start" value="{{ start }}">
-  </div>
-  <div>
-    <label class="field-label" for="end">End</label>
-    <input class="field font-data" type="date" id="end" name="end" value="{{ end }}">
-  </div>
-  <button class="btn-secondary">Apply</button>
-</form>
-
-<div class="mb-3 flex flex-wrap gap-1.5">
-  {% for label, qstart, qend in quick %}
-  <a href="/analytics?tab={{ tab }}&start={{ qstart }}&end={{ qend }}"
-     class="tag {{ 'border-pool bg-shallow' if start == qstart and end == qend }}">{{ label }}</a>
-  {% endfor %}
-</div>
-
-<div class="mb-4 flex flex-wrap gap-1.5 border-b border-seam pb-3">
-  {% for key, label in tab_labels.items() %}
-  <a href="/analytics?tab={{ key }}&start={{ start }}&end={{ end }}"
-     class="tag {{ 'border-pool bg-shallow' if key == tab }}">{{ label }}</a>
-  {% endfor %}
-</div>
 
 {% if too_large %}
 <div class="card p-6 text-center">
@@ -73,8 +51,8 @@
 {% else %}
 
 {% if chart %}
-<div class="card mb-4 p-4">
-  <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-mist">
+<div class="card" style="margin-bottom:var(--gap)">
+  <p class="card-t" style="margin-bottom:12px">
     {{ tab_labels[tab] }}{% if tab in ("income", "volume") %} by week{% elif tab in ("customers", "crew", "chemicals") %} ranked{% elif tab == "types" %} mix{% endif %}
   </p>
   {{ chart | safe }}
@@ -343,4 +321,5 @@
 {% endif %}
 </div>
 {% endif %}
+{% endif %}{# overview / detailed tabs #}
 {% endblock %}

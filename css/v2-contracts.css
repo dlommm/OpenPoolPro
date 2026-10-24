@@ -1,0 +1,108 @@
+/* V2 contracts styles. Kept in their own file so parallel work on other screens never edits the same lines. */
+
+/* ---- Contract editor (Settings > Contract): outline | page | inspector ----
+   Builds on the .ce-* / .ct-* rules in v2.css. The page (.ce-page) is fixed
+   paper colours in every theme, so anything drawn on it pins its own colours
+   and mixes the accent with white rather than reading theme surfaces. */
+.ce-bar{justify-content:space-between}
+.ce-intro{display:flex;flex-direction:column;gap:2px;flex:1 1 320px;min-width:0}
+.ce-modes{margin-left:auto}
+.ce .ce-save{grid-column:1/-1;margin-top:0}
+.ce-ed .ce-rules{display:flex;justify-content:space-between;align-items:center;gap:12px 20px;flex-wrap:wrap;margin-top:18px}
+.ce-rules p{max-width:62ch;margin-top:2px}
+.ce-rules .row{flex-wrap:nowrap}
+
+/* Outline */
+a.ce-oi{text-decoration:none;color:inherit}
+.ce-addo{display:flex;width:100%;margin-top:8px;white-space:nowrap}
+.ce-ol li[draggable=true]{cursor:grab}
+.ce-ol li.drag{opacity:.4}
+.ce-ol li.drop{box-shadow:inset 0 2px 0 var(--a)}
+.ce-om .icbtn[disabled]{opacity:.35;cursor:default}
+
+/* Page: sections, in-place editing, built-in blocks */
+.ce-page .ct-chip{background:color-mix(in srgb,var(--a) 13%,#fff);color:color-mix(in srgb,var(--a) 62%,#0B1F29);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a) 30%,#fff)}
+.ce-page .ct-bad{color:#A3261B}
+.ce-page .ct-view{padding:0;border-radius:4px;background:none;color:#1B2329}
+.ce-page .ct-view:hover{background:none}
+.ce-page .ct-view:focus-visible,.ce-page .ce-bi:focus-visible{outline:2px solid var(--a);outline-offset:3px}
+.ce-page .ct-p.muted{color:#5C6970}
+.ce-page .ct-edit{font-family:var(--ff);color:#1B2329}
+.ce-sec.on .ct-edit{box-shadow:none;background:transparent;padding:2px 0 4px}
+.ce-page .ct-edit .ce-cond{align-self:flex-start;margin-bottom:0}
+.ce-page .ct-edit .lbl{color:#3C4950;margin-bottom:0}
+.ce-page .ct-edit .lbl .inp{margin-top:5px;font-weight:400}
+.ce-page .ct-edit .inp{background:#fff;color:#1B2329;border-color:#CFC8BA}
+.ce-page .ct-edit .inp::placeholder{color:#8A949A}
+.ce-page .ct-edit .help{color:#5C6970;margin-top:0}
+.ce-page .ct-edit input.inp{font-weight:600}
+.ce-page .ct-add{margin-top:16px;color:#5C6970;border-color:#CFC8BA;font-family:var(--ff)}
+.ce-page .ct-add:hover{color:var(--a);border-color:var(--a)}
+.ce-page .ce-autol{background:color-mix(in srgb,var(--a) 12%,#fff);color:color-mix(in srgb,var(--a) 55%,#0B1F29)}
+.ce-bi{outline:0}
+.ce-page .ce-rates .ct-chip{margin:0}
+
+/* Sample preview: the server's rendering (contract_html blocks) on paper */
+#ct-preview .ct-title{text-align:center;margin:0 0 14px;padding:6px}
+#ct-preview .ce-sec{cursor:default}
+#ct-preview ul{list-style:disc;padding-left:22px;margin:2px 0}
+#ct-preview li{line-height:1.6;font-size:14px;color:#1B2329}
+#ct-preview li::marker{color:#5C6970}
+.ce-page .ct-parties{margin:4px 0;padding:10px 14px;border:1px solid #E4DED2;border-radius:8px;font-family:var(--ff);font-size:13.5px;color:#1B2329;line-height:1.7}
+.ce-page .ct-rates{width:100%;border-collapse:collapse;font-family:var(--ff);font-size:13.5px;color:#1B2329}
+.ce-page .ct-rates td{padding:7px 8px;border-bottom:1px solid #EEEAE2;vertical-align:top}
+.ce-page .ct-rl{width:36%;color:#5C6970;font-weight:500}
+
+/* Inspector (right pane, or docked under the selected section) */
+.ce-insp{max-height:calc(100vh - 24px);overflow:auto}
+.ce-panel>div>b{display:block}
+.ce-panel>div>p{margin-top:4px}
+.ce-panel .lbl{margin:12px 0 6px}
+.ce-panel .seg{display:flex;width:100%}
+.ce-panel .seg button{flex:1;padding:0 8px;white-space:nowrap}
+.ce-gap{margin-top:14px}
+.ce-wide{width:100%}
+.ce-help{margin:-2px 0 8px}
+.ce-acts{gap:2px;flex-wrap:nowrap}
+.ce-del{color:var(--negt)}
+.ce-pal{display:flex;flex-direction:column;gap:6px}
+.ce-pg{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--m);margin-top:6px}
+.ce-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ce-tok{appearance:none;font:inherit;font-size:12.5px;font-weight:500;min-height:32px;padding:0 11px;border-radius:999px;border:0;cursor:pointer;background:var(--as);color:var(--ai);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a) 35%,transparent);transition:background-color 160ms ease,transform 160ms var(--ease-out)}
+.ce-tok:active{transform:scale(.97)}
+@media (hover: hover) and (pointer: fine){
+.ce-tok:hover{background:color-mix(in srgb,var(--a) 22%,var(--sheet))}
+}
+.ce-tok:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.ce-ref{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-width:0}
+.ce-ref .ct-chip{white-space:nowrap;margin:0}
+.ce-ref code,.ce-panel p code{font-size:11.5px;color:var(--m);overflow-wrap:anywhere}
+.ce-panel.docked{margin:12px 0 4px;padding:14px;border-radius:10px;background:var(--sheet);border:1px solid var(--b);box-shadow:0 10px 24px -16px rgba(0,0,0,.45);font-family:var(--ff);color:var(--t);cursor:default}
+
+@media (max-width: 1100px){
+.ce-insp{max-height:none;overflow:visible}
+.ce-ol{max-height:280px;overflow:auto}
+}
+@media (max-width: 720px){
+.ce-desk{padding:8px;border-radius:10px}
+.ce-page{padding:22px 16px 16px}
+.ce-sec{margin:2px -8px;padding:8px}
+.ce-parties,.ce-sig{grid-template-columns:minmax(0,1fr)}
+.ce-sig{gap:22px}
+.ce-modes,.ce-modes .seg{width:100%}
+.ce-modes .seg button{flex:1}
+.ce-rules .row{width:100%}
+.ce-rules .row .btn{margin-left:auto}
+}
+
+/* The tab sits beside the settings nav, so size the panes by the editor's own
+   width, not the viewport's. */
+.ce-ed{container:ce/inline-size}
+.ce-page .ce-parties b{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+@media (min-width: 1101px){
+@container ce (max-width: 1180px){
+.ce,.ce.preview{grid-template-columns:184px minmax(0,1fr) 256px;gap:14px}
+.ce-desk{padding:14px}
+.ce-page{padding:30px 26px 20px}
+}
+}

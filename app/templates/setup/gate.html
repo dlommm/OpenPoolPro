@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Set up OpenPoolPro{% endblock %}
+{% set bare = true %}
+{% block content %}
+<div class="auth">
+  <div class="auth-brand">
+    <img src="/static/brand/openpoolpro-mark.png" alt="">
+    <div><b>OpenPoolPro</b><span>First-time setup</span></div>
+  </div>
+  <section class="card auth-card">
+    <p class="crumbs">Welcome</p>
+    <h1 class="h1">Set up OpenPoolPro</h1>
+    <p class="lede">This server doesn't have an owner yet. To prove you're the person installing it, enter the setup code printed in the server log.</p>
+    {% if error %}<p class="flash neg" role="alert" style="margin:14px 0 0">{{ error }}</p>{% endif %}
+    <form method="post" action="/setup/code" class="stack" style="margin-top:18px;gap:14px">
+      <div><label class="lbl" for="g-code">Setup code</label>
+        <input id="g-code" name="code" class="inp mono" autofocus autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX">
+        <p class="help">Find it with <code>docker compose logs app | grep "Setup code"</code>. It stops working once your owner account exists.</p></div>
+      <button class="btn pri xl block" type="submit">Start setup</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

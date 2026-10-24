@@ -165,7 +165,7 @@ def test_job_photo_tag_chip_renders_on_reload(client, engine):
     client.post(f"/photos/job/{jid}", data={"tag": "before"},
                files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
     reloaded = client.get(f"/jobs/{jid}").text
-    assert "<span class=\"tag absolute bottom-1 left-1\">before</span>" in reloaded
+    assert "<figcaption class=\"pill p-neu\">before</figcaption>" in reloaded
 
 
 def test_visit_photo_tag_chip_renders_on_reload(client, engine):
@@ -181,7 +181,7 @@ def test_visit_photo_tag_chip_renders_on_reload(client, engine):
     client.post(f"/photos/visit/{vid}", data={"tag": "issue"},
                files=[("files", ("a.jpg", jpeg_bytes(800, 600), "image/jpeg"))])
     reloaded = client.get(f"/visit/{pid}/2026-07-13").text
-    assert "<span class=\"tag absolute bottom-1 left-1\">issue</span>" in reloaded
+    assert "<figcaption class=\"pill p-neu\">issue</figcaption>" in reloaded
 
 
 def test_property_photo_upload_allowed(client, engine):

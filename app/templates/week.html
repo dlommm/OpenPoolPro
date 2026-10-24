@@ -2,68 +2,67 @@
 {% block title %}Week{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<div class="flex items-center justify-between gap-2">
-  <a href="/week?start={{ prev }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Previous week">{{ ui.icon("chevron", "h-5 w-5 rotate-180") }}</a>
-  {{ ui.page_header("This week", "Week of " ~ start.strftime("%b %-d")) }}
-  <a href="/week?start={{ next }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Next week">{{ ui.icon("chevron", "h-5 w-5") }}</a>
-</div>
+{% from "_route.html" import tech_tag %}
+{% set total = namespace(n=0) %}{% for d in days %}{% set total.n = total.n + day_stops[d]|length %}{% endfor %}
+<header class="ph">
+  <div>
+    <h1 class="h1">Week of {{ start.strftime("%b %-d") }}</h1>
+    <p class="lede">{{ total.n }} stop{{ "s" if total.n != 1 }}{% if tech_filter in tech_by_id %} for {{ tech_by_id[tech_filter].name }}{% endif %} · open a stop to move it or change its order</p>
+  </div>
+  <div class="acts">
+    <a href="/week?start={{ prev }}{{ '&tech=%d'|format(tech_filter) if tech_filter is not none }}" class="icbtn" aria-label="Previous week">{{ ui.icon("back") }}</a>
+    <a href="/week?start={{ next }}{{ '&tech=%d'|format(tech_filter) if tech_filter is not none }}" class="icbtn" aria-label="Next week">{{ ui.icon("next") }}</a>
+    {% if techs %}<a href="/routes/balance" class="btn">Balance routes</a>{% endif %}
+  </div>
+</header>
 
 {% if techs %}
-<div class="mb-2">
-  <a href="/routes/balance" class="btn-secondary">Balance routes</a>
-</div>
-<div class="mb-4 flex flex-wrap gap-1.5">
-  <a href="/week?start={{ start }}" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
+<div class="chips" role="group" aria-label="Whose stops" style="margin-bottom:18px">
+  <a href="/week?start={{ start }}" class="chip {{ 'on' if tech_filter is none }}"{% if tech_filter is none %} aria-current="page"{% endif %}>Everyone</a>
   {% for t in techs %}
-  <a href="/week?start={{ start }}&tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
+  <a href="/week?start={{ start }}&tech={{ t.id }}" class="chip {{ 'on' if tech_filter == t.id }}"{% if tech_filter == t.id %} aria-current="page"{% endif %}>{{ t.name }} ({{ tech_counts.get(t.id, 0) }})</a>
   {% endfor %}
 </div>
 {% endif %}
 
-<div class="md:grid md:grid-cols-2 md:items-start md:gap-x-6">
-{% for d in days %}
-<div class="mb-5">
-  <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ d.strftime("%a %b %-d") }}
-    <span class="font-data text-sm font-normal normal-case tracking-normal text-mist">· {{ day_stops[d] | length }} stops</span></h2>
-  <div class="rise mt-2 space-y-2">
-    {% for s in day_stops[d] %}
-    <details class="card p-3 text-sm">
-      <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-2">
-        <span class="font-medium">{{ s.property.customer.name }} — {{ s.property.label }}
-          {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}
-          {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
-          {% if s.effective_tech_id == assigned_id %}
-          {% if assigned_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
-          {% if not assigned_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
-          {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}
-          {% elif s.effective_tech_id %}
-          <span class="tag tag-safety ml-1" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
-          {% else %}
-          <span class="tag tag-safety">unassigned</span>
-          {% endif %}{% endif %}</span>
-        <span class="flex shrink-0 items-center gap-1.5">
-          {% if s.status == "done" %}{{ ui.icon("check", "h-4 w-4 text-pool") }}{% endif %}
-          {{ ui.icon("chevron", "h-4 w-4 text-mist") }}</span>
-      </summary>
-      <div class="mt-2 space-y-2 border-t border-seam pt-2">
-        <form method="post" action="/week/move" class="flex flex-wrap items-center gap-2">
-          <input type="hidden" name="property_id" value="{{ s.property.id }}">
-          <input type="hidden" name="from_date" value="{{ d }}">
-          <input type="date" name="to_date" value="{{ d }}" class="field w-auto font-data">
-          <label class="flex min-h-11 items-center gap-1.5 text-sm"><input type="radio" name="mode" value="once" checked class="h-4 w-4"> Just this week</label>
-          <label class="flex min-h-11 items-center gap-1.5 text-sm"><input type="radio" name="mode" value="forever" class="h-4 w-4"> From now on</label>
-          <button class="btn-secondary">Move</button>
-        </form>
-        <form method="post" action="/week/reorder" class="flex gap-2">
-          <input type="hidden" name="property_id" value="{{ s.property.id }}">
-          <button name="direction" value="up" class="btn-secondary flex-1 gap-1">{{ ui.icon("chevron", "h-3.5 w-3.5 -rotate-90") }}Earlier</button>
-          <button name="direction" value="down" class="btn-secondary flex-1 gap-1">{{ ui.icon("chevron", "h-3.5 w-3.5 rotate-90") }}Later</button>
-        </form>
-      </div>
-    </details>
-    {% endfor %}
-  </div>
-</div>
-{% endfor %}
+<div class="week">
+  {% for d in days %}
+  {% set stops = day_stops[d] %}
+  <section class="card wday {{ 'sel' if d == today_date }}" aria-labelledby="wd-{{ loop.index }}">
+    <div class="between"><h2 class="strong wday-h" id="wd-{{ loop.index }}">{{ d.strftime("%a %b %-d") }}{% if d == today_date %} <span class="pill p-acc">Today</span>{% endif %}</h2><span class="muted small num">{{ stops|length }} stop{{ "s" if stops|length != 1 }}</span></div>
+    {% if not stops %}<p class="muted small" style="margin-top:8px">No stops</p>{% endif %}
+    <ul class="wlist">
+      {% for s in stops %}
+      <li>
+        <details class="wstop">
+          <summary>
+            {% if s.status == "done" %}<span class="dot done" aria-label="Done">{{ ui.icon("check") }}</span>{% elif s.status == "skipped" %}<span class="dot skipped" aria-label="Skipped">–</span>{% else %}<span class="dot">{{ loop.index }}</span>{% endif %}
+            <span class="wname">{{ s.property.customer.name }}{% if s.property.label and s.property.label != "Home" %} — {{ s.property.label }}{% endif %}</span>
+            {% if s.moved_in %}<span class="pill p-neu">moved</span>{% endif %}
+            {% if techs %}{{ tech_tag(s, tech_by_id) }}{% endif %}
+          </summary>
+          <div class="wmore">
+            <form method="post" action="/week/move" class="wmove">
+              <input type="hidden" name="property_id" value="{{ s.property.id }}">
+              <input type="hidden" name="from_date" value="{{ d }}">
+              <label class="lbl" for="mv-{{ s.property.id }}-{{ d }}">Move to</label>
+              <input id="mv-{{ s.property.id }}-{{ d }}" type="date" name="to_date" value="{{ d }}" class="inp num">
+              <label class="chk"><input type="radio" name="mode" value="once" checked><span>Just this week</span></label>
+              <label class="chk"><input type="radio" name="mode" value="forever"><span>From now on</span></label>
+              <button class="btn sm">Move</button>
+            </form>
+            <form method="post" action="/week/reorder" class="row" style="margin-top:8px">
+              <input type="hidden" name="property_id" value="{{ s.property.id }}">
+              <button name="direction" value="up" class="btn sm">{{ ui.icon("up") }}Earlier</button>
+              <button name="direction" value="down" class="btn sm">{{ ui.icon("down") }}Later</button>
+              <a class="btn sm ghost" href="/visit/{{ s.property.id }}/{{ d }}">Open visit</a>
+            </form>
+          </div>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
 </div>
 {% endblock %}

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app import invoicing, mailer, models, receivables
+from app import email_brand, email_templates, invoicing, mailer, models, receivables
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
@@ -69,16 +69,15 @@ def _send_invoice_email(session: Session, inv: models.Invoice,
     with open(path, "rb") as f:
         pdf_bytes = f.read()
     period = date(inv.period_year, inv.period_month, 1).strftime("%B %Y")
-    body = (f"Hello {customer.name},\n\n"
-            f"Attached is invoice {inv.number} for {period}, "
-            f"totalling ${inv.total_cents / 100:,.2f}"
-            + (f", due {inv.due_date.isoformat()}" if inv.due_date else "")
-            + ".\n\nThank you for your business.\n\n"
-            f"{_company_name(session)}")
+    mail = email_brand.invoice_mail(
+        company_name=_company_name(session), customer_name=customer.name, number=inv.number,
+        period=period, total_cents=inv.total_cents, due=inv.due_date,
+        signoff=email_brand.look(session)["signoff"], doc=email_templates.doc(session, "invoice"))
     try:
-        mailer.send_message(customer.email, f"Invoice {inv.number} — {period}", body,
+        mailer.send_message(customer.email, mail.subject, mail.text,
                             conf=mailer.send_conf(session),
-                            attachments=[(pdf_bytes, f"{inv.number}.pdf")])
+                            attachments=[(pdf_bytes, f"{inv.number}.pdf")],
+                            html=email_brand.html_for(session, mail))
     except Exception:
         return False, "send"
     if inv.status == "draft":
@@ -205,17 +204,12 @@ def send_reminder(request: Request, iid: int, back: str = Form(""),
         return _back(back, inv, error="email")
 
     days = inv.days_overdue(business_today())
-    company = _company_name(session)
-    overdue_line = (f"It is now {days} day{'s' if days != 1 else ''} past due."
-                    if days else "")
-    body = (f"Hello {customer.name},\n\n"
-            f"Invoice {inv.number} has an outstanding balance of "
-            f"${inv.balance_cents / 100:,.2f}. {overdue_line}\n\n"
-            "If you have already sent payment, thank you — please disregard "
-            "this note.\n\n"
-            f"{company}")
-    mailer.queue(session, customer.email, f"Reminder: invoice {inv.number}", body,
-                 customer_id=customer.id)
+    mail = email_brand.reminder_mail(
+        company_name=_company_name(session), customer_name=customer.name, number=inv.number,
+        balance_cents=inv.balance_cents, days_overdue=days,
+        signoff=email_brand.look(session)["signoff"], doc=email_templates.doc(session, "reminder"))
+    mailer.queue(session, customer.email, mail.subject, mail.text,
+                 customer_id=customer.id, html=email_brand.html_for(session, mail))
     models.audit(session, request.state.user.id, "invoice.reminder",
                  detail=f"{inv.number} ({days}d overdue)")
     session.commit()

@@ -2,32 +2,33 @@
 {% block title %}Contract{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<a href="/contracts?season={{ contract.season_year }}" class="mb-1 inline-flex min-h-11 items-center gap-1 text-sm text-pool">← All contracts</a>
-{{ ui.page_header(customer.name, pool.label ~ " — " ~ contract.season_year ~ " Service Agreement") }}
-
-<p class="mb-4 flex flex-wrap items-center gap-1.5 font-data text-sm text-mist">
-  <span class="tag {{ 'tag-safety' if contract.status == 'void' }}">{{ contract.status }}</span>
-  <span>{{ prop.address }}</span>
-  {% if show_money %}<span>· <span class="money">{{ value | dollars }}</span> season value</span>{% endif %}
-</p>
+{% set kinds = {"draft": "neu", "approved": "acc", "sent": "warn", "signed": "pos", "void": "neg"} %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/contracts?season={{ contract.season_year }}">Contracts</a><span aria-hidden="true">›</span><a href="/customers/{{ customer.id }}#agreements">{{ customer.name }}</a><span aria-hidden="true">›</span><span>{{ contract.season_year }}</span></p>
+    <h1 class="h1">{{ contract.season_year }} service agreement</h1>
+    <p class="lede">{{ customer.name }} · {{ pool.label }} · {{ prop.address }}{% if show_money %} · <span class="num">{{ value | dollars }}</span> season value{% endif %}</p>
+  </div>
+  <div class="acts">{{ ui.pill(contract.status | capitalize, kinds.get(contract.status, "neu")) }}</div>
+</header>
 
 {% if send_error %}
-<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+<div class="banner fail" role="alert">
   Could not send: the customer has no email on file, or SMTP isn't configured in Settings.
 </div>
 {% endif %}
 {% if sign_error %}
-<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+<div class="banner fail" role="alert">
   That file doesn't look like a PDF — try again.
 </div>
 {% endif %}
 {% if conflict %}
-<div class="card mb-4 border-safety/40 bg-safety/10 p-3 text-sm text-safety">
+<div class="banner fail" role="alert">
   This contract changed while you were working — review its current status below.
 </div>
 {% endif %}
 
-<div class="card mb-4 p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="set-h">Season &amp; rates</h2>
   {% if contract.status == "draft" %}
   <form method="post" action="/contracts/{{ contract.id }}/edit" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -81,7 +82,7 @@
   {% endif %}
 </div>
 
-<div class="card p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="set-h">Documents &amp; workflow</h2>
   {% if contract.status == "sent" %}
   <p class="mb-3 text-sm {{ 'text-mist' if sign_link_active else 'text-safety' }}">
@@ -165,7 +166,7 @@
   </div>
 </div>
 
-<div class="card mt-4 p-4">
+<div class="card">
   <h2 class="set-h">History</h2>
   <ol class="space-y-1.5 text-sm">
     {% for label, at, who in timeline %}

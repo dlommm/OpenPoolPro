@@ -1,4 +1,5 @@
 import math
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -6,7 +7,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session, selectinload
 
-from app import addresses, geocode, maps, models
+from app import addresses, geocode, maps, models, receivables
 from app.analytics import lifetime_revenue_cents
 from app.db import get_or_404, get_session
 from app.deps import require_perm
@@ -247,11 +248,19 @@ def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
     customers = session.scalars(
         base.offset((p - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
 
+    show_money = request.state.user.can("view_money")
+    balances = {}
+    if show_money:
+        for inv in receivables.open_invoices(session):
+            balances[inv.customer_id] = balances.get(inv.customer_id, 0) + inv.balance_cents
     rows = []
     for c in customers:
         pp = _primary_property(c)
-        rows.append({"c": c, "city": pp.city if pp else "",
-                     "frequency": pp.frequency if pp else ""})
+        rows.append({"c": c, "city": pp.city if pp else "", "prop": pp,
+                     "frequency": pp.frequency if pp else "",
+                     "service": _service_label(pp),
+                     "rate_cents": effective_rate_cents(session, pp) if (show_money and pp) else None,
+                     "balance_cents": balances.get(c.id, 0)})
     if sort == "city":
         rows.sort(key=lambda r: (r["city"] == "", r["city"].lower(), r["c"].name.lower()))
 
@@ -265,7 +274,23 @@ def list_customers(request: Request, q: str = "", tag: str = "", show: str = "",
          "letter": letter, "city": city, "sort": sort, "cities": cities,
          "page": p, "total_pages": total_pages, "has_next": total > p * PAGE_SIZE,
          "has_prev": p > 1, "total": total,
-         "can_manage": request.state.user.can("manage_customers")})
+         "can_manage": request.state.user.can("manage_customers"),
+         "show_money": show_money})
+
+
+def _has_salt(prop) -> bool:
+    return any(pl.active and pl.water_type == "salt" for pl in prop.pools)
+
+
+_FREQ = {"weekly": "Weekly", "biweekly": "Every 2 weeks", "every4weeks": "Every 4 weeks"}
+_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def _service_label(prop) -> str:
+    """'Weekly · Fri', 'Every 2 weeks · Tue', or 'No regular service'."""
+    if prop is None or prop.frequency not in _FREQ:
+        return "No regular service"
+    return f"{_FREQ[prop.frequency]} · {_DAYS[prop.weekday % 7]}"
 
 
 @router.get("/customers/new")
@@ -344,8 +369,42 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
 
     from app.routers.qbo_billing import invoice_context
     qbo_context = invoice_context(session, cid) if (user.can("view_money") or user.can("approve_billing")) else {}
+
+    # Customer 360 (design v0.7): service history with readings flagged
+    # against the same bands the visit screen and water history use, the
+    # local invoices with what is still owed, the contact log, and the water
+    # trend for the main property.
+    from app import charts, chem_targets, water_history
+    prop_ids = [p.id for p in props]
+    history = session.scalars(
+        select(models.Visit).where(models.Visit.property_id.in_(prop_ids),
+                                   models.Visit.status != "due")
+        .options(selectinload(models.Visit.chemicals), selectinload(models.Visit.completed_by))
+        .order_by(models.Visit.date.desc()).limit(26)).all() if prop_ids else []
+    tgt, band = chem_targets.current(session)
+    out_of_band = {(v.id, k) for v in history for k, half in band.items()
+                   if getattr(v, k) is not None and abs(getattr(v, k) - tgt[k]) > half}
+    invoices = session.scalars(
+        select(models.Invoice).where(models.Invoice.customer_id == cid)
+        .options(selectinload(models.Invoice.payments))
+        .order_by(models.Invoice.period_year.desc(), models.Invoice.period_month.desc())
+    ).all() if user.can("view_money") else []
+    comms = session.scalars(select(models.CommLog).where(models.CommLog.customer_id == cid)
+                            .order_by(models.CommLog.at.desc())).all()
+    main = next((p for p in props if p.active), None)
+    water = water_history.for_property(session, main.id) if main else []
+    next_visit = None
+    if main is not None and main.id not in active_holds:
+        from app.scheduling import is_due
+        next_visit = next((today + timedelta(days=i) for i in range(0, 35)
+                           if is_due(main, today + timedelta(days=i))), None)
     return templates.TemplateResponse(request, "customers/detail.html",
         {**qbo_context, "c": c, "props": props, "rates": rates, "jobs": jobs, "timeline": timeline,
+         "history": history, "out_of_band": out_of_band, "invoices": invoices,
+         "balance_cents": sum(i.balance_cents for i in invoices), "comms": comms,
+         "main": main, "water": [(sr, charts.reading_chart(sr, height=140)) for sr in water
+                                 if sr.points and (sr.key != "salt" or _has_salt(main))],
+         "next_visit": next_visit, "today": today,
          "active_holds": active_holds, "lifetime_cents": lifetime_cents,
          "photos": photos, "ptag": ptag, "house_photos": house_photos,
          "map_urls": map_urls, "geoapify_configured": bool(key),
@@ -378,7 +437,9 @@ def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form("
 @router.post("/customers/{cid}/deactivate")
 def deactivate_customer(cid: int, session: Session = Depends(get_session),
                         user=Depends(require_perm("manage_customers"))):
-    get_or_404(session, models.Customer, cid).active = False
+    c = get_or_404(session, models.Customer, cid)
+    if c.active:
+        c.active, c.deactivated_at = False, models.utcnow()
     session.commit()
     return RedirectResponse("/customers", status_code=303)
 
@@ -386,7 +447,8 @@ def deactivate_customer(cid: int, session: Session = Depends(get_session),
 @router.post("/customers/{cid}/reactivate")
 def reactivate_customer(cid: int, session: Session = Depends(get_session),
                         user=Depends(require_perm("manage_customers"))):
-    get_or_404(session, models.Customer, cid).active = True
+    c = get_or_404(session, models.Customer, cid)
+    c.active, c.deactivated_at = True, None
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
@@ -426,18 +488,27 @@ def add_comm_log(cid: int, request: Request, kind: str = Form("note"), note: str
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
 
-def _parse_tech_id(assigned_tech_id: str) -> int | None:
+def _parse_tech_id(assigned_tech_id: str, session=None, keep: int | None = None) -> int | None:
+    """The chosen assignee: blank clears it; anyone who can't hold a route
+    (unknown, inactive, wrong role) keeps the current assignee instead of
+    saving a stale or forged id -- the same rule /routes/assign enforces."""
     if not assigned_tech_id.strip():
         return None
     try:
-        return int(assigned_tech_id)
+        tid = int(assigned_tech_id)
     except ValueError:
-        return None
+        return keep
+    if tid == keep or session is None:
+        return tid
+    from app.route_planning import ROUTE_ROLES
+    u = session.get(models.User, tid)
+    return tid if u is not None and u.active and u.role in ROUTE_ROLES else keep
 
 
 def _apply_property(p: models.Property, label, street, city, state, zip, gate_code, dog_warning,
                     dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
-                    assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True):
+                    assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True,
+                    session=None):
     p.label, p.gate_code, p.notes = label, gate_code, notes
     p.street, p.city, p.state, p.zip = street.strip(), city.strip(), state.strip(), zip.strip()
     p.address = addresses.compose_address(p.street, p.city, p.state, p.zip)
@@ -447,7 +518,7 @@ def _apply_property(p: models.Property, label, street, city, state, zip, gate_co
     if allow_rate:
         p.rate_override_cents = cents(rate_override_dollars)
         p.spa_rate_override_cents = cents(spa_rate_override_dollars)
-    p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
+    p.assigned_tech_id = _parse_tech_id(assigned_tech_id, session, keep=p.assigned_tech_id)
 
 
 def _maybe_geocode(p: models.Property, key: str, old_address: str) -> None:
@@ -495,6 +566,7 @@ def new_property_form(request: Request, cid: int, session: Session = Depends(get
     customer = get_or_404(session, models.Customer, cid)
     ctx = _property_form_context(session, None, customer, request.state.user,
                                  suggested_tech=suggest_tech(session, 0))
+    ctx["default_state"] = models.get_setting(session, "default_state", "") or ""
     return templates.TemplateResponse(request, "customers/property_form.html", ctx)
 
 
@@ -513,7 +585,8 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
     p = models.Property(customer_id=cid)
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"),
+                    session=session)
     key = models.get_setting(session, "geoapify_key", "")
     _maybe_geocode(p, key, old_address="")
     session.add(p)
@@ -563,7 +636,8 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"),
     old_address = p.address
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"),
+                    session=session)
     key = models.get_setting(session, "geoapify_key", "")
     _maybe_geocode(p, key, old_address)
     session.commit()

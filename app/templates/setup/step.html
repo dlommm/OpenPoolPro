@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Set up · {{ label }} — OpenPoolPro{% endblock %}
+{% set bare = true %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{#- The first-run wizard (design: OpenPoolPro first-run setup). One page per
+    step; each saves on Continue, so leaving resumes at the same step. Only
+    "account" is required; everything after it has Skip for now. -#}
+<div class="setup">
+  <header class="setup-band">
+    <div class="setup-brand">
+      <img src="/static/brand/openpoolpro-mark.png" alt="">
+      <div><b>OpenPoolPro</b><span>{{ biz or "Setting up your business" }}</span></div>
+      {% if key not in ("welcome", "account") %}<a class="setup-later" href="/dashboard">Finish later</a>{% endif %}
+    </div>
+  </header>
+  <div class="setup-sheet">
+    <nav class="setup-rail" aria-label="Setup steps">
+      <p class="setup-rail-h">Setup · about 5 minutes</p>
+      <ol>
+        {% for s in steps %}
+        <li>{% if s.open and not s.on %}<a class="st {{ 'done' if s.done }}" href="/setup/{{ s.key }}">{% else %}<span class="st {{ 'on' if s.on }} {{ 'done' if s.done }}"{% if s.on %} aria-current="step"{% endif %}>{% endif %}
+          <span class="n">{% if s.done and s.key in skipped %}–{% elif s.done %}{{ ui.icon("check") }}{% else %}{{ s.n }}{% endif %}</span>
+          <span>{{ s.label }}<small>{% if s.key in skipped %}Skipped{% else %}{{ s.sub }}{% endif %}</small></span>
+        {% if s.open and not s.on %}</a>{% else %}</span>{% endif %}</li>
+        {% endfor %}
+      </ol>
+    </nav>
+
+    <main class="setup-main">
+      <div class="setup-mprog"><div class="between"><span>Step {{ n }} of {{ total }}</span><span>{{ label }}</span></div>
+        <div class="setup-bar" aria-hidden="true"><i style="width:{{ (n / total * 100) | round(0) }}%"></i></div></div>
+      {% if error %}<p class="flash neg" role="alert">{{ error }}</p>{% endif %}
+
+{% if key == "welcome" %}
+      <p class="crumbs">Step 1 · Welcome</p>
+      <h1 class="h1">Let's get your pool business set up</h1>
+      <p class="lede">A few questions so the app knows who you are, what you charge and how you work. Only your account is required. You can skip the rest and change any of it later in Admin.</p>
+      <div class="setup-welcome">
+        <div class="wi"><span class="ic">{{ ui.icon("user") }}</span><div><b>Your account</b><small>Your name, sign-in, password and two-step sign-in.</small></div></div>
+        <div class="wi"><span class="ic">{{ ui.icon("home") }}</span><div><b>Your business</b><small>Name, contact details and logo for invoices and the customer portal.</small></div></div>
+        <div class="wi"><span class="ic">{{ ui.icon("tag") }}</span><div><b>Prices and water</b><small>Service rates, labour, markup and chemistry targets.</small></div></div>
+        <div class="wi"><span class="ic">{{ ui.icon("users") }}</span><div><b>Look and crew</b><small>Your colours, then add technicians if you have them.</small></div></div>
+      </div>
+      <div class="note">{{ ui.icon("lock", "ic18") }}<div>Nothing leaves this server during setup. Email connects only if you choose to in step 9.</div></div>
+      <div class="setup-foot"><span class="sp"></span><a class="btn pri" href="/setup/account">Get started</a></div>
+
+{% elif key == "account" %}
+      <p class="crumbs">Step 2 · Your account</p>
+      <h1 class="h1">Who's running the show?</h1>
+      <p class="lede">This is the owner account, with full access to everything. Your name appears in the app, on route sheets and in the activity log.</p>
+      <form method="post" action="/setup/account">
+        <div class="setup-grid">
+          <div><label class="lbl" for="a-name">Your full name</label><input id="a-name" name="name" value="{{ form.name }}" class="inp" autocomplete="name" required autofocus data-name-src placeholder="e.g. Alex Morgan"></div>
+          <div><label class="lbl" for="a-email">Your email</label><input id="a-email" type="email" name="email" value="{{ form.email }}" class="inp" autocomplete="email" placeholder="you@yourbusiness.com"><p class="help">For notices and the test email. Optional.</p></div>
+          <div><label class="lbl" for="a-user">Username for signing in</label><input id="a-user" name="username" value="{{ form.username }}" class="inp" autocapitalize="none" autocomplete="username" spellcheck="false" pattern="[a-z0-9][a-z0-9.\-]{2,31}" data-user-out><p class="help">Suggested from your name. Lowercase letters, numbers, dots or dashes.</p></div>
+          <div></div>
+          <div><label class="lbl" for="a-pw">Password</label><input id="a-pw" type="password" name="password" class="inp" autocomplete="new-password" minlength="12" required data-pw>
+            <div class="meter" aria-hidden="true"><i></i><i></i><i></i></div><p class="help" data-pw-hint aria-live="polite">At least 12 characters. A short phrase is easiest to remember.</p></div>
+          <div><label class="lbl" for="a-pw2">Type it again</label><input id="a-pw2" type="password" name="password_confirm" class="inp" autocomplete="new-password" minlength="12" required></div>
+        </div>
+        <div class="note">{{ ui.icon("lock", "ic18") }}<div>Your password is stored only as a secure hash in the app's database. It isn't kept in the .env file. Next you'll be offered two-step sign-in.</div></div>
+        <div class="setup-foot"><a class="btn" href="/setup/welcome">Back</a><span class="sp"></span><button class="btn pri">Create my account</button></div>
+      </form>
+      {% include "setup/_username.html" %}
+      <script nonce="{{ csp_nonce() }}">
+      (function () {
+        var pw = document.querySelector("[data-pw]"), hint = document.querySelector("[data-pw-hint]");
+        var bars = document.querySelectorAll(".meter i");
+        if (!pw) return;
+        pw.addEventListener("input", function () {
+          var v = pw.value, s = 0, mix = /[a-z]/i.test(v) && /[0-9\W]/.test(v);
+          if (v.length >= 12) s = 1;
+          if (v.length >= 12 && mix) s = 2;
+          if (v.length >= 16 && mix) s = 3;
+          bars.forEach(function (b, i) { b.className = i < s ? "f" + s : ""; });
+          hint.textContent = !v ? "At least 12 characters. A short phrase is easiest to remember."
+            : s === 0 ? (12 - v.length) + " more character" + (12 - v.length === 1 ? "" : "s") + " needed."
+            : s === 1 ? "Long enough. Mix in a number or symbol to make it stronger."
+            : s === 2 ? "Good password." : "Strong password.";
+        });
+      })();
+      </script>
+
+{% elif key == "security" %}
+      <p class="crumbs">Step 3 · Two-step sign-in</p>
+      <h1 class="h1">Lock the front door</h1>
+      <p class="lede">The owner account can see every customer and all the money. Two-step sign-in asks for a code from your phone as well as your password, so a stolen password alone isn't enough.</p>
+      {% if backup_codes %}
+        <div class="note" style="background:var(--ppb);color:var(--ppi)">{{ ui.icon("check", "ic18") }}<div><b>Two-step sign-in is on.</b> Save these backup codes somewhere safe (a password manager or printed). Each works once if you lose your phone. They won't be shown again.</div></div>
+        <ul class="setup-codes">{% for c in backup_codes %}<li class="mono">{{ c }}</li>{% endfor %}</ul>
+        <div class="setup-foot"><span class="sp"></span><a class="btn pri" href="/setup/business">I've saved them — continue</a></div>
+      {% elif user.totp_enabled %}
+        <div class="note" style="background:var(--ppb);color:var(--ppi)">{{ ui.icon("check", "ic18") }}<div>Two-step sign-in is on for your account.</div></div>
+        <div class="setup-foot"><span class="sp"></span><a class="btn pri" href="/setup/business">Continue</a></div>
+      {% elif enroll %}
+        <div class="setup-enroll">
+          <img src="{{ enroll.qr }}" alt="QR code for your authenticator app" width="180" height="180">
+          <div>
+            <ol class="setup-ol"><li>Open an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy).</li><li>Scan this code, or type the key below.</li><li>Enter the 6-digit code it shows.</li></ol>
+            <p class="mono setup-key">{{ enroll.secret }}</p>
+            <form method="post" action="/setup/security/confirm" class="row" style="margin-top:12px;flex-wrap:nowrap">
+              <label class="sr" for="s-code">6-digit code</label>
+              <input id="s-code" name="code" class="inp mono" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" autofocus style="max-width:160px">
+              <button class="btn pri">Turn it on</button>
+            </form>
+          </div>
+        </div>
+      {% elif confirm_skip %}
+        <div class="note warn" role="alert">{{ ui.icon("alert", "ic18") }}<div><b>Are you sure?</b> Without two-step sign-in, anyone who gets or guesses your password has full control of your business data: customers, invoices and QuickBooks. It takes about a minute to set up. You'll see a reminder on your dashboard until it's on.</div></div>
+        <div class="setup-foot">
+          <form method="post" action="/setup/security/skip"><button class="btn">Skip anyway</button></form>
+          <span class="sp"></span>
+          <a class="btn pri" href="/setup/security">Set it up now</a>
+        </div>
+      {% else %}
+        <form method="post" action="/setup/security/start">
+          {% if not fresh %}<div style="max-width:360px"><label class="lbl" for="s-pw">Your password</label><input id="s-pw" type="password" name="current_password" class="inp" autocomplete="current-password" required><p class="help">Needed to add an authenticator to your account.</p></div>{% endif %}
+          <div class="note">{{ ui.icon("lock", "ic18") }}<div>You'll need an authenticator app on your phone. You'll also get backup codes in case you lose the phone.</div></div>
+          <div class="setup-foot"><a class="btn ghost" href="/setup/security?confirm_skip=1">Skip for now</a><span class="sp"></span><button class="btn pri">Set up two-step sign-in</button></div>
+        </form>
+      {% endif %}
+
+{% else %}
+      <form method="post" action="/setup/{{ key }}" {% if key == "business" %}enctype="multipart/form-data"{% endif %}>
+
+  {% if key == "business" %}
+        <p class="crumbs">Step 4 · Your business</p>
+        <h1 class="h1">Tell us about {{ company.business_name or "your business" }}</h1>
+        <p class="lede">These go on invoices, quotes, contracts, emails and the customer portal.</p>
+        <div class="setup-grid">
+          <div class="full"><label class="lbl" for="b-name">Business name</label><input id="b-name" name="business_name" value="{{ company.business_name }}" class="inp" autocomplete="organization" placeholder="e.g. Example Pool Co."></div>
+          <div><label class="lbl" for="b-phone">Phone</label><input id="b-phone" type="tel" name="company_phone" value="{{ company.company_phone }}" class="inp"></div>
+          <div><label class="lbl" for="b-email">Email customers reply to</label><input id="b-email" type="email" name="company_email" value="{{ company.company_email }}" class="inp"></div>
+          <div class="full"><label class="lbl" for="b-addr">Business address</label><input id="b-addr" name="company_address" value="{{ company.company_address }}" class="inp" placeholder="Street, city, state ZIP"></div>
+          <div><label class="lbl" for="b-lic">Licence number</label><input id="b-lic" name="company_license" value="{{ company.company_license }}" class="inp" placeholder="Optional"></div>
+          <div><label class="lbl" for="b-tz">Time zone</label><select id="b-tz" name="timezone" class="inp">
+            {% for v, l in timezones %}<option value="{{ v }}" {{ "selected" if v == tz }}>{{ l }} ({{ v }})</option>{% endfor %}
+            {% if tz not in timezones | map(attribute=0) %}<option value="{{ tz }}" selected>{{ tz }}</option>{% endif %}</select></div>
+          <div><label class="lbl" for="b-state">Your state</label><input id="b-state" name="default_state" value="{{ default_state }}" class="inp" maxlength="2" autocapitalize="characters" placeholder="FL" style="max-width:100px"><p class="help">Filled in on new properties, which picks their sales-tax rate.</p></div>
+          <div><span class="lbl">Logo</span>
+            <div class="setup-logo">{% if company.has_logo %}<img src="/branding/logo" alt="Current logo">{% else %}<span class="ph" aria-hidden="true">{{ ui.icon("camera") }}</span>{% endif %}
+              <div><label class="btn sm" for="b-logo">{{ "Replace logo" if company.has_logo else "Choose a logo" }}</label><input id="b-logo" type="file" name="logo" accept="image/png,image/jpeg" class="sr"><p class="help">PNG or JPG under 2 MB. Square works best.</p></div></div></div>
+        </div>
+
+  {% elif key == "prices" %}
+        <p class="crumbs">Step 5 · Prices</p>
+        <h1 class="h1">What do you charge?</h1>
+        <p class="lede">Weekly service is priced by pool size. A new customer's rate is picked from these automatically, and you can override it per property.</p>
+        <div class="card" style="padding:6px;overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th scope="col">Size</th><th scope="col">Up to</th><th scope="col" style="width:160px">Per visit</th></tr></thead>
+            <tbody>{% for t in tiers %}
+              <tr><td><b>{{ t.label }}</b></td><td class="muted">{% if t.max_gallons %}{{ "{:,}".format(t.max_gallons) }} gal{% else %}and larger{% endif %}</td>
+                <td><div class="unitw"><span class="pre">$</span><input class="inp num" inputmode="decimal" name="tier_{{ t.id }}" value="{{ '%.2f' | format(t.rate_cents / 100) }}" aria-label="{{ t.label }} price per visit"></div></td></tr>
+            {% endfor %}</tbody>
+          </table>
+        </div>
+        <div class="setup-grid three" style="margin-top:20px">
+          <div><label class="lbl" for="p-lab">Repair labour, per hour</label><div class="unitw"><span class="pre">$</span><input id="p-lab" class="inp num" inputmode="decimal" name="labour" value="{{ labour }}"></div></div>
+          <div><label class="lbl" for="p-mk">Chemical markup, %</label><input id="p-mk" class="inp num" inputmode="decimal" name="markup" value="{{ markup }}"><p class="help">Added to your cost on billed chemicals.</p></div>
+          <div><label class="lbl" for="p-net">Invoices are due in (days)</label><input id="p-net" class="inp num" inputmode="numeric" name="net" value="{{ net }}"></div>
+        </div>
+
+  {% elif key == "water" %}
+        <p class="crumbs">Step 6 · Water and chemicals</p>
+        <h1 class="h1">How do you like the water?</h1>
+        <p class="lede">The visit screen and dose suggestions aim for these targets. Nothing is suggested while a reading stays inside its band.</p>
+        <div class="card" style="padding:6px;overflow-x:auto">
+          <table class="tbl"><thead><tr><th scope="col">Reading</th><th scope="col">Target</th><th scope="col">In range</th></tr></thead>
+            <tbody>{% for r in chem_rows %}{% set fmt = "%." ~ r.spec.decimals ~ "f" %}
+              <tr><td><b>{{ r.spec.label }}</b></td><td class="num">{{ fmt | format(r.target) }} {{ r.spec.unit }}</td><td class="num muted">{{ fmt | format(r.target - r.band) }}–{{ fmt | format(r.target + r.band) }}</td></tr>
+            {% endfor %}</tbody></table>
+        </div>
+        <p class="help">These are the standard starting points. Fine-tune them later in Admin › Chemistry.</p>
+        <h2 class="h2" style="margin-top:22px">Chemicals you carry</h2>
+        <p class="help" style="margin:2px 0 10px">Ticked items stay in your catalogue. Add your costs later in Admin to bill chemicals.</p>
+        <div class="setup-grid">{% for c in chems %}
+          <label class="chk setup-chk"><input type="checkbox" name="chem" value="{{ c.id }}" {{ "checked" if c.active }}><span>{{ c.name }}<small class="muted"> · {{ c.unit }}</small></span></label>
+        {% endfor %}</div>
+
+  {% elif key == "look" %}
+        <p class="crumbs">Step 7 · Look</p>
+        <h1 class="h1">Make it yours</h1>
+        <p class="lede">Pick your colours. Everyone on your team sees the same palette, and every colour is checked so text stays readable.</p>
+        <div class="pals" role="radiogroup" aria-label="Colour palette">
+          {% for p in palettes %}
+          <label class="pal {{ 'on' if appearance.palette == p.key }}"><input type="radio" name="palette" value="{{ p.key }}" class="sr" {{ "checked" if appearance.palette == p.key }}>
+            <span class="setup-sw" style="background:linear-gradient(165deg,{{ p.v['--mast-a'] }},{{ p.v['--mast-c'] }})"><i></i><u style="background:{{ p.v['--a'] }}"></u></span>
+            <span class="pal-t"><b>{{ p.name }}</b></span></label>
+          {% endfor %}
+          <label class="pal {{ 'on' if appearance.palette == 'custom' }}"><input type="radio" name="palette" value="custom" class="sr" {{ "checked" if appearance.palette == "custom" }}>
+            <span class="setup-sw" style="background:{{ appearance.palette_custom }}"><i></i></span>
+            <span class="pal-t"><b>Your colour</b><small><input type="color" name="palette_custom" value="{{ appearance.palette_custom }}" class="colorin" aria-label="Pick your colour" style="margin-top:6px"></small></span></label>
+        </div>
+        <div style="margin-top:22px"><span class="lbl">Navigation on desktop</span>
+          <div class="layopts">{% for value, label, desc in [("top", "Top bar", "Group tabs across the top."), ("side", "Sidebar", "Every page listed down the left.")] %}
+            <label class="layopt {{ 'on' if appearance.nav_layout == value }}"><input type="radio" name="nav_layout" value="{{ value }}" class="sr" {{ "checked" if appearance.nav_layout == value }}><span class="lo-t"><b>{{ label }}</b><small>{{ desc }}</small></span></label>
+          {% endfor %}</div>
+          <p class="help">Phones and tablets always use the top bar. Each person picks light or dark for themselves.</p></div>
+
+  {% elif key == "crew" %}
+        <p class="crumbs">Step 8 · Crew</p>
+        <h1 class="h1">Who else is on the team?</h1>
+        <p class="lede">Technicians see their own route, visits and customers, and none of the money. Each gets a temporary password to change at first sign-in. Working solo? Skip this step.</p>
+        {% if created %}
+        <div class="card setup-temp">
+          <h2 class="h2">Temporary passwords: shown once</h2>
+          <p class="help">Give each person theirs. They'll choose their own when they first sign in. You can reset them later in Admin › Crew.</p>
+          <table class="tbl"><tbody>{% for c in created %}<tr><td><b>{{ c.name }}</b></td><td class="mono">{{ c.username }}</td><td class="mono">{{ c.password }}</td></tr>{% endfor %}</tbody></table>
+        </div>
+        {% endif %}
+        {% if crew %}<p class="help">On the team already: {% for u in crew %}{{ u.name }}{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
+        <div class="card" style="padding:6px;overflow-x:auto;margin-top:12px">
+          <table class="tbl"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Role</th></tr></thead>
+            <tbody data-crew-rows>{% for i in range(3) %}
+              <tr><td><input class="inp" name="name" aria-label="Name" placeholder="Full name"></td>
+                <td><input class="inp" name="username" aria-label="Username" placeholder="from the name" autocapitalize="none" spellcheck="false"></td>
+                <td><select class="inp" name="role" aria-label="Role"><option value="tech">Technician</option><option value="office">Office (technician + customers)</option><option value="admin">Co-owner (full access)</option></select></td></tr>
+            {% endfor %}</tbody></table>
+        </div>
+        <p class="help">Leave rows blank to skip them. More people can be added later in Admin › Crew.</p>
+
+  {% elif key == "connect" %}
+        <p class="crumbs">Step 9 · Connections</p>
+        <h1 class="h1">Connect what you use</h1>
+        <p class="lede">All optional. Without email the app still works, but it can't send visit reports, invoices or reminders.</p>
+        <div class="stack" style="gap:14px">
+          <details class="card" {{ "open" if smtp_ok }}>
+            <summary class="between" style="cursor:pointer"><span><b>Email sending</b><span class="help" style="display:block;margin:2px 0 0">Visit reports, invoices, reminders and signing links, sent from your own mailbox (Gmail, Microsoft 365 or any SMTP).</span></span>{% if smtp_ok %}{{ ui.pill("Set up", "pos") }}{% else %}<span class="btn sm">Set up now</span>{% endif %}</summary>
+            <div class="setup-grid" style="margin-top:14px">
+              <div><label class="lbl" for="m-host">Server</label><input id="m-host" name="smtp_host" value="{{ smtp.host or '' }}" class="inp" placeholder="smtp.gmail.com"></div>
+              <div><label class="lbl" for="m-port">Port</label><input id="m-port" name="smtp_port" value="{{ smtp.port or 587 }}" class="inp num" inputmode="numeric"></div>
+              <div><label class="lbl" for="m-user">Username</label><input id="m-user" name="smtp_user" value="{{ smtp.user or owner_email }}" class="inp" autocomplete="off"></div>
+              <div><label class="lbl" for="m-pass">App password</label><input id="m-pass" type="password" name="smtp_pass" class="inp" autocomplete="new-password"><p class="help">For Gmail, create an app password in your Google account.</p></div>
+              <div class="full"><label class="lbl" for="m-from">Send as</label><input id="m-from" name="smtp_from" value="{{ smtp.sender or '' }}" class="inp" placeholder="Example Pool Co. &lt;office@example.com&gt;"></div>
+            </div>
+            <p class="help">Microsoft 365 sign-in and a test email are in Admin › System.</p>
+          </details>
+          <div class="card between"><span><b>QuickBooks Online</b><span class="help" style="display:block;margin:2px 0 0">Send approved monthly invoices to QuickBooks and let it collect payment. Connect after setup, from Money › QuickBooks billing.</span></span>{{ ui.pill("After setup", "neu") }}</div>
+          <div class="card between"><span><b>Backups</b><span class="help" style="display:block;margin:2px 0 0">A nightly snapshot is on from the start. Add an off-server copy in Admin › System.</span></span>{{ ui.pill("On", "pos") }}</div>
+        </div>
+
+  {% elif key == "review" %}
+        <p class="crumbs">Step 10 · Review</p>
+        <h1 class="h1">All set, {{ user.name.split()[0] }}</h1>
+        <p class="lede">Here's what you set up. Change anything here, or later in Admin.</p>
+        <dl class="setup-sum">
+          <dt>You</dt><dd><b>{{ user.name }}</b> · signs in as <span class="mono">{{ user.username }}</span></dd><dd><a class="btn ghost sm" href="/account">Account</a></dd>
+          <dt>Two-step sign-in</dt><dd>{% if user.totp_enabled %}{{ ui.pill("On", "pos") }}{% else %}{{ ui.pill("Off", "warn") }} <span class="warnt small">Turn it on soon. Your dashboard will remind you.</span>{% endif %}</dd><dd><a class="btn ghost sm" href="/setup/security">{{ "Edit" if user.totp_enabled else "Turn on" }}</a></dd>
+          <dt>Business</dt><dd>{{ company.business_name or "Name not set" }}{% if company.company_phone %} · {{ company.company_phone }}{% endif %} · {{ tz }}</dd><dd><a class="btn ghost sm" href="/setup/business">Edit</a></dd>
+          <dt>Prices</dt><dd>{% if tiers %}{{ tiers[0].rate_cents | dollars }}–{{ (tiers | map(attribute="rate_cents") | max) | dollars }} per visit · {% endif %}${{ labour }}/h labour · {{ markup }}% markup · due in {{ net }} days</dd><dd><a class="btn ghost sm" href="/setup/prices">Edit</a></dd>
+          <dt>Water</dt><dd>Standard targets · {{ chem_count }} chemicals in the catalogue</dd><dd><a class="btn ghost sm" href="/setup/water">Edit</a></dd>
+          <dt>Look</dt><dd>{{ pal_name }} · {{ nav_name }}</dd><dd><a class="btn ghost sm" href="/setup/look">Edit</a></dd>
+          <dt>Crew</dt><dd>{% if crew %}{% for u in crew %}{{ u.name }}{{ ", " if not loop.last }}{% endfor %}{% else %}Just you for now{% endif %}</dd><dd><a class="btn ghost sm" href="/setup/crew">Edit</a></dd>
+          <dt>Email</dt><dd>{{ "Sending from your mailbox" if smtp_ok else "Not set up yet" }}</dd><dd><a class="btn ghost sm" href="/setup/connect">Edit</a></dd>
+        </dl>
+  {% endif %}
+
+        <div class="setup-foot">
+          {% set prev = steps[n - 2].key if n > 1 else "" %}
+          {% if prev and prev != "account" %}<a class="btn" href="/setup/{{ prev }}">Back</a>{% endif %}
+          <span class="sp"></span>
+          {% if key != "review" %}<button class="btn ghost" name="skip" value="1" formnovalidate>Skip for now</button>{% endif %}
+          <button class="btn pri">{{ "Open my dashboard" if key == "review" else ("Review" if key == "connect" else "Continue") }}</button>
+        </div>
+      </form>
+{% endif %}
+    </main>
+  </div>
+</div>
+{% endblock %}

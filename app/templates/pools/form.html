@@ -1,42 +1,94 @@
 {% extends "base.html" %}
+{% block title %}{{ "Edit " ~ pool.label if pool else "Add pool" }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Pool profile", "Edit pool" if pool else "Add pool") }}
-{% if not pool %}
-<div class="mb-4 space-y-2">
-  <span class="field-label">Quick pick a size</span>
-  <div class="grid grid-cols-2 gap-3">
-    {% if size_presets.pool %}
-    <label class="block"><span class="field-label">Pool size</span>
-      <select id="pool_size_select" class="field">
-        <option value="">— Select a pool size —</option>
-        {% for it in size_presets.pool %}
-        <option value="{{ it.id }}" data-kind="pool" data-shape="{{ it.shape }}"
-                data-length_ft="{{ it.length_ft if it.length_ft is not none else '' }}"
-                data-width_ft="{{ it.width_ft if it.width_ft is not none else '' }}"
-                data-avg_depth_ft="{{ it.avg_depth_ft if it.avg_depth_ft is not none else '' }}"
-                data-ref_gallons="{{ it.ref_gallons }}"
-                {{ "selected" if prefill and prefill.id == it.id }}>{{ it.label }}</option>
-        {% endfor %}
-      </select></label>
-    {% endif %}
-    {% if size_presets.spa %}
-    <label class="block"><span class="field-label">Spa size</span>
-      <select id="spa_size_select" class="field">
-        <option value="">— Select a spa size —</option>
-        {% for it in size_presets.spa %}
-        <option value="{{ it.id }}" data-kind="spa" data-shape="{{ it.shape }}"
-                data-length_ft="{{ it.length_ft if it.length_ft is not none else '' }}"
-                data-width_ft="{{ it.width_ft if it.width_ft is not none else '' }}"
-                data-avg_depth_ft="{{ it.avg_depth_ft if it.avg_depth_ft is not none else '' }}"
-                data-ref_gallons="{{ it.ref_gallons }}"
-                {{ "selected" if prefill and prefill.id == it.id }}>{{ it.label }}</option>
-        {% endfor %}
-      </select></label>
-    {% endif %}
+{% import "_form.html" as f %}
+{% set shapes = [
+  ("rectangle", "<rect x='3' y='5' width='14' height='10' rx='1.5'/>"),
+  ("round", "<circle cx='10' cy='10' r='7'/>"),
+  ("oval", "<ellipse cx='10' cy='10' rx='8' ry='5.5'/>"),
+  ("kidney", "<path d='M13.5 3.2c-2.6 0-3 2.6-5 2.6S5 3.6 3.6 5.4c-1.6 2-1 5 .8 6 1.6.9 1.6 2.6 3 3.6 2 1.4 5 .6 5.8-1.4.6-1.6-.4-2.6-.2-4 .2-1.4 2-1.6 2.4-3.2.5-2-.4-3.2-1.9-3.2z'/>"),
+  ("grecian", "<path d='M6 5h8l3 3v4l-3 3H6l-3-3V8z'/>")] %}
+{% set cur_shape = pool.shape if pool else (prefill.shape if prefill else "rectangle") %}
+{% set cur_kind = pool.kind if pool else (prefill.kind if prefill else "pool") %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span>{% if pool %}<a href="/customers/{{ pool.property.customer_id }}#pool">{{ pool.property.customer.name }}</a>{% else %}<span>Property</span>{% endif %}<span aria-hidden="true">›</span><span>{{ pool.label if pool else "Add pool" }}</span></p>
+    <h1 class="h1">{{ "Edit pool" if pool else "Add a pool or spa" }}</h1>
+    <p class="lede">Size sets the gallons the dose engine and the rate tiers use.</p>
   </div>
-  <a href="/properties/{{ property_id }}/pools/new" class="mt-1 inline-block text-sm text-mist underline">Custom size</a>
-</div>
+</header>
+
+<form method="post" class="formwrap stack" id="pool-form">
+  {% call f.group("Size", "Pick a common size or enter the dimensions; the gallons update as you type.") %}
+    {% if not pool and (size_presets.pool or size_presets.spa) %}
+    {% call f.row("Quick pick", "Fills in the shape, dimensions and gallons.") %}
+      <div class="fgrid">
+        {% for kind, items, sid, ph in [("pool", size_presets.pool, "pool_size_select", "Pool size"), ("spa", size_presets.spa, "spa_size_select", "Spa size")] if items %}
+        <div><label class="sr" for="{{ sid }}">{{ ph }}</label>
+          <select id="{{ sid }}" class="inp">
+            <option value="">{{ ph }}…</option>
+            {% for it in items %}
+            <option value="{{ it.id }}" data-kind="{{ kind }}" data-shape="{{ it.shape }}"
+                    data-length_ft="{{ it.length_ft if it.length_ft is not none else '' }}"
+                    data-width_ft="{{ it.width_ft if it.width_ft is not none else '' }}"
+                    data-avg_depth_ft="{{ it.avg_depth_ft if it.avg_depth_ft is not none else '' }}"
+                    data-ref_gallons="{{ it.ref_gallons }}"
+                    {{ "selected" if prefill and prefill.id == it.id }}>{{ it.label }}</option>
+            {% endfor %}
+          </select></div>
+        {% endfor %}
+      </div>
+      <a href="/properties/{{ property_id }}/pools/new" class="small">Custom size</a>
+    {% endcall %}
+    {% endif %}
+    {% call f.row("Label", "", "pl-label") %}<input id="pl-label" name="label" value="{{ pool.label if pool else 'Main pool' }}" class="inp">{% endcall %}
+    {% call f.row("This is a", "", "pl-kind") %}
+      <select id="pl-kind" name="kind" class="inp" style="max-width:220px" hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="change">
+        <option value="pool" {{ "selected" if cur_kind == "pool" }}>Pool</option>
+        <option value="spa" {{ "selected" if cur_kind == "spa" }}>Spa</option>
+      </select>
+    {% endcall %}
+    {% call f.row("Shape") %}
+      <div class="shapes" role="radiogroup" aria-label="Shape">
+        {% for s, svg in shapes %}
+        <label class="shape"><input type="radio" name="shape" value="{{ s }}" hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" {{ "checked" if cur_shape == s }}>
+          <svg viewBox="0 0 20 20" aria-hidden="true">{{ svg | safe }}</svg><span>{{ s | capitalize }}</span></label>
+        {% endfor %}
+      </div>
+    {% endcall %}
+    {% call f.row("Dimensions", "Feet. For a round pool, length is the diameter.") %}
+      <div class="dims">
+        {% for name, label in [("length_ft","Length or diameter"),("width_ft","Width"),("avg_depth_ft","Average depth")] %}
+        <div><label class="lbl" for="pl-{{ name }}">{{ label }}</label>
+          <div class="unitw"><input id="pl-{{ name }}" inputmode="decimal" name="{{ name }}" class="inp num"
+                 value="{{ pool|attr(name) or '' if pool else (prefill[name] if prefill and prefill[name] is not none else '') }}"
+                 hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="input changed delay:300ms"><span class="unit">ft</span></div></div>
+        {% endfor %}
+      </div>
+    {% endcall %}
+    {% call f.row("Gallons", "Leave the override blank to use the calculated figure.") %}
+      <div id="gallons" class="gal-out num" role="status" hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="load">
+        {% if pool %}≈ {{ "{:,}".format(pool.gallons) }} gal{% else %}<span class="muted">Enter dimensions</span>{% endif %}
+      </div>
+      <label class="sr" for="gallons_override">Gallons override</label>
+      <input id="gallons_override" inputmode="numeric" name="gallons_override" value="{{ pool.gallons_override or '' if pool else (prefill.ref_gallons if prefill else '') }}" placeholder="Override (optional)" class="inp num" style="max-width:220px">
+    {% endcall %}
+  {% endcall %}
+
+  {% call f.group("Water and finish") %}
+    {% call f.row("Sanitiser", "Salt pools get a salt reading on every visit.", "pl-water") %}
+      <select id="pl-water" name="water_type" class="inp" style="max-width:220px">{% for w in ["chlorine","salt"] %}<option value="{{ w }}" {{ "selected" if pool and pool.water_type == w }}>{{ w | capitalize }}</option>{% endfor %}</select>
+    {% endcall %}
+    {% call f.row("Surface", "", "pl-surface") %}
+      <select id="pl-surface" name="surface" class="inp" style="max-width:220px">{% for su in ["plaster","pebble","fiberglass","vinyl","tile","other"] %}<option value="{{ su }}" {{ "selected" if pool and pool.surface == su }}>{{ su | capitalize }}</option>{% endfor %}</select>
+    {% endcall %}
+    {% call f.row("Notes", "", "pl-notes") %}<textarea id="pl-notes" name="notes" class="inp">{{ pool.notes if pool else "" }}</textarea>{% endcall %}
+  {% endcall %}
+  {{ f.savebar("Save pool", cancel=("/customers/%d#pool"|format(pool.property.customer_id)) if pool else "") }}
+</form>
+
+{% if not pool %}
 <script nonce="{{ csp_nonce() }}">
 (function () {
   var poolSelect = document.getElementById("pool_size_select");
@@ -46,7 +98,7 @@
   function applyPreset(select) {
     var opt = select.selectedOptions[0];
     if (!opt || !opt.value) return;  // blank option = no-op, leave fields alone
-    var form = select.closest("form") || document.querySelector("form");
+    var form = document.getElementById("pool-form");
     if (!form) return;
     var shapeRadio = form.querySelector('input[name="shape"][value="' + opt.dataset.shape + '"]');
     if (shapeRadio) shapeRadio.checked = true;
@@ -72,125 +124,59 @@
 })();
 </script>
 {% endif %}
-<form method="post" class="space-y-3">
-  <label class="block"><span class="field-label">Label</span>
-    <input name="label" value="{{ pool.label if pool else 'Main pool' }}" class="field"></label>
-  <div>
-    <span class="field-label">Shape</span>
-    <div class="grid grid-cols-5 gap-2">
-      {% for s, icon in [
-        ("rectangle", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><rect x='3' y='5' width='14' height='10' rx='1.5'/></svg>"),
-        ("round", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><circle cx='10' cy='10' r='7'/></svg>"),
-        ("oval", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><ellipse cx='10' cy='10' rx='8' ry='5.5'/></svg>"),
-        ("kidney", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M13.5 3.2c-2.6 0-3 2.6-5 2.6S5 3.6 3.6 5.4c-1.6 2-1 5 .8 6 1.6.9 1.6 2.6 3 3.6 2 1.4 5 .6 5.8-1.4.6-1.6-.4-2.6-.2-4 .2-1.4 2-1.6 2.4-3.2.5-2-.4-3.2-1.9-3.2z'/></svg>"),
-        ("grecian", "<svg viewBox='0 0 20 20' class='h-5 w-5' fill='none' stroke='currentColor' stroke-width='1.6'><path d='M6 5h8l3 3v4l-3 3H6l-3-3V8z'/></svg>")
-      ] %}
-      <label class="flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl border border-seam py-2 has-[:checked]:border-pool has-[:checked]:bg-shallow">
-        <input type="radio" name="shape" value="{{ s }}" class="sr-only" hx-get="/pools/gallons-preview"
-               hx-include="closest form" hx-target="#gallons"
-               {{ "checked" if (pool.shape if pool else (prefill.shape if prefill else "rectangle")) == s }}>
-        {{ icon | safe }}<span class="text-[11px] capitalize text-mist">{{ s }}</span>
-      </label>
-      {% endfor %}
-    </div>
-  </div>
-  <div class="grid grid-cols-3 gap-2">
-    {% for name, label in [("length_ft","Length/diam ft"),("width_ft","Width ft"),("avg_depth_ft","Avg depth ft")] %}
-    <label class="block"><span class="field-label">{{ label }}</span>
-      <input inputmode="decimal" name="{{ name }}"
-             value="{{ pool|attr(name) or '' if pool else (prefill[name] if prefill and prefill[name] is not none else '') }}"
-             hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons"
-             hx-trigger="input changed delay:300ms"
-             class="field font-data"></label>
-    {% endfor %}
-  </div>
-  <div id="gallons" class="card flex min-h-11 items-center bg-shallow/60 px-3 font-data"
-       hx-get="/pools/gallons-preview" hx-include="closest form" hx-target="#gallons" hx-trigger="load">
-    {% if pool %}≈ {{ "{:,}".format(pool.gallons) }} gal{% else %}<span class="text-mist">Enter dimensions</span>{% endif %}
-  </div>
-  <label class="block"><span class="field-label">Gallons override (optional)</span>
-    <input inputmode="numeric" name="gallons_override" value="{{ pool.gallons_override or '' if pool else (prefill.ref_gallons if prefill else '') }}"
-           placeholder="Auto-calculated from size" class="field font-data">
-    <span class="mt-1 block text-xs text-mist">Leave blank to use the auto-calculated gallons above.</span></label>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">Water</span>
-      <select name="water_type" class="field">
-        {% for w in ["chlorine","salt"] %}<option {{ "selected" if pool and pool.water_type == w }}>{{ w }}</option>{% endfor %}
-      </select></label>
-    <label class="block"><span class="field-label">Surface</span>
-      <select name="surface" class="field">
-        {% for su in ["plaster","pebble","fiberglass","vinyl","tile","other"] %}<option {{ "selected" if pool and pool.surface == su }}>{{ su }}</option>{% endfor %}
-      </select></label>
-  </div>
-  <label class="block"><span class="field-label">This is a</span>
-    <select name="kind" class="field" hx-get="/pools/gallons-preview" hx-include="closest form"
-            hx-target="#gallons" hx-trigger="change">
-      {% set cur_kind = pool.kind if pool else (prefill.kind if prefill else "pool") %}
-      <option value="pool" {{ "selected" if cur_kind == "pool" }}>Pool</option>
-      <option value="spa" {{ "selected" if cur_kind == "spa" }}>Spa</option>
-    </select></label>
-  <label class="block"><span class="field-label">Notes</span>
-    <textarea name="notes" class="field min-h-24 py-2">{{ pool.notes if pool else "" }}</textarea></label>
-  <button class="btn-primary">Save pool</button>
-</form>
 
 {% if pool %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Reference photos</h2>
-<div class="mb-2 flex flex-wrap gap-2 text-sm">
-  <a href="/pools/{{ pool.id }}/edit" class="tag {{ 'tag-safety' if not ptag }}">All</a>
-  {% for pt in ["before", "after", "issue"] %}
-  <a href="/pools/{{ pool.id }}/edit?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
-  {% endfor %}
-</div>
-<div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
-  {% for ph in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-  </div>
-  {% endfor %}
-</div>
-<select id="pool-photo-tag" name="tag" class="field mb-2">
-  <option value="">No tag</option>
-  <option value="before">Before</option>
-  <option value="after">After</option>
-  <option value="issue">Issue</option>
-</select>
-<div class="mb-4">
-{% call ui.upload("Take / upload photo", "camera") %}
-<input type="file" accept="image/*" capture="environment" multiple name="files"
-       hx-post="/photos/pool/{{ pool.id }}" hx-encoding="multipart/form-data"
-       hx-include="#pool-photo-tag"
-       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
-{% endcall %}
-</div>
+<div class="formwrap stack" style="margin-top:var(--gap)">
+  {% call f.group("Equipment", "Pumps, filters, heaters and the rest, with warranty end dates for the dashboard's reminders.") %}
+    <div class="sx-r wide"><div class="sx-c" style="width:100%">
+      <ul class="rows" style="width:100%">
+        {% for e in pool.equipment %}
+        <li><div><span class="strong">{{ e.brand }} {{ e.model }}</span><small>{{ e.kind | capitalize }}{% if e.serial %} · serial {{ e.serial }}{% endif %}{% if e.install_date %} · installed {{ e.install_date | short_date }}{% endif %}{% if e.warranty_end %} · warranty until {{ e.warranty_end | short_date }}{% endif %}</small></div>
+          <form method="post" action="/equipment/{{ e.id }}/delete"><button class="btn sm danger">Remove</button></form></li>
+        {% else %}<li><div class="muted">No equipment recorded.</div></li>{% endfor %}
+      </ul>
+      <form method="post" action="/pools/{{ pool.id }}/equipment/new" style="margin-top:14px;width:100%">
+        <h3 class="strong">Add equipment</h3>
+        <div class="eqgrid">
+          <div><label class="lbl" for="eq-kind">Kind</label><select id="eq-kind" name="kind" class="inp">{% for k in ["pump","filter","heater","chlorinator","cleaner","automation","other"] %}<option value="{{ k }}">{{ k | capitalize }}</option>{% endfor %}</select></div>
+          <div><label class="lbl" for="eq-brand">Brand</label><input id="eq-brand" name="brand" class="inp"></div>
+          <div><label class="lbl" for="eq-model">Model</label><input id="eq-model" name="model" class="inp"></div>
+          <div><label class="lbl" for="eq-serial">Serial</label><input id="eq-serial" name="serial" class="inp"></div>
+          <div><label class="lbl" for="eq-inst">Installed</label><input id="eq-inst" type="date" name="install_date" class="inp num"></div>
+          <div><label class="lbl" for="eq-war">Warranty ends</label><input id="eq-war" type="date" name="warranty_end" class="inp num"></div>
+        </div>
+        <label class="lbl" for="eq-notes" style="margin-top:10px">Notes</label><input id="eq-notes" name="notes" class="inp">
+        <div class="row" style="margin-top:10px"><button class="btn">Add equipment</button></div>
+      </form>
+    </div></div>
+  {% endcall %}
 
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Equipment</h2>
-<div class="mb-3 space-y-2">
-  {% for e in pool.equipment %}
-  <div class="card flex items-center justify-between p-3 text-sm">
-    <span>{{ e.kind }}: {{ e.brand }} {{ e.model }} {{ e.serial }}
-      {%- if e.warranty_end %} &middot; Warranty until {{ e.warranty_end.strftime("%Y-%m-%d") }}{% endif %}</span>
-    <form method="post" action="/equipment/{{ e.id }}/delete"><button class="min-h-11 text-sm font-medium text-safety">Remove</button></form>
-  </div>
-  {% endfor %}
+  {% call f.group("Reference photos", "Before, after and issue shots of this pool.") %}
+    <div class="sx-r wide"><div class="sx-c" style="width:100%">
+      <div class="chips">
+        <a href="/pools/{{ pool.id }}/edit" class="chip {{ 'on' if not ptag }}">All</a>
+        {% for pt in ["before", "after", "issue"] %}<a href="/pools/{{ pool.id }}/edit?ptag={{ pt }}" class="chip {{ 'on' if ptag == pt }}">{{ pt | title }}</a>{% endfor %}
+      </div>
+      <div id="photo-strip" class="photo-strip">{% for ph in photos %}{{ ui.photo(ph) }}{% endfor %}</div>
+      <div class="row" style="align-items:flex-end;width:100%">
+        <div><label class="lbl" for="pool-photo-tag">Tag</label>
+          <select id="pool-photo-tag" name="tag" class="inp"><option value="">No tag</option><option value="before">Before</option><option value="after">After</option><option value="issue">Issue</option></select></div>
+        <div style="flex:1;min-width:200px">
+        {% call ui.upload("Take or upload a photo", "camera") %}
+        <input type="file" accept="image/*" capture="environment" multiple name="files"
+               hx-post="/photos/pool/{{ pool.id }}" hx-encoding="multipart/form-data"
+               hx-include="#pool-photo-tag"
+               hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
+        {% endcall %}
+        </div>
+      </div>
+    </div></div>
+  {% endcall %}
+
+  <form method="post" action="/pools/{{ pool.id }}/deactivate" class="danger-zone" data-confirm="Remove {{ pool.label }}? It stops appearing on visits and in pricing.">
+    <div><b>Remove pool</b><p class="muted small">Stops it appearing on visits and in pricing. History is kept.</p></div>
+    <button class="btn danger">Remove pool</button>
+  </form>
 </div>
-<form method="post" action="/pools/{{ pool.id }}/equipment/new" class="card space-y-2 p-3">
-  <div class="grid grid-cols-2 gap-2">
-    <select name="kind" class="field">
-      {% for k in ["pump","filter","heater","chlorinator","cleaner","automation","other"] %}<option>{{ k }}</option>{% endfor %}
-    </select>
-    <input name="brand" placeholder="Brand" class="field">
-    <input name="model" placeholder="Model" class="field">
-    <input name="serial" placeholder="Serial" class="field">
-    <input type="date" name="install_date" title="Install date" class="field font-data">
-    <input type="date" name="warranty_end" title="Warranty end date" class="field font-data">
-    <input name="notes" placeholder="Notes" class="field">
-  </div>
-  <button class="btn-secondary w-full">Add equipment</button>
-</form>
-<form method="post" action="/pools/{{ pool.id }}/deactivate" class="mt-3">
-  <button class="btn-danger">Remove pool</button>
-</form>
 {% endif %}
 {% endblock %}

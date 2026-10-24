@@ -14,7 +14,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import chem_targets, models
 
 # (attribute, label, unit, sensible axis floor/ceiling). The axis bounds keep a
 # pH chart from rendering a flat line: plotted from zero, the whole meaningful
@@ -27,10 +27,6 @@ METRICS = (
     ("salt", "Salt", "ppm", 0.0, 4500.0),
 )
 
-# Half-width of the "good" band drawn around each target, in that metric's own
-# units. Mirrors the deadbands app/dosing.py already refuses to dose inside, so
-# the chart and the dose engine tell the same story.
-BAND = {"fc": 0.5, "ph": 0.3, "ta": 10.0, "cya": 10.0, "salt": 200.0}
 
 
 @dataclass
@@ -59,13 +55,36 @@ class Series:
 
 def targets(session: Session) -> dict[str, float]:
     """The same target settings the dose engine reads."""
-    out = {}
-    for key, default in (("fc", "4.0"), ("ph", "7.5"), ("ta", "90"),
-                         ("cya", "40"), ("salt", "3200")):
-        try:
-            out[key] = float(models.get_setting(session, f"target_{key}", default))
-        except (TypeError, ValueError):
-            out[key] = float(default)
+    return chem_targets.current(session)[0]
+
+
+def bands(session: Session) -> dict[str, float]:
+    """Half-width of the "good" band around each target, in that metric's own
+    units -- the same band the dose engine refuses to dose inside, so the chart
+    and the dose engine tell the same story."""
+    return chem_targets.current(session)[1]
+
+
+# The visit screen's band scales: where each reading's track starts and ends.
+# Narrower than the chart axes so the "good" band is wide enough to read and
+# to hit with a thumb-sized marker.
+SCALE = {"fc": (0.0, 8.0), "ph": (6.8, 8.2), "ta": (40.0, 160.0),
+         "cya": (0.0, 100.0), "salt": (2000.0, 4400.0)}
+
+
+def scales(session: Session) -> list[dict]:
+    """One entry per reading for the visit screen: label, unit, target, the
+    good band around it, and the scale the band is drawn on. The band is the
+    same band the history chart and the dose engine use."""
+    tgt, band = chem_targets.current(session)
+    out = []
+    for key, label, unit, _floor, _ceil in METRICS:
+        lo, hi = SCALE[key]
+        t = tgt[key]
+        half = band[key]
+        out.append({"key": key, "label": label, "unit": unit, "target": t,
+                    "band_lo": t - half, "band_hi": t + half,
+                    "scale_lo": min(lo, t - 2 * half), "scale_hi": max(hi, t + 2 * half)})
     return out
 
 
@@ -87,13 +106,13 @@ def for_property(session: Session, property_id: int, limit: int = 26) -> list[Se
                      if any(getattr(v, key) is not None for key, *_ in METRICS)]
     with_readings = list(reversed(with_readings[:limit]))
 
-    tgt = targets(session)
+    tgt, band = chem_targets.current(session)
     out: list[Series] = []
     for key, label, unit, floor, ceil in METRICS:
         points = [(v.date, float(getattr(v, key))) for v in with_readings
                   if getattr(v, key) is not None]
         target = tgt.get(key)
-        half = BAND.get(key, 0.0)
+        half = band.get(key, 0.0)
         values = [val for _, val in points]
         # Widen the axis to fit anything outside the nominal range — an
         # out-of-range reading is exactly the one worth seeing.

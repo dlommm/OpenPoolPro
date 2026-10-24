@@ -1,54 +1,74 @@
-{# Shared UI macros: icons, page header with waterline signature #}
+{# Shared UI macros: icons, page header, pills, empty states, pager. #}
 
-{% macro icon(name, cls="") %}
-<svg class="{{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  {% if name == "route" %}
-    <circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/>
-    <path d="M8.4 19h6.1a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7h6.1"/>
-  {% elif name == "week" %}
-    <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
-  {% elif name == "customers" %}
-    <circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>
-    <path d="M16 5.5a3 3 0 0 1 0 5.5M17.5 15.5c1.8.7 3 2.2 3 4.5"/>
-  {% elif name == "jobs" %}
-    <path d="M14.5 6.5a4 4 0 0 1 5-5l-3 3 .7 2.3 2.3.7 3-3a4 4 0 0 1-5 5L9 18a2.1 2.1 0 1 1-3-3z"/>
-  {% elif name == "money" %}
-    <circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 8.8c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2.3 0 2.9 6 1.6 6 4.5 0 1.4-1.3 2.3-3 2.3-1.3 0-2.4-.5-3-1.5"/>
-  {% elif name == "settings" %}
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M12 2.8l1.2 2.4 2.6.5 1.9-1.9 1.5 1.5-1.9 1.9.5 2.6 2.4 1.2-1 2-2.6-.4-1.8 2 .6 2.6-2 1-1.7-2.1h-2.6L9.4 21l-2-1 .6-2.6-1.8-2-2.6.4-1-2 2.4-1.2.5-2.6L3.6 8.1l1.5-1.5L7 8.5l2.6-.5z" stroke-width="1.2"/>
-  {% elif name == "pin" %}
-    <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/>
-  {% elif name == "phone" %}
-    <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/>
-  {% elif name == "camera" %}
-    <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>
-  {% elif name == "upload" %}
-    <path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>
-  {% elif name == "document" %}
-    <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h7"/>
-  {% elif name == "check" %}
-    <path d="M4 12.5l5 5L20 6.5"/>
-  {% elif name == "chevron" %}
-    <path d="M9 5l7 7-7 7"/>
-  {% elif name == "plus" %}
-    <path d="M12 5v14M5 12h14"/>
-  {% elif name == "dog" %}
-    <path d="M10 5.5 8.5 3H5l-1 3 1.5 2H8M10 5.5h5.5L19 8l2 .8-1 2.2h-3l-1 2v6h-2.5v-3h-5v3H6v-7"/>
-  {% elif name == "inventory" %}
-    <path d="M3.5 7.5 12 3l8.5 4.5V17L12 21.5 3.5 17z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9.5"/>
-  {% elif name == "menu" %}
-    <path d="M4 6.5h16M4 12h16M4 17.5h16"/>
-  {% elif name == "user" %}
-    <circle cx="12" cy="8.2" r="3.5"/><path d="M4.8 20c0-3.6 3.2-6.2 7.2-6.2s7.2 2.6 7.2 6.2"/>
-  {% elif name == "sun" %}
-    <circle cx="12" cy="12" r="4.2"/>
-    <path d="M12 2.5v2.4M12 19.1v2.4M4.4 4.4l1.7 1.7M17.9 17.9l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.4 19.6l1.7-1.7M17.9 6.1l1.7-1.7"/>
-  {% elif name == "moon" %}
-    <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>
-  {% endif %}
-</svg>
-{% endmacro %}
+{# Icon set from the V2 design (24px grid, 1.7 stroke). Old names are kept as
+   aliases so existing call sites keep working. Unknown names draw nothing. #}
+{% set ICONS = {
+  "dash": "M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z",
+  "today": "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 18h5.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H15",
+  "week": "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+  "users": "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3",
+  "user": "M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
+  "wrench": "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z",
+  "money": "M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  "file": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5",
+  "pen": "M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z",
+  "quote": "M4 4h16v12H8l-4 4zM8 9h8M8 12h5",
+  "box": "M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8",
+  "map": "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14",
+  "gear": "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z",
+  "drop": "M12 2.7l5.7 5.6a8 8 0 1 1-11.4 0z",
+  "chart": "M3 3v18h18M7 15l4-4 3 3 5-6",
+  "pulse": "M3 12h4l3-8 4 16 3-8h4",
+  "cog": "M12 8v4l3 2M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z",
+  "log": "M4 4h16v16H4zM8 8h8M8 12h8M8 16h5",
+  "shield": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  "lock": "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
+  "check": "M5 12l5 5L20 7",
+  "next": "M9 18l6-6-6-6",
+  "back": "M15 18l-6-6 6-6",
+  "minus": "M5 12h14",
+  "plus": "M12 5v14M5 12h14",
+  "chevD": "M6 9l6 6 6-6",
+  "chevU": "M18 15l-6-6-6 6",
+  "down": "M12 5v14M19 12l-7 7-7-7",
+  "up": "M12 19V5M5 12l7-7 7 7",
+  "nav": "M3 11l19-9-9 19-2-8z",
+  "wifioff": "M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.7M19 12.9a10 10 0 0 0-2.3-1.6M2 8.8a15 15 0 0 1 4.2-2.7M22 8.8A15 15 0 0 0 10.7 5M12 20h.01",
+  "sync": "M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5",
+  "alert": "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  "phone": "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z",
+  "mail": "M3 5h18v14H3zM3 6l9 7 9-7",
+  "camera": "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  "print": "M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z",
+  "search": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
+  "menu": "M3 6h18M3 12h18M3 18h18",
+  "close": "M18 6L6 18M6 6l12 12",
+  "home": "M3 11l9-8 9 8v10h-6v-6H9v6H3z",
+  "clock": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
+  "tag": "M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8zM7 7h.01",
+  "dl": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+  "upload": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
+  "pin": "M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2z",
+  "dog": "M10 5.5 8.5 3H5l-1 3 1.5 2H8M10 5.5h5.5L19 8l2 .8-1 2.2h-3l-1 2v6h-2.5v-3h-5v3H6v-7",
+  "sun": "M12 16.2a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4zM12 2.5v2.4M12 19.1v2.4M4.4 4.4l1.7 1.7M17.9 17.9l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.4 19.6l1.7-1.7M17.9 6.1l1.7-1.7",
+  "moon": "M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z",
+  "logout": "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  "edit": "M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z",
+  "trash": "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14",
+  "ext": "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
+  "link": "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
+  "star": "M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z",
+  "route": "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 18h5.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H15",
+  "customers": "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3",
+  "jobs": "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z",
+  "settings": "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z",
+  "inventory": "M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8",
+  "document": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5",
+  "chevron": "M9 18l6-6-6-6"
+} %}
+{% macro icon(name, cls="") -%}
+<svg class="ic {{ cls }}" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ ICONS.get(name, '') }}"/></svg>
+{%- endmacro %}
 
 {# Styled file-upload control. Wraps a caller-provided <input type="file"> (which
    keeps its own name/accept/hx-* attributes) in a labelled, tappable button so
@@ -71,26 +91,52 @@
    appends page=N itself. Mirrors the original customers pager markup. #}
 {% macro pager(page, total_pages, total, base_url, base_qs="") %}
 {% set sep = "&" if base_qs else "" %}
-<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-mist">
-  <span>Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
-  <div class="flex gap-2">
+<nav class="between pager" aria-label="Pages" style="margin-top:14px">
+  <span class="muted small">Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
+  <span class="row">
     {% if page > 1 %}
-    <a class="btn-secondary" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page - 1 }}">Prev</a>
+    <a class="btn sm" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page - 1 }}">{{ icon("back") }}Prev</a>
     {% endif %}
     {% if page < total_pages %}
-    <a class="btn-secondary" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page + 1 }}">Next</a>
+    <a class="btn sm" href="{{ base_url }}?{{ base_qs }}{{ sep }}page={{ page + 1 }}">Next{{ icon("next") }}</a>
     {% endif %}
-  </div>
-</div>
+  </span>
+</nav>
 {% endmacro %}
 
-{% macro page_header(eyebrow, title) %}
-<header class="pt-2 pb-3">
-  <p class="page-eyebrow">{{ eyebrow }}</p>
-  <h1 class="page-title mt-0.5">{{ title }}</h1>
-  <svg class="waterline mt-2 h-2.5 w-28 text-pool" viewBox="0 0 112 10" fill="none" aria-hidden="true">
-    <path d="M1 5 C 8 1, 15 1, 22 5 S 36 9, 43 5 S 57 1, 64 5 S 78 9, 85 5 S 99 1, 106 5"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  </svg>
+{# Page header: optional breadcrumb/eyebrow line, title, lede, and an
+   actions slot (call block). Usage:
+     {% call ui.page_header("Customers", "Priya Nair", lede="Salt pool") %}<a class="btn">Edit</a>{% endcall %} #}
+{% macro page_header(eyebrow, title, lede="") -%}
+<header class="ph">
+  <div>
+    {% if eyebrow %}<p class="crumbs">{{ eyebrow }}</p>{% endif %}
+    <h1 class="h1">{{ title }}</h1>
+    {% if lede %}<p class="lede">{{ lede }}</p>{% endif %}
+  </div>
+  {% if caller is defined %}<div class="acts">{{ caller() }}</div>{% endif %}
 </header>
-{% endmacro %}
+{%- endmacro %}
+
+{# Status pill: kind is pos | neg | warn | neu | acc | next. #}
+{% macro pill(text, kind="neu") -%}<span class="pill p-{{ kind }}">{{ text }}</span>{%- endmacro %}
+
+{# Empty state with the drop mark. #}
+{% macro empty(text) -%}<p class="empty">{{ text }}</p>{%- endmacro %}
+
+{# Avatar initials disc. #}
+{% macro av(name, cls="") -%}<span class="av {{ cls }}" aria-hidden="true">{{ name|initials }}</span>{%- endmacro %}
+
+{# One photo thumbnail with its tag; matches the upload response markup in
+   app/routers/photos.py. #}
+{% macro photo(ph) -%}
+<figure class="photo"><img src="/photos/file/{{ ph.id }}?thumb=1" alt="{{ (ph.tag or 'Photo') | capitalize }}">{% if ph.tag %}<figcaption class="pill p-neu">{{ ph.tag }}</figcaption>{% endif %}</figure>
+{%- endmacro %}
+
+{# A short numbered flow (CSV import, tester import): each step done, current
+   or still to come. `steps` is a list of labels; `current` is 1-based. #}
+{% macro flow_steps(steps, current) -%}
+<ol class="fsteps" aria-label="Steps">
+  {% for s in steps %}<li class="{{ 'dn' if loop.index < current else ('on' if loop.index == current) }}"{% if loop.index == current %} aria-current="step"{% endif %}><i>{% if loop.index < current %}✓{% else %}{{ loop.index }}{% endif %}</i>{{ s }}</li>{% endfor %}
+</ol>
+{%- endmacro %}

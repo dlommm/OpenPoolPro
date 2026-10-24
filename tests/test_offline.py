@@ -5,14 +5,14 @@ being reachable anonymously, the base.html sync-badge/flush-queue wiring,
 and the queued-banner query param on the Today page."""
 from fastapi.testclient import TestClient
 
-import app.config as config
 from app.main import create_app
+from tests.conftest import make_owner
 
 
 def _anon_client(engine, monkeypatch):
     """Same convention as tests/test_auth.py's make_client -- a client that
     never logs in, for exercising the auth-exemption allowlist."""
-    monkeypatch.setattr(config, "APP_PASSWORD", "unused-anon")
+    make_owner(engine, password="unused-anon")
     return TestClient(create_app(engine=engine))
 
 
@@ -90,7 +90,7 @@ def test_offline_html_serves_200_anon(engine, monkeypatch):
 def test_base_html_has_sync_badge_and_flush_queue_script(client):
     html = client.get("/").text
     assert 'id="sync-badge"' in html
-    assert 'class="tag tag-safety"' in html
+    assert "mast-sync" in html
     assert "flush-queue" in html
     assert "queue-count" in html
 

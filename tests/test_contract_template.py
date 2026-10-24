@@ -52,7 +52,7 @@ def _contract_fixtures():
     customer = SimpleNamespace(name="Marcus Alvarez")
     prop = SimpleNamespace(label="Home", address="88 Gulfshore Blvd", gate_code="4417",
                            city="Cocoa Beach", state="FL", zip="32931")
-    company = {"business_name": "Coastline Pools"}
+    company = {"business_name": "Example Pool Co."}
     return contract, pool, prop, customer, company
 
 
@@ -67,7 +67,7 @@ def test_default_render_has_current_sections(engine):
     t = _pdf_text(pdf)
     assert "Scope of Weekly Pool Service" in t
     assert "Payment Terms" in t
-    assert "Coastline Pools" in t
+    assert "Example Pool Co." in t
 
 
 def test_custom_added_section_appears(engine):
@@ -79,7 +79,7 @@ def test_custom_added_section_appears(engine):
         models.set_setting(s, TEMPLATE_KEY, json.dumps(custom)); s.commit()
         pdf = contract_pdf.render_contract(contract, pool, prop, customer, company, session=s)
     t = _pdf_text(pdf)
-    assert "Cancellation Policy" in t and "30 days notice to Coastline Pools" in t
+    assert "Cancellation Policy" in t and "30 days notice to Example Pool Co." in t
 
 
 # --- Task 4: editor save + preview routes ---------------------------------

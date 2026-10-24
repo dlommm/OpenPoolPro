@@ -2,86 +2,99 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Dashboard", d.strftime("%A, %b %-d")) }}
+{% set pct = (stops_done / stops_total) if stops_total else 0 %}
+<header class="ph">
+  <div>
+    <p class="crumbs">{{ d.strftime("%A, %B %-d") }}</p>
+    <h1 class="h1">{{ greeting }}{% if first_name %}, {{ first_name }}{% endif %}</h1>
+    <p class="lede">{% if needs %}{{ needs|length }} thing{{ "s" if needs|length != 1 }} need{{ "" if needs|length != 1 else "s" }} a decision{% else %}Nothing needs a decision{% endif %} · {{ stops_done }} of {{ stops_total }} stops done</p>
+  </div>
+  <div class="acts"><a class="btn pri" href="/">Open today's route</a></div>
+</header>
 
-<p class="mb-4 font-data text-3xl font-semibold text-brass"><span class="money">{{ revenue_mtd_cents | dollars }}</span> <span class="font-body text-sm font-normal normal-case text-mist">MTD revenue</span></p>
+{% if setup_in_progress %}
+<div class="note" style="margin:0 0 var(--gap)">{{ ui.icon("gear", "ic18") }}<div style="flex:1">Setup isn't finished yet. Your choices so far are saved.</div><a class="btn sm" href="/setup">Continue setup</a></div>
+{% endif %}
+{% if getting_started %}
+{% set gs_done = getting_started | selectattr("done") | list | length %}
+<section class="card gs-card" aria-labelledby="d-gs" style="margin-bottom:var(--gap)">
+  <div class="card-h"><h2 class="card-t" id="d-gs">Getting started</h2><span class="muted small num">{{ gs_done }} of {{ getting_started | length }} done</span></div>
+  <div class="gs-bar" aria-hidden="true"><i style="width:{{ (gs_done / getting_started | length * 100) | round(0) }}%"></i></div>
+  {% for i in getting_started %}
+  <div class="gs-row"><span class="gs-dot {{ 'y' if i.done }}" aria-hidden="true">{% if i.done %}{{ ui.icon("check") }}{% endif %}</span>
+    <span style="flex:1">{{ i.label }}{% if i.done %}<span class="sr"> (done)</span>{% elif i.warn %} {{ ui.pill("Recommended", "warn") }}{% endif %}</span>
+    {% if not i.done and i.href %}<a class="btn sm" href="{{ i.href }}">{{ i.cta }}</a>{% endif %}</div>
+  {% endfor %}
+  <form method="post" action="/dashboard/getting-started/hide" style="margin-top:10px"><button class="btn ghost sm">Hide this list</button></form>
+</section>
+{% endif %}
 
-<div class="rise mb-5 grid grid-cols-1 gap-2 md:grid-cols-2">
-  <div class="card p-3.5">
-    <div class="flex items-center justify-between">
-      <span class="font-semibold">Route today</span>
-      <span class="font-data text-sm">{{ stops_done }} of {{ stops_total }}</span>
+<div class="cols c-main">
+  <section class="card" aria-labelledby="d-route">
+    <div class="card-h"><h2 class="card-t" id="d-route">Route today</h2><a class="btn ghost sm" href="/?crew=1">View stops</a></div>
+    <div class="ringrow">
+      <svg class="pring" viewBox="0 0 64 64" role="img" aria-label="{{ stops_done }} of {{ stops_total }} stops done"><circle class="pring-t" cx="32" cy="32" r="27"></circle><circle class="pring-v" cx="32" cy="32" r="27" style="--p:{{ pct | round(3) }}"></circle></svg>
+      <div><p class="big">{{ stops_done }} <span class="muted" style="font-size:20px;font-weight:400">of {{ stops_total }} stops done</span></p>
+        <p class="muted small" style="margin-top:4px">{{ stops_total - stops_done }} to go{% if missed_count %} · {{ missed_count }} missed{% endif %}{% if unassigned %} · {{ unassigned|length }} unassigned{% endif %}</p></div>
     </div>
-  </div>
-  <div class="card p-3.5">
-    <div class="flex items-center justify-between">
-      <span class="font-semibold">Missed stops</span>
-      <span class="font-data text-sm">{{ missed_count }}</span>
-    </div>
-  </div>
-</div>
-
-<div class="rise mb-5 grid grid-cols-1 gap-2 md:grid-cols-2">
-  <div class="card p-3.5">
-    <div class="flex items-center justify-between">
-      <span class="font-semibold">Open jobs</span>
-      <span class="font-data text-sm"><span data-card="open-jobs">{{ open_jobs }}</span></span>
-    </div>
-  </div>
-  <div class="card p-3.5">
-    <div class="flex items-center justify-between">
-      <span class="font-semibold">High priority</span>
-      <span class="font-data text-sm">{{ high_jobs }}</span>
-    </div>
-  </div>
-</div>
-
-<a href="/inventory" class="card mb-5 block p-3.5 {{ 'border-safety/40 bg-safety/5' if low_chems }}">
-  <div class="flex items-center justify-between">
-    <span class="font-semibold {{ 'text-safety' if low_chems }}">Low stock</span>
-    <span class="font-data text-sm {{ 'text-safety' if low_chems }}">{{ low_chems | length }}</span>
-  </div>
-  {% if low_chems %}
-  <p class="mt-1 text-sm text-mist">{{ low_chems | map(attribute="name") | join(", ") }}</p>
-  {% endif %}
-</a>
-
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Warranties</h2>
-<div class="rise mb-5">
-  <details class="card p-3.5">
-    <summary class="flex min-h-11 cursor-pointer items-center justify-between font-semibold">
-      <span>Expiring or past due</span>
-      <span class="font-data text-sm" data-card="warranties">{{ warranty_items | length }}</span>
-    </summary>
-    {% if warranty_items %}
-    <div class="mt-2 space-y-2 border-t border-seam pt-2 font-data text-sm">
-      {% for e in warranty_items %}
-      <div class="flex items-center justify-between gap-2">
-        <span class="font-body">{{ e.kind }}{% if e.brand %} &middot; {{ e.brand }}{% endif %} &mdash;
-          {{ e.pool.property.label }} ({{ e.pool.property.customer.name }})</span>
-        <span class="{{ 'text-safety' if e.warranty_end < d }}">{{ e.warranty_end.strftime("%b %-d, %Y") }}</span>
+    {% if lanes %}
+    <div style="margin-top:16px">
+      {% for l in lanes %}
+      <div class="lane">
+        <div class="row" style="gap:8px;flex-wrap:nowrap;min-width:0">{{ ui.av(l.person.name) }}<span class="lane-n">{{ l.person.name }}{% if l.person.id == request.state.user.id %} <span class="muted">(you)</span>{% endif %}</span></div>
+        <div class="rib" role="img" aria-label="{{ l.done }} of {{ l.count }} done">{% for g in l.segs %}<span class="{{ g }}"></span>{% endfor %}</div>
+        <a class="num lane-c" href="/?tech={{ l.person.id }}" data-crew="{{ l.person.name }}">{{ l.done }}/{{ l.count }}</a>
       </div>
       {% endfor %}
     </div>
-    {% else %}
-    <p class="mt-2 text-sm text-mist">Nothing due in the next 60 days.</p>
+    {% elif not stops_total %}
+    <p class="muted" style="margin-top:12px">No stops today.</p>
     {% endif %}
-  </details>
+  </section>
+
+  <section class="card" aria-labelledby="d-need">
+    <div class="card-h"><h2 class="card-t" id="d-need">Needs a decision</h2><span class="muted small num">{{ needs|length }}</span></div>
+    {% if needs %}
+    <div class="rows">
+      {% for n in needs %}
+      <div class="r"><div><span class="strong">{{ n.title }}</span><span class="sub">{{ n.sub }}</span></div><a class="btn sm" href="{{ n.href }}">{{ n.cta }}</a></div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Nothing waiting on you.</p>
+    {% endif %}
+  </section>
 </div>
 
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Crew</h2>
-<div class="rise space-y-2">
-  {% for t, count in crew %}
-  <div class="card p-3.5">
-    <div class="flex items-center justify-between">
-      <span class="font-semibold">{{ t.name }}</span>
-      <span class="font-data text-sm">{{ count }} stop{{ "s" if count != 1 else "" }}</span>
+<div class="kpis" style="margin-top:var(--gap)">
+  <a class="kpi" href="/jobs"><div class="l">Open service jobs</div><div class="v num"><span data-card="open-jobs">{{ open_jobs }}</span></div><div class="c">{{ high_jobs }} high priority</div></a>
+  <a class="kpi" href="/ar"><div class="l">Receivables</div><div class="v num">{{ ar_total_cents | dollars }}</div><div class="c">{% if overdue_cents %}{{ overdue_cents | dollars }} overdue{% else %}Nothing overdue{% endif %}</div></a>
+  <a class="kpi" href="/money"><div class="l">Revenue this month</div><div class="v num">{{ revenue_mtd_cents | dollars }}</div><div class="c">{{ d.strftime("%b") }} 1–{{ d.day }} · service, chemicals and jobs</div></a>
+  <a class="kpi" href="/water-alerts"><div class="l">Water alerts</div><div class="v num">{{ alert_count }}</div><div class="c">Repeated or worsening readings</div></a>
+</div>
+
+<div class="cols c-main" style="margin-top:var(--gap)">
+  <section class="card" aria-labelledby="d-rev">
+    <div class="card-h"><h2 class="card-t" id="d-rev">Revenue by month</h2><a class="btn ghost sm" href="/analytics">Analytics</a></div>
+    <div class="bars" role="img" aria-label="Revenue for the last six months, {{ revenue[-1].label }} month to date">
+      <div class="yax num"><span>{{ (revenue_scale / 100) | money_short }}</span><span>{{ (revenue_scale * 2 / 3 / 100) | money_short }}</span><span>{{ (revenue_scale / 3 / 100) | money_short }}</span><span>$0</span></div>
+      {% for m in revenue %}<div class="bar {{ 'cur' if m.current }}" title="{{ m.label }}: {{ m.cents | dollars }}"><span style="height:{{ m.pct }}%"></span></div>{% endfor %}
     </div>
-  </div>
-  {% else %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No crew assigned</p>
-  </div>
-  {% endfor %}
+    <div class="bx"><span></span>{% for m in revenue %}<span>{{ m.label }}<br><b class="num" style="color:var(--t);font-weight:500">{{ (m.cents / 100) | money_short }}</b></span>{% endfor %}</div>
+    <p class="muted small" style="margin-top:8px">{{ revenue[-1].label }} is month to date, so its bar is not comparable yet.</p>
+  </section>
+
+  <section class="card" aria-labelledby="d-stock">
+    <div class="card-h"><h2 class="card-t" id="d-stock">Stock and warranties</h2><span class="muted small num" data-card="warranties">{{ warranty_items | length }}</span></div>
+    <div class="rows">
+      {% for c in low_chems %}
+      <a class="rowbtn" href="/inventory"><div><span class="nm strong">{{ c.name }}</span><span class="sub">{{ "%g"|format(c.stock_qty) }} {{ c.unit }} on hand · reorder at {{ "%g"|format(c.reorder_point) }} {{ c.unit }}</span></div><span class="pill p-warn">Low stock</span></a>
+      {% endfor %}
+      {% for e in warranty_items %}
+      <a class="rowbtn" href="/equipment?show=soon"><div><span class="nm strong">{{ e.kind | capitalize }}{% if e.brand %} · {{ e.brand }}{% endif %}{% if e.model %} {{ e.model }}{% endif %} · {{ e.pool.property.customer.name }}</span><span class="sub">Warranty {{ "ended" if e.warranty_end < d else "ends" }} {{ e.warranty_end.strftime("%b %-d, %Y") }}</span></div>{% if e.warranty_end < d %}<span class="pill p-neg">Past due</span>{% else %}<span class="muted small num">{{ (e.warranty_end - d).days }} days</span>{% endif %}</a>
+      {% endfor %}
+      {% if not low_chems and not warranty_items %}<p class="muted">Stock is fine and no warranty ends in the next 60 days.</p>{% endif %}
+    </div>
+  </section>
 </div>
 {% endblock %}

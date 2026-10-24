@@ -1,8 +1,13 @@
 {% extends "base.html" %}
+{% block title %}{{ "Edit job" if j else "New job" }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Job ticket", "Edit job" if j else "New job") }}
-<form method="post" class="space-y-3">
+<header class="ph"><div>
+  <p class="crumbs"><a href="/jobs">Service jobs</a><span aria-hidden="true">›</span>{% if j %}<a href="/jobs/{{ j.id }}">#{{ j.id }}</a><span aria-hidden="true">›</span><span>Edit</span>{% else %}<span>New</span>{% endif %}</p>
+  <h1 class="h1">{{ "Edit job" if j else "New job" }}</h1>
+  <p class="lede">{{ "Repairs and one-off work, billed on the month it is finished." if not j else j.title }}</p>
+</div></header>
+<form method="post" class="formwrap card legacy-form">
   {% if j %}
   <label class="block"><span class="field-label">Property</span>
     <select name="property_id" class="field">
@@ -35,7 +40,7 @@
 
   {% if can_manage_customers %}
   <div id="mode-new-block" class="hidden space-y-3">
-    <h2 class="font-display text-base font-bold uppercase tracking-wide text-mist">New customer</h2>
+    <h2 class="legacy-sub">New customer</h2>
     <label class="block"><span class="field-label">Name</span>
       <input name="customer_name" class="field"></label>
     <div class="grid grid-cols-2 gap-3">
@@ -205,7 +210,7 @@
     {% elif template and hours_status == 'unmatched' %}This pool size isn't priced in the “{{ template.title }}” template — enter hours to create the job.{% endif %}
   </p>
   {% endif %}
-  <button class="btn-primary">Save</button>
+  <div class="formbar"><span class="muted small"></span><span class="row">{% if j %}<a class="btn" href="/jobs/{{ j.id }}">Cancel</a>{% endif %}<button class="btn pri">{{ "Save job" if j else "Create job" }}</button></span></div>
 </form>
 <script nonce="{{ csp_nonce() }}">
 (function () {

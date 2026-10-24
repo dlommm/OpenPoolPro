@@ -1,109 +1,132 @@
 {% extends "base.html" %}
+{% block title %}{{ j.title }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<div class="flex items-start justify-between gap-2">
-  {{ ui.page_header("Job ticket", j.title) }}
-  <a href="/jobs/{{ j.id }}/edit" class="btn-secondary mt-2 shrink-0">Edit</a>
-</div>
-{% if j.priority == "high" %}<span class="tag tag-safety mb-2 inline-flex">High priority</span>{% endif %}
-<p class="mb-1 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</p>
-<p class="mb-4 flex flex-wrap items-center gap-1.5 font-data text-sm text-mist">
-  <span class="tag">{{ j.job_type }}</span>
-  {% if j.assigned_tech %}<span class="tag">{{ j.assigned_tech.name | initials }}</span>{% endif %}
-  {{ j.status }}{% if j.scheduled_date %} · {{ j.scheduled_date | short_date }}{% endif %}{% if show_money %} · <span class="money">{{ j.labor_cents | dollars }}</span>{% endif %}
-  {% if j.duration_minutes is not none %}<span class="tag font-data">{{ j.duration_minutes | minutes_display }}</span>{% endif %}
-  {% if j.started_at and not j.completed_at %}<span class="tag">Started {{ j.started_at | hhmm }}</span>{% endif %}</p>
-{% if j.description %}<p class="card mb-4 p-3.5 text-sm">{{ j.description }}</p>{% endif %}
-
-{% if j.tasks %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Checklist</h2>
-<div class="space-y-1">
-  {% for t in j.tasks %}
-  <form method="post" action="/jobs/{{ j.id }}/tasks/{{ t.id }}/toggle">
-    <button class="flex min-h-11 w-full items-center gap-2 rounded-lg border border-seam px-3 text-left">
-      <span class="{{ 'text-pool' if t.done else 'text-mist' }}">{{ '☑' if t.done else '☐' }}</span>
-      <span class="{{ 'line-through text-mist' if t.done }}">{{ t.label }}</span>
-    </button>
-  </form>
-  {% endfor %}
-</div>
-{% endif %}
-
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Notes</h2>
-<form method="post" action="/jobs/{{ j.id }}/notes" class="mb-4 space-y-2">
-  <textarea name="notes" rows="3" placeholder="Gate codes, dog warnings, anything the next tech should know…"
-            class="field w-full">{{ j.notes }}</textarea>
-  <button class="btn-secondary w-full">Save notes</button>
-</form>
-
-<div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
-  {% for ph in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
+{% set state = {"open": ("Open", "neu"), "scheduled": ("Scheduled", "acc"), "done": ("Done", "pos")}.get(j.status, (j.status, "neu")) %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/jobs?status={{ j.status }}">Service jobs</a><span aria-hidden="true">›</span><span>#{{ j.id }}</span></p>
+    <h1 class="h1">{{ j.title }}</h1>
+    <p class="lede"><a href="/customers/{{ j.property.customer_id }}">{{ j.property.customer.name }}</a>{% if j.property.label and j.property.label != "Home" %} — {{ j.property.label }}{% endif %}{% if j.assigned_tech %} · {{ j.assigned_tech.name }}{% endif %}</p>
   </div>
-  {% endfor %}
-</div>
-<select id="job-photo-tag" name="tag" class="field mb-2">
-  <option value="">No tag</option>
-  <option value="before">Before</option>
-  <option value="after">After</option>
-  <option value="issue">Issue</option>
-</select>
-<div class="mb-4">
-{% call ui.upload("Take / upload photo", "camera") %}
-<input type="file" accept="image/*" capture="environment" multiple name="files"
-       hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
-       hx-include="#job-photo-tag"
-       hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
-{% endcall %}
-</div>
+  <div class="acts">
+    {{ ui.pill(state[0], state[1]) }}
+    {% if j.priority == "high" %}{{ ui.pill("High priority", "neg") }}{% endif %}
+    {% if j.started_at and not j.completed_at %}{{ ui.pill("Started " ~ (j.started_at | hhmm), "acc") }}{% endif %}
+    <a href="/jobs/{{ j.id }}/edit" class="btn">{{ ui.icon("edit") }}Edit</a>
+  </div>
+</header>
 
-{% if not j.started_at and j.status != "done" %}
-<form method="post" action="/jobs/{{ j.id }}/start">
-  <button class="btn-secondary mb-2 w-full">Start job</button>
-</form>
-{% endif %}
+<div class="cols c-main">
+  <div class="stack">
+    {% if j.description %}<section class="card"><h2 class="card-t">What to do</h2><p style="margin-top:8px;white-space:pre-line">{{ j.description }}</p></section>{% endif %}
+
+    {% if j.tasks %}
+    {% set done_n = j.tasks | selectattr("done") | list | length %}
+    <section class="card">
+      <div class="card-h"><h2 class="card-t">Checklist</h2><span class="muted small num">{{ done_n }} of {{ j.tasks|length }}</span></div>
+      {% for t in j.tasks %}
+      <form method="post" action="/jobs/{{ j.id }}/tasks/{{ t.id }}/toggle">
+        <button class="taskbtn {{ 'on' if t.done }}" aria-pressed="{{ 'true' if t.done else 'false' }}"><i aria-hidden="true">{% if t.done %}{{ ui.icon("check") }}{% endif %}</i><span>{{ t.label }}</span></button>
+      </form>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h2 class="card-t">Notes</h2>
+      <form method="post" action="/jobs/{{ j.id }}/notes" style="margin-top:10px">
+        <label class="sr" for="j-notes">Notes</label>
+        <textarea id="j-notes" name="notes" rows="3" placeholder="Gate codes, dog warnings, anything the next tech should know…" class="inp">{{ j.notes }}</textarea>
+        <div class="row" style="margin-top:8px"><button class="btn sm">Save notes</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="card-t">Photos</h2>
+      <div id="photo-strip" class="photo-strip">{% for ph in photos %}{{ ui.photo(ph) }}{% endfor %}</div>
+      <div class="row" style="align-items:flex-end">
+        <div><label class="lbl" for="job-photo-tag">Tag</label>
+          <select id="job-photo-tag" name="tag" class="inp"><option value="">No tag</option><option value="before">Before</option><option value="after">After</option><option value="issue">Issue</option></select></div>
+        <div style="flex:1;min-width:200px">
+        {% call ui.upload("Take or upload a photo", "camera") %}
+        <input type="file" accept="image/*" capture="environment" multiple name="files"
+               hx-post="/photos/job/{{ j.id }}" hx-encoding="multipart/form-data"
+               hx-include="#job-photo-tag"
+               hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change" class="upload-input">
+        {% endcall %}
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2 class="card-t">Details</h2>
+      <dl class="kvl" style="margin-top:12px">
+        <dt>Customer</dt><dd><a href="/customers/{{ j.property.customer_id }}">{{ j.property.customer.name }}</a></dd>
+        <dt>Address</dt><dd><a href="https://maps.apple.com/?daddr={{ j.property.address | urlencode }}">{{ j.property.address }}</a></dd>
+        <dt>Kind</dt><dd>{{ j.job_type | capitalize }}</dd>
+        <dt>Assigned</dt><dd>{{ j.assigned_tech.name if j.assigned_tech else "Nobody yet" }}</dd>
+        <dt>When</dt><dd>{% if j.scheduled_date %}{{ j.scheduled_date | short_date }}{% else %}Not scheduled{% endif %}</dd>
+        {% if show_money %}<dt>Price</dt><dd class="num">{{ j.labor_cents | dollars }}</dd>{% endif %}
+        {% if j.duration_minutes is not none %}<dt>Time on site</dt><dd class="num">{{ j.duration_minutes | minutes_display }}</dd>{% endif %}
+        {% if j.job_template %}<dt>From</dt><dd>{{ j.job_template.title }}</dd>{% endif %}
+      </dl>
+      {% if j.status != "done" %}
+      <div class="row" style="margin-top:16px">
+        {% if not j.started_at %}<form method="post" action="/jobs/{{ j.id }}/start"><button class="btn">Start job</button></form>{% endif %}
+      </div>
+      <form method="post" action="/jobs/{{ j.id }}/schedule" class="row" style="margin-top:12px;align-items:flex-end;flex-wrap:nowrap">
+        <div style="flex:1"><label class="lbl" for="j-when">Schedule for</label><input id="j-when" type="date" name="scheduled_date" required class="inp num" value="{{ j.scheduled_date or '' }}"></div>
+        <button class="btn">Schedule</button>
+      </form>
+      {% endif %}
+    </section>
+
+    {% if j.status != "done" %}
+    <form method="post" action="/jobs/{{ j.id }}/complete" class="card">
+      <h2 class="card-t">Amount to collect</h2>
+      <dl class="kvl num" style="margin-top:12px">
+        <dt>Service</dt>
+        <dd>{% if show_money %}
+          <div class="unitw" style="max-width:160px"><span class="pre">$</span>
+            <label class="sr" for="collect-service-input">Service amount</label>
+            <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
+                   value="{{ '%.2f'|format(collect.service_cents / 100) }}" class="inp num"></div>
+          <span class="help">{{ collect.service_cents | dollars }} by default</span>
+          {% else %}
+          {# The server discards labor_override_dollars without view_money — an editable
+             box here would let a tech grant a discount the billing never sees. #}
+          <span id="collect-service">{{ collect.service_cents | dollars }}</span>
+          {% endif %}</dd>
+        <dt>Tax</dt><dd id="collect-tax">{{ collect.tax_cents | dollars }}</dd>
+        <dt class="strong" style="color:var(--t)">Collect</dt><dd class="strong collect-total" id="collect-total">{{ collect.total_cents | dollars }}</dd>
+      </dl>
+      {% if can_cash %}
+      <label class="chk" style="margin-top:8px"><input type="checkbox" name="paid_cash" value="1" {{ "checked" if j.paid_cash }}><span>Paid in cash (kept off the QuickBooks export)</span></label>
+      {% endif %}
+      <button class="btn pri xl block" style="margin-top:14px">Mark complete</button>
+      <p class="muted small" style="margin-top:8px">A finished job goes on next month's bill.</p>
+    </form>
+    {% endif %}
+
+    <section class="card">
+      <h2 class="card-t">Times</h2>
+      <form method="post" action="/jobs/{{ j.id }}/times" class="fgrid" style="margin-top:10px;align-items:end">
+        <div><label class="lbl" for="j-start">Started</label><input id="j-start" type="time" name="started_hhmm" value="{{ j.started_at | hhmm }}" class="inp num"></div>
+        <div><label class="lbl" for="j-end">Finished</label><input id="j-end" type="time" name="ended_hhmm" value="{{ j.completed_at | hhmm }}" class="inp num"></div>
+        <div><button class="btn sm">Save times</button></div>
+      </form>
+      {% if j.status == "done" %}
+      <form method="post" action="/jobs/{{ j.id }}/reopen" style="margin-top:14px"><button class="btn">Reopen</button></form>
+      <p class="muted small" style="margin-top:6px">Reopening keeps the original start time.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
 
 {% if j.status != "done" %}
-<form method="post" action="/jobs/{{ j.id }}/schedule" class="mb-2 flex gap-2">
-  <input type="date" name="scheduled_date" required class="field flex-1 font-data">
-  <button class="btn-secondary">Schedule</button>
-</form>
-<form method="post" action="/jobs/{{ j.id }}/complete">
-  <div class="card mb-2 p-3.5 space-y-2">
-    <h2 class="font-display text-lg font-bold uppercase tracking-wide">Amount to collect</h2>
-    {% if show_money %}
-    <label class="block">
-      <span class="field-label">Service <span class="money">({{ collect.service_cents | dollars }} default)</span></span>
-      <div class="money-in"><span>$</span>
-        <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
-               value="{{ '%.2f'|format(collect.service_cents / 100) }}"
-               class="field font-data font-semibold"></div>
-    </label>
-    {% else %}
-    {# The server discards labor_override_dollars without view_money — an editable
-       box here would let a tech grant a discount the billing never sees. #}
-    <div class="flex justify-between font-data text-sm text-mist">
-      <span>Service</span>
-      <span id="collect-service" class="money">{{ collect.service_cents | dollars }}</span>
-    </div>
-    {% endif %}
-    <div class="flex justify-between font-data text-sm text-mist">
-      <span>Tax</span><span id="collect-tax" class="money">{{ collect.tax_cents | dollars }}</span>
-    </div>
-    <div class="flex justify-between border-t border-seam pt-2 font-display text-lg font-bold uppercase tracking-wide">
-      <span>Collect</span><span id="collect-total" class="money">{{ collect.total_cents | dollars }}</span>
-    </div>
-    {% if can_cash %}
-    <label class="flex min-h-11 items-center gap-2.5 pt-1">
-      <input type="checkbox" name="paid_cash" value="1" class="h-5 w-5"
-             {{ "checked" if j.paid_cash }}>
-      <span class="text-sm">Paid in cash (kept off QuickBooks export)</span></label>
-    {% endif %}
-  </div>
-  <button class="btn-primary">Mark complete</button>
-</form>
 <script type="application/json" id="collect-data">{{ collect | tojson }}</script>
 <script nonce="{{ csp_nonce() }}">
 (function () {
@@ -141,17 +164,5 @@
   recompute();
 })();
 </script>
-{% endif %}
-
-<form method="post" action="/jobs/{{ j.id }}/times" class="mt-3 grid grid-cols-3 gap-2">
-  <input type="time" name="started_hhmm" value="{{ j.started_at | hhmm }}" class="field font-data">
-  <input type="time" name="ended_hhmm" value="{{ j.completed_at | hhmm }}" class="field font-data">
-  <button class="btn-secondary">Save times</button>
-</form>
-{% if j.status == "done" %}
-<form method="post" action="/jobs/{{ j.id }}/reopen">
-  <button class="btn-secondary w-full">Reopen</button>
-</form>
-<p class="text-xs text-mist">Reopening keeps the original start time.</p>
 {% endif %}
 {% endblock %}

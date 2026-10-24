@@ -103,6 +103,8 @@ def test_public_ip_flood_gets_429(engine, monkeypatch):
     from app.main import create_app
 
     monkeypatch.setattr(config, "REQUEST_RATE_LIMIT_PER_MIN", 3)
+    from tests.conftest import make_owner
+    make_owner(engine)  # else every page sends the visitor to first-run setup
     app = create_app(engine=engine)
     # TestClient lets us set the ASGI scope's client address per request.
     # A routable public IP (documentation ranges like 203.0.113.0/24 are NOT

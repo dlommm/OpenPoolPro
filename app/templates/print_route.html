@@ -1,43 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Print Route{% endblock %}
+{% block title %}Route sheet · {{ d.strftime("%b %-d") }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{#- A paper backup for the truck: black on white, no theme colours, blank
+    boxes to write readings in. On screen it previews the printed page. -#}
 <style>
   @media print {
-    #sidebar, #topbar, .no-print {
-      display: none !important;
-    }
+    .no-print { display: none !important; }
+    .print { border: 0 !important; padding: 0 !important; max-width: none !important; }
   }
 </style>
-
-{{ ui.page_header("Route sheet", d.strftime("%A, %b %-d")) }}
-
-<button data-print class="no-print btn-secondary mb-3">Print route sheet</button>
-
-<div class="rise space-y-2.5">
-  {% for s in stops %}
-  <div class="card p-3.5">
-    <div class="font-semibold">{{ s.property.customer.name }} — {{ s.property.label }}</div>
-    <div class="mt-1 text-sm text-mist">{{ s.property.address }}</div>
-    {% if s.property.customer.phone %}<div class="mt-1 text-sm">{{ s.property.customer.phone }}</div>{% endif %}
-    {% if s.property.gate_code %}<div class="mt-1 text-sm">Gate {{ s.property.gate_code }}</div>{% endif %}
-    {% if s.property.dog_warning %}<div class="mt-1 text-sm font-semibold text-safety">DOG: {{ s.property.dog_note or "on property" }}</div>{% endif %}
-    <div class="mt-2 min-h-12 border-t border-seam pt-2 font-data text-sm text-mist">Notes:</div>
+<header class="ph no-print">
+  <div>
+    <p class="crumbs"><a href="/">Today</a><span aria-hidden="true">›</span><span>Route sheet</span></p>
+    <h1 class="h1">Printable route sheet</h1>
+    <p class="lede">For a paper backup in the truck. Black on white, no theme colours.</p>
   </div>
-  {% endfor %}
+  <div class="acts"><button type="button" data-print class="btn pri">{{ ui.icon("print") }}Print route sheet</button></div>
+</header>
+
+<div class="print">
+  <div class="print-h"><b>{{ request.state.ui.company or "OpenPoolPro" }} · Route sheet</b><span>{{ d.strftime("%A, %B %-d, %Y") }}{% if who %} · {{ who }}{% endif %}</span></div>
+  {% if stops %}
+  <div style="overflow-x:auto;margin-top:14px">
+  <table>
+    <thead><tr><th style="width:28px">#</th><th>Customer and address</th><th>Service</th><th>FC</th><th>pH</th><th>TA</th><th>CYA</th><th>Done</th></tr></thead>
+    <tbody>
+      {% for s in stops %}
+      {% set p = s.property %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><b>{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</b><br>{{ p.address }}
+          {% if p.customer.phone %}<br>{{ p.customer.phone }}{% endif %}
+          {% if p.gate_code %}<br>Gate {{ p.gate_code }}{% endif %}
+          {% if p.dog_warning %}<br><b>DOG: {{ p.dog_note or "on property" }}</b>{% endif %}
+          {% if p.notes %}<br><i>{{ p.notes }}</i>{% endif %}</td>
+        <td>{{ p | pool_summary }}</td>
+        <td class="box"></td><td class="box"></td><td class="box"></td><td class="box"></td>
+        <td class="box">{{ "✓" if s.status == "done" else "☐" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
   {% if jobs %}
-  {% for j in jobs %}
-  <div class="card p-3.5">
-    <div class="font-semibold">{{ j.title }}</div>
-    <div class="mt-1 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</div>
-    <div class="mt-2 min-h-12 border-t border-seam pt-2 font-data text-sm text-mist">Notes:</div>
-  </div>
-  {% endfor %}
+  <h2 class="print-sub">Service / Jobs</h2>
+  <table>
+    <thead><tr><th>Job</th><th>Customer</th><th>Notes</th></tr></thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr><td><b>{{ j.title }}</b></td><td>{{ j.property.customer.name }}{% if j.property.label and j.property.label != "Home" %} — {{ j.property.label }}{% endif %}<br>{{ j.property.address }}</td><td class="notes"></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
   {% endif %}
-  {% if not stops and not jobs %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No stops today</p>
-  </div>
-  {% endif %}
+  {% if not stops and not jobs %}<p style="margin-top:14px">No stops today.</p>{% endif %}
 </div>
 {% endblock %}

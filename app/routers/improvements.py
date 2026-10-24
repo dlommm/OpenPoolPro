@@ -24,12 +24,20 @@ def plan_page(request: Request, weekday: int = Query(0, ge=0, le=6), tech_id: in
               optimize: bool = False, session: Session = Depends(get_session)):
     rows = route_planning.properties(session, weekday, tech_id)
     suggested = route_planning.suggest(rows) if optimize else rows
-    techs = session.scalars(select(models.User).where(models.User.active).order_by(models.User.name)).all()
+    # Technicians first, then owners: an owner's route is set by hand here or
+    # in Balance assignments and never touched by the balancer.
+    techs = route_planning.route_people(session)
     return templates.TemplateResponse(request, "improvements/plan.html", {
         "rows": suggested, "weekday": weekday, "tech_id": tech_id, "techs": techs,
+        "assigned_to": next((t for t in techs if str(t.id) == request.query_params.get("assigned")), None),
         "before": route_planning.estimate(rows), "after": route_planning.estimate(suggested),
         "fingerprint": route_planning.fingerprint(rows),
-        "coordinates": {p.id: route_planning.coordinates(p) for p in rows}})
+        "coordinates": {p.id: route_planning.coordinates(p) for p in rows},
+        # Stop counts for the weekday and technician chips (design v0.13).
+        "day_counts": [len(route_planning.properties(session, d, tech_id)) for d in range(7)],
+        "tech_counts": {t.id: len(route_planning.properties(session, weekday, t.id))
+                        for t in [*techs, None] if t is not None} | {
+            0: len(route_planning.properties(session, weekday, 0))}})
 
 
 @router.post("/routes/plan", dependencies=[Depends(require_perm("view_all_routes"))])
@@ -130,3 +138,28 @@ def inspect_water(request: Request, fingerprint: str = Form(..., max_length=64),
         session.rollback()
         raise HTTPException(409, "An inspection was already created. Refresh the alerts.") from None
     return RedirectResponse(f"/jobs/{job.id}", 303)
+
+
+@router.get("/equipment", dependencies=[Depends(require_admin)])
+def equipment_page(request: Request, show: str = "", session: Session = Depends(get_session)):
+    """Every piece of equipment on an active pool, warranties running out
+    first (design v0.2 Operations). `show=soon` keeps the next 60 days and
+    anything already ended; the dashboard's reminder links here."""
+    from datetime import timedelta
+
+    from sqlalchemy.orm import selectinload
+
+    today = business_today()
+    items = session.scalars(
+        select(models.Equipment).join(models.Pool).join(models.Property).join(models.Customer)
+        .where(models.Pool.active, models.Property.active, models.Customer.active)
+        .options(selectinload(models.Equipment.pool).selectinload(models.Pool.property)
+                 .selectinload(models.Property.customer))).all()
+    soon = today + timedelta(days=60)
+    items.sort(key=lambda e: (e.warranty_end is None, e.warranty_end or today, e.kind))
+    counts = {"all": len(items),
+              "soon": sum(1 for e in items if e.warranty_end and e.warranty_end <= soon)}
+    if show == "soon":
+        items = [e for e in items if e.warranty_end and e.warranty_end <= soon]
+    return templates.TemplateResponse(request, "improvements/equipment.html", {
+        "items": items, "today": today, "soon": soon, "show": show, "counts": counts})

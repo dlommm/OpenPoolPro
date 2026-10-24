@@ -202,29 +202,17 @@ def test_a_tech_cannot_issue_or_revoke_portal_access(tech_client, engine):
     assert tech.post(f"/customers/{cid}/portal/revoke").status_code == 403
 
 
-def test_the_portal_wears_the_company_theme(client, engine, anon):
-    """The portal is this company's storefront. A company on control-room was
-    emailing links that opened in warm-coastal -- a skin the customer had never
-    seen -- because the theme was only resolved for authenticated requests.
-    """
+def test_the_portal_wears_the_company_appearance(client, engine, anon):
+    """The portal is this company's storefront: its appearance is read for the
+    anonymous request too, including the dead-link page rendered by the
+    exception handler behind the same middleware."""
     ids = _fixtures(engine)
     with Session(engine) as s:
-        models.set_setting(s, "active_theme", "control-room")
+        models.set_setting(s, "business_name", "Example Pool Co.")
         s.commit()
-    assert 'data-theme="control-room"' in anon.get(
-        f"/portal/{_token(engine, ids['ours']['customer'])}").text
-    # The dead-link page too: it renders from the exception handler, which sits
-    # behind the same middleware.
-    assert 'data-theme="control-room"' in anon.get(f"/portal/{'z' * 48}").text
-
-
-def test_an_unknown_theme_setting_does_not_reach_the_portal_markup(client, engine, anon):
-    ids = _fixtures(engine)
-    with Session(engine) as s:
-        models.set_setting(s, "active_theme", "bogus-theme")
-        s.commit()
-    assert 'data-theme="warm-coastal"' in anon.get(
-        f"/portal/{_token(engine, ids['ours']['customer'])}").text
+    page = anon.get(f"/portal/{_token(engine, ids['ours']['customer'])}").text
+    assert 'data-theme="aqua-atelier"' in page
+    assert 'data-theme="aqua-atelier"' in anon.get(f"/portal/{'z' * 48}").text
 
 
 def test_draft_paperwork_stays_staff_internal(client, engine, anon):

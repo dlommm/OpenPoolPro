@@ -1,21 +1,19 @@
-/* tailwind.css — CSS entry point / aggregator for the multi-theme system.
+/* tailwind.css — CSS entry point.
  *
- * This file is intentionally thin: it pulls in Tailwind, points content
- * scanning at the templates, then imports the Foundation base layer and each
- * theme file. Tailwind v4 bundles these local @import files at build time
- * (verified with pytailwindcss v4), so app/static/app.css stays a single
- * compiled stylesheet (unchanged URL, network-first via the service worker —
- * a theme swap is a pure re-render, no cache bump, no stale CSS).
- *
- * File ownership (do not merge these back together):
- *   css/base.css                 — Foundation: @theme tokens + shared layers
- *   css/themes/warm-coastal.css  — Warm-Coastal agent
- *   css/themes/control-room.css  — Control-Room agent
- *   css/themes/fresh-field.css   — Fresh-Field agent
+ * Pulls in Tailwind, points content scanning at the templates, then the
+ * token map + compatibility layer (css/base.css) and the Aqua Atelier
+ * stylesheet (css/v2.css), which sits in the components layer so a Tailwind
+ * utility on an element still wins over a component default. Tailwind v4
+ * bundles these local @imports, so app/static/app.css stays one compiled
+ * stylesheet.
  */
 @import "tailwindcss";
 @source "./app/templates";
 @import "./css/base.css";
-@import "./css/themes/warm-coastal.css";
-@import "./css/themes/control-room.css";
-@import "./css/themes/fresh-field.css";
+@import "./css/v2.css" layer(components);
+@import "./css/v2-emails.css" layer(components);
+@import "./css/v2-contracts.css" layer(components);
+@import "./css/v2-billing.css" layer(components);
+@import "./css/v2-analytics.css" layer(components);
+@import "./css/v2-routes.css" layer(components);
+@import "./css/v2-setup.css" layer(components);

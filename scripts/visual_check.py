@@ -3,7 +3,7 @@
 Catches the failure class where markup ships but the stylesheet is stale or
 broken (naked-HTML pages). Run against a live instance:
 
-    APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py [shots_dir]
+    APP_URL=http://localhost:8000 OWNER_USER=... OWNER_PASSWORD=... python scripts/visual_check.py [shots_dir]
 
 Requires: pip install playwright && playwright install chromium
 Exit code 0 = all screens styled; non-zero = a screen failed a check.
@@ -21,7 +21,8 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("APP_URL", "http://localhost:8000")
-PASSWORD = os.environ.get("APP_PASSWORD", "coastline-demo")
+OWNER_USER = os.environ.get("OWNER_USER", "alex.morgan")
+PASSWORD = os.environ.get("OWNER_PASSWORD", "demo-owner-pass-1")
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
 # Every page a staff user can reach. The list was previously 11 screens, and
@@ -30,35 +31,20 @@ SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 SCREENS = ["/", "/dashboard", "/week", "/customers", "/customers/1", "/jobs", "/quotes",
            "/contracts", "/money", "/invoices", "/ar", "/analytics", "/inventory", "/settings",
            "/billing", "/audit", "/account", "/routes/balance", "/routes/plan", "/operations",
-           "/users", "/followups", "/water-alerts", "/search", "/today/print",
+           "/users", "/followups", "/water-alerts", "/equipment", "/search", "/today/print",
            "/customers/1/portal", "/testers", "/water-tests", "/water-tests/import",
            # Form pages. They are screens like any other -- a form that renders
            # its own page can clip a label or stretch a button just as a list can.
            "/customers/new", "/customers/import", "/jobs/new", "/quotes/new",
            "/contracts/new", "/contracts/renew", "/users/new"]
 
-# Per-theme expected computed styles. THEME selects which theme is active
-# (set it via the Settings control or `set_setting` before running); the map
-# defaults to warm-coastal, whose values are the base defaults in
-# css/base.css. Check a non-default theme only once its css/themes/<theme>.css
-# is filled in. fresh-field values are its light-mode tokens (Playwright's
-# default color scheme is light).
-THEME = os.environ.get("THEME", "warm-coastal")
-# body_bg is the light tile, dark_bg the dark one: with no `mode` in
-# localStorage no data-mode attribute is set, so the theme follows
-# prefers-color-scheme, and the dark pass below drives that directly.
-EXPECTED = {
-    "warm-coastal": {"body_font": "system-ui", "display_font": "system-ui",
-                     "body_bg": "rgb(243, 237, 227)",     # tile #F3EDE3
-                     "dark_bg": "rgb(18, 32, 31)"},       # tile #12201F
-    "control-room": {"body_font": "Helvetica Neue", "display_font": "Helvetica Neue",
-                     "body_bg": "rgb(234, 239, 244)",     # tile #EAEFF4
-                     "dark_bg": "rgb(14, 20, 27)"},       # tile #0E141B
-    "fresh-field": {"body_font": "system-ui", "display_font": "system-ui",
-                    "body_bg": "rgb(247, 250, 252)",      # tile #F7FAFC
-                    "dark_bg": "rgb(11, 18, 32)"},        # tile #0B1220
-}
-EXPECT = EXPECTED.get(THEME, EXPECTED["warm-coastal"])
+# Expected computed styles for the one theme, Aqua Atelier (css/v2.css).
+# body_bg is the light frame colour (--g), dark_bg the dark one: with no
+# `mode` in localStorage the head script follows prefers-color-scheme, and
+# the dark pass below drives that directly.
+EXPECT = {"body_font": "IBM Plex Sans", "display_font": "IBM Plex Sans",
+          "body_bg": "rgb(241, 238, 231)",    # --g #F1EEE7
+          "dark_bg": "rgb(10, 25, 34)"}       # --g #0A1922
 STAFF = {**EXPECT, "chrome": "staff"}
 CUSTOMER = {**EXPECT, "chrome": "none"}
 DARK = {**STAFF, "body_bg": EXPECT["dark_bg"]}
@@ -79,14 +65,14 @@ CHECKS = r"""
   if (body.backgroundColor !== exp.body_bg)
     probs.push("bg not tile (want " + exp.body_bg + "): " + body.backgroundColor);
   // exp.chrome says which shell this page is supposed to wear. Staff pages
-  // ride the sticky topbar; the customer portal has no account behind it and
-  // must never render staff navigation -- a link into /money it cannot open
-  // would be the giveaway that the wrong base template got picked up.
-  const topbar = document.querySelector("#topbar");
+  // wear the deep-water masthead; the customer portal has no account behind
+  // it and must never render staff navigation -- a link into /money it
+  // cannot open would be the giveaway that the wrong base template was used.
+  const mast = document.querySelector(".mast");
   if (exp.chrome === "staff") {
-    if (!topbar) probs.push("topbar missing");
-    else if (getComputedStyle(topbar).position !== "sticky") probs.push("topbar not sticky/unstyled");
-  } else if (topbar || document.querySelector("#sidebar")) {
+    if (!mast) probs.push("masthead missing");
+    else if (getComputedStyle(mast).display === "none") probs.push("masthead hidden/unstyled");
+  } else if (mast || document.querySelector(".side") || document.querySelector(".bnav")) {
     probs.push("customer page renders staff navigation");
   }
   const h1 = document.querySelector("h1");
@@ -171,7 +157,7 @@ with sync_playwright() as p:
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
     page = ctx.new_page()
     visit(page, f"{BASE}/login")
-    page.fill("input[name=username]", "owner")
+    page.fill("input[name=username]", OWNER_USER)
     page.fill("input[name=password]", PASSWORD)
     page.click("button")
     page.wait_for_load_state("networkidle")
@@ -323,7 +309,7 @@ with sync_playwright() as p:
                                 device_scale_factor=2, color_scheme="dark")
     dkpage = dkctx.new_page()
     visit(dkpage, f"{BASE}/login")
-    dkpage.fill("input[name=username]", "owner")
+    dkpage.fill("input[name=username]", OWNER_USER)
     dkpage.fill("input[name=password]", PASSWORD)
     dkpage.click("button")
     dkpage.wait_for_load_state("networkidle")
@@ -339,11 +325,11 @@ with sync_playwright() as p:
         checked += 1
     dkctx.close()
 
-    # Tablet-portrait pass (iPad): topbar still in charge, md: width tier applied.
+    # Tablet-portrait pass (iPad): the masthead collapses to title, search and menu.
     tabctx = browser.new_context(viewport={"width": 834, "height": 1194}, device_scale_factor=2)
     tabpage = tabctx.new_page()
     visit(tabpage, f"{BASE}/login")
-    tabpage.fill("input[name=username]", "owner")
+    tabpage.fill("input[name=username]", OWNER_USER)
     tabpage.fill("input[name=password]", PASSWORD)
     tabpage.click("button")
     tabpage.wait_for_load_state("networkidle")
@@ -353,12 +339,14 @@ with sync_playwright() as p:
         tablet_probs = tabpage.evaluate("""
 () => {
   const probs = [];
-  const topbar = document.querySelector("#topbar");
-  const sidebar = document.querySelector("#sidebar");
-  if (!topbar || getComputedStyle(topbar).display === "none") probs.push("topbar hidden at tablet viewport");
-  if (sidebar && getComputedStyle(sidebar).display !== "none") probs.push("sidebar visible at tablet viewport");
+  const mast = document.querySelector(".mast");
+  const tabs = document.querySelector(".mast-nav");
+  const menu = document.querySelector(".mast-menu");
+  if (!mast || getComputedStyle(mast).display === "none") probs.push("masthead hidden at tablet viewport");
+  if (tabs && getComputedStyle(tabs).display !== "none") probs.push("group tabs visible at tablet viewport");
+  if (!menu || getComputedStyle(menu).display === "none") probs.push("menu button hidden at tablet viewport");
   const main = document.querySelector("main");
-  if (main && main.offsetWidth < 600) probs.push("main not using md width tier: " + main.offsetWidth + "px");
+  if (main && main.offsetWidth < 600) probs.push("main not using the tablet width: " + main.offsetWidth + "px");
   if (document.documentElement.scrollWidth > document.documentElement.clientWidth)
     probs.push("horizontal overflow at tablet viewport");
   return probs;
@@ -372,11 +360,11 @@ with sync_playwright() as p:
         checked += 1
     tabctx.close()
 
-    # Desktop pass: sidebar visible, tab bar hidden at lg: viewport.
+    # Desktop pass: the masthead's group tabs show; no menu button, no bottom bar.
     dctx = browser.new_context(viewport={"width": 1280, "height": 900})
     dpage = dctx.new_page()
     visit(dpage, f"{BASE}/login")
-    dpage.fill("input[name=username]", "owner")
+    dpage.fill("input[name=username]", OWNER_USER)
     dpage.fill("input[name=password]", PASSWORD)
     dpage.click("button")
     dpage.wait_for_load_state("networkidle")
@@ -385,10 +373,12 @@ with sync_playwright() as p:
     desktop_probs = dpage.evaluate("""
 () => {
   const probs = [];
-  const sidebar = document.querySelector("#sidebar");
-  const topbar = document.querySelector("#topbar");
-  if (!sidebar || getComputedStyle(sidebar).display === "none") probs.push("sidebar hidden at desktop viewport");
-  if (!topbar || getComputedStyle(topbar).display !== "none") probs.push("topbar visible at desktop viewport");
+  const tabs = document.querySelector(".mast-nav");
+  const menu = document.querySelector(".mast-menu");
+  const bnav = document.querySelector(".bnav");
+  if (!tabs || getComputedStyle(tabs).display === "none") probs.push("group tabs hidden at desktop viewport");
+  if (menu && getComputedStyle(menu).display !== "none") probs.push("menu button visible at desktop viewport");
+  if (bnav && getComputedStyle(bnav).display !== "none") probs.push("phone bottom bar visible at desktop viewport");
   return probs;
 }
 """)
@@ -403,6 +393,6 @@ if failures:
     for path, problems in failures:
         print(f"FAIL {path}: {'; '.join(problems)}")
     sys.exit(1)
-print(f"OK — {checked} renders styled correctly for theme '{THEME}': staff screens "
+print(f"OK — {checked} renders styled correctly (Aqua Atelier): staff screens "
       f"light and dark, settings panels, error pages, the customer portal, "
       f"and the tablet and desktop layouts")

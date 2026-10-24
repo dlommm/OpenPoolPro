@@ -34,8 +34,13 @@ def test_today_lists_stops_and_jobs(client, engine):
 def test_today_has_google_maps_fallback_link(client, engine):
     # M2 pin: alongside the Apple Maps link, a secondary Google Maps link
     # must be present for techs whose default maps app isn't Apple's.
-    seed_route(engine, date.today())
-    html = client.get("/").text
+    pid = seed_route(engine, date.today())
+    with Session(engine) as s:
+        owner = s.query(models.User).filter_by(role="admin").first()
+        s.get(models.Property, pid).assigned_tech_id = owner.id
+        s.commit()
+    html = client.get("/").text   # the owner's own route: next-stop card
+    assert "maps.apple.com/?daddr=" in html
     assert "maps.google.com" in html
 
 
@@ -73,31 +78,13 @@ def test_backup_remaining_banner_absent_without_param(client):
 
 
 def test_progress_hero_is_hidden_when_there_is_no_route(client, engine):
-    """A gauge reading 0 of 0 sits directly above the "no stops today" card and
-    says the same thing less clearly, with its numeral stranded above the fill
-    line. Every theme suppresses it rather than drawing an empty basin."""
-    from sqlalchemy.orm import Session as _S
-
-    from app import models as _m
-    markers = {"warm-coastal": "wc-tide", "fresh-field": "ff-progress-card",
-               "control-room": "cr-gauge"}
-    for theme, marker in markers.items():
-        with _S(engine) as s:
-            _m.set_setting(s, "active_theme", theme)
-            s.commit()
-        html = client.get("/").text
-        assert marker not in html, f"{theme or 'base'}: hero drawn for an empty route"
-        assert "No stops today" in html or "NO STOPS" in html.upper()
+    """A progress track reading 0 of 0 sits directly above the "no stops
+    today" card and says the same thing less clearly, so it is suppressed."""
+    html = client.get("/").text
+    assert 'class="rib"' not in html and "Crew progress" not in html
+    assert "No stops today" in html or "NO STOPS" in html.upper()
 
 
 def test_progress_hero_returns_once_the_route_has_a_stop(client, engine):
-    from sqlalchemy.orm import Session as _S
-
-    from app import models as _m
     seed_route(engine, date.today())
-    for theme, marker in {"warm-coastal": "wc-tide", "fresh-field": "ff-progress-card",
-                          "control-room": "cr-gauge"}.items():
-        with _S(engine) as s:
-            _m.set_setting(s, "active_theme", theme)
-            s.commit()
-        assert marker in client.get("/").text, theme or "base"
+    assert "Crew progress" in client.get("/").text   # the owner has no stops: crew view

@@ -33,6 +33,40 @@
     row.style.display = "none";
   });
 
+  // Sheets and drawers: <button data-open="id"> shows #id (a .scrim or
+  // .drawer-scrim); [data-close] inside it, Escape, or a tap on the scrim
+  // itself ([data-close-self]) hides it again and returns focus.
+  var opener = null;
+  function closeSheet(sheet) {
+    if (!sheet || sheet.hidden) return;
+    sheet.hidden = true;
+    document.documentElement.style.overflow = "";
+    if (opener && opener.focus) opener.focus();
+    opener = null;
+  }
+  document.addEventListener("click", function (e) {
+    var o = e.target.closest && e.target.closest("[data-open]");
+    if (o) {
+      var sheet = document.getElementById(o.getAttribute("data-open"));
+      if (!sheet) return;
+      e.preventDefault();
+      opener = o;
+      sheet.hidden = false;
+      document.documentElement.style.overflow = "hidden";
+      var f = sheet.querySelector("[autofocus], input, select, textarea, a[href], button");
+      if (f) f.focus();
+      return;
+    }
+    var c = e.target.closest && e.target.closest("[data-close]");
+    if (c) { closeSheet(c.closest(".scrim, .drawer-scrim")); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute("data-close-self")) closeSheet(e.target);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var open = document.querySelectorAll(".scrim:not([hidden]), .drawer-scrim:not([hidden])");
+    if (open.length) closeSheet(open[open.length - 1]);
+  });
+
   // <img data-hide-on-error> / <img data-swap-on-error>: error events don't
   // bubble, so listen in the capture phase.
   document.addEventListener("error", function (e) {

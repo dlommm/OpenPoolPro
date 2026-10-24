@@ -85,3 +85,26 @@ def get_template(session) -> dict:
         except (ValueError, TypeError):
             pass
     return DEFAULT_TEMPLATE
+
+
+# A sent contract with no signature after this many days lands in the
+# Contracts hub's needs-attention digest. Admin-editable on the Contract tab.
+STALE_DAYS_KEY = "contract_stale_days"
+STALE_SENT_DAYS = 14
+STALE_DAYS_MIN, STALE_DAYS_MAX = 1, 90
+
+
+def parse_stale_days(raw) -> int | None:
+    """A whole number of days in range, or None when it isn't one."""
+    try:
+        days = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return days if STALE_DAYS_MIN <= days <= STALE_DAYS_MAX else None
+
+
+def get_stale_days(session) -> int:
+    """The stored threshold; a missing or out-of-range value falls back to the
+    default rather than silently flagging every contract (0) or none."""
+    days = parse_stale_days(models.get_setting(session, STALE_DAYS_KEY, ""))
+    return STALE_SENT_DAYS if days is None else days

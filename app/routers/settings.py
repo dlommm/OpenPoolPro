@@ -7,16 +7,29 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax
+from app import (
+    chem_presets,
+    chem_targets,
+    config,
+    email_brand,
+    mailer,
+    models,
+    palettes,
+    qbo,
+    rates,
+    receivables,
+    sizes,
+    tax,
+    templating,
+)
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.templating import ALLOWED_THEMES, DEFAULT_THEME, templates
+from app.templating import templates
 from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
-TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
 
 # Older than this and the nightly snapshot is presumed to have stopped running.
 BACKUP_STALE_HOURS = 36
@@ -97,9 +110,19 @@ def settings_page(request: Request, rules_created: str | None = None,
                            .order_by(models.User.role, models.User.name)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
-    targets = {k: models.get_setting(session, k, d) for k, d in [
-        ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
-        ("target_cya", "50"), ("target_salt", "3200")]}
+    appearance = templating.ui_settings(session)
+    palette_cards = [{"key": p.key, "name": p.name, "desc": p.desc, "on": appearance["palette"] == p.key,
+                      "v": palettes.preview(p.key, p.base)} for p in palettes.PALETTES]
+    custom = appearance["palette_custom"]
+    palette_cards.append({"key": "custom", "name": "Your colour",
+                          "desc": "Any brand colour; contrast is corrected for you.",
+                          "on": appearance["palette"] == "custom", "v": palettes.preview("custom", custom)})
+    fixed = palettes.derive(custom, "light")["--a"]
+    palette_custom_fix = fixed if fixed != custom else ""
+    chem_t, chem_b = chem_targets.current(session)
+    rejected = set((request.query_params.get("chem_rejected") or "").split(","))
+    target_rows = [{"spec": sp, "target": chem_t[sp.key], "band": chem_b[sp.key],
+                    "rejected": sp.key in rejected} for sp in chem_targets.SPECS]
     outbox = session.scalars(select(models.EmailOutbox)
                              .order_by(models.EmailOutbox.created_at.desc())
                              .limit(50)).all()
@@ -116,7 +139,14 @@ def settings_page(request: Request, rules_created: str | None = None,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "labor_rate_dollars": "%.2f" % (rates.default_labor_rate_cents(session) / 100),
-        "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
+        "appearance": appearance,
+        "palette_cards": palette_cards,
+        "palette_custom_fix": palette_custom_fix,
+        "customer_look": email_brand.look(session),
+        "customer_look_saved": request.query_params.get("look") == "saved",
+        "customer_look_error": request.query_params.get("look") == "error",
+        "email_preview_kinds": email_brand.PREVIEW_KINDS,
+        "signoff_max": email_brand.SIGNOFF_MAX,
         "business_name": models.get_setting(session, "business_name", ""),
         "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -127,7 +157,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         "backup_at": models.get_setting(session, "last_backup_at", ""),
         "backup_stale": _backup_is_stale(session),
         "role_values": models.ROLE_VALUES,
-        "targets": targets,
+        "chem_targets": target_rows,
+        "chem_saved": request.query_params.get("chem"),
         "rules_created": _parse_count(rules_created),
         "company": company_info(session),
         "smtp_configured": mailer.smtp_configured(session),
@@ -185,13 +216,24 @@ def _contract_tab_ctx(session) -> dict:
     palette, a preview rendered against the sample context, and the editable
     e-sign message templates."""
     from app import contract_tokens, sign_messages
-    from app.contract_defaults import get_template
-    from app.routers.contract_template import _preview_html, sample_context
+    from app.company import company_info
+    from app.contract_defaults import (
+        STALE_DAYS_MAX,
+        STALE_DAYS_MIN,
+        get_stale_days,
+        get_template,
+    )
+    from app.routers.contract_template import _preview_html, sample_context, sample_objects
     tpl = get_template(session)
+    company = company_info(session)
     return {
         "contract_template": tpl,
         "contract_tokens": contract_tokens.TOKENS,
-        "contract_preview_html": _preview_html(tpl, sample_context()),
+        "contract_company": company,
+        "contract_preview_html": _preview_html(tpl, sample_context(company=company),
+                                               sample_objects(company=company)),
+        "contract_stale_days": get_stale_days(session),
+        "contract_stale_range": (STALE_DAYS_MIN, STALE_DAYS_MAX),
         "sign_messages": {k: sign_messages.get_message(session, k)
                           for k in sign_messages.DEFAULTS},
         "sign_message_tokens": sign_messages.TOKENS,
@@ -207,18 +249,35 @@ def run_maintenance_now(session: Session = Depends(get_session)):
 
 @router.post("/settings/targets")
 async def save_targets(request: Request, session: Session = Depends(get_session)):
+    """Target and band per reading, saved as a pair: a pair that fails the
+    limits in app/chem_targets.py keeps what was stored, so a typo can't
+    switch dosing off. A field left out of the form keeps its stored value."""
     form = await request.form()
-    for key in TARGET_KEYS:
-        raw = (form.get(key) or "").strip()
-        try:
-            v = float(raw)
-        except ValueError:
-            continue  # invalid keeps the previously stored value
-        if not math.isfinite(v):
-            continue  # inf/nan keeps the previously stored value
-        models.set_setting(session, key, raw)
+    if form.get("reset"):
+        for spec in chem_targets.SPECS:
+            models.set_setting(session, f"target_{spec.key}", f"{spec.target:g}")
+            models.set_setting(session, f"band_{spec.key}", f"{spec.band:g}")
+        session.commit()
+        return RedirectResponse("/settings?chem=reset#chemistry", status_code=303)
+    targets, bands = chem_targets.current(session)
+    rejected = []
+    for spec in chem_targets.SPECS:
+        pair, raws = {}, {}
+        for prefix, stored in (("target", targets), ("band", bands)):
+            raw = (form.get(f"{prefix}_{spec.key}") or "").strip()
+            raws[prefix] = raw or f"{stored[spec.key]:g}"
+            try:
+                pair[prefix] = float(raws[prefix])
+            except ValueError:
+                pair[prefix] = math.nan
+        if chem_targets.problem(spec.key, pair["target"], pair["band"]):
+            rejected.append(spec.key)
+            continue  # invalid keeps the previously stored pair
+        models.set_setting(session, f"target_{spec.key}", raws["target"])
+        models.set_setting(session, f"band_{spec.key}", raws["band"])
     session.commit()
-    return RedirectResponse("/settings", status_code=303)
+    q = f"chem_rejected={','.join(rejected)}" if rejected else "chem=saved"
+    return RedirectResponse(f"/settings?{q}#chemistry", status_code=303)
 
 
 async def _save_tiers_of_kind(request: Request, session: Session, kind: str) -> None:
@@ -562,14 +621,74 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
 @router.post("/settings/appearance")
 async def save_appearance(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
-    theme = (form.get("active_theme") or "").strip()
-    # Only persist a recognized theme; anything else (garbage/tampering) keeps
-    # whatever was previously stored rather than saving an invalid value that
-    # the middleware would just fall back on -- mirrors save_general/save_targets.
-    if theme in ALLOWED_THEMES:
-        models.set_setting(session, "active_theme", theme)
-        session.commit()
+    # Only persist recognized values; anything else (garbage/tampering) keeps
+    # whatever was previously stored -- mirrors save_general/save_targets.
+    for key, allowed in (("nav_layout", templating.NAV_LAYOUTS),
+                         ("header_style", templating.HEADER_STYLES)):
+        value = (form.get(key) or "").strip()
+        if value in allowed:
+            models.set_setting(session, key, value)
+    pal = (form.get("palette") or "").strip()
+    if pal in palettes.BY_KEY or pal == "custom":
+        models.set_setting(session, "palette", pal)
+    custom = palettes.clean_hex(form.get("palette_custom"))
+    if custom:
+        models.set_setting(session, "palette_custom", custom)
+    session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+def _look_flag(form, key):
+    """A checkbox posted as a hidden "0" followed by the box's "1": the last
+    value wins. Missing or anything else -> None (keep the stored value)."""
+    values = form.getlist(key)
+    return values[-1] if values and values[-1] in ("0", "1") else None
+
+
+@router.post("/settings/customer-look")
+async def save_customer_look(request: Request, session: Session = Depends(get_session)):
+    """What customers see: palette on emails, logo, email format, sign-off.
+    Only recognized values are stored; anything else keeps the stored value."""
+    form = await request.form()
+    for field, key in (("brand", "email_brand"), ("logo", "email_logo")):
+        flag = _look_flag(form, field)
+        if flag is not None:
+            models.set_setting(session, key, flag)
+    fmt = (form.get("format") or "").strip()
+    if fmt in email_brand.FORMATS:
+        models.set_setting(session, "email_format", fmt)
+    outcome = "saved"
+    if "signoff" in form:
+        signoff = email_brand.clean_signoff(form.get("signoff"))
+        if signoff is None:
+            outcome = "error"
+        else:
+            models.set_setting(session, "email_signoff", signoff)
+    session.commit()
+    return RedirectResponse(f"/settings?look={outcome}#customer-look", status_code=303)
+
+
+@router.get("/settings/customer-look/preview/{kind}")
+def customer_look_preview(kind: str, request: Request, session: Session = Depends(get_session)):
+    """One sample email, rendered by the same template the mailer uses, for
+    the settings card's sandboxed iframe. Unsaved choices may be passed as
+    query parameters (validated exactly like the save) so the preview follows
+    the form; anything invalid falls back to the saved value."""
+    if kind not in dict(email_brand.PREVIEW_KINDS):
+        return HTMLResponse("not found", status_code=404)
+    lk = email_brand.look(session)
+    q = request.query_params
+    for field in ("brand", "logo"):
+        if q.get(field) in ("0", "1"):
+            lk[field] = q.get(field) == "1"
+    if q.get("format") in email_brand.FORMATS:
+        lk["format"] = q.get("format")
+    if "signoff" in q:
+        signoff = email_brand.clean_signoff(q.get("signoff"))
+        if signoff is not None:
+            lk["signoff"] = signoff
+    return HTMLResponse(email_brand.preview(session, kind, lk),
+                        headers={"Cache-Control": "no-store"})
 
 
 @router.post("/settings/general")
@@ -1109,8 +1228,11 @@ async def send_test_email(request: Request, session: Session = Depends(get_sessi
     to_addr = (form.get("to_addr") or "").strip()
     if not to_addr or "@" not in to_addr:
         return RedirectResponse("/settings?mail_error=1", status_code=303)
-    mailer.queue(session, to_addr, "OpenPoolPro test email",
-                "This is a test email from OpenPoolPro.")
+    lk = email_brand.look(session)
+    mail = email_brand.smtp_test_mail(company_name=email_brand.company(session)["name"],
+                                      signoff=lk["signoff"])
+    mailer.queue(session, to_addr, mail.subject, mail.text,
+                 html=email_brand.html_for(session, mail))
     session.commit()
     sent, failed = mailer.flush_outbox(session)
     session.commit()
@@ -1156,3 +1278,40 @@ def reset_tax_state(state: str, session: Session = Depends(get_session)):
         row.overridden = False
         session.commit()
     return RedirectResponse("/settings#tax", status_code=303)
+
+
+@router.get("/settings/logs")
+def logs_page(request: Request, level: str = "", q: str = ""):
+    """Admin › Logs: the recent in-memory log lines, newest first, filtered by
+    level and text. Download returns the same lines as plain text."""
+    from app.observability import RECENT
+    order = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
+    floor = order.get(level, 0)
+    needle = (q or "").strip().lower()[:80]
+    lines = [r for r in reversed(RECENT.lines)
+             if order.get(r["level"], 1) >= floor
+             and (not needle or needle in r["line"].lower())][:500]
+    sources = sorted({r["source"] for r in RECENT.lines})
+    return templates.TemplateResponse(request, "settings/logs.html", {
+        "lines": lines, "level": level, "q": needle, "sources": sources,
+        "total": len(RECENT.lines)})
+
+
+@router.get("/settings/logs.txt")
+def logs_download():
+    from fastapi.responses import PlainTextResponse
+
+    from app.observability import RECENT
+    return PlainTextResponse("\n".join(r["line"] for r in RECENT.lines) + "\n",
+                             headers={"Content-Disposition": "attachment; filename=openpoolpro-recent.log"})
+
+
+@router.get("/settings/about")
+def about_page(request: Request):
+    """Admin › About: what is running, and where releases come from."""
+    import platform
+    import sys
+
+    return templates.TemplateResponse(request, "settings/about.html", {
+        "version": config.APP_VERSION, "python": sys.version.split()[0],
+        "platform": platform.platform(terse=True)})

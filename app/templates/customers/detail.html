@@ -2,244 +2,331 @@
 {% block title %}{{ c.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/customers/{{ c.id }}/portal">Customer portal</a>{% endif %}
+{% set is_admin = request.state.user.role == "admin" %}
+{% set days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] %}
+{% set freq = {"weekly": "Weekly", "biweekly": "Every 2 weeks", "every4weeks": "Every 4 weeks", "none": "No regular service"} %}
 
-<div class="flex items-start justify-between gap-2">
-  {{ ui.page_header("Customer file", c.name) }}
-  <a href="/customers/{{ c.id }}/edit" class="btn-secondary mt-2 shrink-0">Edit</a>
-</div>
+<header class="ph">
+  <div class="prof">
+    <span class="prof-av" aria-hidden="true">{{ c.name | initials }}</span>
+    <div>
+      <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><span>{{ c.name }}</span></p>
+      <h1 class="h1">{{ c.name }}</h1>
+      <p class="lede">{{ main.address if main and main.address else (c.email or c.phone or "No address yet") }}</p>
+    </div>
+  </div>
+  <div class="acts">
+    {% if c.active %}<span class="pill p-pos">Active</span>{% else %}<span class="pill p-neu">Inactive</span>{% endif %}
+    {% if c.phone %}<a class="btn" href="tel:{{ c.phone }}">{{ ui.icon("phone") }}Call</a>{% endif %}
+    {% if c.email %}<a class="btn" href="mailto:{{ c.email }}">{{ ui.icon("mail") }}Email</a>{% endif %}
+    {% if can_manage %}<a href="/customers/{{ c.id }}/edit" class="btn">{{ ui.icon("edit") }}Edit</a>{% endif %}
+  </div>
+</header>
 
-<div class="mb-4 flex gap-4 border-b border-seam">
-  <button type="button" data-custab-btn="profile" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Profile</button>
-  <button type="button" data-custab-btn="photos" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Photos</button>
-  <button type="button" data-custab-btn="pool" class="border-b-2 border-transparent pb-1.5 font-display text-sm font-bold uppercase tracking-wide text-mist">Pool</button>
-</div>
-
-<div data-custab="profile">
-{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
-<p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-  {% if c.phone %}<a href="tel:{{ c.phone }}" class="flex min-h-11 items-center gap-1.5 text-pool">{{ ui.icon("phone", "h-4 w-4") }}{{ c.phone }}</a>{% endif %}
-  {% if c.email %}<a href="mailto:{{ c.email }}" class="flex min-h-11 items-center text-pool">{{ c.email }}</a>{% endif %}
-  {% if show_money and lifetime_cents is not none %}<span class="tag">Lifetime <span class="money">{{ lifetime_cents | dollars }}</span></span>{% endif %}
-</p>
 {% if not c.active %}
-<div class="card mb-4 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
-  <span>This customer is inactive.</span>
-  {% if can_manage %}
-  <form method="post" action="/customers/{{ c.id }}/reactivate" class="mt-2">
-    <button class="btn-secondary w-full">Reactivate customer</button>
-  </form>
-  {% endif %}
+<div class="banner off" role="status">{{ ui.icon("alert", "ic18") }}<span>This customer is inactive.</span><span class="sp"></span>
+  {% if can_manage %}<form method="post" action="/customers/{{ c.id }}/reactivate"><button class="btn sm">Reactivate customer</button></form>{% endif %}
 </div>
 {% endif %}
-{% if c.notes %}<p class="card mb-4 bg-shallow/50 p-3 text-sm">{{ c.notes }}</p>{% endif %}
 
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Tags</h2>
-<div class="card mb-5 p-3">
-  <div class="mb-2 flex flex-wrap gap-1.5">
-    {% for t in c.tags %}
-    <span class="tag">
-      {{ t }}
-      {% if can_manage %}
-      <form method="post" action="/customers/{{ c.id }}/tags/remove" class="inline">
-        <input type="hidden" name="tag" value="{{ t }}">
-        <button class="text-safety" aria-label="Remove tag {{ t }}">×</button>
-      </form>
-      {% endif %}
-    </span>
-    {% else %}<span class="text-sm text-mist">No tags yet.</span>{% endfor %}
-  </div>
-  {% if can_manage %}
-  <form method="post" action="/customers/{{ c.id }}/tags/add" class="flex gap-2">
-    <input name="tags" placeholder="Add tag (comma-separated)" class="field flex-1">
-    <button class="btn-secondary">Add</button>
-  </form>
+<dl class="facts">
+  <div><dt>Service</dt><dd>{% if main %}{{ freq.get(main.frequency, main.frequency) }}{% if main.frequency != "none" %} · {{ days[main.weekday % 7] }}{% endif %}{% else %}—{% endif %}</dd></div>
+  <div><dt>Pool</dt><dd>{{ (main | pool_summary) if main else "—" }}</dd></div>
+  {% if show_money %}
+  <div><dt>Rate</dt><dd class="num">{{ (rates[main.id] | dollars) ~ " a visit" if main else "—" }}</dd></div>
+  <div><dt>Balance</dt><dd class="num {{ 'owed' if balance_cents > 0 }}">{{ balance_cents | dollars }}</dd></div>
+  {% if lifetime_cents is not none %}<div><dt>Lifetime</dt><dd class="num">{{ lifetime_cents | dollars }}</dd></div>{% endif %}
   {% endif %}
+  <div><dt>Customer since</dt><dd>{{ c.created_at.strftime("%b %Y") if c.created_at else "—" }}</dd></div>
+</dl>
+
+<div class="tabs" role="tablist" aria-label="Customer sections">
+  <button type="button" role="tab" class="tab" data-custab-btn="profile">Overview</button>
+  <button type="button" role="tab" class="tab" data-custab-btn="pool">Pools and equipment</button>
+  <button type="button" role="tab" class="tab" data-custab-btn="history">Service history</button>
+  <button type="button" role="tab" class="tab" data-custab-btn="water">Water</button>
+  {% if show_money or qbo_invoices %}<button type="button" role="tab" class="tab" data-custab-btn="billing">Billing</button>{% endif %}
+  <button type="button" role="tab" class="tab" data-custab-btn="agreements">Agreements</button>
+  <button type="button" role="tab" class="tab" data-custab-btn="photos">Photos</button>
+  <button type="button" role="tab" class="tab" data-custab-btn="log">Contact log</button>
+  {% if is_admin %}<a class="tab" href="/customers/{{ c.id }}/portal">Portal</a>{% endif %}
 </div>
 
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
-<div class="mb-5 space-y-2">
-  {% for p in props %}
-  <div class="card flex items-center justify-between gap-2 p-3 text-sm">
-    <div class="min-w-0">
-      <div class="font-semibold">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
-      <div class="mt-0.5 truncate text-mist">{% if p.address %}{{ p.address }}{% else %}{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %}{% endif %}</div>
-      <div class="mt-1 flex flex-wrap items-center gap-1.5">
-        <span class="tag">{{ p.frequency }}</span>
-        {% if show_money %}<span class="money">{{ rates[p.id] | dollars }}</span>/visit{% endif %}
-      </div>
+{# ======================= OVERVIEW ======================= #}
+<div data-custab="profile" role="tabpanel">
+  <div class="cols c-main">
+    <section class="card" aria-labelledby="c-cp">
+      <h2 class="card-t" id="c-cp">Contact and property</h2>
+      <dl class="kvl" style="margin-top:12px">
+        <dt>Phone</dt><dd class="num">{% if c.phone %}<a href="tel:{{ c.phone }}">{{ c.phone }}</a>{% else %}—{% endif %}</dd>
+        <dt>Email</dt><dd>{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% if c.notify_email %} <span class="pill p-acc">Gets visit emails</span>{% endif %}{% else %}—{% endif %}</dd>
+        {% for p in props if p.active %}
+        <dt>{{ p.label }}</dt><dd>{{ p.address or p.city or "—" }}{% if p.id in active_holds %} <span class="pill p-warn">On hold until {{ active_holds[p.id].resume_date | short_date if active_holds[p.id].resume_date else "further notice" }}</span>{% endif %}</dd>
+        {% if p.gate_code %}<dt>Gate code</dt><dd><details class="gate-d"><summary class="linkbtn">On file · show</summary><span class="mono strong">{{ p.gate_code }}</span></details></dd>{% endif %}
+        {% if p.dog_warning %}<dt>Dog</dt><dd>{{ p.dog_note or "On property" }}</dd>{% endif %}
+        {% endfor %}
+        <dt>Notes</dt><dd>{{ c.notes or "—" }}</dd>
+        <dt>Tags</dt><dd>
+          <div class="chips">
+            {% for t in c.tags %}
+            <span class="pill p-neu">{{ t }}{% if can_manage %}<form method="post" action="/customers/{{ c.id }}/tags/remove" style="display:inline"><input type="hidden" name="tag" value="{{ t }}"><button class="tagx" aria-label="Remove tag {{ t }}">×</button></form>{% endif %}</span>
+            {% else %}<span class="muted">None</span>{% endfor %}
+          </div>
+          {% if can_manage %}
+          <form method="post" action="/customers/{{ c.id }}/tags/add" class="row" style="margin-top:8px;flex-wrap:nowrap">
+            <label class="sr" for="c-tags">Add tags</label>
+            <input id="c-tags" name="tags" placeholder="Add tag (comma-separated)" class="inp" style="height:34px">
+            <button class="btn sm">Add</button>
+          </form>
+          {% endif %}
+        </dd>
+      </dl>
+    </section>
+    <div class="stack">
+      <section class="card" aria-labelledby="c-up">
+        <h2 class="card-t" id="c-up">Coming up</h2>
+        <ul class="rows" style="margin-top:6px">
+          <li><div>Next visit<small>{% if next_visit %}{{ next_visit.strftime("%A, %b %-d") }}{% if main.assigned_tech %} · {{ main.assigned_tech.name }}{% endif %}{% elif main and main.id in active_holds %}On hold{% else %}None scheduled{% endif %}</small></div></li>
+          {% for j in jobs %}
+          <li><div><a href="/jobs/{{ j.id }}" class="strong">{{ j.title }}</a><small>{{ j.status | capitalize }}{% if j.scheduled_date %} · {{ j.scheduled_date | short_date }}{% endif %}</small></div>{% if j.priority == "high" %}<span class="pill p-neg">High</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        <div class="row" style="margin-top:10px"><a class="btn sm" href="/jobs/new{{ "?property_id=%d"|format(main.id) if main }}">{{ ui.icon("plus") }}New job</a>{% if request.state.user.can("manage_customers") %}<a class="btn sm" href="/quotes/new?customer_id={{ c.id }}">{{ ui.icon("plus") }}New quote</a>{% endif %}</div>
+      </section>
+      {% if show_money %}
+      <section class="card">
+        <div class="card-h"><h2 class="card-t">Balance</h2><button type="button" class="btn ghost sm" data-custab-btn="billing">Billing</button></div>
+        <p class="big {{ 'owed-t' if balance_cents > 0 }}">{{ balance_cents | dollars }}</p>
+        <p class="muted small" style="margin-top:4px">{% set open_inv = invoices | selectattr("balance_cents") | list %}{% if open_inv %}{{ open_inv|length }} open invoice{{ "s" if open_inv|length != 1 }}{% else %}Nothing owed{% endif %}</p>
+      </section>
+      {% endif %}
+      {% if qbo_invoices %}
+      <section class="card"><div class="card-h"><h2 class="card-t">QuickBooks</h2><span class="muted small num">{{ qbo_balance_cents | dollars }} outstanding</span></div>{% include "billing/_invoices.html" %}</section>
+      {% endif %}
+      <section class="card" aria-labelledby="c-act">
+        <h2 class="card-t" id="c-act">Recent activity</h2>
+        <ul class="rows" style="margin-top:6px">
+          {% for e in timeline[:8] %}
+          <li><div><span class="strong">{{ e.title }}</span><small>{% if e.detail %}{{ e.detail }} · {% endif %}{{ (e.at | local_date | short_date) if e.date_only else (e.at | stamp) }}</small></div>{% if e.money is not none %}<span class="num">{{ e.money | dollars }}</span>{% endif %}</li>
+          {% else %}
+          <li><div class="muted">No activity yet. Visits, jobs, photos and notes appear here once service begins.</div></li>
+          {% endfor %}
+        </ul>
+      </section>
     </div>
-    <a href="/properties/{{ p.id }}/edit" class="min-h-11 shrink-0 text-sm text-pool">Edit</a>
-    <a href="/properties/{{ p.id }}/water" class="min-h-11 shrink-0 text-sm text-pool">Water</a>
   </div>
-  {% else %}
-  <p class="text-sm text-mist">No properties yet.</p>
-  {% endfor %}
-</div>
 </div>
 
-<div data-custab="pool" class="hidden">
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
-<div class="rise mb-5 space-y-2">
+{# ======================= POOLS AND EQUIPMENT ======================= #}
+<div data-custab="pool" role="tabpanel">
   {% for p in props %}
-  <div class="card p-3.5 {{ 'opacity-60' if not p.active }}">
-    <div class="flex justify-between gap-2">
-      <div class="font-semibold">{{ p.label }}{% if not p.active %} <span class="tag">Inactive</span>{% endif %}</div>
-      <a href="/properties/{{ p.id }}/edit" class="min-h-11 text-sm text-pool">Edit</a>
-    <a href="/properties/{{ p.id }}/water" class="min-h-11 text-sm text-pool">Water</a>
-    </div>
-    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-mist">
-      <span>{{ p.frequency }} · {{ ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][p.weekday] }}</span>
-      {% if show_money %}· <span class="money">{{ rates[p.id] | dollars }}</span>/visit{{ " (override)" if p.rate_override_cents is not none }}{% endif %}
-      {% if p.id in active_holds %}<span class="tag">On hold until {{ active_holds[p.id].resume_date or "further notice" }}</span>{% endif %}
+  <section class="card prop-card {{ 'is-off' if not p.active }}" aria-labelledby="pp-{{ p.id }}">
+    <div class="card-h">
+      <div><h2 class="card-t" id="pp-{{ p.id }}">{{ p.label }}{% if not p.active %} <span class="pill p-neu">Inactive</span>{% endif %}</h2>
+        <p class="muted small">{{ freq.get(p.frequency, p.frequency) }}{% if p.frequency != "none" %} · {{ days[p.weekday % 7] }}{% endif %}{% if show_money %} · <span class="num">{{ rates[p.id] | dollars }}</span>/visit{{ " (override)" if p.rate_override_cents is not none }}{% endif %}{% if p.assigned_tech %} · {{ p.assigned_tech.name }}{% endif %}</p></div>
+      <div class="row"><a href="/properties/{{ p.id }}/water" class="btn sm">{{ ui.icon("drop") }}Water</a><a href="/properties/{{ p.id }}/edit" class="btn sm">{{ ui.icon("edit") }}Edit</a></div>
     </div>
     {% if p.active %}
     {% set hp = house_photos.get(p.id) %}
-    <div class="mt-2 rounded-xl border border-seam bg-shallow/40 p-2.5">
-      <div class="flex gap-3">
-        <div id="housephoto-{{ p.id }}" class="flex shrink-0 items-start gap-2">
-        {% if hp %}
-        <img src="/photos/file/{{ hp.id }}?thumb=1" alt="House photo — {{ p.label }}"
-             class="h-24 w-24 rounded-lg object-cover">
-        {% else %}
-        <div class="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-seam text-center">
-          {{ ui.icon("camera", "h-4 w-4 text-mist") }}
-          <span class="text-[10px] leading-tight text-mist">No photo</span>
+    <div class="prop-loc">
+      <div id="housephoto-{{ p.id }}" class="prop-photo">
+        {% if hp %}<img src="/photos/file/{{ hp.id }}?thumb=1" alt="House photo — {{ p.label }}">
+        {% else %}<div class="prop-nophoto">{{ ui.icon("camera") }}<span>No photo</span></div>{% endif %}
+      </div>
+      <div style="min-width:0;flex:1">
+        <p>{{ p.street or p.address }}</p>
+        <p class="muted">{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %} {{ p.zip }}</p>
+        <div class="chips" style="margin-top:6px">
+          {% if p.gate_code %}<span class="pill p-neu">Gate {{ p.gate_code }}</span>{% endif %}
+          {% if p.dog_warning %}<span class="pill p-warn">{{ ui.icon("dog") }}{{ p.dog_note or "Dog" }}</span>{% endif %}
         </div>
-        {% endif %}
-        </div>
-        <div class="min-w-0 flex-1 text-sm">
-          <div>{{ p.street }}</div>
-          <div class="text-mist">{{ p.city }}{% if p.state %}, {{ p.state }}{% endif %} {{ p.zip }}</div>
-          <div class="mt-1.5 flex flex-wrap gap-1.5">
-            {% if p.gate_code %}<span class="tag">Gate {{ p.gate_code }}</span>{% endif %}
-            {% if p.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ p.dog_note }}</span>{% endif %}
-          </div>
+        <div class="row" style="margin-top:10px">
+          <a href="https://maps.apple.com/?q={{ p.address | urlencode }}" class="btn sm">{{ ui.icon("nav") }}Navigate</a>
+          {% if not hp %}
+          {% call ui.upload("Add house photo", "camera", "btn-upload-sm") %}
+          <input type="file" accept="image/*" capture="environment" multiple name="files"
+                 hx-post="/photos/property/{{ p.id }}" hx-encoding="multipart/form-data"
+                 hx-include="#house-tag-{{ p.id }}" hx-trigger="change" class="upload-input"
+                 hx-target="#housephoto-{{ p.id }}" hx-swap="afterbegin"
+                 aria-label="Add house photo">
+          {% endcall %}
+          <input type="hidden" id="house-tag-{{ p.id }}" name="tag" value="house">
+          {% endif %}
         </div>
       </div>
-      {% if not hp %}
-      {% call ui.upload("Take / upload photo", "camera", "mt-2") %}
-      <input type="file" accept="image/*" capture="environment" multiple name="files"
-             hx-post="/photos/property/{{ p.id }}" hx-encoding="multipart/form-data"
-             hx-include="#house-tag-{{ p.id }}" hx-trigger="change" class="upload-input"
-             hx-target="#housephoto-{{ p.id }}" hx-swap="afterbegin"
-             aria-label="Add house photo">
-      {% endcall %}
-      <input type="hidden" id="house-tag-{{ p.id }}" name="tag" value="house">
-      {% endif %}
-      {% if map_urls[p.id] %}
-      <img src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" loading="lazy" class="mt-2 h-24 w-full rounded-lg object-cover" data-hide-on-error>
-      {% endif %}
-      <a href="https://maps.apple.com/?q={{ p.address | urlencode }}"
-         class="btn-secondary mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 text-sm font-semibold">
-        {{ ui.icon("pin", "h-4 w-4") }}Navigate</a>
+      {% if map_urls[p.id] %}<img class="prop-map" src="{{ map_urls[p.id] }}" alt="Map preview of {{ p.address }}" loading="lazy" data-hide-on-error>{% endif %}
     </div>
     {% endif %}
     {% if not p.active and can_manage %}
-    <form method="post" action="/properties/{{ p.id }}/reactivate" class="mt-2">
-      <button class="btn-secondary w-full">Reactivate property</button>
-    </form>
+    <form method="post" action="/properties/{{ p.id }}/reactivate" style="margin-top:12px"><button class="btn">Reactivate property</button></form>
     {% else %}
-    <div class="mt-2 space-y-1">
+    <div class="cols c2" style="margin-top:16px">
       {% for pool in p.pools if pool.active %}
-      <a href="/pools/{{ pool.id }}/edit" class="flex min-h-11 items-center justify-between gap-2 text-sm">
-        <span>{{ pool.label }} — {{ pool.water_type }}</span>
-        <span class="font-data text-mist">{{ pool.length_ft|int }}{% if pool.width_ft %}×{{ pool.width_ft|int }}{% endif %} ft · {{ "{:,}".format(pool.gallons) }} gal</span>
-      </a>
-      <div class="ml-1 space-y-1 border-l border-seam py-1 pl-3">
-        {% for contract in contracts_by_pool.get(pool.id, []) %}
-        <div class="flex flex-wrap items-center gap-1.5 text-xs">
-          <a href="/contracts/{{ contract.id }}" class="text-pool">{{ contract.season_year }} contract</a>
-          <span class="tag {{ 'tag-safety' if contract.status == 'void' }}">{{ contract.status }}</span>
-          {% if contract.pdf_filename %}<a href="/contracts/{{ contract.id }}/pdf" class="text-mist">PDF</a>{% endif %}
-        </div>
-        {% else %}
-        <p class="text-xs text-mist">No contracts yet.</p>
-        {% endfor %}
-        {% if can_manage %}
-        <form method="post" action="/pools/{{ pool.id }}/contracts/new">
-          <button class="flex min-h-11 items-center gap-1 text-xs text-pool">{{ ui.icon("plus", "h-3 w-3") }}New contract</button>
-        </form>
+      <div class="pool-card">
+        <div class="between"><a href="/pools/{{ pool.id }}/edit" class="strong">{{ pool.label }}</a><span class="pill p-neu">{{ pool.kind | capitalize }}</span></div>
+        <dl class="kvl" style="margin-top:10px;grid-template-columns:110px minmax(0,1fr)">
+          <dt>Volume</dt><dd class="num">{{ "{:,}".format(pool.gallons) }} gal · {{ pool.length_ft|int }}{% if pool.width_ft %}×{{ pool.width_ft|int }}{% endif %} ft</dd>
+          <dt>Sanitiser</dt><dd>{{ pool.water_type | capitalize }}</dd>
+          <dt>Surface</dt><dd>{{ pool.surface | capitalize }}</dd>
+        </dl>
+        {% if pool.equipment %}
+        <ul class="rows" style="margin-top:8px">
+          {% for e in pool.equipment %}
+          <li><div><span class="strong">{{ e.brand }} {{ e.model }}</span><small>{{ e.kind | capitalize }}{% if e.install_date %} · installed {{ e.install_date | short_date }}{% endif %}</small></div>
+            {% if e.warranty_end %}{% if e.warranty_end < today %}<span class="pill p-neu">Warranty ended</span>{% elif (e.warranty_end - today).days <= 60 %}<span class="pill p-warn">Warranty ends {{ e.warranty_end.strftime("%b %-d") }}</span>{% else %}<span class="pill p-pos">Under warranty</span>{% endif %}{% endif %}</li>
+          {% endfor %}
+        </ul>
         {% endif %}
+        <div class="contracts-mini">
+          {% for contract in contracts_by_pool.get(pool.id, []) %}
+          <div class="row" style="gap:6px"><a href="/contracts/{{ contract.id }}">{{ contract.season_year }} contract</a><span class="pill {{ 'p-neg' if contract.status == 'void' else ('p-pos' if contract.status == 'signed' else 'p-neu') }}">{{ contract.status }}</span>{% if contract.pdf_filename %}<a href="/contracts/{{ contract.id }}/pdf" class="small">PDF</a>{% endif %}</div>
+          {% endfor %}
+        </div>
+        <div class="row" style="margin-top:10px">
+          <a href="/pools/{{ pool.id }}/edit" class="btn sm">Edit pool and equipment</a>
+          {% if can_manage %}<form method="post" action="/pools/{{ pool.id }}/contracts/new"><button class="btn sm">{{ ui.icon("plus") }}New contract</button></form>{% endif %}
+        </div>
       </div>
       {% endfor %}
-      <a href="/properties/{{ p.id }}/pools/new" class="flex min-h-11 items-center gap-1 text-sm text-pool">{{ ui.icon("plus", "h-3.5 w-3.5") }}Add pool</a>
     </div>
+    <a href="/properties/{{ p.id }}/pools/new" class="btn ghost sm" style="margin-top:10px">{{ ui.icon("plus") }}Add pool</a>
     {% endif %}
-  </div>
-  {% endfor %}
-  <a href="/customers/{{ c.id }}/properties/new"
-     class="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-dashed border-seam py-2 text-sm text-mist">
-    {{ ui.icon("plus", "h-4 w-4") }}Add property</a>
-</div>
-</div>
-
-<div data-custab="profile">
-{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
-{% if jobs %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Open jobs</h2>
-<div class="mb-5 space-y-2">
-  {% for j in jobs %}<a href="/jobs/{{ j.id }}" class="card block p-3.5">{{ j.title }} <span class="text-sm text-mist">({{ j.status }})</span></a>{% endfor %}
-</div>
-{% endif %}
-
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Communication log</h2>
-{% if can_manage %}
-<form method="post" action="/customers/{{ c.id }}/comm/add" class="card mb-3 flex flex-wrap gap-2 p-3">
-  <select name="kind" class="field w-28 flex-none">
-    {% for k in ["call","email","text","note"] %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
-  </select>
-  <input name="note" placeholder="Note" class="field min-w-0 flex-1">
-  <button class="btn-secondary">Log</button>
-</form>
-{% endif %}
-</div>
-
-<div data-custab="photos" class="hidden">
-{% if photos or ptag %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
-<div class="mb-2 flex flex-wrap gap-2 text-sm">
-  <a href="/customers/{{ c.id }}" class="tag {{ 'tag-safety' if not ptag }}">All</a>
-  {% for pt in ["before", "after", "issue", "house"] %}
-  <a href="/customers/{{ c.id }}?ptag={{ pt }}" class="tag {{ 'tag-safety' if ptag == pt }}">{{ pt | title }}</a>
-  {% endfor %}
-</div>
-<div class="mb-5 flex flex-wrap gap-2">
-  {% for ph, prop in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-  </div>
+  </section>
   {% else %}
-  <p class="text-sm text-mist">No photos yet.</p>
+  <p class="empty">No properties yet.</p>
   {% endfor %}
-</div>
-{% endif %}
+  <a href="/customers/{{ c.id }}/properties/new" class="ct-add" style="display:flex;justify-content:center;gap:6px;text-decoration:none">{{ ui.icon("plus") }}Add property</a>
 </div>
 
-<div data-custab="profile">
-{% if qbo_invoices %}<section class="mb-4"><h2 class="mb-2 font-display text-xl">QuickBooks billing · {{ qbo_balance_cents | dollars }} outstanding</h2>{% include "billing/_invoices.html" %}</section>{% endif %}
-<h2 class="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-wide">Activity</h2>
-<div class="space-y-2">
-  {% for e in timeline %}
-  <div class="card flex items-start gap-2.5 p-3.5 text-sm">
-    {{ ui.icon(e.icon, "h-4 w-4 shrink-0 mt-0.5 text-pool") }}
-    <div class="min-w-0 flex-1">
-      <div class="flex items-center justify-between gap-2">
-        <span class="font-semibold">{{ e.title }}</span>
-        {% if e.money is not none %}<span class="money">{{ e.money | dollars }}</span>{% endif %}
-      </div>
-      {% if e.detail %}<div class="mt-0.5 text-mist">{{ e.detail }}</div>{% endif %}
-      <div class="mt-0.5 text-xs text-mist">{{ (e.at | local_date | short_date) if e.date_only else (e.at | stamp) }}</div>
-    </div>
-  </div>
-  {% else %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No activity yet</p>
-    <p class="mt-1 text-sm text-mist">Visits, jobs, photos and notes will appear here once service begins.</p>
-  </div>
-  {% endfor %}
+{# ======================= SERVICE HISTORY ======================= #}
+<div data-custab="history" role="tabpanel">
+  <section class="card">
+    <div class="card-h"><h2 class="card-t">Service history</h2><span class="muted small">Last {{ history|length }} visit{{ "s" if history|length != 1 }}</span></div>
+    {% if history %}
+    <div class="tblw"><table class="tbl num">
+      <thead><tr><th>Visit</th><th>Technician</th><th class="r">FC</th><th class="r">pH</th><th class="r">TA</th><th class="r">CYA</th><th class="r">Salt</th><th class="r">Chemicals</th><th class="r">Time</th></tr></thead>
+      <tbody>
+        {% for v in history %}
+        <tr>
+          <td><a href="/visit/{{ v.property_id }}/{{ v.date }}">{{ v.date | short_date }}</a>{% if v.status == "skipped" %} <span class="pill p-neg">Skipped</span>{% endif %}</td>
+          <td>{{ v.completed_by.name if v.completed_by else "—" }}</td>
+          {% for k in ["fc","ph","ta","cya","salt"] %}
+          {% set val = v|attr(k) %}
+          <td class="r {{ 'out' if (v.id, k) in out_of_band }}">{{ ("%g"|format(val)) if val is not none and (k != "salt" or val) else "—" }}</td>
+          {% endfor %}
+          <td class="r">{{ v.chemicals|length or "—" }}</td>
+          <td class="r">{{ v.duration_minutes | minutes_display or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="muted small" style="margin-top:10px">Readings outside the target band are bold red.</p>
+    {% else %}
+    <p class="empty">No visits recorded yet.</p>
+    {% endif %}
+  </section>
 </div>
+
+{# ======================= WATER ======================= #}
+<div data-custab="water" role="tabpanel">
+  {% if water %}
+  <div class="cols c2">
+    {% for sr, svg in water %}
+    <section class="card">
+      <div class="card-h"><h2 class="card-t">{{ sr.label }}</h2><span class="muted small">Target {{ "%g"|format(sr.band_lo) }}–{{ "%g"|format(sr.band_hi) }}{{ " " ~ sr.unit if sr.unit }}</span></div>
+      {{ svg | safe }}
+      <p class="small" style="margin-top:6px">Latest {{ "%g"|format(sr.latest) }}{{ " " ~ sr.unit if sr.unit }} · {% if sr.in_band %}<span class="st st-ok">in range</span>{% elif sr.in_band is none %}<span class="muted">no target</span>{% else %}<span class="st st-low">out of range</span>{% endif %}</p>
+    </section>
+    {% endfor %}
+  </div>
+  {% if main %}<p style="margin-top:12px"><a href="/properties/{{ main.id }}/water">Full water history for {{ main.label }}</a></p>{% endif %}
+  {% else %}
+  <p class="empty">No readings yet.</p>
+  {% endif %}
+</div>
+
+{# ======================= BILLING ======================= #}
+{% if show_money or qbo_invoices %}
+<div data-custab="billing" role="tabpanel">
+  {% if show_money %}
+  <section class="card">
+    <div class="card-h"><h2 class="card-t">Invoices</h2><span class="muted small num">Balance {{ balance_cents | dollars }}</span></div>
+    {% if invoices %}
+    <div class="tblw"><table class="tbl num">
+      <thead><tr><th>Invoice</th><th>Period</th><th>State</th><th>Due</th><th class="r">Amount</th><th class="r">Balance</th></tr></thead>
+      <tbody>
+        {% for inv in invoices %}
+        {% set st = inv.payment_state %}
+        <tr>
+          <td><a href="/invoices/{{ inv.id }}/pdf">{{ inv.number }}</a></td>
+          <td>{{ "%d-%02d"|format(inv.period_year, inv.period_month) | month_name }}</td>
+          <td>{% if st == "paid" %}<span class="pill p-pos">Paid</span>{% elif st == "void" %}<span class="pill p-neu">Void</span>{% elif inv.days_overdue(today) %}<span class="pill p-neg">Overdue {{ inv.days_overdue(today) }} d</span>{% elif st == "partial" %}<span class="pill p-warn">Part paid</span>{% else %}<span class="pill p-acc">{{ "Sent" if inv.status == "sent" else "Draft" }}</span>{% endif %}</td>
+          <td>{{ inv.due_date | short_date }}</td>
+          <td class="r">{{ inv.total_cents | dollars }}</td>
+          <td class="r {{ 'out' if inv.balance_cents > 0 }}">{{ inv.balance_cents | dollars }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="muted small" style="margin-top:10px">“Paid” comes from payments recorded against the invoice, never from it having been sent.</p>
+    {% else %}<p class="empty">No invoices yet.</p>{% endif %}
+  </section>
+  {% endif %}
+  {% if qbo_invoices %}
+  <section class="card" style="margin-top:var(--gap)"><div class="card-h"><h2 class="card-t">QuickBooks billing</h2><span class="muted small num">{{ qbo_balance_cents | dollars }} outstanding</span></div>{% include "billing/_invoices.html" %}</section>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ======================= AGREEMENTS ======================= #}
+<div data-custab="agreements" role="tabpanel">
+  <section class="card"><h2 class="card-t">Agreements</h2>
+    {% set any_contract = namespace(n=0) %}
+    <ul class="rows" style="margin-top:6px">
+      {% for p in props %}{% for pool in p.pools %}{% for contract in contracts_by_pool.get(pool.id, []) %}
+      {% set any_contract.n = any_contract.n + 1 %}
+      <li><div><a class="strong" href="/contracts/{{ contract.id }}">{{ contract.season_year }} season · {{ pool.label }}</a><small>{{ p.label }}{% if contract.pdf_filename %} · <a href="/contracts/{{ contract.id }}/pdf">PDF</a>{% endif %}</small></div><span class="pill {{ 'p-neg' if contract.status == 'void' else ('p-pos' if contract.status == 'signed' else ('p-acc' if contract.status == 'sent' else 'p-neu')) }}">{{ contract.status }}</span></li>
+      {% endfor %}{% endfor %}{% endfor %}
+    </ul>
+    {% if not any_contract.n %}<p class="empty" style="margin-top:10px">No agreements yet. Start one from a pool on Pools and equipment, or from Contracts.</p>{% endif %}
+  </section>
+</div>
+
+{# ======================= PHOTOS ======================= #}
+<div data-custab="photos" role="tabpanel">
+  <div class="chips" style="margin-bottom:14px">
+    <a href="/customers/{{ c.id }}#photos" class="chip {{ 'on' if not ptag }}">All</a>
+    {% for pt in ["before", "after", "issue", "house"] %}
+    <a href="/customers/{{ c.id }}?ptag={{ pt }}#photos" class="chip {{ 'on' if ptag == pt }}">{{ pt | title }}</a>
+    {% endfor %}
+  </div>
+  {% if photos %}
+  <div class="photo-grid">{% for ph, prop in photos %}{{ ui.photo(ph) }}{% endfor %}</div>
+  {% else %}
+  <p class="empty">No photos{{ " tagged " ~ ptag if ptag }} yet.</p>
+  {% endif %}
+  <p class="muted small" style="margin-top:10px">New photos are private. Share them from the customer portal settings.</p>
+</div>
+
+{# ======================= CONTACT LOG ======================= #}
+<div data-custab="log" role="tabpanel">
+  <section class="card"><h2 class="card-t">Contact log</h2>
+    {% if can_manage %}
+    <form method="post" action="/customers/{{ c.id }}/comm/add" class="row" style="margin-top:12px;align-items:flex-end">
+      <div><label class="lbl" for="c-ltype">Type</label>
+        <select id="c-ltype" name="kind" class="inp">{% for k, lbl in [("call","Call"),("email","Email"),("text","Text"),("note","Note")] %}<option value="{{ k }}">{{ lbl }}</option>{% endfor %}</select></div>
+      <div style="flex:1;min-width:200px"><label class="lbl" for="c-lnote">Note</label><input id="c-lnote" name="note" class="inp" placeholder="What was discussed"></div>
+      <button class="btn pri">Log it</button>
+    </form>
+    {% endif %}
+    <ul class="rows" style="margin-top:14px">
+      {% for l in comms %}
+      <li><div><span class="strong">{{ l.kind | capitalize }}</span><small>{{ l.note }}</small></div><span class="muted small">{{ l.at | stamp }}</span></li>
+      {% else %}
+      <li><div class="muted">Nothing logged yet.</div></li>
+      {% endfor %}
+    </ul>
+  </section>
 </div>
 
 {% include "_custabs.html" %}

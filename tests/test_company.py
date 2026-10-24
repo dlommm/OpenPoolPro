@@ -17,7 +17,7 @@ def png_bytes(w=800, h=400):
 def test_company_settings_roundtrip(client, engine):
     r = client.post("/settings/company", data={
         "business_name": "OpenPoolPro LLC", "company_address": "1 Dock St",
-        "company_phone": "555-0100", "company_email": "info@coastline.example",
+        "company_phone": "555-0100", "company_email": "info@example.com",
         "company_license": "CPC-12345"}, follow_redirects=False)
     assert r.status_code == 303
     with Session(engine) as s:

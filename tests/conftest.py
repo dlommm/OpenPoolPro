@@ -5,7 +5,7 @@ import app.config as config
 from app import auth_core
 
 # Bcrypt at production cost (~250 ms/hash) dominated this suite's runtime:
-# every `client` fixture rebuilds the app (seeds.run hashes APP_PASSWORD) and
+# every `client` fixture rebuilds the app (and hashes the owner's password) and
 # then logs in (a verify), so 500+ tests each paid ~0.5 s of pure KDF.
 #
 # auth_core reads BCRYPT_ROUNDS at call time, so passwords and backup codes
@@ -40,10 +40,32 @@ def engine():
     return make_engine("sqlite://")
 
 
+def make_owner(engine, username="owner", password="testpass", name="Owner"):
+    """The owner the first-run setup would have created, with setup finished.
+    There is no environment-seeded owner any more."""
+    from sqlalchemy.orm import Session
+
+    from app import models
+    from app.auth_core import hash_password
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    from sqlalchemy import select
+    with Session(engine) as s:
+        u = s.scalars(select(models.User).where(models.User.username == username)).first()
+        if u is None:
+            s.add(models.User(name=name, username=username, role="admin", active=True,
+                              password_hash=hash_password(password)))
+        else:
+            u.password_hash = hash_password(password)
+        models.set_setting(s, "setup_status", "done")
+        s.commit()
+
+
 @pytest.fixture
 def client(engine, monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(config, "TIMEZONE", config.TIMEZONE)
+    make_owner(engine)
     from app.main import create_app
     app = create_app(engine=engine)
     c = TestClient(app)

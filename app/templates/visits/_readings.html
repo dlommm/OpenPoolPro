@@ -1,21 +1,54 @@
-{# Readings inputs. Rendered inside the visit form, and swapped in whole by
-   /tester-readings/.../use/<id> when the tech picks a tester reading. #}
+{# Readings inputs with a band scale per reading. Rendered inside the visit
+   form, and swapped in whole by /tester-readings/.../use/<id> when the tech
+   picks a tester reading. Each row carries its target band in data- attributes
+   so the visit script can move the marker and say Low / In range / High while
+   the tech types; the first paint is computed here, so it is right with no JS. #}
+{% import "_ui.html" as ui %}
+{% set salt_pool = v.property.pools | selectattr("active") | selectattr("water_type", "equalto", "salt") | list %}
 <div id="readings-grid">
-  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-    {% for name, label in [("fc","Free Chlorine"),("ph","pH"),("ta","Total Alkalinity"),("cya","Cyanuric Acid"),("salt","Salt")] %}
-    <label class="block text-center"><span class="field-label font-data leading-tight">{{ label }}</span>
-      <input inputmode="decimal" name="{{ name }}" value="{{ values[name] }}"
+  {% for m in reading_scales() %}
+  {% set raw = values[m.key] %}
+  {% set show = m.key != "salt" or salt_pool or raw not in ("", none) %}
+  {% set span = m.scale_hi - m.scale_lo %}
+  {% set num = raw | float(none) if raw not in ("", none) else none %}
+  {% if num is not none %}
+    {% set st = "low" if num < m.band_lo else ("high" if num > m.band_hi else "ok") %}
+  {% else %}{% set st = "none" %}{% endif %}
+  {% set fmt = "%.0f" if m.key in ("ta", "cya", "salt") else "%.1f" %}
+  <div class="reading {{ 'out' if st in ('low', 'high') }}" {% if show %}data-reading data-lo="{{ m.band_lo }}" data-hi="{{ m.band_hi }}" data-slo="{{ m.scale_lo }}" data-shi="{{ m.scale_hi }}" data-fmt="{{ 0 if m.key in ('ta', 'cya', 'salt') else 1 }}"{% endif %}>
+    <div class="nm"><b>{{ m.label }}</b><span class="muted small">Target {{ fmt|format(m.band_lo) }}–{{ fmt|format(m.band_hi) }}{{ " " ~ m.unit if m.unit }}</span></div>
+    <div>
+      {% if show %}
+      <label class="sr" for="r-{{ m.key }}">{{ m.label }}{{ " in " ~ m.unit if m.unit }}</label>
+      <div class="unitw"><input id="r-{{ m.key }}" inputmode="decimal" name="{{ m.key }}" value="{{ raw }}" autocomplete="off"
              hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="input changed delay:400ms"
-             class="field text-center font-data text-lg"></label>
-    {% endfor %}
+             class="inp big">{% if m.unit %}<span class="unit">{{ m.unit }}</span>{% endif %}</div>
+      {% else %}
+      <span class="muted">Not a salt pool</span><input type="hidden" name="salt" value="">
+      {% endif %}
+    </div>
+    {% if show %}
+    <div class="scl">
+      <div class="scale" aria-hidden="true">
+        <div class="trk"></div>
+        <div class="band" style="left:{{ ((m.band_lo - m.scale_lo) / span * 100) | round(2) }}%;width:{{ ((m.band_hi - m.band_lo) / span * 100) | round(2) }}%"></div>
+        <div class="tgt" style="left:{{ ((m.target - m.scale_lo) / span * 100) | round(2) }}%"></div>
+        <div class="mk" style="left:{{ ([[((num if num is not none else m.target) - m.scale_lo) / span * 100, 0] | max, 100] | min) | round(2) }}%"{% if num is none %} hidden{% endif %}></div>
+      </div>
+      <div class="scale-ax"><span>{{ fmt|format(m.scale_lo) }}</span>
+        <span class="st st-{{ st }}" role="status" data-st>{% if st == "ok" %}{{ ui.icon("check") }}In range{% elif st == "low" %}{{ ui.icon("down") }}Low{% elif st == "high" %}{{ ui.icon("up") }}High{% else %}Not tested{% endif %}</span>
+        <span>{{ fmt|format(m.scale_hi) }}</span></div>
+    </div>
+    {% endif %}
   </div>
+  {% endfor %}
   {% if reading %}
   <input type="hidden" name="device_reading_id" value="{{ reading.id }}">
-  <p class="mt-2 text-sm" role="status">Filled from <strong>{{ sources[reading.source] }}</strong>{% if reading.device_serial %} #{{ reading.device_serial }}{% endif %}, tested {{ reading.measured_at | stamp }}. Check the numbers before marking done — anything you change is recorded as edited.</p>
-  {% if extra %}<p class="text-sm text-mist">Also measured: {% for label, val in extra %}{{ label }} {{ val }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+  <p class="note" role="status">{{ ui.icon("drop", "ic18") }}<span>Filled from <strong>{{ sources[reading.source] }}</strong>{% if reading.device_serial %} #{{ reading.device_serial }}{% endif %}, tested {{ reading.measured_at | stamp }}. Check the numbers before marking done — anything you change is recorded as edited.</span></p>
+  {% if extra %}<p class="muted small" style="margin-top:6px">Also measured: {% for label, val in extra %}{{ label }} {{ val }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   <div hx-get="/visit/{{ v.id }}/doses" hx-include="closest form" hx-target="#dose-panel" hx-trigger="load"></div>
   {# Close the candidate list once one is chosen, so a second tap can't swap
      in a different pool's test by accident; "Find tester readings" reopens it. #}
-  <div id="tester-panel" class="mt-2" aria-live="polite" hx-swap-oob="true"></div>
+  <div id="tester-panel" aria-live="polite" hx-swap-oob="true"></div>
   {% endif %}
 </div>

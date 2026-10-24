@@ -1,37 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Water history{% endblock %}
+{% block title %}Water history · {{ c.name }}{% endblock %}
 {% block content %}
-{% if request.state.user.role == "admin" %}<a class="btn-secondary mb-3" href="/water-alerts">Review water alerts</a>{% endif %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header(c.name, prop.label ~ " — water history") }}
-
-<p class="mb-4 text-sm text-mist">
-  Readings from the last {{ series[0].points | length if series else 0 }} serviced visits.
-  The shaded band is your target range; a red marker is a reading outside it.
-  <a href="/customers/{{ c.id }}" class="text-pool">Back to {{ c.name }}</a>
-</p>
-
-{% for s in series %}
-<div class="card mb-3 p-3.5">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h2 class="font-display text-lg font-bold uppercase tracking-wide">{{ s.label }}</h2>
-    <p class="font-data text-sm">
-      <span class="{{ 'text-safety font-semibold' if s.in_band is false }}">
-        {{ "%g" | format(s.latest) }}{{ " " ~ s.unit if s.unit }}
-      </span>
-      {% if s.target is not none %}
-      <span class="text-mist">· target {{ "%g" | format(s.target) }}</span>
-      {% endif %}
-      {% if s.in_band is false %}<span class="tag tag-safety ml-1">out of range</span>{% endif %}
-    </p>
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><a href="/customers/{{ c.id }}#water">{{ c.name }}</a><span aria-hidden="true">›</span><span>Water history</span></p>
+    <h1 class="h1">Water history</h1>
+    <p class="lede">{{ prop.label }} · readings from the last {{ series[0].points | length if series else 0 }} serviced visits. The shaded band is the target range; a red marker is a reading outside it.</p>
   </div>
-  <div class="mt-2">{{ charts[s.key] | safe }}</div>
+  {% if request.state.user.role == "admin" %}<div class="acts"><a class="btn" href="/water-alerts">{{ ui.icon("drop") }}Review water alerts</a></div>{% endif %}
+</header>
+
+{% if series %}
+<div class="cols c2">
+  {% for s in series %}
+  <section class="card" aria-labelledby="w-{{ s.key }}">
+    <div class="card-h"><h2 class="card-t" id="w-{{ s.key }}">{{ s.label }}</h2>
+      <p class="small num"><span class="{{ 'st st-low' if s.in_band is false }}">{{ "%g" | format(s.latest) }}{{ " " ~ s.unit if s.unit }}</span>{% if s.target is not none %} <span class="muted">· target {{ "%g" | format(s.target) }}</span>{% endif %}{% if s.in_band is false %} <span class="pill p-neg">out of range</span>{% endif %}</p></div>
+    {{ charts[s.key] | safe }}
+  </section>
+  {% endfor %}
 </div>
 {% else %}
-<div class="card p-6 text-center">
-  <p class="font-display text-xl font-bold uppercase tracking-wide">No readings yet</p>
-  <p class="mt-1 text-sm text-mist">
-    Chemistry readings logged on completed visits will chart here.</p>
-</div>
-{% endfor %}
+<div class="empty"><p class="strong" style="color:var(--t)">No readings yet</p><p>Chemistry readings logged on completed visits will chart here.</p></div>
+{% endif %}
 {% endblock %}

@@ -115,7 +115,7 @@ def test_emailing_an_invoice_attaches_the_pdf_and_marks_it_sent(client, engine, 
 
     captured = {}
 
-    def fake_send(to_addr, subject, body, conf=None, attachments=None):
+    def fake_send(to_addr, subject, body, conf=None, attachments=None, html=None):
         captured.update(to=to_addr, subject=subject, body=body, attachments=attachments)
 
     monkeypatch.setattr(mailer, "send_message", fake_send)

@@ -1,0 +1,64 @@
+/* V2 billing styles. Kept in their own file so parallel work on other screens never edits the same lines. */
+
+/* ---- Master/detail workspace (/billing?ym=..&draft=ID) ----
+   v2.css owns .qb-ws/.qb-list/.qb-row/.qb-detail; this adds the empty pane,
+   the review partial's layout, and the narrow-screen fallbacks. */
+.qb-list .qb-row:focus-visible{outline:2px solid var(--a);outline-offset:-2px}
+.qb-detail[aria-busy="true"]{opacity:.6;transition:opacity 160ms ease}
+.qb-pick{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;min-height:260px;color:var(--m)}
+.qb-pick p{max-width:320px}
+
+/* ---- Draft review partial (pane and full page) ---- */
+.qbr{min-width:0}
+.qbr .qb-foot>.sp{flex:1}
+.qbr-who{min-width:0;flex:1}
+.qbr-who .h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qbr-st{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto}
+.qbr-st b{font-size:20px;font-weight:600;letter-spacing:-.02em}
+.qbr-full{margin:8px 0 0 50px}
+.qbr-total{font-size:26px}
+.qbr-steps{padding:14px 18px;margin:0 0 var(--gap)}
+.qbr .flash{margin:12px 0 0}
+.qbr .inp[readonly]{background:var(--r);border-color:transparent}
+/* v2.css's global .big would blow the row label up to display size. */
+.qb-tot>div.big{font-size:inherit}
+.qb-tot>div.big>span{font-size:15px;font-weight:600}
+.qbr-form{margin-top:16px}
+.qbr-form.card{padding:18px 20px;margin-top:0}
+.qbr-lines{margin-top:14px}
+.qb-lines .inp{height:38px}
+.qb-lines .inp.amt{width:110px;margin-left:auto}
+.qbr-date{white-space:nowrap;padding-top:20px}
+.qb-lines td.r.num{padding-top:20px;white-space:nowrap}
+.qbr-items{margin-top:4px;padding-left:18px;list-style:disc}
+.qbr-acts{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:14px}
+.qbr-acts:empty{display:none}
+.qbr-appr{margin-top:12px}
+.qbr-mirror{padding-left:18px;list-style:disc}
+.qbr-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* Tablet and phone: list → detail page. The rows navigate, an empty pane is
+   not shown, and a split URL opened here leads with the review. */
+@media (max-width: 1100px){
+.qb-pane-empty{display:none}
+.qb-ws.has-sel .qb-detail{order:-1}
+}
+@media (max-width: 720px){
+.qbr-full{margin-left:0}
+/* Charges stack as one block each instead of a four-column table. Every
+   input keeps its own (visually hidden) label, so the header can go. */
+.qb-lines thead{display:none}
+.qb-lines,.qb-lines tbody{display:block}
+.qb-lines tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding:12px 4px;border-top:1px solid var(--rule)}
+.qb-lines tr:first-child{border-top:0}
+.qb-lines td{display:block;padding:0;border:0}
+.qb-lines td.qbr-date,.qb-lines td.r.num{padding-top:0}
+.qb-lines td:nth-child(2){grid-column:1/-1;grid-row:2}
+.qb-lines td:nth-child(4){grid-column:1/-1;grid-row:3}
+.qb-lines .inp.amt{width:96px}
+.qbr-acts{justify-content:stretch}
+.qbr-acts form,.qbr-acts .btn{width:100%}
+}
+@media (prefers-reduced-motion: reduce){
+.qb-detail[aria-busy="true"]{transition:none}
+}

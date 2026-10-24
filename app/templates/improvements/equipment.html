@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Equipment{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+<header class="ph">
+  <div><h1 class="h1">Equipment</h1><p class="lede">Pumps, filters, heaters and the rest on every active pool, warranties running out first. Add equipment from a pool's page.</p></div>
+</header>
+<nav class="chips" aria-label="Which equipment" style="margin-bottom:16px">
+  <a class="chip {{ 'on' if show != 'soon' }}" href="/equipment">All {{ counts.all }}</a>
+  <a class="chip {{ 'on' if show == 'soon' }}" href="/equipment?show=soon">Warranty ending or ended {{ counts.soon }}</a>
+</nav>
+{% if items %}
+<div class="card" style="padding:4px 12px">
+  <div class="tblw"><table class="tbl etbl">
+    <thead><tr><th>Equipment</th><th>Customer</th><th>Pool</th><th>Installed</th><th>Warranty</th></tr></thead>
+    <tbody>
+      {% for e in items %}
+      <tr>
+        <td><a class="nm" href="/pools/{{ e.pool.id }}/edit">{{ e.brand }} {{ e.model }}</a><div class="muted small">{{ e.kind | capitalize }}{% if e.serial %} · {{ e.serial }}{% endif %}</div></td>
+        <td><a href="/customers/{{ e.pool.property.customer.id }}#pool">{{ e.pool.property.customer.name }}</a></td>
+        <td>{{ e.pool.label }}</td>
+        <td>{{ e.install_date | short_date if e.install_date else "—" }}</td>
+        <td>{% if not e.warranty_end %}<span class="muted">Not recorded</span>{% elif e.warranty_end < today %}{{ ui.pill("Ended " ~ (e.warranty_end | short_date), "neu") }}{% elif e.warranty_end <= soon %}{{ ui.pill("Ends " ~ (e.warranty_end | short_date) ~ " · " ~ (e.warranty_end - today).days ~ " days", "warn") }}{% else %}{{ ui.pill("Until " ~ (e.warranty_end | short_date), "pos") }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% else %}
+<div class="empty"><p class="strong" style="color:var(--t)">No equipment {{ "with a warranty ending soon" if show == "soon" else "recorded" }}</p><p>Add equipment from a pool's page so warranty reminders reach the dashboard.</p></div>
+{% endif %}
+{% endblock %}

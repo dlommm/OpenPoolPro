@@ -109,6 +109,28 @@ def test_hub_needs_attention_stale_sent_and_uncovered(client, engine):
     assert "Alvarez" in r.text
 
 
+def test_hub_stale_threshold_follows_setting(client, engine):
+    """The needs-attention cut-off is the admin's contract_stale_days setting,
+    not a fixed 14: a contract sent 20 days ago is not stale at a 30-day rule."""
+    with Session(engine) as s:
+        _seed_rate(s)
+        _, _, pool = _seed_property(s, name="Henderson")
+        pool_id = pool.id
+    cid = _create(client, pool_id)
+    with Session(engine) as s:
+        c = s.get(models.Contract, cid)
+        c.status = "sent"
+        c.sent_at = models.utcnow() - timedelta(days=20)
+        models.set_setting(s, "contract_stale_days", "30")
+        s.commit()
+    assert "sent 20 days ago" not in client.get("/contracts").text
+
+    with Session(engine) as s:
+        models.set_setting(s, "contract_stale_days", "20")
+        s.commit()
+    assert "sent 20 days ago" in client.get("/contracts").text
+
+
 def test_duplicate_guard_redirects_to_existing(client, engine):
     with Session(engine) as s:
         _seed_rate(s)

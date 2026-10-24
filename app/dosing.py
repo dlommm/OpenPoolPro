@@ -1,18 +1,17 @@
 """Target-based dose recommendations. Pure and deterministic.
 
-Deadbands (fixed): FC doses only below target-0.5 ppm; pH only outside
-7.2-7.8; TA below target-10; CYA below target-10 (raise only, >100 warns);
-salt below target-200 on salt pools. Doses rounding to zero are dropped.
+Nothing is dosed inside the band around each target (app/chem_targets.py,
+the same band the alerts and charts use): FC only below target-band; pH only
+outside target±band; TA and CYA below target-band (CYA raise only, >100
+warns); salt below target-band on salt pools. Doses rounding to zero are
+dropped.
 """
 import math
 from dataclasses import dataclass
 
-DEADBAND_FC = 0.5
-PH_LOW, PH_HIGH = 7.2, 7.8
-DEADBAND_TA = 10.0
-DEADBAND_CYA = 10.0
+from app.chem_targets import DEFAULT_BANDS
+
 CYA_HIGH = 100.0
-DEADBAND_SALT = 200.0
 LIQUID_LB_PER_GAL = 10.0
 ACID_CAP_FLOZ_PER_10K = 32.0
 
@@ -60,7 +59,8 @@ def _emit(out, chem, computed_amount, computed_unit, note=""):
         out.append(Dose(chem.id, chem.name, amount, chem.unit, note=note))
 
 
-def recommend(readings, gallons, water_type, chemicals, targets):
+def recommend(readings, gallons, water_type, chemicals, targets, bands=None):
+    band = {**DEFAULT_BANDS, **(bands or {})}
     out: list[Dose] = []
     if not gallons or gallons <= 0:
         return out
@@ -75,7 +75,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
 
     fc, ph, ta, cya, salt = r("fc"), r("ph"), r("ta"), r("cya"), r("salt")
 
-    if fc is not None and fc < targets["fc"] - DEADBAND_FC:
+    if fc is not None and fc < targets["fc"] - band["fc"]:
         deficit = targets["fc"] - fc
         pure_lbs = deficit * gallons * 8.34 / 1_000_000
         chem = _first(chemicals, "chlorine_liquid")
@@ -90,7 +90,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
                 out.append(Dose(None, "Chlorine", 0, "", applyable=False,
                                 note="no chlorine chemical in catalog"))
 
-    if ph is not None and ph > PH_HIGH:
+    if ph is not None and ph > targets["ph"] + band["ph"]:
         chem = _first(chemicals, "ph_down")
         if chem is not None:
             ta_factor = (ta / 100.0) if ta is not None else 1.0
@@ -105,7 +105,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
         else:
             out.append(Dose(None, "pH down", 0, "", applyable=False,
                             note="no ph_down chemical in catalog"))
-    elif ph is not None and ph < PH_LOW:
+    elif ph is not None and ph < targets["ph"] - band["ph"]:
         chem = _first(chemicals, "ph_up")
         if chem is not None:
             oz = ((targets["ph"] - ph) / 0.2) * 6.0 * g10k * (100.0 / chem.strength_pct)
@@ -114,7 +114,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
             out.append(Dose(None, "pH up", 0, "", applyable=False,
                             note="no ph_up chemical in catalog"))
 
-    if ta is not None and ta < targets["ta"] - DEADBAND_TA:
+    if ta is not None and ta < targets["ta"] - band["ta"]:
         chem = _first(chemicals, "alkalinity_up")
         if chem is not None:
             lbs = ((targets["ta"] - ta) / 10.0) * 1.5 * g10k
@@ -127,7 +127,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
         if cya > CYA_HIGH:
             out.append(Dose(None, "Stabilizer", 0, "", applyable=False,
                             note="CYA high — partial drain/dilution recommended"))
-        elif cya < targets["cya"] - DEADBAND_CYA:
+        elif cya < targets["cya"] - band["cya"]:
             chem = _first(chemicals, "stabilizer")
             if chem is not None:
                 lbs = (targets["cya"] - cya) * g10k / 12.0
@@ -136,7 +136,7 @@ def recommend(readings, gallons, water_type, chemicals, targets):
                 out.append(Dose(None, "Stabilizer", 0, "", applyable=False,
                                 note="no stabilizer chemical in catalog"))
 
-    if water_type == "salt" and salt is not None and salt < targets["salt"] - DEADBAND_SALT:
+    if water_type == "salt" and salt is not None and salt < targets["salt"] - band["salt"]:
         chem = _first(chemicals, "salt")
         if chem is not None:
             lbs = (targets["salt"] - salt) * gallons * 8.34 / 1_000_000

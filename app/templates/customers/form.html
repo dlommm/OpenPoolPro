@@ -1,24 +1,31 @@
 {% extends "base.html" %}
+{% block title %}{{ "Edit " ~ c.name if c else "New customer" }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Customer file", "Edit customer" if c else "New customer") }}
-<form method="post" class="space-y-3">
-  {% for name, label, type in [("name","Name","text"),("qb_display_name","QuickBooks name (blank = same)","text"),
-     ("phone","Phone","tel"),("email","Email","email")] %}
-  <label class="block"><span class="field-label">{{ label }}</span>
-    <input type="{{ type }}" name="{{ name }}" value="{{ c|attr(name) if c else '' }}"
-           {{ "required" if name == "name" }} class="field"></label>
-  {% endfor %}
-  <label class="block"><span class="field-label">Notes</span>
-    <textarea name="notes" class="field min-h-24 py-2">{{ c.notes if c else "" }}</textarea></label>
-  <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="notify_email"
-         {{ "checked" if c and c.notify_email }} class="h-5 w-5 rounded border-seam text-pool"> Email visit notifications</label>
-  <button class="btn-primary">Save</button>
+{% import "_form.html" as f %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span>{% if c %}<a href="/customers/{{ c.id }}">{{ c.name }}</a><span aria-hidden="true">›</span><span>Edit</span>{% else %}<span>New</span>{% endif %}</p>
+    <h1 class="h1">{{ "Edit customer" if c else "New customer" }}</h1>
+    {% if not c %}<p class="lede">Add their property and pool next, from the customer page.</p>{% endif %}
+  </div>
+</header>
+<form method="post" class="formwrap stack">
+  {% call f.group("Customer", "Who they are and how to reach them.") %}
+    {% call f.row("Name", "As it appears on invoices and the portal.", "c-name") %}<input id="c-name" name="name" value="{{ c.name if c else '' }}" required class="inp">{% endcall %}
+    {% call f.row("QuickBooks name", "Leave blank to use the name above.", "c-qb") %}<input id="c-qb" name="qb_display_name" value="{{ c.qb_display_name if c else '' }}" class="inp">{% endcall %}
+    {% call f.row("Phone", "", "c-phone") %}<input id="c-phone" type="tel" name="phone" value="{{ c.phone if c else '' }}" class="inp num">{% endcall %}
+    {% call f.row("Email", "Invoices, visit summaries and signing requests go here.", "c-email") %}<input id="c-email" type="email" name="email" value="{{ c.email if c else '' }}" class="inp">{% endcall %}
+    {% call f.row("Visit emails", "Send a summary with the readings after each visit.") %}{{ f.switch("notify_email", "Email visit notifications", c and c.notify_email) }}{% endcall %}
+    {% call f.row("Notes", "For the office. Technicians see property notes, not these.", "c-notes") %}<textarea id="c-notes" name="notes" class="inp">{{ c.notes if c else "" }}</textarea>{% endcall %}
+  {% endcall %}
+  {{ f.savebar("Save customer" if c else "Create customer", cancel=("/customers/%d"|format(c.id)) if c else "/customers") }}
 </form>
 
 {% if c %}
-<form method="post" action="/customers/{{ c.id }}/deactivate" class="mt-3">
-  <button class="btn-danger">Deactivate customer</button>
+<form method="post" action="/customers/{{ c.id }}/deactivate" class="danger-zone formwrap" data-confirm="Deactivate {{ c.name }}? They drop off routes and lists; you can reactivate them later.">
+  <div><b>Deactivate customer</b><p class="muted small">Takes them off routes and the customer list. History and invoices are kept.</p></div>
+  <button class="btn danger">Deactivate customer</button>
 </form>
 {% endif %}
 {% endblock %}

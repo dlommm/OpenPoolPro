@@ -1,0 +1,4 @@
+{#- Light/dark and the person's display choices (density, text size, motion)
+    before first paint, from localStorage on this device; light/dark falls back
+    to the device setting. -#}
+<script nonce="{{ csp_nonce() }}">(function(){var d=document.documentElement,q=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)');function m(){try{return localStorage.getItem('mode')}catch(e){return null}}function a(){var v=m(),k=v==='dark'||(v!=='light'&&!!(q&&q.matches));d.classList.toggle('dark',k);d.classList.toggle('light',!k)}a();try{var P={dens:{compact:'dens-compact'},txt:{lg:'txt-lg',xl:'txt-xl'},mot:{reduced:'mot-reduced'}};for(var k in P){var v=localStorage.getItem(k);if(P[k][v])d.classList.add(P[k][v])}}catch(e){}window.__applyMode=a;if(q&&q.addEventListener)q.addEventListener('change',a)})();</script>

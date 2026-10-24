@@ -78,6 +78,7 @@
   "customers": [
     "active",
     "created_at",
+    "deactivated_at",
     "email",
     "id",
     "name",
@@ -113,6 +114,7 @@
     "body",
     "created_at",
     "customer_id",
+    "html",
     "id",
     "last_error",
     "sent_at",
@@ -476,6 +478,7 @@
     "id",
     "manage_customers",
     "mark_cash",
+    "must_change_password",
     "name",
     "password_hash",
     "role",

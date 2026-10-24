@@ -145,6 +145,7 @@ INDEXES = [
 
 COLUMNS = {
     "users": [
+        ("must_change_password", "BOOLEAN DEFAULT 0"),
         ("username", "VARCHAR(40)"),
         ("active", "BOOLEAN DEFAULT 1"),
         ("view_money", "BOOLEAN DEFAULT 0"),
@@ -197,7 +198,7 @@ COLUMNS = {
         ("reorder_point", "REAL"),
         ("reorder_qty", "REAL"),
     ],
-    "customers": [("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0"),
+    "customers": [("deactivated_at", "DATETIME"), ("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0"),
                   ("qbo_customer_id", "VARCHAR(40) DEFAULT ''"),
                   ("qbo_customer_scope", "VARCHAR(100) DEFAULT ''")],
     "equipment": [("warranty_end", "DATE")],
@@ -219,6 +220,7 @@ COLUMNS = {
         ("sign_viewed_at", "DATETIME"),
         ("signed_pdf_hash", "VARCHAR(64) DEFAULT ''"),
     ],
+    "email_outbox": [("html", "TEXT DEFAULT ''")],
 }
 
 

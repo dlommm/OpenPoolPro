@@ -2,44 +2,46 @@
 {% block title %}Search{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Search", "Customers & properties") }}
+{% set is_admin = request.state.user.role == "admin" %}
+{% set found = customers or properties or jobs or invoices %}
+<header class="ph">
+  <div>
+    <h1 class="h1">Search</h1>
+    <p class="lede">{{ "Customers, properties, jobs and invoices" if is_admin else "Customers and properties" }}</p>
+  </div>
+</header>
+<form method="get" action="/search" role="search" class="search-big">
+  <label class="sr" for="s-q">Search</label>
+  <div class="unitw">{{ ui.icon("search", "search-ic") }}<input id="s-q" class="inp" type="search" name="q" value="{{ q }}" autofocus autocomplete="off"
+    placeholder="{{ 'Customer, street, phone, job or invoice number' if is_admin else 'Customer, street or phone' }}"></div>
+</form>
 
-{% if q %}
-{% if customers or properties %}
-{% if customers %}
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Customers</h2>
-<div class="rise mb-5 space-y-2">
-  {% for c in customers %}
-  <a href="/customers/{{ c.id }}" class="card p-3.5">
-    <div class="font-semibold">{{ c.name }}</div>
-    {% if c.phone %}<div class="mt-1 font-data text-sm text-mist">{{ c.phone }}</div>{% endif %}
-    {% if c.email %}<div class="font-data text-sm text-mist">{{ c.email }}</div>{% endif %}
-  </a>
-  {% endfor %}
+{% if q and found %}
+<div class="cols c2" style="margin-top:var(--gap)">
+  {% if customers %}
+  <section class="card"><div class="card-h"><h2 class="card-t">Customers</h2><span class="muted small num">{{ customers|length }}</span></div>
+    <div class="rows">{% for c in customers %}<a class="rowbtn" href="/customers/{{ c.id }}"><div class="who">{{ ui.av(c.name) }}<div><span class="nm strong">{{ c.name }}</span><span class="sub">{{ c.phone }}{% if c.phone and c.email %} · {% endif %}{{ c.email }}</span></div></div>{{ ui.icon("next", "muted") }}</a>{% endfor %}</div>
+  </section>
+  {% endif %}
+  {% if properties %}
+  <section class="card"><div class="card-h"><h2 class="card-t">Properties</h2><span class="muted small num">{{ properties|length }}</span></div>
+    <div class="rows">{% for p in properties %}<a class="rowbtn" href="/customers/{{ p.customer.id }}"><div><span class="nm strong">{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</span><span class="sub">{{ p.address }}</span></div>{{ ui.icon("next", "muted") }}</a>{% endfor %}</div>
+  </section>
+  {% endif %}
+  {% if jobs %}
+  <section class="card"><div class="card-h"><h2 class="card-t">Service jobs</h2><span class="muted small num">{{ jobs|length }}</span></div>
+    <div class="rows">{% for j in jobs %}<a class="rowbtn" href="/jobs/{{ j.id }}"><div><span class="nm strong">{{ j.title }}</span><span class="sub">{{ j.property.customer.name }} · {{ j.status | capitalize }}</span></div>{{ ui.pill(j.status | capitalize, "pos" if j.status == "done" else ("acc" if j.status == "scheduled" else "neu")) }}</a>{% endfor %}</div>
+  </section>
+  {% endif %}
+  {% if invoices %}
+  <section class="card"><div class="card-h"><h2 class="card-t">Invoices</h2><span class="muted small num">{{ invoices|length }}</span></div>
+    <div class="rows">{% for i in invoices %}<a class="rowbtn" href="/invoices?ym={{ "%d-%02d"|format(i.period_year, i.period_month) }}#inv-{{ i.id }}"><div><span class="nm strong">{{ i.number }}</span><span class="sub">{{ i.customer.name }} · {{ "%d-%02d"|format(i.period_year, i.period_month) | month_name }}</span></div><span class="num">{{ i.total_cents | dollars }}</span></a>{% endfor %}</div>
+  </section>
+  {% endif %}
 </div>
-{% endif %}
-
-{% if properties %}
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Properties</h2>
-<div class="rise space-y-2">
-  {% for p in properties %}
-  <a href="/customers/{{ p.customer.id }}" class="card p-3.5">
-    <div class="font-semibold">{{ p.customer.name }} — {{ p.label }}</div>
-    <div class="mt-1 text-sm text-mist">{{ p.address }}</div>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
+{% elif q %}
+<div class="empty" style="margin-top:var(--gap)"><p class="strong" style="color:var(--t)">Nothing found</p><p>Nothing matches “{{ q }}”. Try a name, phone, email, address or label.</p></div>
 {% else %}
-<div class="card p-6 text-center">
-  <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing found</p>
-  <p class="mt-1 text-sm text-mist">Try searching by name, phone, email, address, or label.</p>
-</div>
-{% endif %}
-{% else %}
-<div class="card p-6 text-center">
-  <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing found</p>
-  <p class="mt-1 text-sm text-mist">Enter a search term to get started.</p>
-</div>
+<div class="empty" style="margin-top:var(--gap)"><p class="strong" style="color:var(--t)">Nothing found yet</p><p>Enter a search term to get started.</p></div>
 {% endif %}
 {% endblock %}

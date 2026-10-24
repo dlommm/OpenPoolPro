@@ -1,95 +1,101 @@
 {% extends "base.html" %}
 {% block title %}Route balance{% endblock %}
 {% block content %}
-<a class="btn-secondary mb-3" href="/routes/plan">Plan stop order</a>
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Field power", "Route balance") }}
-<p class="mb-4 text-sm text-mist">Balances across techs — properties assigned to an admin/owner or a disabled tech are left as-is.</p>
+<header class="ph">
+  <div><h1 class="h1">Balance assignments</h1><p class="lede">Stops per weekday and person, unassigned stops with a suggested technician, and the balancer's greedy proposal. Stops held by an owner are placed by hand and never moved.</p></div>
+  <div class="acts"><a class="btn" href="/routes/plan">{{ ui.icon("map") }}Route planner</a></div>
+</header>
 
 {% if banner %}
-<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">{{ banner }}</div>
+<div class="flash" role="status">{{ ui.icon("check", "ic18") }}{{ banner }}</div>
 {% endif %}
 
-<div class="card mb-4 overflow-x-auto p-4">
-  <table class="w-full text-sm">
+<section class="card sx-g" aria-labelledby="rb-t">
+  <div class="sx-gh"><div><h2 class="card-t" id="rb-t">Recurring stops by weekday</h2><p class="muted small">Every scheduled property counted once per weekday. Balancing spreads stops across technicians only; an owner's column is set by hand and a disabled technician's stops are left as they are.</p></div></div>
+  <div class="tblw rb-wrap"><table class="tbl rb-grid num">
     <thead>
-      <tr class="border-b border-seam text-left text-mist">
-        <th class="py-1.5 pr-3 font-medium">Weekday</th>
-        {% for t in techs %}<th class="py-1.5 pr-3 font-medium">{{ t.name | initials }}</th>{% endfor %}
-        <th class="py-1.5 font-medium">Unassigned</th>
+      <tr>
+        <th>Weekday</th>
+        {% for t in techs %}<th class="r"><span class="rb-ch" title="{{ t.name }}">{{ ui.av(t.name) }}{{ t.name }}</span></th>{% endfor %}
+        {% for o in owners %}<th class="r rb-own"><span class="rb-ch" title="{{ o.name }}, set by hand">{{ ui.av(o.name) }}{{ o.name }} · by hand</span></th>{% endfor %}
+        <th class="r"><span class="rb-ch"><span class="av rb-none" aria-hidden="true">–</span>Unassigned</span></th>
       </tr>
     </thead>
-    <tbody class="font-data">
+    <tbody>
       {% for wd in range(7) %}
-      <tr class="border-b border-seam/60">
-        <td class="py-1.5 pr-3 font-body">{{ weekday_names[wd] }}</td>
-        {% for t in techs %}<td class="py-1.5 pr-3">{{ matrix[wd].get(t.id, 0) }}</td>{% endfor %}
-        <td class="py-1.5 {{ 'text-safety' if matrix[wd].get(None, 0) else '' }}">{{ matrix[wd].get(None, 0) }}</td>
+      <tr>
+        <td>{{ weekday_names[wd] }}</td>
+        {% for t in techs %}{% set n = matrix[wd].get(t.id, 0) %}<td class="r"><span class="rb-cell {{ 'zero' if not n else 'rb-h%d' % ((n / peak * 4) | round(0, 'ceil') | int) }}">{{ n }}</span></td>{% endfor %}
+        {% for o in owners %}<td class="r"><span class="rb-cell muted">{{ matrix[wd].get(o.id, 0) }}</span></td>{% endfor %}
+        {% set u = matrix[wd].get(None, 0) %}<td class="r"><span class="rb-cell {{ 'neg' if u else 'zero' }}">{{ u }}</span></td>
       </tr>
       {% endfor %}
     </tbody>
-  </table>
-</div>
+  </table></div>
+</section>
 
-{% for wd in range(7) %}
-{% if unassigned_by_weekday.get(wd) %}
-<div class="card mb-4 p-4">
-  <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">{{ weekday_names[wd] }} — unassigned</h2>
-  <div class="space-y-2">
-    {% for p in unassigned_by_weekday[wd] %}
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-seam/60 py-1.5 text-sm">
-      <span>{{ p.customer.name }} — {{ p.label }}</span>
-      {% if suggested_by_weekday.get(wd) %}
+{% if unassigned_by_weekday %}
+<section class="card sx-g" aria-labelledby="rb-u">
+  <div class="sx-gh"><div><h2 class="card-t" id="rb-u">No technician yet</h2><p class="muted small">The suggestion is whoever already covers most of that day, or the lightest route. Choose an owner here to give them the stop by hand.</p></div></div>
+  {% for wd in range(7) %}{% for p in unassigned_by_weekday.get(wd, []) %}
+  <div class="sx-r">
+    <div class="sx-l"><span class="sx-lab">{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</span><p class="sx-help">{{ weekday_names[wd] }}</p></div>
+    <div class="sx-c"><div class="row">
+      {% set sug = suggested_by_weekday.get(wd) %}
+      {% if sug %}
       <form method="post" action="/routes/assign">
         <input type="hidden" name="property_id" value="{{ p.id }}">
-        <input type="hidden" name="tech_id" value="{{ suggested_by_weekday[wd] }}">
-        <button class="btn-secondary px-2 text-xs">Assign to {{ tech_by_id[suggested_by_weekday[wd]].name | initials }}</button>
+        <input type="hidden" name="tech_id" value="{{ sug }}">
+        <button class="btn pri sm">Assign to {{ tech_by_id[sug].name }}</button>
       </form>
       {% endif %}
-    </div>
-    {% endfor %}
+      {% set others = people | rejectattr("id", "equalto", sug) | list %}
+      {% if others %}
+      <form method="post" action="/routes/assign" class="row rb-other">
+        <input type="hidden" name="property_id" value="{{ p.id }}">
+        <label class="sr" for="rb-o{{ p.id }}">Give {{ p.customer.name }} to someone else</label>
+        <select class="inp" id="rb-o{{ p.id }}" name="tech_id" required>
+          <option value="">{{ "Someone else…" if sug else "Choose a person…" }}</option>
+          {% for o in others %}<option value="{{ o.id }}">{{ o.name }}{% if o.role == "admin" %} · by hand{% endif %}</option>{% endfor %}
+        </select>
+        <button class="btn sm">Assign</button>
+      </form>
+      {% endif %}
+    </div></div>
   </div>
-</div>
+  {% endfor %}{% endfor %}
+</section>
 {% endif %}
-{% endfor %}
 
 {% if techs %}
-<div class="card mb-4 p-4">
-  <div class="flex flex-wrap items-center gap-2">
-    <a href="/routes/balance?preview=1" class="btn-secondary">Preview balance</a>
-    {% if preview %}
-    <form method="post" action="/routes/apply"><button class="btn-primary">Apply balance</button></form>
-    {% endif %}
-  </div>
-
+<section class="card sx-g" aria-labelledby="rb-b">
+  <div class="sx-gh"><div><h2 class="card-t" id="rb-b">Even out the routes</h2><p class="muted small">Unassigned stops go to the lightest technician first; then any technician over their share hands their last stops to the lightest one. Owners are never given or relieved of stops here. Preview before anything moves.</p></div>
+    <a href="/routes/balance?preview=1" class="btn">Preview balance</a></div>
   {% if preview %}
-  <div class="mt-3 overflow-x-auto">
     {% if moves %}
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-seam text-left text-mist">
-          <th class="py-1.5 pr-3 font-medium">Weekday</th>
-          <th class="py-1.5 pr-3 font-medium">Property</th>
-          <th class="py-1.5 pr-3 font-medium">From</th>
-          <th class="py-1.5 font-medium">To</th>
-        </tr>
-      </thead>
-      <tbody class="font-data">
+    <div class="tblw rb-wrap"><table class="tbl">
+      <thead><tr><th>Weekday</th><th>Stop</th><th>From</th><th>To</th></tr></thead>
+      <tbody>
         {% for wd, p, from_id, to_id in moves %}
-        <tr class="border-b border-seam/60">
-          <td class="py-1.5 pr-3 font-body">{{ weekday_names[wd] }}</td>
-          <td class="py-1.5 pr-3 font-body">{{ p.customer.name }} — {{ p.label }}</td>
-          <td class="py-1.5 pr-3">{{ tech_by_id[from_id].name | initials if from_id in tech_by_id else "Unassigned" }}</td>
-          <td class="py-1.5">{{ tech_by_id[to_id].name | initials }}</td>
+        <tr>
+          <td>{{ weekday_names[wd] }}</td>
+          <td>{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</td>
+          <td class="muted">{{ tech_by_id[from_id].name if from_id in tech_by_id else "Unassigned" }}</td>
+          <td class="strong">{{ tech_by_id[to_id].name }}</td>
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
+    <div class="row rb-apply">
+      <form method="post" action="/routes/apply"><button class="btn pri">Apply balance</button></form>
+      <span class="muted small">{{ moves|length }} move{{ "s" if moves|length != 1 }}. Recorded in the audit log.</span>
+    </div>
     {% else %}
-    <p class="text-sm text-mist">Already balanced — no moves needed.</p>
+    <p class="muted rb-apply">Already balanced — no moves needed.</p>
+    <div class="row rb-apply"><form method="post" action="/routes/apply"><button class="btn pri">Apply balance</button></form></div>
     {% endif %}
-  </div>
   {% endif %}
-</div>
+</section>
 {% endif %}
 {% endblock %}

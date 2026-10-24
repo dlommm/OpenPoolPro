@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
-{% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Business settings", "Settings") }}
+<header class="ph">
+  <div><h1 class="h1">Admin</h1><p class="lede">Company, field, people and access, connections and system settings in one place.</p></div>
+</header>
 
 {% set role_labels = {
   "chlorine_liquid": "Liquid chlorine", "chlorine_granular": "Granular / shock",
@@ -12,16 +13,16 @@
   "other": "Other" } %}
 
 {# ---- global feedback banners (visible on any tab) ---- #}
-{% if backup_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
-{% if backup_sync_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+{% if backup_error %}<p class="flash neg">Backup failed: {{ backup_error }}</p>{% endif %}
+{% if backup_sync_error %}<p class="flash neg">
   Off-box backup sync failed ({{ backup_sync_error }}). The local snapshot succeeded, but the copy
   that would survive a dead disk did not — check BACKUP_SYNC_CMD.</p>{% endif %}
-{% if backup_stale %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+{% if backup_stale %}<p class="flash neg">
   No successful backup in the last 36 hours{{ " (last: " ~ backup_at ~ ")" if backup_at }}.
   A backup that has quietly stopped looks exactly like one that works, until you need it.</p>{% endif %}
-{% if rules_created is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
-{% if mail_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>{% endif %}
-{% if mail_result is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}
+{% if rules_created is not none %}<div class="flash">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
+{% if mail_error %}<p class="flash neg">Enter a valid email address.</p>{% endif %}
+{% if mail_result is not none %}<div class="flash">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}
 
 <div class="settabs">
   <input class="tab-radio" type="radio" name="settab" id="settab-business" checked>
@@ -32,14 +33,24 @@
   <input class="tab-radio" type="radio" name="settab" id="settab-system">
   <input class="tab-radio" type="radio" name="settab" id="settab-contract">
 
-  <nav class="tabnav" role="tablist" aria-label="Settings sections">
-    <label class="tab-label" for="settab-business">Business</label>
-    <label class="tab-label" for="settab-pricing">Pricing</label>
-    <label class="tab-label" for="settab-chemistry">Chemistry</label>
-    <label class="tab-label" for="settab-service">Service</label>
-    <label class="tab-label" for="settab-crew">Crew</label>
-    <label class="tab-label" for="settab-system">System</label>
-    <label class="tab-label" for="settab-contract">Contract</label>
+  <nav class="tabnav" aria-label="Admin sections">
+    <div class="setnav-g">Company</div>
+    <label class="tab-label" for="settab-business">{{ ui.icon("home") }}Business</label>
+    <label class="tab-label" for="settab-pricing">{{ ui.icon("tag") }}Pricing</label>
+    <label class="tab-label" for="settab-contract">{{ ui.icon("pen") }}Contract</label>
+    <div class="setnav-g">Field</div>
+    <label class="tab-label" for="settab-chemistry">{{ ui.icon("drop") }}Chemistry</label>
+    <label class="tab-label" for="settab-service">{{ ui.icon("wrench") }}Service</label>
+    <div class="setnav-g">People and access</div>
+    <label class="tab-label" for="settab-crew">{{ ui.icon("users") }}Crew</label>
+    <a class="tab-label" href="/users">{{ ui.icon("shield") }}Crew and permissions</a>
+    <a class="tab-label" href="/audit">{{ ui.icon("log") }}Audit log</a>
+    <div class="setnav-g">System</div>
+    <label class="tab-label" for="settab-system">{{ ui.icon("gear") }}Connections and system</label>
+    <a class="tab-label" href="/testers">{{ ui.icon("drop") }}Water testers</a>
+    <a class="tab-label" href="/operations">{{ ui.icon("pulse") }}Operations health</a>
+    <a class="tab-label" href="/settings/logs">{{ ui.icon("log") }}Logs</a>
+    <a class="tab-label" href="/settings/about">{{ ui.icon("cog") }}About and updates</a>
   </nav>
 
   <div class="tab-panels">
@@ -352,19 +363,63 @@
           </form>
         </div>
 
-        <div class="card p-4">
-          <h2 class="set-h">Water targets</h2>
-          <p class="mb-3 text-sm text-mist">The ideal readings the dose calculator aims for.</p>
-          <form method="post" action="/settings/targets" class="space-y-3">
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-              {% for key, label in [("target_fc","Free Chlorine"),("target_ph","pH"),("target_ta","Total Alkalinity"),("target_cya","Cyanuric Acid"),("target_salt","Salt")] %}
-              <label class="block text-center"><span class="field-label leading-tight">{{ label }}</span>
-                <input inputmode="decimal" name="{{ key }}" value="{{ targets[key] }}" class="field text-center font-data"></label>
+        <section class="card lg:col-span-2" id="chem-targets" aria-labelledby="ct-t">
+          <div class="card-h"><div><h2 class="card-t" id="ct-t">Chemistry targets and bands</h2>
+            <p class="muted small">The target is where you want each reading; the band is how far it may drift before anything happens.</p></div>
+            <form method="post" action="/settings/targets"><input type="hidden" name="reset" value="1"><button class="btn sm ghost">Reset to defaults</button></form></div>
+          {% if chem_saved == "saved" %}<p class="flash" role="status">Targets and bands saved. The visit screen, dose suggestions and water alerts now use them.</p>
+          {% elif chem_saved == "reset" %}<p class="flash" role="status">Back to the default targets and bands.</p>{% endif %}
+          {% if chem_targets | selectattr("rejected") | list %}<p class="flash neg" role="alert">Some rows were outside the allowed limits and kept their previous values.</p>{% endif %}
+          <form method="post" action="/settings/targets" data-chem-form>
+            <div class="chem">
+              {% for row in chem_targets %}{% set sp = row.spec %}
+              {% set span = sp.hi - sp.lo %}
+              {% set pc_lo = ((([row.target - row.band, sp.lo] | max) - sp.lo) / span * 100) | round(1) %}
+              {% set pc_hi = ((([row.target + row.band, sp.hi] | min) - sp.lo) / span * 100) | round(1) %}
+              {% set fmt = "%." ~ sp.decimals ~ "f" %}
+              <div class="chem-r {{ 'bad' if row.rejected }}" data-chem-row data-lo="{{ sp.lo }}" data-hi="{{ sp.hi }}" data-bmin="{{ sp.band_min }}" data-bmax="{{ sp.band_max }}" data-dec="{{ sp.decimals }}">
+                <div class="chem-n"><b>{{ sp.label }}</b><span class="muted small">{{ sp.unit }}{% if sp.key == "salt" %} · salt pools only{% endif %}</span></div>
+                <div><label class="lbl" for="tg-{{ sp.key }}">Target</label><input id="tg-{{ sp.key }}" class="inp amt num" type="text" inputmode="decimal" name="target_{{ sp.key }}" value="{{ fmt | format(row.target) }}" data-t></div>
+                <div><label class="lbl" for="tb-{{ sp.key }}">Band ±</label><input id="tb-{{ sp.key }}" class="inp amt num" type="text" inputmode="decimal" name="band_{{ sp.key }}" value="{{ '%g' | format(row.band) }}" data-b></div>
+                <div class="chem-s">
+                  <div class="scale" aria-hidden="true"><div class="trk"></div><div class="band" style="left:{{ pc_lo }}%;width:{{ (pc_hi - pc_lo) | round(1) }}%" data-band></div><div class="tgt" style="left:{{ (((row.target - sp.lo) / span) * 100) | round(1) }}%" data-tgt></div></div>
+                  <div class="scale-ax"><span>{{ '%g' | format(sp.lo) }}</span><span class="strong" data-range>In range {{ fmt | format(row.target - row.band) }}–{{ fmt | format(row.target + row.band) }}</span><span>{{ '%g' | format(sp.hi) }}</span></div>
+                  <p class="err" data-err {{ 'hidden' if not row.rejected }}>{% if row.rejected %}Outside the allowed limits: target {{ '%g' | format(sp.lo) }}–{{ '%g' | format(sp.hi) }}, band ±{{ '%g' | format(sp.band_min) }} to ±{{ '%g' | format(sp.band_max) }}.{% endif %}</p>
+                  {% if row.target != sp.target or row.band != sp.band %}<p class="muted small">Default: {{ fmt | format(sp.target) }} ± {{ '%g' | format(sp.band) }}</p>{% endif %}
+                </div>
+              </div>
               {% endfor %}
             </div>
-            <button class="btn-secondary w-full">Save targets</button>
+            <div class="note" style="margin-top:16px">{{ ui.icon("drop", "ic18") }}<div>Dose suggestions start only outside the band, and water alerts flag readings outside it. Both read this one setting. Changes apply to new suggestions and alerts; past visits keep their readings.</div></div>
+            <div class="row" style="margin-top:14px"><button class="btn pri">Save targets and bands</button></div>
           </form>
-        </div>
+        </section>
+        <script nonce="{{ csp_nonce() }}">
+        (function () {
+          document.querySelectorAll("[data-chem-row]").forEach(function (row) {
+            var lo = +row.dataset.lo, hi = +row.dataset.hi, bmin = +row.dataset.bmin, bmax = +row.dataset.bmax, dec = +row.dataset.dec;
+            var t = row.querySelector("[data-t]"), b = row.querySelector("[data-b]");
+            var band = row.querySelector("[data-band]"), tgt = row.querySelector("[data-tgt]");
+            var range = row.querySelector("[data-range]"), err = row.querySelector("[data-err]");
+            function pc(x) { return (Math.max(lo, Math.min(hi, x)) - lo) / (hi - lo) * 100; }
+            function update() {
+              var v = parseFloat(t.value), w = parseFloat(b.value), msg = "";
+              if (!isFinite(v)) msg = "Enter a number for the target.";
+              else if (v < lo || v > hi) msg = "Keep the target between " + lo + " and " + hi + ".";
+              else if (!isFinite(w)) msg = "Enter a number for the band.";
+              else if (w < bmin || w > bmax) msg = "Keep the band between ±" + bmin + " and ±" + bmax + "; outside that, doses would be suggested too often or not at all.";
+              else if (v - w < lo) msg = "The band reaches below " + lo + ".";
+              row.classList.toggle("bad", !!msg);
+              err.hidden = !msg; err.textContent = msg;
+              if (msg) { band.style.display = "none"; range.textContent = "In range —"; return; }
+              band.style.display = ""; band.style.left = pc(v - w) + "%"; band.style.width = (pc(v + w) - pc(v - w)) + "%";
+              tgt.style.left = pc(v) + "%";
+              range.textContent = "In range " + (v - w).toFixed(dec) + "–" + (v + w).toFixed(dec);
+            }
+            t.addEventListener("input", update); b.addEventListener("input", update);
+          });
+        })();
+        </script>
       </div>
     </section>
 
@@ -775,31 +830,135 @@
 
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Appearance</h2>
-          <p class="mb-3 text-sm text-mist">Pick a theme — applies to the whole app, for everyone.</p>
+          <p class="mb-3 text-sm text-mist">One theme, Aqua Atelier, in light and dark (each person picks light or dark from the menu). These choices apply to everyone.</p>
           <form method="post" action="/settings/appearance" class="space-y-3">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {% for value, label, desc in [
-                ("warm-coastal","Warm Coastal","Sand & water, friendly"),
-                ("control-room","Control Room","Dark, high-contrast"),
-                ("fresh-field","Fresh Field","Bright & clean")] %}
-              <label class="group block cursor-pointer overflow-hidden rounded-xl border-2 border-seam transition has-[:checked]:border-pool has-[:checked]:shadow-card">
-                <input type="radio" name="active_theme" value="{{ value }}" class="sr-only" {{ "checked" if active_theme == value }}>
-                <div class="relative">
-                  <img src="/static/themes/{{ value }}.png" alt="{{ label }} theme preview"
-                       class="block h-32 w-full border-b border-seam object-cover object-left-top" loading="lazy">
-                  <div class="absolute right-2 top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-pool group-has-[:checked]:flex">
-                    <svg viewBox="0 0 20 20" class="h-3 w-3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between gap-2 border-t border-seam px-3 py-2">
-                  <span class="font-display text-sm font-bold uppercase tracking-wide text-ink">{{ label }}</span>
-                  <span class="truncate text-xs text-mist">{{ desc }}</span>
-                </div>
+            <span class="field-label">Colour palette</span>
+            <p class="muted small" style="margin:0">Light and dark versions are worked out from one colour, and every colour is checked for readable contrast. Chart colours stay the same so they remain readable for colour-blind people.</p>
+            <div class="pals" role="radiogroup" aria-label="Colour palette">
+              {% for p in palette_cards %}
+              <label class="pal {{ 'on' if p.on }}"><input type="radio" name="palette" value="{{ p.key }}" class="sr-only" {{ "checked" if p.on }}>
+                <svg viewBox="0 0 200 112" aria-hidden="true"><defs><linearGradient id="pg-{{ p.key }}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{ p.v['--mast-a'] }}"/><stop offset="1" stop-color="{{ p.v['--mast-c'] }}"/></linearGradient><linearGradient id="ph-{{ p.key }}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{ p.v['--hero-a'] }}"/><stop offset="1" stop-color="{{ p.v['--hero-c'] }}"/></linearGradient></defs>
+                  <rect width="200" height="112" rx="10" fill="{{ p.v['--g'] }}"/><path d="M10 0h180a10 10 0 0 1 10 10v30H0V10A10 10 0 0 1 10 0z" fill="url(#pg-{{ p.key }})"/>
+                  <rect x="12" y="11" width="10" height="10" rx="3" fill="#FFFFFF" opacity=".9"/><rect x="28" y="13" width="22" height="6" rx="3" fill="#FFFFFF"/><rect x="54" y="13" width="18" height="6" rx="3" fill="#FFFFFF" opacity=".45"/><rect x="76" y="13" width="18" height="6" rx="3" fill="#FFFFFF" opacity=".45"/><rect x="150" y="12" width="38" height="8" rx="4" fill="#FFFFFF" opacity=".2"/>
+                  <rect x="10" y="30" width="180" height="76" rx="7" fill="{{ p.v['--sheet'] }}"/>
+                  <rect x="18" y="38" width="94" height="42" rx="6" fill="url(#ph-{{ p.key }})"/><rect x="24" y="44" width="26" height="6" rx="3" fill="#FFD166"/><rect x="24" y="56" width="58" height="7" rx="3" fill="#FFFFFF"/><rect x="24" y="67" width="38" height="5" rx="2.5" fill="#FFFFFF" opacity=".6"/>
+                  <rect x="122" y="66" width="10" height="14" rx="2" fill="{{ p.v['--a'] }}" opacity=".45"/><rect x="137" y="56" width="10" height="24" rx="2" fill="{{ p.v['--a'] }}" opacity=".45"/><rect x="152" y="48" width="10" height="32" rx="2" fill="{{ p.v['--a'] }}" opacity=".45"/><rect x="167" y="40" width="10" height="40" rx="2" fill="{{ p.v['--a'] }}"/>
+                  <rect x="18" y="88" width="40" height="11" rx="5.5" fill="{{ p.v['--a'] }}"/><rect x="62" y="88" width="34" height="11" rx="5.5" fill="{{ p.v['--as'] }}"/><rect x="122" y="88" width="56" height="4" rx="2" fill="{{ p.v['--b'] }}"/><rect x="122" y="95" width="40" height="4" rx="2" fill="{{ p.v['--b'] }}"/>
+                </svg>
+                <span class="pal-t"><b>{{ p.name }}</b><small>{{ p.desc }}</small></span>
+                <span class="pal-sw" aria-hidden="true">{% for c in [p.v['--mast-a'], p.v['--mast-c'], p.v['--a'], p.v['--as'], p.v['--hero-c']] %}<i style="background:{{ c }}"></i>{% endfor %}</span>
               </label>
+              {% endfor %}
+            </div>
+            <div class="pick">
+              <label class="lbl" for="pal-c">Your colour</label>
+              <div class="row" style="flex-wrap:nowrap"><input id="pal-c" class="colorin" type="color" value="{{ appearance.palette_custom }}" data-pal-color aria-label="Pick a colour">
+                <input class="inp mono" style="width:120px" type="text" name="palette_custom" value="{{ appearance.palette_custom }}" aria-label="Hex colour" pattern="#?[0-9A-Fa-f]{6}" data-pal-hex></div>
+              <p class="help">{% if palette_custom_fix %}Text and links use {{ palette_custom_fix }}, a deeper shade of your colour, so they stay readable.{% else %}Pick “Your colour” above to use it.{% endif %}</p>
+            </div>
+            <span class="field-label">Navigation layout (desktop; tablets and phones always use the top bar)</span>
+            <div class="layopts">
+              {% for value, label, desc in [("top", "Top bar", "Group tabs in the deep-water masthead, the page floating over it."),
+                                            ("side", "Sidebar", "Every page listed down the left, grouped.")] %}
+              <label class="layopt {{ 'on' if appearance.nav_layout == value }}"><input type="radio" name="nav_layout" value="{{ value }}" class="sr-only" {{ "checked" if appearance.nav_layout == value }}>
+                <svg viewBox="0 0 120 70" aria-hidden="true">{% if value == "top" %}<rect class="lo-g" x="0" y="0" width="120" height="70" rx="6"/><rect class="lo-m" x="0" y="0" width="120" height="26" rx="6"/><rect class="lo-hi" x="30" y="8" width="16" height="6" rx="3"/><rect class="lo-dim" x="50" y="8" width="14" height="6" rx="3"/><rect class="lo-dim" x="68" y="8" width="14" height="6" rx="3"/><rect class="lo-s" x="8" y="20" width="104" height="46" rx="5"/><rect class="lo-a" x="16" y="30" width="34" height="5" rx="2"/><rect class="lo-d2" x="16" y="40" width="88" height="4" rx="2"/><rect class="lo-d2" x="16" y="48" width="70" height="4" rx="2"/>{% else %}<rect class="lo-g" x="0" y="0" width="120" height="70" rx="6"/><rect class="lo-a" x="8" y="10" width="22" height="5" rx="2"/><rect class="lo-d2" x="8" y="20" width="22" height="4" rx="2"/><rect class="lo-d2" x="8" y="28" width="22" height="4" rx="2"/><rect class="lo-d2" x="8" y="36" width="22" height="4" rx="2"/><rect class="lo-s" x="36" y="6" width="78" height="58" rx="5"/><rect class="lo-a" x="44" y="14" width="30" height="5" rx="2"/><rect class="lo-d2" x="44" y="24" width="62" height="4" rx="2"/>{% endif %}</svg>
+                <span class="lo-t"><b>{{ label }}</b><small>{{ desc }}</small></span></label>
+              {% endfor %}
+            </div>
+            <span class="field-label">Masthead</span>
+            <div class="opt3">
+              {% for value, label, desc, sw in [("lit", "Lit water", "Slow light drifting across the water.", "sw-lit"), ("still", "Still", "The same water, no motion.", "sw-still"), ("solid", "Solid", "One flat colour.", "sw-solid")] %}
+              <label class="opt {{ 'on' if appearance.header_style == value }}"><input type="radio" name="header_style" value="{{ value }}" class="sr-only" {{ "checked" if appearance.header_style == value }}><span class="opt-sw {{ sw }}"></span><b>{{ label }}</b><small>{{ desc }}</small></label>
               {% endfor %}
             </div>
             <button class="btn-secondary w-full">Save appearance</button>
           </form>
+          <script nonce="{{ csp_nonce() }}">
+          (function () {
+            var c = document.querySelector("[data-pal-color]"), h = document.querySelector("[data-pal-hex]");
+            if (!c || !h) return;
+            var custom = document.querySelector('input[name="palette"][value="custom"]');
+            c.addEventListener("input", function () { h.value = c.value.toUpperCase(); if (custom) custom.checked = true; });
+            h.addEventListener("input", function () { var v = h.value.trim(); if (v[0] !== "#") v = "#" + v; if (/^#[0-9a-fA-F]{6}$/.test(v)) { c.value = v; if (custom) custom.checked = true; } });
+          })();
+          </script>
+        </div>
+
+        <div class="card p-4 lg:col-span-2 clook" id="customer-look">
+          <h2 class="set-h">What customers see</h2>
+          <p class="mb-3 text-sm text-mist">The emails OpenPoolPro sends customers: visit summaries, invoices, reminders and signing requests.</p>
+          {% if customer_look_saved %}<p class="clook-note" role="status">Saved. New emails use these settings.</p>{% endif %}
+          {% if customer_look_error %}<p class="clook-note bad" role="alert">The sign-off is too long (up to {{ signoff_max }} characters on 6 lines), so it was not changed.</p>{% endif %}
+          <div class="clook-grid">
+            <form method="post" action="/settings/customer-look" class="clook-opts" data-clook-form>
+              <input type="hidden" name="brand" value="0">
+              <label class="chk"><input type="checkbox" name="brand" value="1" {{ "checked" if customer_look.brand }}>
+                <span><span class="strong">Use the company palette</span><span class="help">The customer portal, signing pages, email headers and buttons take your colours. Off uses the standard OpenPoolPro teal.</span></span></label>
+              <input type="hidden" name="logo" value="0">
+              <label class="chk"><input type="checkbox" name="logo" value="1" {{ "checked" if customer_look.logo }}>
+                <span><span class="strong">Show the company logo</span><span class="help">{% if company.has_logo %}Change it under Business.{% else %}No logo uploaded yet. Add one under Business.{% endif %}</span></span></label>
+              <fieldset class="clook-fmt">
+                <legend class="lbl">Email format</legend>
+                <div class="seg" role="radiogroup" aria-label="Email format">
+                  {% for value, label in [("html", "Branded"), ("plain", "Plain text")] %}
+                  <label class="{{ 'on' if customer_look.format == value }}"><input type="radio" name="format" value="{{ value }}" class="sr-only" {{ "checked" if customer_look.format == value }}>{{ label }}</label>
+                  {% endfor %}
+                </div>
+                <p class="help">Branded emails always carry a plain-text copy for mail apps that block images and styling.</p>
+              </fieldset>
+              <label class="lbl" for="clook-signoff">Sign-off</label>
+              <textarea id="clook-signoff" name="signoff" class="inp" rows="3" maxlength="{{ signoff_max }}" placeholder="{{ appearance.company or 'Your company name' }}">{{ customer_look.signoff }}</textarea>
+              <p class="help">Closes visit, invoice and reminder emails. Leave it blank to sign with the company name. Contract emails keep the wording set under Contract.</p>
+              <button class="btn-secondary w-full">Save what customers see</button>
+              <span class="lbl" style="margin-top:16px">Wording and layout</span>
+              <p class="help">Build each email from blocks: headings, text with fields, details, images and more.</p>
+              <div class="clook-links">
+                {% for k, l in [("visit", "Visit completed"), ("invoice", "Invoice"), ("reminder", "Payment reminder"), ("followup", "Follow-up reminder")] %}
+                <a class="btn sm" href="/settings/emails/{{ k }}">{{ l }}</a>
+                {% endfor %}
+              </div>
+            </form>
+            <div class="clook-prev">
+              <div class="seg" role="tablist" aria-label="Email preview">
+                {% for kind, label in email_preview_kinds %}
+                <a href="/settings/customer-look/preview/{{ kind }}" target="clook-frame" role="tab" data-clook-tab="{{ kind }}" class="{{ 'on' if loop.first }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ label }}</a>
+                {% endfor %}
+              </div>
+              <iframe name="clook-frame" class="clook-frame" title="Email preview" sandbox="" loading="lazy" referrerpolicy="no-referrer"
+                      src="/settings/customer-look/preview/{{ email_preview_kinds[0][0] }}" data-clook-frame></iframe>
+              <p class="help">A sample with made-up customers. Invoices sent through QuickBooks use QuickBooks' own email design; these settings cover the emails OpenPoolPro sends itself.</p>
+            </div>
+          </div>
+          <script nonce="{{ csp_nonce() }}">
+          (function () {
+            var form = document.querySelector("[data-clook-form]"), frame = document.querySelector("[data-clook-frame]");
+            if (!form || !frame) return;
+            var tabs = document.querySelectorAll("[data-clook-tab]"), kind = tabs.length ? tabs[0].getAttribute("data-clook-tab") : "visit", timer;
+            function src() {
+              var p = new URLSearchParams();
+              p.set("brand", form.querySelector('input[type=checkbox][name="brand"]').checked ? "1" : "0");
+              p.set("logo", form.querySelector('input[type=checkbox][name="logo"]').checked ? "1" : "0");
+              var f = form.querySelector('input[name="format"]:checked');
+              if (f) p.set("format", f.value);
+              p.set("signoff", form.querySelector('textarea[name="signoff"]').value);
+              return "/settings/customer-look/preview/" + encodeURIComponent(kind) + "?" + p.toString();
+            }
+            function refresh() { frame.src = src(); }
+            tabs.forEach(function (t) {
+              t.addEventListener("click", function (e) {
+                e.preventDefault();
+                kind = t.getAttribute("data-clook-tab");
+                tabs.forEach(function (o) { o.classList.toggle("on", o === t); o.setAttribute("aria-selected", o === t ? "true" : "false"); });
+                refresh();
+              });
+            });
+            form.addEventListener("change", function (e) {
+              if (e.target.name === "format") form.querySelectorAll(".clook-fmt label").forEach(function (l) { l.classList.toggle("on", l.contains(e.target)); });
+              refresh();
+            });
+            form.querySelector('textarea[name="signoff"]').addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(refresh, 350); });
+          })();
+          </script>
         </div>
 
         <div class="card p-4">
@@ -936,5 +1095,19 @@
     var el = e.target.closest("[data-chem-cust]");
     if (el) opChemCust(el);
   });
+</script>
+<script nonce="{{ csp_nonce() }}">
+// /settings#contract (and friends) open that section; picking a section
+// updates the hash so a reload or a shared link lands on it.
+(function () {
+  var name = (location.hash || "").slice(1);
+  var r = name && document.getElementById("settab-" + name);
+  if (r) r.checked = true;
+  document.querySelectorAll(".tab-radio").forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      try { history.replaceState(null, "", "#" + radio.id.replace("settab-", "")); } catch (e) {}
+    });
+  });
+})();
 </script>
 {% endblock %}

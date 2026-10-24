@@ -127,6 +127,6 @@ def test_dashboard_crew_counts_use_effective_tech(client, engine):
         s.commit()
     html = client.get("/dashboard").text
     import re
-    m = re.search(r'Leedash</span>\s*<span class="font-data text-sm">(\d+) stop', html, re.S)
+    m = re.search(r'data-crew="Leedash">\d+/(\d+)<', html)
     assert m and m.group(1) == "1"
     assert "Samdash" not in html  # sam's effective count is 0 -> filtered from crew

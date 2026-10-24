@@ -1,110 +1,252 @@
 {% import "_ui.html" as ui %}
-{# Contract template editor, document-style: the tab renders as the contract
-   itself. Click any section to edit it in place; data placeholders display as
-   labeled chips; the toggle swaps in the server-rendered sample preview.
+{# Contract template editor: three panes, outline | the page | inspector.
 
-   Progressive enhancement: the server emits every section in its EDIT state
-   (plain inputs/textareas that submit the same positional kind/title/body/
-   when/visible lists /settings/contract/save has always parsed), and JS then
-   collapses them into the click-to-edit document view. No JS = a working,
-   if plainer, form. #}
+   The page is the contract itself. Click any section to edit it in place;
+   data placeholders display as labeled chips; the Sample data mode swaps the
+   page for the server-rendered preview (HTMX, POST /settings/contract/preview)
+   filled with made-up values.
 
-{% macro text_block(title="", body="", when="") %}
-<section class="ct-section group relative rounded-lg" data-block data-kind="text">
-  <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
-    <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" data-ct-move="-1">↑</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" data-ct-move="1">↓</button>
-    <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-safety" title="Delete section" data-ct-delete>✕</button>
-  </div>
+   Progressive enhancement: the server emits every text section in its EDIT
+   state (plain inputs/textareas that submit the same positional kind/title/
+   body/when/visible lists /settings/contract/save has always parsed), plus a
+   working Save button and a field-code reference in the right pane. JS then
+   collapses the sections into the click-to-edit page view, builds the
+   outline's controls and moves the inspector's controls next to the selected
+   section on narrow screens. Every control that only works with JS ships
+   `hidden`; nothing without a name ever posts. No JS = a working, if plainer,
+   form. #}
+
+{% set CE_NAMES = {"parties": "Customer details", "rates": "Service rates table",
+                   "signature": "Signature lines"} %}
+{% set CE_ABOUT = {
+  "parties": "Service address, customer name and phone / email, filled in from the customer's record.",
+  "rates": "The contract's prices laid out as a table. The figures come from each contract; the wording is fixed so it always matches the PDF.",
+  "signature": "Where the customer signs. On the e-sign page this is where the signature box appears."} %}
+
+{% macro chip(label) %}<span class="ct-chip">{{ label }}</span>{% endmacro %}
+
+{% macro text_block(title="", body="", when="", n=0) %}
+<section class="ce-sec" data-block data-kind="text"{% if n %} id="ct-b-{{ n }}"{% endif %}>
   <input type="hidden" name="kind" value="text">
   <input type="hidden" name="when" value="{{ when or '' }}">
-  <div class="ct-view hidden cursor-text rounded-lg px-2 py-1.5 transition hover:bg-shallow/40" title="Click to edit"></div>
-  <div class="ct-edit space-y-2 rounded-lg border border-pool/50 bg-shallow/20 p-3">
-    <input class="field font-semibold" name="title" value="{{ title }}"
-           placeholder="Section heading (optional)">
-    <textarea class="field ct-body min-h-24 text-sm" name="body" rows="4"
-              placeholder="Write this part of the agreement. Use “Insert customer info” below to drop in details that fill themselves in. Start a line with &quot;- &quot; for a bullet.">{{ body }}</textarea>
-    <div class="flex flex-wrap items-center gap-2">
-      <select class="field w-auto text-sm" data-ct-token>
-        <option value="">Insert customer info…</option>
-        {% for token, label, group in contract_tokens %}
-        {% if loop.first or group != loop.previtem[2] %}
-        {% if not loop.first %}</optgroup>{% endif %}
-        <optgroup label="{{ group }}">
-        {% endif %}
-        <option value="{{ token }}">{{ label }}</option>
-        {% if loop.last %}</optgroup>{% endif %}
-        {% endfor %}
-      </select>
-      <select class="field w-auto text-sm" data-ct-when>
-        <option value="" {{ "selected" if not when }}>Shows on: all contracts</option>
-        <option value="includes_spa" {{ "selected" if when == "includes_spa" }}>Shows on: spa contracts only</option>
-      </select>
-      <button type="button" class="btn-secondary ml-auto px-4 py-1.5 text-sm" data-ct-done>Done</button>
-    </div>
+  <button type="button" class="ct-view" hidden aria-label="Edit this section"></button>
+  <div class="ct-edit">
+    <span class="ce-cond" data-ct-cond{% if not when %} hidden{% endif %}>Shows on spa contracts only</span>
+    <label class="lbl">Heading
+      <input class="inp" name="title" value="{{ title }}" placeholder="Optional"></label>
+    <label class="lbl">Text
+      <textarea class="inp ct-body" name="body" rows="5"
+                placeholder="Write this part of the agreement.">{{ body }}</textarea></label>
+    <p class="help">A blank line starts a new paragraph. Start a line with &quot;- &quot; for a bullet.</p>
   </div>
 </section>
 {% endmacro %}
 
-<div id="ct-root">
-  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-    <p class="text-sm text-mist"><b class="text-ink">This is your contract.</b> Click any part to
-      edit it in place — the blue chips fill in automatically from each customer's details.</p>
-    <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-      <input type="checkbox" id="ct-sample-toggle" class="h-4 w-4">
-      See it with sample data</label>
+{% macro builtin_view(kind, company) %}
+{% if kind == "parties" %}
+<div class="ce-parties">
+  <div><span>Service address</span><b>{{ chip("Property address") }}</b></div>
+  <div><span>Customer name</span><b>{{ chip("Customer name") }}</b></div>
+  <div><span>Phone / Email</span><b>{{ chip("Phone") }} / {{ chip("Email") }}</b></div>
+</div>
+{% elif kind == "rates" %}
+<table class="ce-rates">
+  <thead><tr><th>Service</th><th class="r">Rate</th></tr></thead>
+  <tbody>
+    <tr><td>Openings &amp; closings</td><td class="r">{{ chip("Open/close price") }}</td></tr>
+    <tr><td>{{ chip("Season weeks") }}-week pool service</td><td class="r">{{ chip("Weekly price") }} / week</td></tr>
+    <tr><td>Service calls / repairs</td><td class="r">{{ chip("Service-call price") }} / hour</td></tr>
+    <tr><td>Green-to-clean service</td><td class="r">{{ chip("Green-clean price") }} / hour</td></tr>
+    <tr><td>Storm cleanup</td><td class="r">{{ chip("Storm price") }} / hour</td></tr>
+  </tbody>
+</table>
+{% else %}
+<div class="ce-sig">
+  <div><span class="ce-line"></span><b>Client</b><span>Signs here</span></div>
+  <div><span class="ce-line"></span><b>{{ company.business_name or "Your company" }}</b><span>Authorised signature</span></div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro page_head(company) %}
+<header class="ce-ph">
+  {% if company.has_logo %}<img src="/branding/logo" alt="">{% endif %}
+  <div><b>{{ company.business_name or "Your company name" }}</b>
+    <span>{{ [company.company_address, company.company_phone] | select | join(" · ") or "Add your address and phone under Business info" }}</span></div>
+</header>
+{% endmacro %}
+
+{% macro palette(with_codes) %}
+<div class="ce-pal">
+  {% for token, label, group in contract_tokens %}
+  {% if loop.first or group != loop.previtem[2] %}
+  {% if not loop.first %}</div>{% endif %}
+  <span class="ce-pg">{{ group }}</span><div class="ce-chips">
+  {% endif %}
+  {% if with_codes %}
+  <span class="ce-ref"><span class="ct-chip">{{ label }}</span><code>{{ "{{" ~ token ~ "}}" }}</code></span>
+  {% else %}
+  <button type="button" class="ce-tok" data-ct-token="{{ token }}" title="Inserts {{ label | lower }}">{{ label }}</button>
+  {% endif %}
+  {% if loop.last %}</div>{% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% set company = contract_company %}
+<div id="ct-root" class="ce-ed">
+  <div class="card ce-bar">
+    <div class="ce-intro">
+      <b>This is your contract.</b>
+      <span class="muted small">Click any part of the page to edit it. Blue chips fill in from each customer's details.</span>
+    </div>
+    <div class="row ce-modes" hidden>
+      <div class="seg" role="group" aria-label="Mode">
+        <button type="button" class="on" aria-pressed="true" data-ct-mode="edit">Edit</button>
+        <button type="button" aria-pressed="false" data-ct-mode="sample">Sample data</button>
+      </div>
+    </div>
   </div>
 
-  <form method="post" action="/settings/contract/save" id="ct-form"
-        hx-post="/settings/contract/preview" hx-trigger="input delay:600ms, change delay:300ms, ct-reorder"
+  <form method="post" action="/settings/contract/save" id="ct-form" class="ce"
+        hx-post="/settings/contract/preview" hx-trigger="ct-refresh"
         hx-sync="this:replace" hx-target="#ct-preview" hx-swap="innerHTML">
-    <div id="ct-doc" class="card w-full p-6 sm:p-10 xl:px-[8%]">
-      <input class="w-full border-0 bg-transparent text-center font-display text-2xl font-bold outline-none focus:ring-2 focus:ring-pool/50"
-             name="doc_title" value="{{ contract_template.title }}" title="Document title — click to edit">
+    <input type="hidden" name="ct_sample_spa" value="1">
 
-      <div id="ct-blocks" class="mt-4 space-y-1">
+    <nav class="card ce-outline" aria-label="Contract sections">
+      <div class="ce-oh"><b>Sections</b><span class="muted small num" id="ct-count">{{ contract_template.blocks | length }}</span></div>
+      <ol class="ce-ol" id="ct-outline">
         {% for b in contract_template.blocks %}
-        {% if b.kind == "text" %}
-        {{ text_block(b.title, b.body, b.get("when") or "") }}
-        {% else %}
-        <section class="ct-section group relative rounded-lg" data-block data-kind="{{ b.kind }}">
-          <div class="ct-tools absolute -left-1 top-1 z-10 hidden gap-0.5 rounded-lg border border-seam bg-paper p-0.5 shadow-card group-hover:flex" role="toolbar">
-            <button type="button" class="ct-handle min-h-0 cursor-grab rounded px-1.5 py-0.5 text-mist" title="Drag to reorder">≡</button>
-            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move up" data-ct-move="-1">↑</button>
-            <button type="button" class="min-h-0 rounded px-1.5 py-0.5 text-mist" title="Move down" data-ct-move="1">↓</button>
-          </div>
-          <input type="hidden" name="kind" value="{{ b.kind }}">
-          <input type="hidden" name="visible" value="{{ 'on' if b.get('visible', True) else 'off' }}">
-          <div class="my-1 flex items-center justify-between gap-2 rounded-lg border border-dashed border-seam px-3 py-2 {{ 'opacity-50' if not b.get('visible', True) }}">
-            <span class="text-sm text-mist">
-              {% if b.kind == "parties" %}📋 Customer &amp; company details
-              {% elif b.kind == "rates" %}💲 Service rates table
-              {% else %}✍️ Signature lines{% endif %}
-              — fills in automatically</span>
-            <label class="flex items-center gap-1.5 text-sm text-mist">
-              <input type="checkbox" {{ "checked" if b.get('visible', True) }} class="h-4 w-4"
-                     data-ct-visible> Show</label>
-          </div>
-        </section>
-        {% endif %}
+        {% set hidden_b = b.kind != "text" and not b.get("visible", True) %}
+        <li{% if hidden_b %} class="off"{% endif %}>
+          <a class="ce-oi" href="#ct-b-{{ loop.index }}"><span class="ce-on num">{{ loop.index }}</span>
+            <span class="ce-ot">{% if b.kind == "text" %}{{ b.title or (b.body | truncate(40, True, "…")) or "Untitled section" }}{% else %}{{ CE_NAMES[b.kind] }}{% endif %}</span>
+            {% if b.get("when") == "includes_spa" %}<span class="ce-tag">Spa</span>{% endif %}
+            {% if b.kind != "text" %}<span class="ce-tag auto">Auto</span>{% endif %}
+            {% if hidden_b %}<span class="ce-tag off">Hidden</span>{% endif %}</a>
+        </li>
         {% endfor %}
+      </ol>
+      <button type="button" class="btn sm ce-addo" data-ct-add hidden>{{ ui.icon("plus") }}Add a section</button>
+    </nav>
+
+    <div class="ce-desk">
+      <article class="ce-page" id="ct-doc" aria-label="Contract page">
+        {{ page_head(company) }}
+        <input class="ct-title" name="doc_title" value="{{ contract_template.title }}" aria-label="Document title">
+        <div id="ct-blocks">
+          {% for b in contract_template.blocks %}
+          {% if b.kind == "text" %}
+          {{ text_block(b.title, b.body, b.get("when") or "", loop.index) }}
+          {% else %}
+          {% set shown = b.get("visible", True) %}
+          <section class="ce-sec ce-bi{% if not shown %} off{% endif %}" data-block data-kind="{{ b.kind }}" id="ct-b-{{ loop.index }}"
+                   aria-label="{{ CE_NAMES[b.kind] }}">
+            <input type="hidden" name="kind" value="{{ b.kind }}">
+            <input type="hidden" name="visible" value="{{ 'on' if shown else 'off' }}">
+            <span class="ce-cond ce-autol">Fills in automatically · {{ CE_NAMES[b.kind] }}<span data-ct-offl{% if shown %} hidden{% endif %}> · hidden</span></span>
+            {{ builtin_view(b.kind, company) }}
+          </section>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <button type="button" class="ct-add" data-ct-add hidden>+ Add a section</button>
+        <footer class="ce-pf"><span>{{ contract_template.title }}</span><span>Template · fills in per contract</span></footer>
+      </article>
+
+      <article class="ce-page" id="ct-preview-wrap" aria-label="Sample preview" hidden>
+        {{ page_head(company) }}
+        <div id="ct-preview" aria-live="polite">{{ contract_preview_html | safe }}</div>
+        <footer class="ce-pf"><span>Sample data</span><span>Not a real customer</span></footer>
+      </article>
+    </div>
+
+    <aside class="card ce-insp" id="ct-insp" aria-label="Section settings">
+      <div id="ct-panel" class="ce-panel">
+        <div id="ct-insp-nojs">
+          <b>Fields you can use</b>
+          <p class="muted small">Type a field's code into any section, for example <code>{{ "{{customer_name}}" }}</code>. It fills in from each customer's details.</p>
+          {{ palette(True) }}
+        </div>
+
+        <div id="ct-insp-empty" hidden>
+          <div class="ce-empty">
+            <b>Pick a section</b>
+            <p class="muted small">Click a section on the page or in the outline to edit it. On a narrow screen its settings open right under it.</p>
+            <div class="ce-legend">
+              <span><i class="ct-chip">Chip</i> fills in from each customer</span>
+              <span><span class="ce-tag">Spa</span> only on contracts with a spa</span>
+              <span><span class="ce-tag auto">Auto</span> built from the contract's data</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="ct-insp-text" hidden>
+          <div class="eb-ih"><b data-ct-label>Section</b>
+            <div class="row ce-acts">
+              <button type="button" class="icbtn plain" aria-label="Move up" data-ct-move="-1">{{ ui.icon("up") }}</button>
+              <button type="button" class="icbtn plain" aria-label="Move down" data-ct-move="1">{{ ui.icon("down") }}</button>
+              <button type="button" class="icbtn plain ce-del" aria-label="Delete section" data-ct-delete>{{ ui.icon("trash") }}</button>
+            </div>
+          </div>
+          <span class="lbl">Shows on</span>
+          <div class="seg" role="group" aria-label="Shows on">
+            <button type="button" data-ct-when="">All contracts</button>
+            <button type="button" data-ct-when="includes_spa">Spa only</button>
+          </div>
+          <span class="lbl ce-gap">Insert customer info</span>
+          <p class="help ce-help">Tap a field to drop it in where your cursor is.</p>
+          {{ palette(False) }}
+          <button type="button" class="btn sm pri ce-wide ce-gap" data-ct-done>Done</button>
+        </div>
+
+        <div id="ct-insp-auto" hidden>
+          <div class="eb-ih"><b data-ct-label>Built-in block</b>
+            <div class="row ce-acts">
+              <button type="button" class="icbtn plain" aria-label="Move up" data-ct-move="-1">{{ ui.icon("up") }}</button>
+              <button type="button" class="icbtn plain" aria-label="Move down" data-ct-move="1">{{ ui.icon("down") }}</button>
+            </div>
+          </div>
+          <p class="muted small" data-ct-about></p>
+          <label class="chk"><input type="checkbox" data-ct-visible><span>Show this on contracts</span></label>
+          <button type="button" class="btn sm ce-wide ce-gap" data-ct-done>Done</button>
+        </div>
+
+        <div id="ct-insp-sample" hidden>
+          <b>Sample preview</b>
+          <p class="muted small">The page is filled with made-up customer values so you can read it the way a customer will. Your company details head the page.</p>
+          <span class="lbl ce-gap">Preview as</span>
+          <div class="seg" role="group" aria-label="Preview as">
+            <button type="button" class="on" aria-pressed="true" data-ct-as="1">Pool and spa</button>
+            <button type="button" aria-pressed="false" data-ct-as="0">Pool only</button>
+          </div>
+          <p class="help">Spa-only sections drop out of a pool-only contract.</p>
+          <button type="button" class="btn sm ce-wide ce-gap" data-ct-mode="edit">Back to editing</button>
+        </div>
       </div>
+    </aside>
 
-      <button type="button" class="mt-4 w-full rounded-lg border border-dashed border-seam py-2 text-sm text-mist transition hover:border-pool hover:text-pool"
-              data-ct-add>+ Add a section</button>
-    </div>
-
-    <div id="ct-preview-wrap" class="hidden w-full">
-      <div id="ct-preview" class="card w-full p-6 sm:p-10 xl:px-[8%]">{{ contract_preview_html | safe }}</div>
-    </div>
-
-    <div id="ct-savebar" class="sticky bottom-16 z-20 mt-4 hidden w-full items-center justify-between gap-3 rounded-xl border border-seam bg-paper p-3 shadow-card lg:bottom-4">
-      <span class="text-sm font-medium">Unsaved changes</span>
-      <span class="flex gap-2">
-        <button type="button" class="btn-secondary px-4" data-ct-discard>Discard</button>
-        <button class="btn-primary px-6">Save contract</button>
+    <div class="savebar ce-save" id="ct-savebar">
+      <span class="small" data-ct-dirty hidden><b>Unsaved changes</b></span>
+      <span class="row">
+        <button type="button" class="btn" data-ct-discard hidden>Discard</button>
+        <button class="btn pri">Save contract</button>
       </span>
+    </div>
+  </form>
+
+  <form method="post" action="/settings/contract/rules" class="card ce-rules">
+    <div>
+      <b>Follow up on unsigned contracts</b>
+      <p class="muted small">A contract that's been sent but not signed after this many days shows in the Contracts hub's needs-attention list.</p>
+    </div>
+    <div class="row">
+      <label class="sr" for="ct-stale">Days before flagging</label>
+      <input id="ct-stale" class="inp amt" type="number" name="stale_days" inputmode="numeric"
+             min="{{ contract_stale_range[0] }}" max="{{ contract_stale_range[1] }}" step="1"
+             value="{{ contract_stale_days }}" required>
+      <span class="muted">days</span>
+      <button class="btn sm">Save</button>
     </div>
   </form>
 
@@ -113,189 +255,330 @@
 
 <script nonce="{{ csp_nonce() }}">
   (function () {
+    var root = document.getElementById('ct-root');
+    if (!root) return;
     var LABELS = {};
     {% for token, label, group in contract_tokens %}LABELS[{{ token | tojson }}] = {{ label | tojson }};
     {% endfor %}
-    var TOKEN_RE = new RegExp('\\{\\{\\s*([a-z0-9_]+)\\s*\\}\\}', 'g');
+    var NAMES = {{ CE_NAMES | tojson }};
+    var ABOUT = {{ CE_ABOUT | tojson }};
+    var IC = { up: {{ ui.icon("up") | string | tojson }}, down: {{ ui.icon("down") | string | tojson }} };
+    var TOKEN_RE = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
     var form = document.getElementById('ct-form');
+    var grid = form;
     var blocks = document.getElementById('ct-blocks');
-    var last = null;
+    var outline = document.getElementById('ct-outline');
+    var panel = document.getElementById('ct-panel');
+    var aside = document.getElementById('ct-insp');
+    var doc = document.getElementById('ct-doc');
+    var prev = document.getElementById('ct-preview-wrap');
+    var bar = document.getElementById('ct-savebar');
+    var narrow = window.matchMedia('(max-width: 1100px)');
+    var still = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var sel = null, last = null, mode = 'edit', isDirty = false, dragI = null;
 
+    function $(s, el) { return (el || root).querySelector(s); }
+    function $$(s, el) { return Array.prototype.slice.call((el || root).querySelectorAll(s)); }
+    function show(el, on) { if (el) el.hidden = !on; }
     function esc(s) {
-      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+    function list() { return $$(':scope > [data-block]', blocks); }
+    function isText(sec) { return sec && sec.getAttribute('data-kind') === 'text'; }
+    function field(sec, name) { return sec.querySelector('[name=' + name + ']'); }
+
+    // Known tokens become labeled chips; an unknown {{token}} is flagged, since
+    // the renderers leave it in the contract exactly as typed.
     function chipify(s) {
       return esc(s).replace(TOKEN_RE, function (m, tok) {
-        var label = LABELS[tok];
-        return label
-          ? '<span class="ct-chip mx-0.5 inline-flex items-center rounded-full border border-pool/40 bg-shallow px-1.5 text-xs font-medium text-pool">' + esc(label) + '</span>'
-          : esc(m);
+        return LABELS[tok] ? '<span class="ct-chip">' + esc(LABELS[tok]) + '</span>'
+          : '<span class="ct-bad" title="Not a known field. It will print exactly as typed.">' + m + '</span>';
       });
+    }
+    function plain(s) {
+      return s.replace(TOKEN_RE, function (m, tok) { return LABELS[tok] || m; });
     }
     // Mirrors the server preview's text rules: blank-line paragraphs, "- " bullets.
     function renderView(sec) {
-      var title = sec.querySelector('input[name=title]').value;
-      var body = sec.querySelector('textarea[name=body]').value;
-      var when = sec.querySelector('input[name=when]').value;
-      var html = '';
-      if (when) html += '<span class="mb-1 inline-block rounded-full border border-seam px-2 text-xs text-mist">Spa contracts only</span>';
-      if (title) html += '<h3 class="font-semibold">' + chipify(title) + '</h3>';
-      if (!body.trim() && !title) html += '<p class="text-sm italic text-mist">Empty section — click to write it.</p>';
-      body.split('\n\n').forEach(function (para) {
-        var bullets = [];
+      var title = field(sec, 'title').value, body = field(sec, 'body').value;
+      var html = field(sec, 'when').value ? '<span class="ce-cond">Shows on spa contracts only</span>' : '';
+      if (title) html += '<span class="ct-h">' + chipify(title) + '</span>';
+      if (!body.trim() && !title) html += '<span class="ct-p muted"><i>Empty section. Click to write it.</i></span>';
+      body.split('\n\n').forEach(function (para, i) {
+        if (i && para.trim()) html += '<span class="ct-p gap"></span>';
         para.split('\n').forEach(function (ln) {
           if (!ln.trim()) return;
-          if (ln.replace(/^\s+/, '').indexOf('- ') === 0) {
-            bullets.push(ln.replace(/^\s+/, '').slice(2));
-          } else {
-            if (bullets.length) { html += ctUl(bullets); bullets = []; }
-            html += '<p class="mt-1 text-sm">' + chipify(ln) + '</p>';
-          }
+          var t = ln.replace(/^\s+/, '');
+          html += t.indexOf('- ') === 0 ? '<span class="ct-p bul">' + chipify(t.slice(2)) + '</span>'
+            : '<span class="ct-p">' + chipify(ln) + '</span>';
         });
-        if (bullets.length) html += ctUl(bullets);
       });
       sec.querySelector('.ct-view').innerHTML = html;
     }
-    function ctUl(items) {
-      return '<ul class="ml-5 list-disc text-sm">' + items.map(function (b) {
-        return '<li>' + chipify(b) + '</li>';
-      }).join('') + '</ul>';
+    function outlineLabel(sec) {
+      if (!isText(sec)) return NAMES[sec.getAttribute('data-kind')] || 'Block';
+      var t = plain(field(sec, 'title').value).trim();
+      if (t) return t;
+      var b = plain(field(sec, 'body').value).replace(/\s+/g, ' ').trim();
+      return b ? (b.length > 40 ? b.slice(0, 40) + '…' : b) : 'Untitled section';
     }
-    function toView(sec) { renderView(sec); sec.querySelector('.ct-edit').classList.add('hidden'); sec.querySelector('.ct-view').classList.remove('hidden'); }
-    function toEdit(sec) {
-      blocks.querySelectorAll('[data-kind=text]').forEach(function (s) { if (s !== sec) toView(s); });
-      sec.querySelector('.ct-view').classList.add('hidden');
-      sec.querySelector('.ct-edit').classList.remove('hidden');
-      var ta = sec.querySelector('textarea'); ctGrow(ta); ta.focus();
-    }
-    function dirty() {
-      document.getElementById('ct-savebar').classList.remove('hidden');
-      document.getElementById('ct-savebar').classList.add('flex');
+    function hiddenBlock(sec) {
+      return !isText(sec) && field(sec, 'visible').value === 'off';
     }
 
-    window.ctFocus = function (el) { last = el; };
-    window.ctGrow = function (ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
-    window.ctDone = function (btn) { toView(btn.closest('[data-block]')); };
-    window.ctInsertToken = function (sel) {
-      if (!sel.value) return;
-      var el = last && sel.closest('[data-block]').contains(last)
-        ? last : sel.closest('[data-block]').querySelector('textarea');
-      var t = '{' + '{' + sel.value + '}' + '}';
+    function renderOutline() {
+      var secs = list();
+      $('#ct-count').textContent = secs.length;
+      outline.innerHTML = secs.map(function (sec, i) {
+        var on = sec === sel, cls = (on ? 'on' : '') + (hiddenBlock(sec) ? ' off' : '');
+        var tags = '';
+        if (isText(sec) && field(sec, 'when').value) tags += '<span class="ce-tag">Spa</span>';
+        if (!isText(sec)) tags += '<span class="ce-tag auto">Auto</span>';
+        if (hiddenBlock(sec)) tags += '<span class="ce-tag off">Hidden</span>';
+        return '<li class="' + cls + '" data-i="' + i + '" draggable="true">' +
+          '<button type="button" class="ce-oi" data-ct-pick="' + i + '"' + (on ? ' aria-current="true"' : '') + '>' +
+          '<span class="ce-on num">' + (i + 1) + '</span><span class="ce-ot">' + esc(outlineLabel(sec)) + '</span>' + tags + '</button>' +
+          '<span class="ce-om">' +
+          '<button type="button" class="icbtn plain" aria-label="Move up" data-ct-move="-1" data-ct-i="' + i + '"' + (i ? '' : ' disabled') + '>' + IC.up + '</button>' +
+          '<button type="button" class="icbtn plain" aria-label="Move down" data-ct-move="1" data-ct-i="' + i + '"' + (i < secs.length - 1 ? '' : ' disabled') + '>' + IC.down + '</button>' +
+          '</span></li>';
+      }).join('');
+    }
+
+    function grow(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+    function toView(sec) {
+      if (!isText(sec)) return;
+      renderView(sec);
+      show(sec.querySelector('.ct-edit'), false);
+      show(sec.querySelector('.ct-view'), true);
+    }
+    function toEdit(sec, focus) {
+      show(sec.querySelector('.ct-view'), false);
+      show(sec.querySelector('.ct-edit'), true);
+      var ta = field(sec, 'body'); grow(ta);
+      if (focus) { ta.focus({ preventScroll: true }); last = ta; }
+    }
+
+    function updatePanel() {
+      var sample = mode === 'sample';
+      show($('#ct-insp-sample'), sample);
+      show($('#ct-insp-empty'), !sample && !sel);
+      show($('#ct-insp-text'), !sample && isText(sel));
+      show($('#ct-insp-auto'), !sample && sel && !isText(sel));
+      if (sample || !sel) return;
+      var n = list().indexOf(sel) + 1;
+      if (isText(sel)) {
+        $('#ct-insp-text [data-ct-label]').textContent = 'Section ' + n;
+        var when = field(sel, 'when').value;
+        $$('#ct-insp-text [data-ct-when]').forEach(function (b) {
+          var on = b.getAttribute('data-ct-when') === when;
+          b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+      } else {
+        var kind = sel.getAttribute('data-kind');
+        $('#ct-insp-auto [data-ct-label]').textContent = n + '. ' + NAMES[kind];
+        $('#ct-insp-auto [data-ct-about]').textContent = ABOUT[kind] || '';
+        $('#ct-insp-auto [data-ct-visible]').checked = !hiddenBlock(sel);
+      }
+      var secs = list(), i = secs.indexOf(sel);
+      $$('[data-ct-move]', panel).forEach(function (b) {
+        var d = parseInt(b.getAttribute('data-ct-move'), 10);
+        b.disabled = d < 0 ? i <= 0 : i >= secs.length - 1;
+      });
+    }
+    // Wide screens keep the inspector in the right pane; narrow ones dock it
+    // under the selected section so its controls sit next to what they change.
+    function place() {
+      var host = narrow.matches && sel && mode === 'edit' ? sel : aside;
+      if (panel.parentNode !== host) host.appendChild(panel);
+      panel.classList.toggle('docked', host !== aside);
+      aside.hidden = host !== aside;
+    }
+    function sync() { updatePanel(); place(); renderOutline(); }
+
+    function scrollTo(el) {
+      el.scrollIntoView({ behavior: still.matches ? 'auto' : 'smooth', block: 'center' });
+    }
+    function select(sec, opts) {
+      if (!sec || mode !== 'edit') return;
+      opts = opts || {};
+      if (sel === sec) { if (opts.scroll) scrollTo(sec); return; }
+      if (sel) { sel.classList.remove('on'); toView(sel); }
+      sel = sec; sec.classList.add('on');
+      if (isText(sec)) toEdit(sec, opts.focus);
+      sync();
+      if (opts.scroll) scrollTo(sec);
+    }
+    function deselect(refocus) {
+      if (!sel) return;
+      var was = sel;
+      sel.classList.remove('on'); toView(sel); sel = null;
+      sync();
+      if (refocus) (was.querySelector('.ct-view:not([hidden])') || was).focus({ preventScroll: true });
+    }
+
+    function dirty() {
+      if (isDirty) return;
+      isDirty = true;
+      show(bar, true); show($('[data-ct-dirty]'), true); show($('[data-ct-discard]'), true);
+    }
+    function move(sec, dir) {
+      if (!sec) return;
+      var sib = dir < 0 ? sec.previousElementSibling : sec.nextElementSibling;
+      if (!sib || !sib.hasAttribute('data-block')) return;
+      if (dir < 0) blocks.insertBefore(sec, sib); else blocks.insertBefore(sib, sec);
+      dirty(); sync();
+    }
+    function remove(sec) {
+      if (!isText(sec) || !confirm('Delete this section from the contract?')) return;
+      if (sel === sec) { sel = null; place(); }
+      sec.remove();
+      dirty(); sync();
+    }
+    function add() {
+      if (mode !== 'edit') setMode('edit');
+      var node = document.getElementById('ct-block-tpl').content.firstElementChild.cloneNode(true);
+      blocks.appendChild(node);
+      toView(node); dirty();
+      select(node, { focus: true, scroll: true });
+    }
+    function insertToken(tok) {
+      if (!isText(sel)) return;
+      var el = last && sel.contains(last) ? last : field(sel, 'body');
+      var t = '{' + '{' + tok + '}' + '}';
       var s = el.selectionStart != null ? el.selectionStart : el.value.length;
       var e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
       el.value = el.value.slice(0, s) + t + el.value.slice(e);
-      el.focus(); el.selectionStart = el.selectionEnd = s + t.length;
-      sel.value = '';
+      el.focus({ preventScroll: true }); el.selectionStart = el.selectionEnd = s + t.length;
       el.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    window.ctMove = function (btn, dir) {
-      var b = btn.closest('[data-block]');
-      var sib = dir < 0 ? b.previousElementSibling : b.nextElementSibling;
-      if (!sib) return;
-      dir < 0 ? blocks.insertBefore(b, sib) : blocks.insertBefore(sib, b);
-      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
-    };
-    window.ctDelete = function (btn) {
-      if (!confirm('Delete this section from the contract?')) return;
-      btn.closest('[data-block]').remove();
-      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
-    };
-    window.ctVisible = function (cb) {
-      var sec = cb.closest('[data-block]');
-      sec.querySelector('input[name=visible]').value = cb.checked ? 'on' : 'off';
-      sec.querySelector('.border-dashed').classList.toggle('opacity-50', !cb.checked);
-    };
-    window.ctAddSection = function () {
-      var node = document.getElementById('ct-block-tpl').content.firstElementChild.cloneNode(true);
-      blocks.appendChild(node); toEdit(node); dirty();
-      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
-    window.ctToggleSample = function (cb) {
-      document.getElementById('ct-doc').classList.toggle('hidden', cb.checked);
-      document.getElementById('ct-preview-wrap').classList.toggle('hidden', !cb.checked);
-      if (cb.checked) form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true }));
-    };
-
-    // Drag to reorder: the handle arms its section, drop re-inserts it.
-    var dragging = null;
-    blocks.addEventListener('mousedown', function (e) {
-      var h = e.target.closest('.ct-handle');
-      if (h) h.closest('[data-block]').setAttribute('draggable', 'true');
-    });
-    // A press on the handle that never becomes a drag must not leave the
-    // section draggable — a later text-selection drag would move the whole
-    // block. dragend below can't fire in that case; mouseup always does.
-    document.addEventListener('mouseup', function () {
-      if (!dragging) blocks.querySelectorAll('[draggable]').forEach(function (b) {
-        b.removeAttribute('draggable');
+    }
+    function setWhen(v) {
+      if (!isText(sel)) return;
+      field(sel, 'when').value = v;
+      show(sel.querySelector('[data-ct-cond]'), !!v);
+      dirty(); sync();
+    }
+    function setVisible(on) {
+      if (!sel || isText(sel)) return;
+      field(sel, 'visible').value = on ? 'on' : 'off';
+      sel.classList.toggle('off', !on);
+      show(sel.querySelector('[data-ct-offl]'), !on);
+      dirty(); sync();
+    }
+    function pressSeg(attr, v) {
+      $$('[' + attr + ']').forEach(function (b) {
+        if (!b.closest('.seg')) return;
+        var on = b.getAttribute(attr) === v;
+        b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-    });
-    blocks.addEventListener('dragstart', function (e) {
-      dragging = e.target.closest('[data-block]');
-      if (dragging) dragging.classList.add('opacity-50');
-    });
-    blocks.addEventListener('dragover', function (e) {
-      if (!dragging) return;
-      e.preventDefault();
-      var over = e.target.closest('[data-block]');
-      if (!over || over === dragging) return;
-      var r = over.getBoundingClientRect();
-      blocks.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
-    });
-    blocks.addEventListener('dragend', function () {
-      if (!dragging) return;
-      dragging.classList.remove('opacity-50');
-      dragging.removeAttribute('draggable');
-      dragging = null;
-      form.dispatchEvent(new CustomEvent('ct-reorder', { bubbles: true })); dirty();
-    });
+    }
+    function refresh() { form.dispatchEvent(new CustomEvent('ct-refresh')); }
+    function setMode(m) {
+      if (m === mode) return;
+      if (m === 'sample') deselect();
+      mode = m;
+      pressSeg('data-ct-mode', m);
+      grid.classList.toggle('preview', m === 'sample');
+      show(doc, m === 'edit'); show(prev, m === 'sample');
+      if (m === 'sample') refresh();
+      sync();
+    }
+    function setAs(v) {
+      field(form, 'ct_sample_spa').value = v;
+      pressSeg('data-ct-as', v);
+      refresh();
+    }
 
-    // All button/select behavior is delegated off data- attributes (the CSP
-    // forbids inline handlers), so cloned template sections just work.
-    blocks.addEventListener('click', function (e) {
-      var mv = e.target.closest('[data-ct-move]');
-      if (mv) return ctMove(mv, parseInt(mv.getAttribute('data-ct-move'), 10));
-      var del = e.target.closest('[data-ct-delete]');
-      if (del) return ctDelete(del);
-      var done = e.target.closest('[data-ct-done]');
-      if (done) return ctDone(done);
-      var view = e.target.closest('.ct-view');
-      if (view) toEdit(view.closest('[data-block]'));
+    root.addEventListener('mousedown', function (e) {
+      // Keep the caret where it is while a field chip is clicked.
+      if (e.target.closest('[data-ct-token]')) e.preventDefault();
     });
-    blocks.addEventListener('change', function (e) {
-      var t = e.target;
-      if (t.closest('[data-ct-token]')) return ctInsertToken(t);
-      if (t.closest('[data-ct-when]')) {
-        t.closest('[data-block]').querySelector('input[name=when]').value = t.value;
+    root.addEventListener('click', function (e) {
+      var t = e.target, b;
+      if ((b = t.closest('[data-ct-pick]'))) return select(list()[+b.getAttribute('data-ct-pick')], { scroll: true, focus: true });
+      if ((b = t.closest('[data-ct-move]'))) {
+        var i = b.getAttribute('data-ct-i');
+        return move(i == null ? sel : list()[+i], parseInt(b.getAttribute('data-ct-move'), 10));
+      }
+      if (t.closest('[data-ct-delete]')) return remove(sel);
+      if (t.closest('[data-ct-done]')) return deselect(true);
+      if ((b = t.closest('[data-ct-token]'))) return insertToken(b.getAttribute('data-ct-token'));
+      if ((b = t.closest('[data-ct-when]'))) return setWhen(b.getAttribute('data-ct-when'));
+      if ((b = t.closest('[data-ct-mode]'))) return setMode(b.getAttribute('data-ct-mode'));
+      if ((b = t.closest('[data-ct-as]'))) return setAs(b.getAttribute('data-ct-as'));
+      if (t.closest('[data-ct-add]')) return add();
+      if (t.closest('[data-ct-discard]')) {
+        if (confirm('Discard your changes?')) { form._submitting = true; location.reload(); }
         return;
       }
-      if (t.closest('[data-ct-visible]')) ctVisible(t);
+      if (t.closest('#ct-panel')) return;
+      var sec = t.closest('[data-block]');
+      if (sec && blocks.contains(sec)) select(sec, { focus: true });
     });
-    // Track the last-focused editable so token insertion lands at the caret,
-    // and auto-grow textareas as they fill.
+    root.addEventListener('change', function (e) {
+      if (e.target.matches('[data-ct-visible]')) setVisible(e.target.checked);
+    });
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && sel && mode === 'edit') { e.preventDefault(); deselect(true); return; }
+      var sec = e.target.matches && e.target.matches('.ce-bi') ? e.target : null;
+      if (sec && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(sec); }
+    });
     blocks.addEventListener('focusin', function (e) {
-      if (e.target.matches('.ct-edit input[name=title], .ct-edit textarea')) ctFocus(e.target);
+      if (e.target.matches('.ct-edit input[name=title], .ct-edit textarea')) last = e.target;
     });
-    blocks.addEventListener('input', function (e) {
-      if (e.target.matches('textarea.ct-body')) ctGrow(e.target);
+    form.addEventListener('input', function (e) {
+      if (e.target.matches('textarea.ct-body')) grow(e.target);
+      if (e.target.name === 'doc_title' || (sel && sel.contains(e.target))) renderOutline();
+      if (e.target.name !== 'ct_sample_spa') dirty();
     });
-    document.getElementById('ct-sample-toggle')
-      .addEventListener('change', function () { ctToggleSample(this); });
-    document.querySelector('[data-ct-add]')
-      .addEventListener('click', function () { ctAddSection(); });
-    document.querySelector('[data-ct-discard]')
-      .addEventListener('click', function () {
-        if (confirm('Discard your changes?')) { form._submitting = true; location.reload(); }
-      });
-    form.addEventListener('input', dirty);
-    form.addEventListener('change', dirty);
+
+    // Drag outline rows to reorder; the move buttons do the same by keyboard.
+    outline.addEventListener('dragstart', function (e) {
+      var li = e.target.closest('li[data-i]');
+      if (!li) return;
+      dragI = +li.getAttribute('data-i');
+      li.classList.add('drag');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragI));
+    });
+    outline.addEventListener('dragover', function (e) {
+      if (dragI == null) return;
+      var li = e.target.closest('li[data-i]');
+      if (!li) return;
+      e.preventDefault();
+      $$('li.drop', outline).forEach(function (x) { if (x !== li) x.classList.remove('drop'); });
+      li.classList.add('drop');
+    });
+    outline.addEventListener('drop', function (e) {
+      var li = e.target.closest('li[data-i]');
+      if (dragI == null || !li) return;
+      e.preventDefault();
+      var secs = list(), from = secs[dragI], to = secs[+li.getAttribute('data-i')];
+      if (from && to && from !== to) {
+        var r = li.getBoundingClientRect();
+        blocks.insertBefore(from, e.clientY > r.top + r.height / 2 ? to.nextSibling : to);
+        dirty();
+      }
+      dragI = null; sync();
+    });
+    outline.addEventListener('dragend', function () { dragI = null; renderOutline(); });
+
     window.addEventListener('beforeunload', function (e) {
-      var bar = document.getElementById('ct-savebar');
-      if (!bar.classList.contains('hidden') && !form._submitting) e.preventDefault();
+      if (isDirty && !form._submitting) e.preventDefault();
     });
     form.addEventListener('submit', function () { form._submitting = true; });
+    (narrow.addEventListener ? narrow.addEventListener.bind(narrow, 'change') : narrow.addListener.bind(narrow))(place);
 
-    // Collapse the server-rendered edit forms into the document view.
-    blocks.querySelectorAll('[data-kind=text]').forEach(toView);
+    // Enhance: collapse the server-rendered edit forms into the page view and
+    // reveal the JS-only controls.
+    root.classList.add('ct-js');
+    list().forEach(function (sec) {
+      if (isText(sec)) toView(sec); else sec.tabIndex = 0;
+    });
+    $$('[data-ct-add], [data-ct-discard], .ce-modes').forEach(function (el) { el.hidden = false; });
+    show($('[data-ct-discard]'), false);
+    show($('#ct-insp-nojs'), false);
+    show(bar, false);
+    sync();
   })();
 </script>

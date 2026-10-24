@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Emails · {{ tpl.name }}{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+{#- The block email builder (app/routers/email_builder.py). One form holds the
+    whole draft; every button posts it with an `op`, so it all works without
+    JavaScript. The script below only adds drag, field chips and a live preview. -#}
+{% set show_label = {"html": "Branded only", "text": "Plain text only"} %}
+<header class="ph">
+  <div><p class="crumbs"><a href="/settings">Admin</a><span aria-hidden="true">›</span><a href="/settings#customer-look">What customers see</a><span aria-hidden="true">›</span><span>Emails</span></p>
+    <h1 class="h1">{{ tpl.name }}</h1><p class="lede">{{ tpl.when }}</p></div>
+</header>
+<div class="eb">
+  <nav class="eb-nav card" aria-label="Emails">
+    <p class="eb-nh">Emails the app sends</p>
+    {% for t in templates_list %}
+    <a href="/settings/emails/{{ t.key }}" class="eb-ni{{ ' on' if t.key == key }}"{% if t.key == key %} aria-current="page"{% endif %}><span>{{ t.name }}</span>{% if t.edited %}<span class="pill p-acc">Edited</span>{% endif %}</a>
+    {% endfor %}
+    <a href="/settings#contract" class="eb-ni"><span>Signing emails<small>Worded under Contract</small></span></a>
+  </nav>
+
+  <form class="eb-main" method="post" action="/settings/emails/{{ key }}" enctype="multipart/form-data" data-eb-form data-fields="{{ fields_json }}">
+    {# First submit button in the form: what Enter in a field presses. It only redraws. #}
+    <button class="eb-default" name="op" value="refresh" tabindex="-1" aria-hidden="true">Update preview</button>
+    <input type="hidden" name="order" value="{{ blocks | map(attribute='n') | join(',') }}" data-eb-order>
+    <input type="hidden" name="part" value="{{ part }}" data-eb-part>
+    {% if notice %}<p class="eb-note" role="status">{{ notice }}</p>{% endif %}
+    {% if errors %}<div class="eb-note bad" role="alert"><b>Not saved.</b><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+
+    <div class="eb-work">
+      <div class="eb-edit">
+        <section class="card eb-subj" data-eb-scope>
+          <label class="lbl" for="eb-subject">Subject</label>
+          <input id="eb-subject" class="inp" name="subject" value="{{ doc.subject }}" maxlength="200" required data-eb-tok>
+          <p class="eb-warn" data-eb-warn{% if not subject_warn %} hidden{% endif %}>Not a field of this email, so it is sent as typed: <span data-eb-warn-list>{% for w in subject_warn %}{{ '{' ~ w ~ '}' }}{{ ", " if not loop.last }}{% endfor %}</span></p>
+        </section>
+
+        <ol class="eb-list" data-eb-list aria-label="Blocks, top to bottom">
+          {% for b in blocks %}
+          {% set p = "b" ~ b.n ~ "_" %}
+          <li class="eb-blk card" data-id="{{ b.n }}" data-eb-scope>
+            <input type="hidden" name="{{ p }}type" value="{{ b.type }}">
+            <div class="eb-bh">
+              <span class="eb-grip" data-eb-grip hidden title="Drag to move" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
+              <span class="eb-bt"><b>{{ b.label }}</b>{% if b.show != "both" %}<span class="pill p-neu">{{ show_label[b.show] }}</span>{% endif %}{% if b.warn %}<span class="pill p-warn">Unknown field</span>{% endif %}
+                <span class="eb-snip">{{ b.snippet }}</span></span>
+              <span class="eb-acts">
+                <button class="icbtn plain" name="op" value="up:{{ b.n }}" aria-label="Move {{ b.label | lower }} block up"{% if loop.first %} disabled{% endif %}>{{ ui.icon("up") }}</button>
+                <button class="icbtn plain" name="op" value="down:{{ b.n }}" aria-label="Move {{ b.label | lower }} block down"{% if loop.last %} disabled{% endif %}>{{ ui.icon("down") }}</button>
+                <button class="icbtn plain eb-del" name="op" value="del:{{ b.n }}" aria-label="Delete {{ b.label | lower }} block" formnovalidate>{{ ui.icon("trash") }}</button>
+              </span>
+            </div>
+            <details class="eb-bd"{% if open_at == b.n or b.warn %} open{% endif %}>
+              <summary>Edit</summary>
+              <div class="eb-fl">
+                {% if b.type in ("heading", "button") %}
+                <label class="lbl" for="{{ p }}text">{{ "Button label" if b.type == "button" else "Text" }}</label>
+                <input id="{{ p }}text" class="inp" name="{{ p }}text" value="{{ b.text }}" maxlength="120" data-eb-tok>
+                {% elif b.type == "text" %}
+                <label class="lbl" for="{{ p }}text">Text</label>
+                <textarea id="{{ p }}text" class="inp" name="{{ p }}text" rows="{{ 3 if b.text | length < 160 else 6 }}" maxlength="{{ limits.text }}" data-eb-tok>{{ b.text }}</textarea>
+                {% endif %}
+                {% if b.type == "button" %}
+                <label class="lbl" for="{{ p }}link">Opens</label>
+                <select id="{{ p }}link" class="inp" name="{{ p }}link">{% for f, label in tpl.links.items() %}<option value="{{ f }}"{% if b.link == f %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+                {% endif %}
+                {% if b.type == "details" %}
+                <label class="lbl" for="{{ p }}title">Title <span class="muted">(optional)</span></label>
+                <input id="{{ p }}title" class="inp" name="{{ p }}title" value="{{ b.title }}" maxlength="120" data-eb-tok>
+                <span class="lbl eb-rl">Rows <span class="muted">(a row with no value is left out)</span></span>
+                {% for label, f in b.rows %}
+                <div class="eb-row">
+                  <input class="inp" name="{{ p }}rl" value="{{ label }}" maxlength="120" aria-label="Row {{ loop.index }} label" data-eb-tok>
+                  <select class="inp" name="{{ p }}rf" aria-label="Row {{ loop.index }} value">{% for ff, fl in tpl.fields.items() %}<option value="{{ ff }}"{% if ff == f %} selected{% endif %}>{{ fl }}</option>{% endfor %}</select>
+                  <button class="icbtn plain" name="op" value="rowdel:{{ b.n }}.{{ loop.index0 }}" aria-label="Remove row {{ loop.index }}" formnovalidate>{{ ui.icon("close") }}</button>
+                </div>
+                {% endfor %}
+                {% if b.rows | length < limits.rows %}<button class="btn sm eb-addrow" name="op" value="rowadd:{{ b.n }}" formnovalidate>{{ ui.icon("plus") }}Add a row</button>{% endif %}
+                {% endif %}
+                {% if b.type == "image" %}
+                <input type="hidden" name="{{ p }}image" value="{{ b.image }}">
+                {% if b.thumb %}<img class="eb-thumb" src="{{ b.thumb }}" alt="">{% else %}<p class="help">No image yet. It is left out of the email until you upload one.</p>{% endif %}
+                <label class="lbl" for="{{ p }}file">{{ "Replace the image" if b.thumb else "Upload an image" }}</label>
+                <input id="{{ p }}file" class="eb-file" type="file" name="{{ p }}file" accept="image/png,image/jpeg">
+                <p class="help">PNG or JPEG under 2 MB. It travels inside the email, never as a link, and shows up to 544 pixels wide. Choose the file, then press any button to upload it.</p>
+                <label class="lbl" for="{{ p }}alt">Description <span class="muted">(read aloud, and shown in the plain-text copy)</span></label>
+                <input id="{{ p }}alt" class="inp" name="{{ p }}alt" value="{{ b.alt }}" maxlength="200" data-eb-tok>
+                {% endif %}
+                {% if b.type == "readings" %}<p class="help">Filled in from the visit: the readings taken, chemicals added and tasks done. Never includes prices.</p>{% endif %}
+                {% if b.type == "attachment" %}<p class="help">Names the PDF attached to this email.</p>{% endif %}
+                {% if b.type == "signoff" %}<p class="help">The sign-off set under <a href="/settings#customer-look">What customers see</a>, else the company name. Shared by every email.</p>{% endif %}
+                {% if b.type == "divider" %}<p class="help">A thin line. Four dashes in the plain-text copy.</p>{% endif %}
+                <div class="eb-opts">
+                  {% if b.type in ("heading", "text", "button") %}
+                  <span><label class="lbl" for="{{ p }}align">Alignment</label>
+                  <select id="{{ p }}align" class="inp" name="{{ p }}align">{% for v, l in aligns %}<option value="{{ v }}"{% if b.align == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></span>
+                  {% endif %}
+                  <span><label class="lbl" for="{{ p }}show">Appears in</label>
+                  <select id="{{ p }}show" class="inp" name="{{ p }}show">{% for v, l in shows %}<option value="{{ v }}"{% if b.show == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></span>
+                </div>
+              </div>
+            </details>
+            <p class="eb-warn" data-eb-warn{% if not b.warn %} hidden{% endif %}>Not a field of this email, so it is sent as typed: <span data-eb-warn-list>{% for w in b.warn %}{{ '{' ~ w ~ '}' }}{{ ", " if not loop.last }}{% endfor %}</span></p>
+          </li>
+          {% else %}
+          <li class="empty">No blocks. Add one below, or reset to the default wording.</li>
+          {% endfor %}
+        </ol>
+
+        {% if blocks | length < limits.blocks %}
+        <details class="eb-add card"{% if not blocks %} open{% endif %}>
+          <summary>{{ ui.icon("plus") }}Add a block</summary>
+          <div class="eb-palette">
+            {% for t, label, sub in types %}
+            <button class="eb-pt" name="op" value="add:{{ t }}" formnovalidate><b>{{ label }}</b><small>{{ sub }}</small></button>
+            {% endfor %}
+          </div>
+          <p class="help">New blocks go above the sign-off. Move them with the arrows{{ " or drag them" }}.</p>
+        </details>
+        {% endif %}
+
+        <section class="card eb-fields">
+          <h2 class="card-t">Fields</h2>
+          <p class="help">Type a field in braces and it fills in for each customer. Click one to put it where you are typing.</p>
+          <div class="chips">
+            {% for f, label in tpl.fields.items() %}<button type="button" class="chip" data-eb-insert="{{ '{' ~ f ~ '}' }}" title="{{ label }}"><code>{{ '{' ~ f ~ '}' }}</code><span class="muted">{{ label }}</span></button>{% endfor %}
+          </div>
+          <p class="help">Square brackets hide text when a field in them is empty: <code>[Notes: {{ '{notes}' if 'notes' in tpl.fields else '{' ~ (tpl.fields | first) ~ '}' }}]</code>. Anything else in braces is sent exactly as typed.</p>
+        </section>
+
+        <fieldset class="card eb-style">
+          <legend class="card-t">Email style</legend>
+          <p class="help">For every email the app sends, so they all match.</p>
+          <span class="lbl">Accent colour</span>
+          <label class="chk"><input type="radio" name="es_mode" value="palette"{% if not style.accent %} checked{% endif %}><span>Follow the company palette</span></label>
+          <label class="chk"><input type="radio" name="es_mode" value="custom"{% if style.accent %} checked{% endif %} data-eb-custom><span>Custom colour</span></label>
+          <div class="eb-hex">
+            <input type="color" value="{{ accent_value }}" aria-label="Pick the accent colour" data-eb-pick>
+            <input class="inp" name="es_accent" value="{{ style.accent }}" placeholder="#1B6C80" maxlength="7" aria-label="Accent colour as a hex code" data-eb-hexin>
+          </div>
+          <p class="help">{{ style_note }}</p>
+          <span class="lbl">Buttons</span>
+          <div class="eb-seg" role="radiogroup" aria-label="Button shape">
+            {% for v, l in button_shapes %}<label><input type="radio" class="sr" name="es_button" value="{{ v }}"{% if style.button == v %} checked{% endif %}>{{ l }}</label>{% endfor %}
+          </div>
+          <p class="help">Button text is always white; a colour too light for it is darkened just enough.</p>
+        </fieldset>
+      </div>
+
+      <div class="eb-prev">
+        <div class="eb-ph">
+          <div class="seg" role="group" aria-label="Show">
+            <button name="op" value="part:html" class="{{ 'on' if part == 'html' }}" aria-pressed="{{ 'true' if part == 'html' else 'false' }}" formnovalidate>Branded</button>
+            <button name="op" value="part:text" class="{{ 'on' if part == 'text' }}" aria-pressed="{{ 'true' if part == 'text' else 'false' }}" formnovalidate>Plain text</button>
+          </div>
+          <button class="btn sm eb-refresh" name="op" value="refresh" formnovalidate>{{ ui.icon("sync") }}Update preview</button>
+        </div>
+        <iframe class="eb-frame" title="Email preview" sandbox="" referrerpolicy="no-referrer" srcdoc="{{ preview }}" data-eb-frame></iframe>
+        <p class="help">Made-up customer and figures.{% if look.format != "html" %} Your emails go out as plain text only (set under What customers see); the branded view shows what turning it on would send.{% endif %}</p>
+      </div>
+    </div>
+
+    <div class="savebar eb-save">
+      <span class="muted small" data-eb-status>{% if dirty %}Unsaved changes{% elif edited %}Your wording{% else %}The default wording{% endif %}</span>
+      <span class="row">
+        {% if edited %}<button class="btn ghost" formaction="/settings/emails/{{ key }}/reset" formnovalidate>Reset to default</button>{% endif %}
+        <a class="btn" href="/settings/emails/{{ key }}">Discard changes</a>
+        <button class="btn" name="op" value="test" title="{{ ('Goes to ' ~ test_to) if test_to else 'Add the company email under Business first' }}">Send me a test</button>
+        <button class="btn pri" name="op" value="save">Save template</button>
+      </span>
+    </div>
+  </form>
+</div>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var form = document.querySelector("[data-eb-form]");
+  if (!form) return;
+  var frame = form.querySelector("[data-eb-frame]"), list = form.querySelector("[data-eb-list]");
+  var order = form.querySelector("[data-eb-order]"), part = form.querySelector("[data-eb-part]");
+  var status = form.querySelector("[data-eb-status]"), fields = JSON.parse(form.getAttribute("data-fields") || "[]");
+  var url = form.getAttribute("action") + "/preview", timer, seq = 0, last = null, dragging = null;
+  var refreshBtn = form.querySelector(".eb-refresh");
+  if (refreshBtn) refreshBtn.hidden = true;
+
+  function refresh() {
+    var fd = new FormData(form), my = ++seq;
+    fd.delete("op");
+    Array.from(fd.keys()).forEach(function (k) { if (fd.get(k) instanceof File) fd.delete(k); });
+    fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : null; })
+      .then(function (h) { if (h !== null && my === seq) frame.srcdoc = h; })
+      .catch(function () {});
+  }
+  function changed() {
+    if (status) status.textContent = "Unsaved changes";
+    clearTimeout(timer);
+    timer = setTimeout(refresh, 350);
+  }
+  function warn(el) {
+    var scope = el.closest("[data-eb-scope]");
+    if (!scope) return;
+    var box = scope.querySelector(":scope > [data-eb-warn]"), found = {};
+    scope.querySelectorAll("[data-eb-tok]").forEach(function (inp) {
+      (inp.value.match(/\{([^{}\s]{1,40})\}/g) || []).forEach(function (m) {
+        var k = m.slice(1, -1);
+        if (fields.indexOf(k) < 0) found[m] = 1;
+      });
+    });
+    var keys = Object.keys(found);
+    if (!box) return;
+    box.hidden = !keys.length;
+    box.querySelector("[data-eb-warn-list]").textContent = keys.join(", ");
+  }
+
+  form.addEventListener("input", function (e) {
+    if (e.target.type === "file") return;
+    if (e.target.matches("[data-eb-tok]")) warn(e.target);
+    changed();
+  });
+  form.addEventListener("change", function (e) { if (e.target.type !== "file") changed(); });
+  form.addEventListener("focusin", function (e) { if (e.target.matches("[data-eb-tok]")) last = e.target; });
+
+  form.querySelectorAll("[data-eb-insert]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var el = last || form.querySelector("#eb-subject"), t = chip.getAttribute("data-eb-insert");
+      var s = el.selectionStart == null ? el.value.length : el.selectionStart;
+      var en = el.selectionEnd == null ? s : el.selectionEnd;
+      el.setRangeText(t, s, en, "end");
+      el.focus();
+      warn(el);
+      changed();
+    });
+  });
+
+  form.querySelectorAll('button[name="op"][value^="part:"]').forEach(function (b) {
+    b.addEventListener("click", function (e) {
+      e.preventDefault();
+      part.value = b.value.slice(5);
+      form.querySelectorAll('button[name="op"][value^="part:"]').forEach(function (o) {
+        o.classList.toggle("on", o === b);
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
+      });
+      refresh();
+    });
+  });
+
+  var pick = form.querySelector("[data-eb-pick]"), hexin = form.querySelector("[data-eb-hexin]"), custom = form.querySelector("[data-eb-custom]");
+  if (pick && hexin) {
+    pick.addEventListener("input", function () { hexin.value = pick.value.toUpperCase(); if (custom) custom.checked = true; changed(); });
+    hexin.addEventListener("input", function () {
+      var v = hexin.value.trim();
+      if (v && v[0] !== "#") v = "#" + v;
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) { pick.value = v; if (custom) custom.checked = true; }
+    });
+  }
+
+  if (list) {
+    list.querySelectorAll("[data-eb-grip]").forEach(function (g) {
+      g.hidden = false;
+      g.addEventListener("pointerdown", function () { g.closest("li").draggable = true; });
+    });
+    list.addEventListener("dragstart", function (e) {
+      dragging = e.target.closest("li");
+      if (!dragging) return;
+      dragging.classList.add("drag");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", dragging.getAttribute("data-id"));
+    });
+    list.addEventListener("dragover", function (e) {
+      if (!dragging) return;
+      e.preventDefault();
+      var over = e.target.closest("li.eb-blk");
+      if (!over || over === dragging) return;
+      var r = over.getBoundingClientRect();
+      list.insertBefore(dragging, e.clientY > r.top + r.height / 2 ? over.nextSibling : over);
+    });
+    list.addEventListener("drop", function (e) { if (dragging) e.preventDefault(); });
+    list.addEventListener("dragend", function () {
+      if (!dragging) return;
+      dragging.classList.remove("drag");
+      dragging.draggable = false;
+      dragging = null;
+      var items = list.querySelectorAll("li.eb-blk");
+      order.value = Array.from(items).map(function (li) { return li.getAttribute("data-id"); }).join(",");
+      items.forEach(function (li, i) {
+        var up = li.querySelector('button[value^="up:"]'), down = li.querySelector('button[value^="down:"]');
+        if (up) up.disabled = i === 0;
+        if (down) down.disabled = i === items.length - 1;
+      });
+      changed();
+    });
+  }
+})();
+</script>
+{% endblock %}

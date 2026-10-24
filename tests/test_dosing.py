@@ -167,3 +167,17 @@ def test_negative_ta_does_not_corrupt_acid_dose():
     acid = by_role(doses, "Muriatic")
     assert acid is not None and acid.amount > 0  # ta treated absent -> factor 1.0
     assert by_role(doses, "Baking soda") is None  # no phantom TA-raise advice
+
+
+def test_ph_band_follows_target_and_band():
+    # A lower pH target with a tighter band moves both thresholds: 7.5 is in
+    # range for the defaults but above 7.2 + 0.2.
+    targets = {**TARGETS, "ph": 7.2}
+    assert by_role(recommend({"ph": 7.5}, 16875, "chlorine", CATALOG, targets, {"ph": 0.2}),
+                   "Muriatic") is not None
+    assert recommend({"ph": 7.3}, 16875, "chlorine", CATALOG, targets, {"ph": 0.2}) == []
+
+
+def test_custom_fc_band_widens_deadband():
+    assert recommend({"fc": 3.0}, 16875, "chlorine", CATALOG, TARGETS, {"fc": 1.5}) == []
+    assert rec({"fc": 3.0}) != []
