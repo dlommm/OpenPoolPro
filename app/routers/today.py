@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import inventory, models
 from app.db import get_session
-from app.scheduling import ScheduleWindow, is_due, missed_stops, stops_for_date, visible_to
+from app.scheduling import (ScheduleWindow, is_due, missed_stops, progress_segments,
+                            stops_for_date, visible_to)
 from app.templating import templates
 from app.timefmt import business_today
 
@@ -94,7 +95,7 @@ def today_page(request: Request, tech: int | None = None, crew: str | None = Non
         for tid in order:
             mine = [s for s in all_stops if s.effective_tech_id == tid]
             lanes.append({"tech": tech_by_id.get(tid), "id": tid, "stops": mine,
-                          "segs": _segments(mine),
+                          "segs": progress_segments(mine),
                           "done": sum(1 for s in mine if s.status != "due")})
     unassigned = [s for s in all_stops if s.effective_tech_id is None] if can_all else []
     # The rest of the crew, for someone working their own route who also
@@ -114,7 +115,7 @@ def today_page(request: Request, tech: int | None = None, crew: str | None = Non
         "done": done, "total": len(stops), "techs": techs, "tech_filter": tech,
         "tech_counts": tech_counts, "tech_by_id": tech_by_id,
         "one_route": one_route, "crew_view": can_all and not one_route,
-        "segments": _segments(stops), "next_stop": next_stop,
+        "segments": progress_segments(stops), "next_stop": next_stop,
         "upcoming": [s for s in stops if s.status == "due" and s is not next_stop],
         "finished": [s for s in stops if s.status != "due"],
         "lanes": lanes, "unassigned": unassigned, "rest": rest, "on_hold": on_hold,
@@ -131,20 +132,3 @@ def _low_stock(session) -> list:
     except Exception:
         log.warning("low-stock query failed; Today renders without it", exc_info=True)
         return []
-
-
-def _segments(stops) -> list[str]:
-    """One progress-track segment per stop, in route order: done | skipped |
-    next (the first stop still due) | "" (to go)."""
-    out, nxt = [], False
-    for s in stops:
-        if s.status == "done":
-            out.append("done")
-        elif s.status == "skipped":
-            out.append("skipped")
-        elif not nxt:
-            out.append("next")
-            nxt = True
-        else:
-            out.append("")
-    return out

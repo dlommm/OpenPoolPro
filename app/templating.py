@@ -232,3 +232,24 @@ def _reading_scales(ctx) -> list:
 
 
 templates.env.globals["reading_scales"] = _reading_scales
+
+
+def _money_short(dollars) -> str:
+    """Compact axis/label money: $850, $1.2k, $12k, $1.5M."""
+    try:
+        v = float(dollars or 0)
+    except (TypeError, ValueError):
+        return str(dollars)
+    a = abs(v)
+    if a >= 1_000_000:
+        s = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+    elif a >= 10_000:
+        s = f"{v / 1000:.0f}k"
+    elif a >= 1000:
+        s = f"{v / 1000:.1f}".rstrip("0").rstrip(".") + "k"
+    else:
+        s = f"{v:.0f}"
+    return ("-" if v < 0 else "") + "$" + s.lstrip("-")
+
+
+templates.env.filters["money_short"] = _money_short

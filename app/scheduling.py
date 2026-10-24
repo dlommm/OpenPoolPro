@@ -312,3 +312,20 @@ def missed_stops(session: Session, today: date, lookback_days: int = 14,
             latest_unresolved[pid] = MissedStop(property=stop.property, date=d, visit=stop.visit,
                                                 effective_tech_id=stop.effective_tech_id)
     return sorted(latest_unresolved.values(), key=lambda m: m.date)
+
+
+def progress_segments(stops) -> list[str]:
+    """One progress-track segment per stop, in route order: done | skipped |
+    next (the first stop still due) | "" (to go)."""
+    out, nxt = [], False
+    for s in stops:
+        if s.status == "done":
+            out.append("done")
+        elif s.status == "skipped":
+            out.append("skipped")
+        elif not nxt:
+            out.append("next")
+            nxt = True
+        else:
+            out.append("")
+    return out

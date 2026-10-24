@@ -195,7 +195,7 @@ def test_dashboard_low_stock_card_count(client, engine):
     assert "Liquid chlorine" in html
     # exactly one chemical is low: the card's count digit must render "1",
     # not just contain the word "Low stock" somewhere on the page.
-    assert '<span class="font-data text-sm text-safety">1</span>' in html
+    assert html.count('<span class="pill p-warn">Low stock</span>') == 1
 
 
 def test_nav_badge_shows_low_stock_count(client, engine):

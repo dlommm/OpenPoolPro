@@ -42,6 +42,11 @@ def business_today() -> date:
     return datetime.now(config.tz()).date()
 
 
+def local_now() -> datetime:
+    """The current wall-clock time in the business timezone."""
+    return datetime.now(config.tz())
+
+
 def parse_ym(raw: str | None, default: tuple[int, int] | None = None) -> tuple[int, int]:
     """Tolerant "YYYY-M" -> (year, month) parser.
 

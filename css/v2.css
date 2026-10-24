@@ -1421,3 +1421,8 @@ a.stop{text-decoration:none}
 .print td.box{width:48px;border-left:1px solid #ddd}
 .print td.notes{width:40%}
 .print-sub{font-size:15px;font-weight:600;margin:20px 0 8px}
+/* Dashboard (app) */
+a.kpi{display:block;color:inherit;text-decoration:none;transition:background-color 160ms ease}
+@media (hover: hover) and (pointer: fine){ a.kpi:hover{background:color-mix(in srgb,var(--r) 60%,var(--sheet))} }
+a.rowbtn{text-decoration:none}
+.rows .r .btn{flex:none}
