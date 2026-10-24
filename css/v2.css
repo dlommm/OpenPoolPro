@@ -1570,3 +1570,24 @@ a.rp-tech,a.rp-li{text-decoration:none;color:inherit}
 .ops .text-safety::before{background:var(--negt)}
 @media (max-width: 1100px){ .ops{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width: 720px){ .ops{grid-template-columns:minmax(0,1fr)} }
+/* Admin page: the section radios drive a grouped side menu (CSS only) */
+.settabs{display:grid;grid-template-columns:236px minmax(0,1fr);gap:32px;align-items:start;position:relative}
+.settabs .tab-radio{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.tabnav{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px}
+.tab-label{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 10px;border-radius:8px;color:var(--m);font-size:14px;cursor:pointer;text-decoration:none;position:relative;transition:background-color 160ms ease,color 160ms ease}
+.tab-label .ic{color:var(--m)}
+@media (hover: hover) and (pointer: fine){ .tab-label:hover{background:var(--r);color:var(--t)} }
+.tab-panel{display:none;min-width:0}
+.tab-panels{min-width:0}
+#settab-business:checked~.tab-panels [data-tab="business"],#settab-pricing:checked~.tab-panels [data-tab="pricing"],#settab-chemistry:checked~.tab-panels [data-tab="chemistry"],#settab-service:checked~.tab-panels [data-tab="service"],#settab-crew:checked~.tab-panels [data-tab="crew"],#settab-system:checked~.tab-panels [data-tab="system"],#settab-contract:checked~.tab-panels [data-tab="contract"]{display:block;animation:opp-rise 240ms var(--ease-out) both}
+#settab-business:checked~.tabnav label[for="settab-business"],#settab-pricing:checked~.tabnav label[for="settab-pricing"],#settab-chemistry:checked~.tabnav label[for="settab-chemistry"],#settab-service:checked~.tabnav label[for="settab-service"],#settab-crew:checked~.tabnav label[for="settab-crew"],#settab-system:checked~.tabnav label[for="settab-system"],#settab-contract:checked~.tabnav label[for="settab-contract"]{background:var(--as);color:var(--ai);font-weight:600}
+#settab-business:checked~.tabnav label[for="settab-business"] .ic,#settab-pricing:checked~.tabnav label[for="settab-pricing"] .ic,#settab-chemistry:checked~.tabnav label[for="settab-chemistry"] .ic,#settab-service:checked~.tabnav label[for="settab-service"] .ic,#settab-crew:checked~.tabnav label[for="settab-crew"] .ic,#settab-system:checked~.tabnav label[for="settab-system"] .ic,#settab-contract:checked~.tabnav label[for="settab-contract"] .ic{color:var(--a)}
+.tab-radio:focus-visible~.tabnav{outline:2px solid var(--a);outline-offset:4px;border-radius:8px}
+.layopt input:checked~.lo-t b::after,.opt input:checked~b::after{content:" ✓";color:var(--a)}
+.layopt:has(input:checked),.opt:has(input:checked){border-color:var(--a);box-shadow:0 0 0 3px color-mix(in srgb,var(--a) 22%,transparent)}
+@media (max-width: 1100px){
+  .settabs{grid-template-columns:minmax(0,1fr);gap:16px}
+  .tabnav{position:static;flex-direction:row;flex-wrap:wrap;gap:6px}
+  .tabnav .setnav-g{display:none}
+  .tab-label{border:1px solid var(--b);border-radius:999px;min-height:34px;padding:0 12px}
+}

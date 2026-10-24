@@ -2,7 +2,9 @@
 {% block title %}Settings{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Business settings", "Settings") }}
+<header class="ph">
+  <div><h1 class="h1">Admin</h1><p class="lede">Company, field, people and access, connections and system settings in one place.</p></div>
+</header>
 
 {% set role_labels = {
   "chlorine_liquid": "Liquid chlorine", "chlorine_granular": "Granular / shock",
@@ -11,16 +13,16 @@
   "other": "Other" } %}
 
 {# ---- global feedback banners (visible on any tab) ---- #}
-{% if backup_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Backup failed: {{ backup_error }}</p>{% endif %}
-{% if backup_sync_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+{% if backup_error %}<p class="flash neg">Backup failed: {{ backup_error }}</p>{% endif %}
+{% if backup_sync_error %}<p class="flash neg">
   Off-box backup sync failed ({{ backup_sync_error }}). The local snapshot succeeded, but the copy
   that would survive a dead disk did not — check BACKUP_SYNC_CMD.</p>{% endif %}
-{% if backup_stale %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">
+{% if backup_stale %}<p class="flash neg">
   No successful backup in the last 36 hours{{ " (last: " ~ backup_at ~ ")" if backup_at }}.
   A backup that has quietly stopped looks exactly like one that works, until you need it.</p>{% endif %}
-{% if rules_created is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
-{% if mail_error %}<p class="card mb-3 border-safety/40 bg-safety/5 p-3 text-sm text-safety">Enter a valid email address.</p>{% endif %}
-{% if mail_result is not none %}<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}
+{% if rules_created is not none %}<div class="flash">Created {{ rules_created }} maintenance job{{ "" if rules_created == 1 else "s" }}.</div>{% endif %}
+{% if mail_error %}<p class="flash neg">Enter a valid email address.</p>{% endif %}
+{% if mail_result is not none %}<div class="flash">Email flushed: {{ mail_result[0] }} sent, {{ mail_result[1] }} failed.</div>{% endif %}
 
 <div class="settabs">
   <input class="tab-radio" type="radio" name="settab" id="settab-business" checked>
@@ -31,14 +33,22 @@
   <input class="tab-radio" type="radio" name="settab" id="settab-system">
   <input class="tab-radio" type="radio" name="settab" id="settab-contract">
 
-  <nav class="tabnav" role="tablist" aria-label="Settings sections">
-    <label class="tab-label" for="settab-business">Business</label>
-    <label class="tab-label" for="settab-pricing">Pricing</label>
-    <label class="tab-label" for="settab-chemistry">Chemistry</label>
-    <label class="tab-label" for="settab-service">Service</label>
-    <label class="tab-label" for="settab-crew">Crew</label>
-    <label class="tab-label" for="settab-system">System</label>
-    <label class="tab-label" for="settab-contract">Contract</label>
+  <nav class="tabnav" aria-label="Admin sections">
+    <div class="setnav-g">Company</div>
+    <label class="tab-label" for="settab-business">{{ ui.icon("home") }}Business</label>
+    <label class="tab-label" for="settab-pricing">{{ ui.icon("tag") }}Pricing</label>
+    <label class="tab-label" for="settab-contract">{{ ui.icon("pen") }}Contract</label>
+    <div class="setnav-g">Field</div>
+    <label class="tab-label" for="settab-chemistry">{{ ui.icon("drop") }}Chemistry</label>
+    <label class="tab-label" for="settab-service">{{ ui.icon("wrench") }}Service</label>
+    <div class="setnav-g">People and access</div>
+    <label class="tab-label" for="settab-crew">{{ ui.icon("users") }}Crew</label>
+    <a class="tab-label" href="/users">{{ ui.icon("shield") }}Crew and permissions</a>
+    <a class="tab-label" href="/audit">{{ ui.icon("log") }}Audit log</a>
+    <div class="setnav-g">System</div>
+    <label class="tab-label" for="settab-system">{{ ui.icon("gear") }}Connections and system</label>
+    <a class="tab-label" href="/testers">{{ ui.icon("drop") }}Water testers</a>
+    <a class="tab-label" href="/operations">{{ ui.icon("pulse") }}Operations health</a>
   </nav>
 
   <div class="tab-panels">
@@ -774,27 +784,21 @@
 
         <div class="card p-4 lg:col-span-2">
           <h2 class="set-h">Appearance</h2>
-          <p class="mb-3 text-sm text-mist">Pick a theme — applies to the whole app, for everyone.</p>
+          <p class="mb-3 text-sm text-mist">One theme, Aqua Atelier, in light and dark (each person picks light or dark from the menu). These choices apply to everyone.</p>
           <form method="post" action="/settings/appearance" class="space-y-3">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {% for value, label, desc in [
-                ("warm-coastal","Warm Coastal","Sand & water, friendly"),
-                ("control-room","Control Room","Dark, high-contrast"),
-                ("fresh-field","Fresh Field","Bright & clean")] %}
-              <label class="group block cursor-pointer overflow-hidden rounded-xl border-2 border-seam transition has-[:checked]:border-pool has-[:checked]:shadow-card">
-                <input type="radio" name="active_theme" value="{{ value }}" class="sr-only" {{ "checked" if active_theme == value }}>
-                <div class="relative">
-                  <img src="/static/themes/{{ value }}.png" alt="{{ label }} theme preview"
-                       class="block h-32 w-full border-b border-seam object-cover object-left-top" loading="lazy">
-                  <div class="absolute right-2 top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-pool group-has-[:checked]:flex">
-                    <svg viewBox="0 0 20 20" class="h-3 w-3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between gap-2 border-t border-seam px-3 py-2">
-                  <span class="font-display text-sm font-bold uppercase tracking-wide text-ink">{{ label }}</span>
-                  <span class="truncate text-xs text-mist">{{ desc }}</span>
-                </div>
-              </label>
+            <span class="field-label">Navigation layout (desktop; tablets and phones always use the top bar)</span>
+            <div class="layopts">
+              {% for value, label, desc in [("top", "Top bar", "Group tabs in the deep-water masthead, the page floating over it."),
+                                            ("side", "Sidebar", "Every page listed down the left, grouped.")] %}
+              <label class="layopt {{ 'on' if appearance.nav_layout == value }}"><input type="radio" name="nav_layout" value="{{ value }}" class="sr-only" {{ "checked" if appearance.nav_layout == value }}>
+                <svg viewBox="0 0 120 70" aria-hidden="true">{% if value == "top" %}<rect class="lo-g" x="0" y="0" width="120" height="70" rx="6"/><rect class="lo-m" x="0" y="0" width="120" height="26" rx="6"/><rect class="lo-hi" x="30" y="8" width="16" height="6" rx="3"/><rect class="lo-dim" x="50" y="8" width="14" height="6" rx="3"/><rect class="lo-dim" x="68" y="8" width="14" height="6" rx="3"/><rect class="lo-s" x="8" y="20" width="104" height="46" rx="5"/><rect class="lo-a" x="16" y="30" width="34" height="5" rx="2"/><rect class="lo-d2" x="16" y="40" width="88" height="4" rx="2"/><rect class="lo-d2" x="16" y="48" width="70" height="4" rx="2"/>{% else %}<rect class="lo-g" x="0" y="0" width="120" height="70" rx="6"/><rect class="lo-a" x="8" y="10" width="22" height="5" rx="2"/><rect class="lo-d2" x="8" y="20" width="22" height="4" rx="2"/><rect class="lo-d2" x="8" y="28" width="22" height="4" rx="2"/><rect class="lo-d2" x="8" y="36" width="22" height="4" rx="2"/><rect class="lo-s" x="36" y="6" width="78" height="58" rx="5"/><rect class="lo-a" x="44" y="14" width="30" height="5" rx="2"/><rect class="lo-d2" x="44" y="24" width="62" height="4" rx="2"/>{% endif %}</svg>
+                <span class="lo-t"><b>{{ label }}</b><small>{{ desc }}</small></span></label>
+              {% endfor %}
+            </div>
+            <span class="field-label">Masthead</span>
+            <div class="opt3">
+              {% for value, label, desc, sw in [("lit", "Lit water", "Slow light drifting across the water.", "sw-lit"), ("still", "Still", "The same water, no motion.", "sw-still"), ("solid", "Solid", "One flat colour.", "sw-solid")] %}
+              <label class="opt {{ 'on' if appearance.header_style == value }}"><input type="radio" name="header_style" value="{{ value }}" class="sr-only" {{ "checked" if appearance.header_style == value }}><span class="opt-sw {{ sw }}"></span><b>{{ label }}</b><small>{{ desc }}</small></label>
               {% endfor %}
             </div>
             <button class="btn-secondary w-full">Save appearance</button>
@@ -935,5 +939,19 @@
     var el = e.target.closest("[data-chem-cust]");
     if (el) opChemCust(el);
   });
+</script>
+<script nonce="{{ csp_nonce() }}">
+// /settings#contract (and friends) open that section; picking a section
+// updates the hash so a reload or a shared link lands on it.
+(function () {
+  var name = (location.hash || "").slice(1);
+  var r = name && document.getElementById("settab-" + name);
+  if (r) r.checked = true;
+  document.querySelectorAll(".tab-radio").forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      try { history.replaceState(null, "", "#" + radio.id.replace("settab-", "")); } catch (e) {}
+    });
+  });
+})();
 </script>
 {% endblock %}
