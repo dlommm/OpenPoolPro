@@ -1,0 +1,164 @@
+{#- Analytics overview (v0.7). Everything is computed server-side
+    (app/analytics_overview.py); charts are SVG marks with HTML words laid over
+    them, each with role="img" + aria-label and a table view. Hover readouts are
+    plain CSS, so the page is complete without JavaScript. -#}
+{% import "_ui.html" as ui %}
+{% set whole = v.whole %}
+{% set rs = ov.span %}
+
+<div class="afilters" role="group" aria-label="Date range">
+  <span class="muted small">Showing</span>
+  <div class="seg">{% for n in ranges %}<a href="/analytics?range={{ n }}" class="{{ 'on' if n == range }}"{% if n == range %} aria-current="true"{% endif %}><span class="an-last">Last </span>{{ n }} months</a>{% endfor %}</div>
+  <span class="muted small">{{ rs }} · {{ v.partial_note }}</span>
+</div>
+
+<div class="akpis">
+  <section class="card ahero" aria-labelledby="k-rev">
+    <div class="l" id="k-rev">Revenue</div>
+    <div class="hv num">{{ whole(ov.revenue_cents) }}</div>
+    {% if ov.delta %}
+    <div class="c"><span class="delta {{ 'up' if ov.delta.up else 'down' }}">{{ ui.icon('up' if ov.delta.up else 'down') }}<span class="sr">{{ 'Up' if ov.delta.up else 'Down' }}</span>{{ '+' if ov.delta.up else '−' }}{{ '%.1f' | format(ov.delta.pct | abs) }}%</span> vs {{ ov.delta.previous_span }}</div>
+    <div class="c an-cmp">Full months only: {{ ov.delta.current_span }}, {{ whole(ov.delta.current_cents) }} against {{ whole(ov.delta.previous_cents) }}</div>
+    {% else %}<div class="c">No earlier full months to compare with</div>{% endif %}
+    {% if v.spark_line %}<svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon points="{{ v.spark_area }}" class="sp-a"></polygon><polyline points="{{ v.spark_line }}" class="sp-l"></polyline></svg>{% endif %}
+  </section>
+  <section class="card atile"><div class="l">Visits completed</div><div class="v num">{{ '{:,}'.format(ov.visits) }}</div><div class="c">{% if ov.visits_per_full_month is not none %}{{ ov.visits_per_full_month }} a month in full months{% else %}{{ ov.months[-1].short }} so far{% endif %}</div></section>
+  <section class="card atile"><div class="l">Revenue per visit</div><div class="v num">{{ ov.per_visit_cents | dollars if ov.visits else '—' }}</div><div class="c">All income divided by visits</div></section>
+  <section class="card atile"><div class="l">Active customers</div><div class="v num">{{ ov.active_customers }}</div><div class="c">{{ v.gained }} gained · {{ v.lost }} lost in this range</div></section>
+</div>
+
+<div class="cols c-main an-row">
+  <section class="card" aria-labelledby="a-rev">
+    <div class="card-h"><div><h2 class="card-t" id="a-rev">Revenue by month</h2><p class="muted small">{% if ov.best_full_month %}Best full month: {{ ov.best_full_month.long }} at {{ whole(ov.best_full_month.total_cents) }}.{% else %}No full month in this range yet.{% endif %}</p></div></div>
+    <div class="legend">{% for key, label, colour in sources %}<span><i style="background:{{ colour }}"></i>{{ label }}</span>{% endfor %}</div>
+    {% if ov.has_revenue %}
+    <div class="an-chart" role="img" aria-label="{{ v.stack_aria }}">
+      <div class="an-y num" aria-hidden="true">{% for t in v.yticks %}<span>{{ t }}</span>{% endfor %}</div>
+      <div class="an-plot">
+        {{ v.stack_svg | safe }}
+        <div class="an-hits" style="{{ v.cols }}" aria-hidden="true">
+          {% for m in ov.months %}
+          <div class="an-hit{{ ' cur' if m.partial }}">
+            <span class="tip{{ ' tip-l' if v.stack_tip_left[loop.index0] }}"><b class="num">{{ m.total_cents | dollars }}</b><span class="muted">{{ m.long }}</span>{% for key, label, colour in sources %}<span class="tip-r"><i style="background:{{ colour }}"></i>{{ label }}<b class="num">{{ m.part(key) | dollars }}</b></span>{% endfor %}<span class="tip-r muted">{{ m.visits }} visits</span></span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="an-x{{ ' many' if ov.months | length > 6 }}" style="{{ v.cols }}" aria-hidden="true">{% for m in ov.months %}<span{% if m.partial %} class="cur"{% endif %}>{{ m.axis_label if ov.months | length <= 6 else m.short }}</span>{% endfor %}</div>
+    {% if ov.months | length > 6 %}<p class="muted small an-note">{{ ov.months[-1].axis_label }} is partial and drawn lighter.</p>{% endif %}
+    {% else %}
+    {{ ui.empty("No revenue in " ~ rs ~ " yet. Completed visits and finished jobs show up here.") }}
+    {% endif %}
+    <details class="an-table"{% if not ov.has_revenue %} hidden{% endif %}>
+      <summary>Table view</summary>
+      <div class="tblw"><table class="tbl num">
+        <caption class="sr">Revenue by month, {{ rs }}</caption>
+        <thead><tr><th scope="col">Month</th><th scope="col" class="r">Service</th><th scope="col" class="r">Chemicals</th><th scope="col" class="r">Repairs and jobs</th><th scope="col" class="r">Total</th><th scope="col" class="r">Visits</th></tr></thead>
+        <tbody>{% for m in ov.months %}<tr><th scope="row" class="an-th">{{ m.long }}</th><td class="r">{{ m.service_cents | dollars }}</td><td class="r">{{ m.chem_cents | dollars }}</td><td class="r">{{ m.jobs_cents | dollars }}</td><td class="r strong">{{ m.total_cents | dollars }}</td><td class="r">{{ m.visits }}</td></tr>{% endfor %}</tbody>
+        <tfoot><tr><th scope="row" class="an-th">Total</th>{% for x in ov.mix %}<td class="r">{{ x.cents | dollars }}</td>{% endfor %}<td class="r strong">{{ ov.revenue_cents | dollars }}</td><td class="r">{{ ov.visits }}</td></tr></tfoot>
+      </table></div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="a-mix">
+    <div class="card-h"><h2 class="card-t" id="a-mix">Where it came from</h2><span class="muted small">{{ rs }}</span></div>
+    {% if v.mix_total %}
+    <div class="mixbar" role="img" aria-label="Income mix, {{ rs }}: {{ v.mix_aria }}">{% for x in ov.mix %}{% if x.cents %}<span style="flex-basis:{{ '%.2f' | format(x.share * 100) }}%;background:{{ x.colour }}"></span>{% endif %}{% endfor %}</div>
+    <ul class="mixl">{% for x in ov.mix %}<li><i style="background:{{ x.colour }}" aria-hidden="true"></i><span>{{ x.label }}</span><b class="num">{{ x.cents | dollars }}</b><span class="muted num">{{ '%.1f' | format(x.share * 100) }}%</span></li>{% endfor %}</ul>
+    {% set side = ov.mix[1].cents + ov.mix[2].cents %}
+    <p class="muted small an-note">Chemicals and repairs together are {{ '%.0f' | format(side / v.mix_total * 100) }}% of income{% if ov.mix[0].share >= 0.5 %}; weekly service carries the business{% endif %}.</p>
+    {% else %}
+    {{ ui.empty("Nothing billed in this range yet.") }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="cols c2 an-row">
+  <section class="card" aria-labelledby="a-route">
+    <div class="card-h"><div><h2 class="card-t" id="a-route">Recurring service by route</h2><p class="muted small">Weekly value of the active customers on each route, today</p></div></div>
+    {% if ov.routes %}
+    <div class="hb" role="img" aria-label="Recurring service a week by route: {% for r in ov.routes %}{{ r.name }} {{ whole(r.weekly_cents) }} from {{ r.customers }} customer{{ 's' if r.customers != 1 }}{{ '; ' if not loop.last }}{% endfor %}">
+      {% for r in ov.routes %}
+      <div class="hb-r" aria-hidden="true"><span class="hb-n">{% if r.unassigned %}<span class="av an-av-none">—</span>{% else %}{{ ui.av(r.name) }}{% endif %}{{ r.name }}</span><span class="hb-t"><span class="hb-f{{ ' warn' if r.unassigned }}" style="width:{{ '%.1f' | format(r.weekly_cents / v.route_max * 100) }}%"></span></span><b class="num">{{ whole(r.weekly_cents) }}</b><span class="muted small num">{{ r.customers }} customer{{ 's' if r.customers != 1 }}</span></div>
+      {% endfor %}
+    </div>
+    {% set un = ov.routes | selectattr('unassigned') | list %}
+    <p class="muted small an-note">{{ whole(ov.weekly_recurring_cents) }} a week of recurring service, before chemicals.{% if un %} {{ whole(un[0].weekly_cents) }} of it has no technician yet.{% endif %} Biweekly stops count at half their rate.</p>
+    <details class="an-table">
+      <summary>Table view</summary>
+      <div class="tblw"><table class="tbl num">
+        <caption class="sr">Recurring service a week by route</caption>
+        <thead><tr><th scope="col">Route</th><th scope="col" class="r">Customers</th><th scope="col" class="r">Per week</th></tr></thead>
+        <tbody>{% for r in ov.routes %}<tr><th scope="row" class="an-th">{{ r.name }}</th><td class="r">{{ r.customers }}</td><td class="r">{{ r.weekly_cents | dollars }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+    {% else %}
+    {{ ui.empty("No active recurring customers yet.") }}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="a-ar">
+    <div class="card-h"><div><h2 class="card-t" id="a-ar">Receivables by age</h2><p class="muted small">Open balances today · {{ ov.ar_total_cents | dollars }}</p></div><a class="btn ghost sm" href="/ar">Receivables</a></div>
+    {% if ov.ar_total_cents %}
+    <div class="hb" role="img" aria-label="Open balances by age: {% for a in ov.aging %}{{ a.label }} {{ a.cents | dollars }} on {{ a.count }} invoice{{ 's' if a.count != 1 }}{{ '; ' if not loop.last }}{% endfor %}">
+      {% for a in ov.aging %}
+      <div class="hb-r" aria-hidden="true"><span class="hb-n">{{ a.label }}</span><span class="hb-t"><span class="hb-f{{ ' ' ~ a.level if a.level }}{{ ' an-zero' if not a.cents }}" style="width:{{ '%.1f' | format(a.cents / v.aging_max * 100) }}%"></span></span><b class="num">{{ a.cents | dollars }}</b><span class="muted small num">{{ a.count }} invoice{{ 's' if a.count != 1 }}</span></div>
+      {% endfor %}
+    </div>
+    <p class="muted small an-note">{% if ov.ar_over_30_cents %}{{ ov.ar_over_30_cents | dollars }} is more than 30 days late.{% else %}Nothing is more than 30 days late.{% endif %}</p>
+    {% else %}
+    {{ ui.empty("Nothing is owed right now.") }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="cols c-main an-row">
+  <section class="card" aria-labelledby="a-rate">
+    <div class="card-h"><div><h2 class="card-t" id="a-rate">Rate review</h2><p class="muted small">Chemical cost per visit as a share of the rate, {{ rs }}</p></div></div>
+    {% if v.scatter %}
+    <div class="an-chart an-sc" role="img" aria-label="{{ v.rate_aria }}">
+      <div class="an-y num" aria-hidden="true">{% for t in v.y_ticks %}<span>{{ t }}</span>{% endfor %}</div>
+      <div class="an-plot">
+        {{ v.scatter_svg | safe }}
+        <span class="an-thr-l" style="bottom:{{ '%.2f' | format(v.threshold_pct) }}%" aria-hidden="true">Review at 15%</span>
+        {% for d in v.scatter %}
+        <span class="an-pt{{ ' flag' if d.p.flag }}" style="left:{{ '%.2f' | format(d.x) }}%;bottom:{{ '%.2f' | format(d.y) }}%" aria-hidden="true">{% if d.label %}<span class="an-lab{{ ' an-lab-l' if d.left_tip }}">{{ d.short }}</span>{% endif %}<span class="tip{{ ' tip-l' if d.left_tip }}"><b class="num">{{ '%.1f' | format(d.p.share * 100) }}%</b><span>{{ d.p.name }}</span><span class="tip-r muted">{{ d.p.rate_cents | dollars }} rate · {{ d.p.chem_per_visit_cents | dollars }} chemicals a visit</span></span></span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="an-scx num" aria-hidden="true">{% for t in v.x_ticks %}<span>{{ t }}{% if loop.last %} rate{% endif %}</span>{% endfor %}</div>
+    <details class="an-table">
+      <summary>Table view</summary>
+      <div class="tblw"><table class="tbl num">
+        <caption class="sr">Chemical cost per visit as a share of the rate, {{ rs }}</caption>
+        <thead><tr><th scope="col">Customer</th><th scope="col" class="r">Rate</th><th scope="col" class="r">Chemicals a visit</th><th scope="col" class="r">Share</th><th scope="col" class="r">Pool size</th><th scope="col" class="r">Time on site</th><th scope="col"><span class="sr">Flag</span></th></tr></thead>
+        <tbody>{% for p in ov.rates %}<tr><th scope="row" class="an-th"><a class="nm" href="/customers/{{ p.customer_id }}">{{ p.name }}</a></th><td class="r">{{ p.rate_cents | dollars }}</td><td class="r">{{ p.chem_per_visit_cents | dollars }}</td><td class="r">{{ '%.1f' | format(p.share * 100) }}%</td><td class="r">{{ '{:,}'.format(p.gallons) ~ ' gal' if p.gallons else '—' }}</td><td class="r">{{ (p.avg_minutes ~ ' min') if p.avg_minutes is not none else '—' }}</td><td class="r">{% if p.flag %}{{ ui.pill('Review rate', 'warn') }}{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+    <p class="muted small an-note">{% if ov.flagged | length > 4 %}{{ ov.flagged | length }} properties are at or above the 15% line; the four highest are labelled and the table lists them all, highest first.{% elif ov.flagged %}{{ ov.flagged | map(attribute='name') | join(', ') }} {{ 'is' if ov.flagged | length == 1 else 'are' }} at or above the 15% line.{% else %}Every property is under the 15% line.{% endif %} Changing a rate happens on the customer's property, never from this report; the <a href="/analytics?tab=rates">Rates</a> tab compares rates with your tiers.</p>
+    {% else %}
+    {{ ui.empty("No completed visits in " ~ rs ~ " to compare chemical cost with rates.") }}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="a-move">
+    <div class="card-h"><div><h2 class="card-t" id="a-move">Customers gained and lost</h2><p class="muted small">{{ rs }}</p></div></div>
+    <div class="legend"><span><i style="background:var(--c1)"></i>Gained</span><span><i style="background:var(--c2)"></i>Lost</span></div>
+    <div class="an-mv" role="img" aria-label="{{ v.move_aria }}">
+      {{ v.move_svg | safe }}
+      <div class="an-hits" style="{{ v.cols }}" aria-hidden="true">{% for m in ov.months %}{% set g, lo = v.moves[loop.index0] %}<div class="an-hit"><span class="tip{{ ' tip-l' if v.stack_tip_left[loop.index0] }}"><b>{{ m.long }}</b><span class="tip-r"><i style="background:var(--c1)"></i>Gained<b class="num">{{ g }}</b></span><span class="tip-r"><i style="background:var(--c2)"></i>Lost<b class="num">{{ lo }}</b></span></span></div>{% endfor %}</div>
+    </div>
+    <div class="an-x an-x-mv" style="{{ v.cols }}" aria-hidden="true">{% for m in ov.months %}<span>{{ m.short }}</span>{% endfor %}</div>
+    {% set mvs = (ov.movement.gained + ov.movement.lost) %}
+    {% if mvs %}
+    <ul class="rows an-moves">
+      {% for m in ov.movement.gained[:6] %}<li><div><a class="strong" href="/customers/{{ m.customer_id }}">{{ m.name }}</a><small>Added {{ m.on | short_date }}</small></div>{{ ui.pill('Gained', 'acc') }}</li>{% endfor %}
+      {% for m in ov.movement.lost[:6] %}<li><div><a class="strong" href="/customers/{{ m.customer_id }}">{{ m.name }}</a><small>Last visit {{ m.on | short_date }}</small></div>{{ ui.pill('Lost', 'neu') }}</li>{% endfor %}
+    </ul>
+    {% if ov.movement.gained | length > 6 or ov.movement.lost | length > 6 %}<p class="muted small an-note">Showing the latest six of each.</p>{% endif %}
+    {% else %}
+    <p class="muted small an-note">No customers added or lost in this range.</p>
+    {% endif %}
+  </section>
+</div>

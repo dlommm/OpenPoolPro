@@ -1,1 +1,94 @@
 /* V2 analytics styles. Kept in their own file so parallel work on other screens never edits the same lines. */
+
+/* Analytics overview (v0.7). The chart colours are the fixed colour-blind-safe
+   --c1..--c3 slots from v2.css, never the company palette. Charts are SVG marks
+   stretched to their box with HTML words laid over them; hover readouts are
+   CSS-only, so nothing here needs JavaScript. */
+.an-row{margin-top:var(--gap)}
+.an-note{margin-top:10px}
+.akpis .c .delta{margin-right:2px}
+.akpis .ahero{padding-bottom:64px}
+.akpis .an-cmp{position:relative;z-index:1}
+.hb-f.an-zero{display:none}
+
+/* plot frame: y-axis ticks beside a stretched SVG */
+.an-chart{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;height:230px;margin-top:10px}
+.an-y{display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px;color:var(--m);text-align:right;transform:translateY(-.5em);height:100%}
+.an-plot{position:relative;min-width:0;height:100%}
+.an-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;display:block}
+.an-grid{stroke:var(--grid);stroke-width:1}
+.an-base{stroke:var(--m);stroke-width:1}
+.an-col{transform-box:fill-box;transform-origin:50% 100%;animation:opp-grow-y 620ms var(--ease-out) both}
+.an-col:nth-of-type(2){animation-delay:30ms}
+.an-col:nth-of-type(3){animation-delay:60ms}
+.an-col:nth-of-type(4){animation-delay:90ms}
+.an-col:nth-of-type(n+5){animation-delay:120ms}
+.an-col.cur{opacity:.55}
+
+/* month labels under a column chart */
+.an-x{display:grid;gap:0 10px;margin-left:54px;font-size:12px;color:var(--m);text-align:center;margin-top:6px}
+.an-x span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-x .cur{font-style:italic}
+
+/* hover readouts: one hit column per month over the marks */
+.an-hits{position:absolute;inset:0;display:grid;gap:0}
+.an-hit{position:relative;border-radius:6px}
+.an-hit .tip{display:none;bottom:auto;top:8px;left:calc(50% + 18px);transform:none}
+.an-hit .tip.tip-l{left:auto;right:calc(50% + 18px)}
+@media (hover: hover) and (pointer: fine){
+  .an-hit:hover{background:color-mix(in srgb,var(--t) 5%,transparent)}
+  .an-hit:hover .tip{display:flex}
+}
+
+/* table view, for keyboards, screen readers and exact numbers */
+.an-table{margin-top:12px}
+.an-table>summary{cursor:pointer;color:var(--link);font-size:13px;font-weight:500;display:inline-flex;align-items:center;min-height:32px;list-style-position:inside}
+.an-table>summary:focus-visible{outline:2px solid var(--a);outline-offset:2px;border-radius:4px}
+.an-table[open]>summary{margin-bottom:6px}
+.an-table .tbl .an-th{font-size:inherit;color:var(--t);font-weight:400;padding:11px 10px;border-top:1px solid var(--rule);white-space:normal;text-align:left}
+.an-table .tbl tfoot td,.an-table .tbl tfoot .an-th{font-weight:600;border-top:1px solid var(--b)}
+
+/* rate review scatter */
+.an-sc{height:260px;margin-top:12px}
+.an-thr{stroke:var(--c2);stroke-width:1.5}
+.an-halo{stroke:var(--sheet);stroke-width:16;stroke-linecap:round}
+.an-dot{stroke:var(--c1);stroke-width:10;stroke-linecap:round}
+.an-dot.flag{stroke:var(--c2);stroke-width:12}
+.an-thr-l{position:absolute;right:0;transform:translateY(-100%);font-size:11.5px;color:var(--m);background:var(--sheet);padding:0 4px 2px;pointer-events:none}
+.an-pt{position:absolute;width:26px;height:26px;margin:0 0 -13px -13px;border-radius:50%}
+.an-pt .tip{display:none;bottom:calc(100% + 2px)}
+.an-pt .tip.tip-l{left:auto;right:0;transform:none}
+@media (hover: hover) and (pointer: fine){
+  .an-pt:hover .tip{display:flex}
+  .an-pt:hover{box-shadow:0 0 0 2px color-mix(in srgb,var(--t) 22%,transparent)}
+}
+.an-lab{position:absolute;left:22px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--t);white-space:nowrap;pointer-events:none}
+.an-lab.an-lab-l{left:auto;right:22px}
+.an-scx{display:flex;justify-content:space-between;margin-left:54px;font-size:11.5px;color:var(--m);margin-top:6px}
+.an-scx span:last-child{text-align:right}
+
+/* customers gained (up) and lost (down) */
+.an-mv{position:relative;height:120px;margin:10px 0 0 54px}
+.an-x-mv{margin-left:54px}
+.an-mv .an-hit .tip{top:auto;bottom:calc(50% + 6px)}
+.an-moves{margin-top:10px}
+.an-moves a{color:var(--t);text-decoration:none}
+.an-moves a:hover{text-decoration:underline;text-underline-offset:3px}
+
+.an-av-none{background:var(--pnb);color:var(--pni)}
+
+@media (max-width: 720px){
+  .an-chart{grid-template-columns:36px minmax(0,1fr);gap:8px}
+  .an-x,.an-scx{margin-left:44px;font-size:11px}
+  .an-x{gap:0 4px}
+  .an-mv,.an-x-mv{margin-left:0}
+  .an-last{display:none}
+  .seg a{white-space:nowrap}
+  .akpis .ahero{padding-bottom:72px}
+  .an-x.many span:nth-child(even){visibility:hidden}
+  .an-hit .tip{left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(100% + 8px)}
+  .an-hit .tip.tip-l{left:50%;right:auto}
+}
+@media (prefers-reduced-motion: reduce){
+  .an-col{animation:none}
+}

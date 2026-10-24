@@ -1,13 +1,14 @@
 import csv
 import io
+import math
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import analytics, charts, models
+from app import analytics, analytics_overview, charts, models
 from app.db import get_session
 from app.deps import require_admin
 from app.qbo import csv_safe
@@ -25,6 +26,8 @@ TAB_LABELS = {
     "volume": "Volume",
     "rates": "Rates",
 }
+# The overview leads; the detailed tabs (and their exports) follow it.
+VIEW_LABELS = {"overview": "Overview", **TAB_LABELS}
 MAX_SPAN_DAYS = 5 * 365
 
 
@@ -74,13 +77,127 @@ def _quick_links() -> list[tuple[str, date, date]]:
     ]
 
 
+def _money_axis(cents: int) -> str:
+    dollars = cents / 100
+    if dollars == 0:
+        return "$0"
+    if dollars >= 1000:
+        k = dollars / 1000
+        return f"${k:.1f}".rstrip("0").rstrip(".") + "k"
+    return f"${dollars:,.0f}"
+
+
+def _whole(cents: int) -> str:
+    return f"${cents / 100:,.0f}"
+
+
+def _overview_view(ov: "analytics_overview.Overview") -> dict:
+    """Chart geometry and text alternatives for the overview template.
+
+    Every number is computed server-side; the template only places it. Marks
+    are SVG (charts.py); words are HTML laid over them.
+    """
+    n = len(ov.months)
+    cols = f"grid-template-columns:repeat({n},minmax(0,1fr))"
+
+    # Revenue by month, stacked service / chemicals / repairs and jobs.
+    top = analytics_overview.nice_top(max((m.total_cents for m in ov.months), default=0))
+    stack_svg = charts.stacked_columns(
+        [((m.service_cents, m.chem_cents, m.jobs_cents), m.partial) for m in ov.months], top)
+    yticks = [_money_axis(round(top * f)) for f in (1, 2 / 3, 1 / 3, 0)]
+    stack_aria = (f"Revenue by month, {ov.span}, split into service, chemicals and repairs. "
+                  + "; ".join(f"{m.long}: {_whole(m.total_cents)}" for m in ov.months) + ".")
+
+    spark_line, spark_area = charts.sparkline([m.total_cents for m in ov.months])
+
+    # Rate review scatter: x = rate, y = chemical cost share of the rate.
+    pts = ov.rates
+    # Thirds of a multiple of 30% keep every tick on a round 10%.
+    y_top = 0.30 * max(1, math.ceil(max((p.share for p in pts), default=0) / 0.30 - 1e-9))
+    # x axis in whole dollars, starting near the cheapest rate.
+    x0, xstep = analytics_overview.nice_range(
+        min((p.rate_cents for p in pts), default=0) / 100,
+        max((p.rate_cents for p in pts), default=0) / 100)
+    x_span = xstep * 4 * 100  # cents
+    placed = []
+    labelled = 0
+    for p in pts:  # highest share first, so the labelled four are the worst
+        x = (p.rate_cents - x0 * 100) / x_span * 100 if x_span else 0
+        y = min(p.share, y_top) / y_top * 100
+        words = [w for w in p.name.split() if w.lower() != "the"] or [p.name]
+        label = p.flag and labelled < 4
+        labelled += label
+        placed.append({"p": p, "x": x, "y": y, "left_tip": x > 60, "short": words[0],
+                       "label": label})
+    scatter_svg = charts.scatter_marks([(d["x"], d["y"], d["p"].flag) for d in placed],
+                                       threshold=analytics_overview.REVIEW_SHARE / y_top * 100)
+    y_ticks = [f"{y_top * f * 100:.0f}%" for f in (1, 2 / 3, 1 / 3, 0)]
+    x_ticks = [_money_axis((x0 + xstep * k) * 100) for k in range(5)]
+    flagged = ov.flagged
+    rate_aria = ("Scatter of chemical cost per visit as a share of the rate, against the rate, "
+                 f"for {len(pts)} properties. "
+                 + (", ".join(f"{p.name} {p.share * 100:.1f}%" for p in flagged)
+                    + (" is" if len(flagged) == 1 else " are") + " at or above 15 percent."
+                    if flagged else "None is at or above 15 percent."))
+
+    # Customers gained and lost.
+    moves = [ov.movement.by_month.get(m.key, (0, 0)) for m in ov.months]
+    mv_top = max([max(g, lost) for g, lost in moves] + [1])
+    move_svg = charts.diverging_columns(moves, mv_top)
+    gained, lost = len(ov.movement.gained), len(ov.movement.lost)
+    move_aria = (f"Customers gained and lost by month, {ov.span}: {gained} gained, {lost} lost. "
+                 + "; ".join(f"{m.long}: {g} gained, {lo} lost"
+                             for m, (g, lo) in zip(ov.months, moves) if g or lo))
+
+    route_max = max((r.weekly_cents for r in ov.routes), default=0) or 1
+    aging_max = max((a.cents for a in ov.aging), default=0) or 1
+    mix_total = sum(x.cents for x in ov.mix)
+
+    cur = ov.months[-1]
+    partial_note = (f"{analytics_overview.MONTH_NAMES[cur.month - 1]} runs to the "
+                    f"{analytics_overview.ordinal(cur.partial_through)}, so it is shown "
+                    "but left out of comparisons") if cur.partial else ""
+
+    return {
+        "partial_note": partial_note,
+        "cols": cols, "stack_svg": stack_svg, "yticks": yticks, "stack_aria": stack_aria,
+        "stack_tip_left": [i >= n / 2 for i in range(n)],
+        "spark_line": spark_line, "spark_area": spark_area,
+        "scatter_svg": scatter_svg, "scatter": placed, "y_ticks": y_ticks, "x_ticks": x_ticks,
+        "threshold_pct": analytics_overview.REVIEW_SHARE / y_top * 100, "rate_aria": rate_aria,
+        "move_svg": move_svg, "moves": moves, "move_aria": move_aria,
+        "gained": gained, "lost": lost,
+        "route_max": route_max, "aging_max": aging_max, "mix_total": mix_total,
+        "mix_aria": ", ".join(f"{x.label} {x.share * 100:.1f}%" for x in ov.mix),
+        "whole": _whole,
+    }
+
+
+def _overview_response(request: Request, session: Session, range_raw) -> object:
+    months = analytics_overview.parse_range(range_raw)
+    ov = analytics_overview.build(session, months)
+    ctx = {
+        "tab": "overview",
+        "tab_labels": VIEW_LABELS,
+        "range": months,
+        "ranges": analytics_overview.RANGES,
+        "ov": ov,
+        "v": _overview_view(ov),
+        "sources": analytics_overview.SOURCES,
+        "start": ov.start,
+        "end": ov.today,
+    }
+    return templates.TemplateResponse(request, "analytics.html", ctx)
+
+
 @router.get("/analytics")
-def analytics_page(request: Request, tab: str = "income",
+def analytics_page(request: Request, tab: str = "overview",
                     start: str | None = None, end: str | None = None,
                     applied: str | None = None,
+                    range_: str | None = Query(None, alias="range"),
                     session: Session = Depends(get_session)):
     if tab not in TAB_LABELS:
-        tab = "income"
+        return _overview_response(request, session, range_)
 
     start_d = _parse_date(start)
     end_d = _parse_date(end)
@@ -91,7 +208,7 @@ def analytics_page(request: Request, tab: str = "income",
 
     ctx = {
         "tab": tab,
-        "tab_labels": TAB_LABELS,
+        "tab_labels": VIEW_LABELS,
         "start": start_d,
         "end": end_d,
         "quick": _quick_links(),
@@ -356,7 +473,7 @@ def _rates_ctx(session: Session) -> dict:
     start_d, end_d = _current_month()
     return {
         "tab": "rates",
-        "tab_labels": TAB_LABELS,
+        "tab_labels": VIEW_LABELS,
         "start": start_d,
         "end": end_d,
         "quick": _quick_links(),
