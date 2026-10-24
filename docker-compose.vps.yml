@@ -1,0 +1,58 @@
+# OpenPoolPro on a VPS with automatic HTTPS (Caddy + Let's Encrypt).
+#
+# Before you start:
+#   1. Point your domain's DNS A record (and AAAA, if you use IPv6) at this
+#      server, and open ports 80 and 443 in its firewall.
+#   2. Create .env next to this file:
+#        SECRET_KEY=<output of: openssl rand -hex 32>
+#        DOMAIN=pools.example.com
+#        APP_TZ=America/New_York
+#   3. docker compose -f docker-compose.vps.yml up -d
+#   4. docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+#      then open https://<your domain> and enter the code.
+#
+# Updating: docker compose -f docker-compose.vps.yml pull && \
+#           docker compose -f docker-compose.vps.yml up -d
+services:
+  app:
+    image: dendlomm/openpoolpro:${OPENPOOLPRO_TAG:-latest}
+    # Not published to the internet: only Caddy reaches it, on the private
+    # network below, so nobody can bypass the proxy and forge their address.
+    expose: ["8000"]
+    volumes:
+      - ./data:/data
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env (openssl rand -hex 32)}
+      APP_TZ: ${APP_TZ:-America/New_York}
+      FORWARDED_ALLOW_IPS: 172.30.80.2   # Caddy's fixed address below
+      COOKIE_SECURE: "1"
+    networks:
+      web:
+        ipv4_address: 172.30.80.3
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env, e.g. pools.example.com} --to app:8000
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/data:/data       # certificates; keep this folder
+      - ./caddy/config:/config
+    networks:
+      web:
+        ipv4_address: 172.30.80.2
+    depends_on: [app]
+    restart: unless-stopped
+
+networks:
+  web:
+    ipam:
+      config:
+        - subnet: 172.30.80.0/24

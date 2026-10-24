@@ -26,20 +26,30 @@ one box (Docker + SQLite) and to be used from an iPhone in the field.
 
 ## Run
 
-    cp .env.example .env   # set SECRET_KEY (openssl rand -hex 32)
-    docker compose up -d
-    # (builds from source; to run the published image instead use
-    #  deploy/docker-compose.yml, which pulls dendlomm/openpoolpro:latest)
-    # Put a TLS reverse proxy in front — the compose file binds the app to
-    # 127.0.0.1:8000 ON PURPOSE (the app trusts X-Forwarded-* from the proxy),
-    # so it is NOT reachable from other machines directly. Point the proxy at
-    # 127.0.0.1:8000 and set FORWARDED_ALLOW_IPS to the proxy's address.
-    # Open the app: first-time setup asks for the setup code from
-    #   docker compose logs app | grep "Setup code"
-    # then creates your owner account (your name, username and password).
-    # Forgot the owner password? Print a one-time reset link:
-    #   docker compose exec app python -m app.manage reset-owner [--clear-2fa]
-    # on iPhone: Share → Add to Home Screen
+**On a VPS (automatic HTTPS).** Point your domain at the server, open ports 80
+and 443, then:
+
+    mkdir openpoolpro && cd openpoolpro
+    curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/docker-compose.vps.yml
+    printf 'SECRET_KEY=%s\nDOMAIN=pools.example.com\n' "$(openssl rand -hex 32)" > .env
+    docker compose -f docker-compose.vps.yml up -d
+    docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+
+Open `https://<your domain>`, enter the setup code, and the setup creates your
+owner account. Caddy gets and renews the certificate; the app is reachable only
+through it.
+
+**Behind your own reverse proxy.** `docker-compose.yml` runs the same published
+image bound to `127.0.0.1:8000`. Put SECRET_KEY in `.env`, run
+`docker compose up -d`, point the proxy at `127.0.0.1:8000`, and set
+`FORWARDED_ALLOW_IPS` to the address the proxy connects from (by default the
+Docker bridge, `172.17.0.1`).
+
+Images are built for x86 (amd64) and ARM (arm64) servers. Pin a release with
+`OPENPOOLPRO_TAG=vX.Y.Z` in `.env`. Forgot the owner password? Print a one-time
+reset link with `docker compose exec app python -m app.manage reset-owner
+[--clear-2fa]` (add `-f docker-compose.vps.yml` after `compose` on the VPS
+stack). On iPhone, Share → Add to Home Screen.
 
 All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
 folder.
@@ -67,6 +77,8 @@ for Unraid's Docker Compose Manager — read the SETUP notes at the top of the f
     python scripts/build_css.py
     COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
     # the setup code is printed in the log on first start
+    # or in Docker, building from this checkout with live reload:
+    #   docker compose -f docker-compose.dev.yml up --build
     ruff check app/ tests/ scripts/   # same gate CI runs
     pytest -n auto
 
