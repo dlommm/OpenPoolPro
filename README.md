@@ -26,22 +26,28 @@ one box (Docker + SQLite) and to be used from an iPhone in the field.
 
 ## Run
 
-    cp .env.example .env   # set SECRET_KEY (openssl rand -hex 32)
-    docker compose up -d
-    # (builds from source; to run the published image instead use
-    #  deploy/docker-compose.yml, which pulls dendlomm/openpoolpro:latest)
-    # Put a TLS reverse proxy in front — the compose file binds the app to
-    # 127.0.0.1:8000 ON PURPOSE (the app trusts X-Forwarded-* from the proxy),
-    # so it is NOT reachable from other machines directly. Point the proxy at
-    # 127.0.0.1:8000 and set FORWARDED_ALLOW_IPS to the proxy's address.
-    # Open the app: first-time setup asks for the setup code from
-    #   docker compose logs app | grep "Setup code"
-    # then creates your owner account (your name, username and password).
-    # Forgot the owner password? Print a one-time reset link:
-    #   docker compose exec app python -m app.manage reset-owner [--clear-2fa]
-    # on iPhone: Share → Add to Home Screen
+One image (`dendlomm/openpoolpro`, x86 and ARM) on any VPS or home server. Pick
+the compose file for the proxy that gives you HTTPS:
 
-All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
+| You have | Use |
+| --- | --- |
+| Pangolin on the same server | `docker-compose.pangolin.yml` |
+| A bare VPS, nothing on ports 80/443 | `docker-compose.caddy.yml` (bundled Caddy + Let's Encrypt) |
+| Nginx, NPM, Traefik, Caddy on the host, or a Cloudflare Tunnel | `docker-compose.yml` (app on `127.0.0.1:8000`) |
+| Unraid | `docker-compose.unraid.yml` |
+
+    curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/<the file>
+    echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
+    docker compose -f <the file> up -d
+    docker compose -f <the file> logs app | grep "Setup code"
+
+Then open the site, enter the setup code, and first-time setup creates your
+owner account. [docs/deploy.md](docs/deploy.md) has the details for each proxy
+(Pangolin resource and bypass rules, single sign-on, firewalls, updating and
+owner password recovery).
+
+All data lives in /opt/openpoolpro/data (SQLite DB, photos, nightly backups; set
+HOST_DIR to move it). Back up that
 folder.
 
 **Upgrading from a version that used `APP_PASSWORD`:** your `owner` account keeps
@@ -67,6 +73,8 @@ for Unraid's Docker Compose Manager — read the SETUP notes at the top of the f
     python scripts/build_css.py
     COOKIE_SECURE=0 uvicorn app.main:create_app --factory --reload
     # the setup code is printed in the log on first start
+    # or in Docker, building from this checkout with live reload:
+    #   docker compose -f docker-compose.dev.yml up --build
     ruff check app/ tests/ scripts/   # same gate CI runs
     pytest -n auto
 

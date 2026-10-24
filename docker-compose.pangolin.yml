@@ -1,0 +1,55 @@
+# OpenPoolPro behind Pangolin (https://github.com/fosrl/pangolin) on the same
+# server. The app joins Pangolin's Docker network and publishes no port, so
+# the only way in is through Pangolin.
+#
+# Works pasted into a control panel (Hostinger's Docker Manager and similar:
+# set the variables in its form) or from a shell (put them in a .env file
+# beside this one). Variables marked :? are required.
+#
+#   SECRET_KEY        required; any long random string (openssl rand -hex 32).
+#                     Keep it: changing it signs everyone out.
+#   PANGOLIN_NETWORK  Pangolin's Docker network; see `docker network ls`.
+#                     Usually "pangolin"; installed from a panel template it
+#                     may be "<project>_default".
+#   HOST_DIR          where data lives on the server (default /opt/openpoolpro)
+#   APP_TZ            your time zone (default America/New_York)
+#
+# Then in Pangolin add an HTTP resource for your subdomain on this server's
+# site with target  openpoolpro : 8000 , open it, and enter the setup code
+# from the logs:  docker compose logs app | grep "Setup code"
+#
+# If Pangolin's own sign-in protects the resource, add bypass rules for the
+# customer pages (/portal/*, /sign/*, /static/*, /branding/*, /manifest.json,
+# /sw.js) or customers can't open their links. See docs/deploy.md.
+services:
+  app:
+    image: ${OPENPOOLPRO_IMAGE:-dendlomm/openpoolpro:latest}
+    container_name: openpoolpro
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY to a long random string (openssl rand -hex 32)}
+      APP_TZ: ${APP_TZ:-America/New_York}
+      # Trust X-Forwarded-For from Pangolin's network. With no published port,
+      # only containers on that network can connect at all.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.16.0.0/12}
+      COOKIE_SECURE: "1"
+      # Optional single sign-on through Pangolin: see docs/deploy.md.
+      PROXY_AUTH_SECRET: ${PROXY_AUTH_SECRET:-}
+    volumes:
+      # Database, photos, PDFs and nightly backups. Back this folder up.
+      - ${HOST_DIR:-/opt/openpoolpro}/data:/data
+    networks: [pangolin]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  pangolin:
+    external: true
+    name: ${PANGOLIN_NETWORK:-pangolin}

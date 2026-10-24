@@ -1,0 +1,25 @@
+# Development: builds the image from this checkout and live-mounts ./app so
+# template and CSS changes (rebuild CSS with `python scripts/build_css.py`)
+# show on refresh; uvicorn --reload restarts on Python edits.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# Servers use docker-compose.yml, .caddy.yml or .pangolin.yml (docs/deploy.md).
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/data
+      - ./app:/srv/app
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env (openssl rand -hex 32)}
+      APP_TZ: ${APP_TZ:-America/New_York}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      COOKIE_SECURE: "0"
+      RUN_SCHEDULER: "0"
+      APP_VERSION: dev
+    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0",
+              "--port", "8000", "--reload", "--reload-dir", "/srv/app"]
+    restart: "no"

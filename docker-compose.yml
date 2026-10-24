@@ -1,28 +1,47 @@
+# OpenPoolPro from the published image (Docker Hub; the same image is at
+# ghcr.io/dlommm/openpoolpro). For a server with your own reverse proxy.
+# Behind Pangolin use docker-compose.pangolin.yml; on a bare VPS,
+# docker-compose.caddy.yml adds Caddy
+# with automatic HTTPS instead.
+#
+#   echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
+#   docker compose up -d
+#   docker compose logs app | grep "Setup code"
+#
+# Then open the app through your proxy and enter the setup code.
+#
+# Pasting into a control panel (Hostinger's Docker Manager and similar)? Set
+# SECRET_KEY in its variables form; data goes to HOST_DIR (default
+# /opt/openpoolpro).
 services:
   app:
-    build: .
+    image: ${OPENPOOLPRO_IMAGE:-dendlomm/openpoolpro:latest}
     ports:
       # Loopback-only. The app trusts X-Forwarded-* from the configured proxy,
       # so anything that can reach this port directly can forge the client IP
-      # the login rate limiter and audit log key on. Put the reverse proxy in
-      # front; don't publish this on 0.0.0.0.
+      # the login rate limiter and audit log key on. Point the reverse proxy at
+      # 127.0.0.1:8000; don't publish this on 0.0.0.0.
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./data:/data
+      - ${HOST_DIR:-/opt/openpoolpro}/data:/data
     environment:
-      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env (openssl rand -hex 32)}
       APP_TZ: ${APP_TZ:-America/New_York}
-      # Must match the address the reverse proxy connects from (see Dockerfile).
-      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
-      # Session cookies are marked Secure (HTTPS-only) by default — correct for
-      # the documented TLS-reverse-proxy setup above. Set COOKIE_SECURE=0 in
-      # .env ONLY for a deliberately plain-HTTP deployment; logins won't stick
-      # over HTTP otherwise.
+      # The address the reverse proxy connects FROM, as the container sees it.
+      # A proxy on the host usually arrives from the Docker bridge gateway.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.17.0.1}
+      # Session cookies are HTTPS-only by default. Set COOKIE_SECURE=0 in .env
+      # ONLY for a deliberately plain-HTTP setup, or logins won't stick.
       COOKIE_SECURE: ${COOKIE_SECURE:-1}
     # Drop everything, then add back only what the entrypoint needs before it
-    # gosu's down to PUID:PGID (chown the data dir, then setuid/setgid).
+    # drops to PUID:PGID (chown the data dir, then setuid/setgid).
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
