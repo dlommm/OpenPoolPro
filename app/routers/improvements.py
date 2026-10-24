@@ -29,7 +29,12 @@ def plan_page(request: Request, weekday: int = Query(0, ge=0, le=6), tech_id: in
         "rows": suggested, "weekday": weekday, "tech_id": tech_id, "techs": techs,
         "before": route_planning.estimate(rows), "after": route_planning.estimate(suggested),
         "fingerprint": route_planning.fingerprint(rows),
-        "coordinates": {p.id: route_planning.coordinates(p) for p in rows}})
+        "coordinates": {p.id: route_planning.coordinates(p) for p in rows},
+        # Stop counts for the weekday and technician chips (design v0.13).
+        "day_counts": [len(route_planning.properties(session, d, tech_id)) for d in range(7)],
+        "tech_counts": {t.id: len(route_planning.properties(session, weekday, t.id))
+                        for t in [*techs, None] if t is not None} | {
+            0: len(route_planning.properties(session, weekday, 0))}})
 
 
 @router.post("/routes/plan", dependencies=[Depends(require_perm("view_all_routes"))])

@@ -1559,3 +1559,14 @@ a.pipe-s,a.qb-row{text-decoration:none}
 .seg a.on{background:var(--sheet);color:var(--t);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.1),0 4px 10px -6px rgba(0,0,0,.3)}
 .ahero{padding-bottom:22px}
 a.tab{text-decoration:none}
+.rp-pick .lbl{margin-bottom:8px}
+a.rp-tech,a.rp-li{text-decoration:none;color:inherit}
+.rp-tech>.av{width:30px;height:30px;font-size:11px}
+#route-stops{list-style:none;margin:0;padding:0}
+.rp-list li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:10px}
+.rp-list li+li{border-top:1px solid var(--rule)}
+.rp-mk text{font-size:2.2px}
+.ops .text-safety::before,.ops p.mt-2:not(.text-safety)::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--post);vertical-align:1px}
+.ops .text-safety::before{background:var(--negt)}
+@media (max-width: 1100px){ .ops{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width: 720px){ .ops{grid-template-columns:minmax(0,1fr)} }

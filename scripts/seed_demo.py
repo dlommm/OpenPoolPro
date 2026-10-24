@@ -52,6 +52,16 @@ CUSTOMERS = [
 ]
 
 
+# Rough city centres, so the route planner has a map to draw.
+CITY_LL = {"Satellite Beach": (28.176, -80.590), "Melbourne": (28.083, -80.608),
+           "Merritt Island": (28.354, -80.682), "Cocoa Beach": (28.320, -80.608),
+           "Cocoa": (28.386, -80.742), "Indialantic": (28.090, -80.566),
+           "Rockledge": (28.350, -80.727), "Viera": (28.247, -80.728),
+           "Melbourne Beach": (28.068, -80.560), "Palm Bay": (28.034, -80.588),
+           "West Melbourne": (28.075, -80.655), "Titusville": (28.612, -80.808),
+           "Indian Harbour Beach": (28.149, -80.588)}
+
+
 def run() -> None:
     rnd = random.Random(7)
     engine = make_engine()
@@ -105,6 +115,8 @@ def run() -> None:
                 frequency="weekly", weekday=weekday if on_today else (weekday + 2) % 7,
                 anchor_date=today - timedelta(weeks=8), route_order=n,
                 assigned_tech_id=techs[tech].id if tech and techs.get(tech) else None)
+            lat, lng = CITY_LL.get(city, (28.2, -80.65))
+            prop.latitude, prop.longitude = lat + rnd.uniform(-0.012, 0.012), lng + rnd.uniform(-0.012, 0.012)
             if note:
                 prop.notes = note
             if "Dog" in note:
