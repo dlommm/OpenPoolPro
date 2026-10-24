@@ -4,6 +4,8 @@
 
 <p align="center"><em>Self-hosted pool-service management — routes, water chemistry, invoicing, and crew.</em></p>
 
+<p align="center"><a href="https://dlommm.github.io/OpenPoolPro/">Website</a> · <a href="https://hub.docker.com/r/dendlomm/openpoolpro">Docker Hub</a> · <a href="https://github.com/dlommm/OpenPoolPro/releases">Releases</a></p>
+
 ---
 
 Self-hosted pool-route app for small pool-service companies, built to run on
@@ -26,6 +28,8 @@ one box (Docker + SQLite) and to be used from an iPhone in the field.
 
     cp .env.example .env   # set SECRET_KEY (openssl rand -hex 32)
     docker compose up -d
+    # (builds from source; to run the published image instead use
+    #  deploy/docker-compose.yml, which pulls dendlomm/openpoolpro:latest)
     # Put a TLS reverse proxy in front — the compose file binds the app to
     # 127.0.0.1:8000 ON PURPOSE (the app trusts X-Forwarded-* from the proxy),
     # so it is NOT reachable from other machines directly. Point the proxy at

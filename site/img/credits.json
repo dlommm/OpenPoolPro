@@ -1,0 +1,50 @@
+[
+  {
+    "file": "img/hero-water.webp",
+    "media": "image",
+    "ref": "commons:91962863",
+    "title": "Caustic light - Flickr - fdecomite",
+    "creator": "fdecomite",
+    "creatorUrl": null,
+    "date": "Taken on 18 July 2005, 15:17",
+    "license": "CC BY 2.0",
+    "licenseCode": "by",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "creditRequired": true,
+    "page": "https://commons.wikimedia.org/wiki/File:Caustic_light_-_Flickr_-_fdecomite.jpg",
+    "via": "Wikimedia Commons",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Caustic_light_-_Flickr_-_fdecomite.jpg",
+    "width": 2048,
+    "height": 1532,
+    "bytes": 198974,
+    "credit": "\"Caustic light - Flickr - fdecomite\" by fdecomite, CC BY 2.0, via Wikimedia Commons",
+    "notes": [],
+    "saved": "2026-10-24T16:06:25.233Z"
+  },
+  {
+    "file": "img/pool-clip.webm",
+    "media": "video",
+    "poster": "site/img/outdoor-swimming-pool-1-2019-09-13-poster.jpg",
+    "ref": "commons:82141722",
+    "title": "Outdoor swimming pool 1 2019-09-13",
+    "creator": "F ASTILY",
+    "creatorUrl": null,
+    "date": "2019-09-13",
+    "license": "CC BY-SA 4.0",
+    "licenseCode": "by-sa",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "creditRequired": true,
+    "page": "https://commons.wikimedia.org/wiki/File:Outdoor_swimming_pool_1_2019-09-13.webm",
+    "via": "Wikimedia Commons",
+    "video": "https://upload.wikimedia.org/wikipedia/commons/transcoded/5/52/Outdoor_swimming_pool_1_2019-09-13.webm/Outdoor_swimming_pool_1_2019-09-13.webm.480p.vp9.webm",
+    "width": 854,
+    "height": 480,
+    "duration": 12.8,
+    "bytes": 2110519,
+    "credit": "\"Outdoor swimming pool 1 2019-09-13\" by F ASTILY, CC BY-SA 4.0, via Wikimedia Commons",
+    "notes": [
+      "Share-alike: an altered version (recoloured, combined with other pictures) must be shared under the same licence."
+    ],
+    "saved": "2026-10-24T16:06:26.573Z"
+  }
+]

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenPoolPro: free, self-hosted pool service software</title>
+<meta name="description" content="Routes, water chemistry, visits, invoicing and QuickBooks billing for pool service companies. Open source, runs on your own server with one Docker command.">
+<meta name="theme-color" content="#0E2A3B">
+<meta property="og:title" content="OpenPoolPro: pool service software you host yourself">
+<meta property="og:description" content="Routes, water chemistry, visits, invoicing and QuickBooks billing. Free and open source.">
+<meta property="og:image" content="https://dlommm.github.io/OpenPoolPro/img/og.jpg">
+<meta property="og:url" content="https://dlommm.github.io/OpenPoolPro/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://dlommm.github.io/OpenPoolPro/">
+<meta property="og:type" content="website">
+<link rel="icon" href="img/mark.png">
+<link rel="preload" href="fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="img/hero-water.webp" as="image">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero" id="top">
+  <img class="hero-pic" src="img/hero-water.webp" width="2048" height="1532" alt="Sunlight rippling across clear teal pool water">
+  <div class="rail" data-rail>
+    <div class="rail-in">
+      <h1 class="rail-h1"><a href="#top"><img src="img/mark.png" width="36" height="36" alt="">OpenPoolPro</a><span class="rail-what">pool service software</span></h1>
+      <p class="rail-say">Routes, water and billing, on your own server.</p>
+      <nav class="rail-nav" aria-label="Site">
+        <a href="https://github.com/dlommm/OpenPoolPro">GitHub</a>
+        <a href="https://hub.docker.com/r/dendlomm/openpoolpro">Docker Hub</a>
+        <a class="btn" href="#install">Install</a>
+      </nav>
+    </div>
+  </div>
+  <figure class="hero-detail" data-ui>
+    <img src="shots/today-crew.webp" width="2400" height="1500" alt="OpenPoolPro's Today screen: crew progress for three people and the owner's three stops for the day">
+  </figure>
+</header>
+
+<main id="main">
+
+  <section class="intro" aria-labelledby="intro-h">
+    <div class="intro-text">
+    <h2 id="intro-h" class="h2">Run the whole route from one app</h2>
+    <p class="lead">OpenPoolPro is free, open-source software for pool service companies. Your technicians work their route on a phone. You run customers, chemistry, invoices and QuickBooks billing from the office. It all lives on a server you control, in one Docker container.</p>
+    <ul class="facts" role="list">
+      <li><b>Free</b> forever, AGPL-3.0</li>
+      <li><b>One container</b> and a SQLite file</li>
+      <li><b>Phone first</b> works without signal</li>
+    </ul>
+    </div>
+    <figure class="intro-phone" data-ui><img src="shots/phone-today.webp" width="900" height="1948" alt="A technician's Today screen on a phone: seven stops, two done, the next stop highlighted" loading="lazy"></figure>
+  </section>
+
+  <section class="showcase" aria-labelledby="show-h">
+    <div class="grid">
+      <h2 id="show-h" class="h2 show-h">One stop, start to finish</h2>
+      <div class="state-row">
+        <p class="state-word">Next</p>
+        <div class="stop" data-ui>
+          <span class="stop-n">2</span>
+          <span class="stop-b"><b>Dana Cole</b><small>230 Sandpiper Way · Pool · 15,188 gal</small></span>
+          <span class="stop-r"><span class="tag">JR</span><span class="pill p-acc">Next</span></span>
+        </div>
+      </div>
+      <div class="state-row">
+        <p class="state-word">On site</p>
+        <div class="stop is-live" data-ui data-stop>
+          <span class="stop-n" data-stop-n>2</span>
+          <span class="stop-b"><b>Dana Cole</b><small data-stop-sub>Started 12:03 · FC 2.1 · pH 7.9 · TA 92</small></span>
+          <span class="stop-r" data-stop-r><a class="mini" href="#water">Open visit</a><button class="mini pri" type="button" data-done>Mark done</button></span>
+        </div>
+      </div>
+      <div class="state-row">
+        <p class="state-word">Done</p>
+        <div class="stop is-done" data-ui>
+          <span class="stop-n"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr">Done</span></span>
+          <span class="stop-b"><b>Dana Cole</b><small>Done 12:31 · 0.2 gal liquid chlorine · 0.4 gal acid</small></span>
+          <span class="stop-r"><span class="tag">JR</span><span class="pill p-pos">Done</span></span>
+        </div>
+      </div>
+      <p class="show-note">The customer gets the visit report by email, with readings, chemicals and photos. It goes on next month's invoice by itself.</p>
+    </div>
+  </section>
+
+  <section class="how" aria-labelledby="how-h">
+    <div class="grid">
+      <div class="how-text">
+        <h2 id="how-h" class="h2">Up and running this afternoon</h2>
+        <div class="how-step is-on" data-step="0">
+          <p class="how-say">Run one command on your server.</p>
+          <p class="how-sub">Any Linux box or small VPS with Docker. The app, the database and the nightly backups live in one folder.</p>
+          <figure class="how-pic" aria-hidden="true"><pre class="term"><code><span class="c">$</span> docker compose up -d
+<span class="c">$</span> docker compose logs app | grep "Setup code"
+<span class="o">Setup code: 9SZS-GBEK-82NZ</span></code></pre></figure>
+        </div>
+        <div class="how-step" data-step="1">
+          <p class="how-say">Then answer the setup questions.</p>
+          <p class="how-sub">Your name and password, two-step sign-in, your business details, your prices and your colours. There is no default login to change later.</p>
+          <figure class="how-pic"><img src="shots/setup-account.webp" width="2400" height="1500" alt="The setup wizard asking for the owner's name, username and password" loading="lazy"></figure>
+        </div>
+        <div class="how-step" data-step="2">
+          <p class="how-say">Hand your crew their phones.</p>
+          <p class="how-sub">Each technician gets a temporary password and their own route. Add the app to the home screen and it works like a native one, signal or not.</p>
+          <figure class="how-pic"><img src="shots/phone-doses.webp" width="900" height="1948" alt="Suggested doses on a technician's phone during a visit" loading="lazy"></figure>
+        </div>
+      </div>
+      <div class="how-stage" aria-hidden="true">
+        <div class="stage-in">
+          <div class="stage-card st-0 is-on" data-stage="0">
+            <pre class="term"><code><span class="c">$</span> mkdir openpoolpro &amp;&amp; cd openpoolpro
+<span class="c">$</span> curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/deploy/docker-compose.yml
+<span class="c">$</span> echo "SECRET_KEY=$(openssl rand -hex 32)" &gt; .env
+<span class="c">$</span> docker compose up -d
+<span class="c">$</span> docker compose logs app | grep "Setup code"
+<span class="o">No owner account yet. Setup code: 9SZS-GBEK-82NZ</span></code></pre>
+          </div>
+          <div class="stage-card st-1" data-stage="1"><img src="shots/setup-account.webp" width="2400" height="1500" alt="" loading="lazy"></div>
+          <div class="stage-card st-2" data-stage="2"><img src="shots/phone-today.webp" width="900" height="1948" alt="" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="water" id="water" aria-labelledby="water-h">
+    <div class="col">
+      <h2 id="water-h" class="h2">Try the dose engine</h2>
+      <p class="lead">Every visit starts with a water test. Type in a reading and OpenPoolPro shows where it sits against your target band and what to add. This calculator runs the same rules as the app.</p>
+    </div>
+    <form class="calc" data-ui data-calc aria-describedby="calc-note" onsubmit="return false">
+      <div class="calc-pool">
+        <label for="c-gal">Pool size</label>
+        <div class="calc-gal"><input id="c-gal" name="gallons" type="number" inputmode="numeric" min="1000" max="100000" step="500" value="15188"><span>gallons</span></div>
+        <div class="calc-presets" role="group" aria-label="Typical sizes">
+          <button type="button" data-gal="10000">10k</button><button type="button" data-gal="15188" class="on">15k</button><button type="button" data-gal="20000">20k</button><button type="button" data-gal="30000">30k</button>
+        </div>
+      </div>
+      <div class="calc-read">
+        <div class="rd" data-key="fc"><label for="c-fc">Free chlorine</label><input id="c-fc" type="number" inputmode="decimal" step="0.1" min="0" max="20" value="2.1"><span class="u">ppm</span>
+          <div class="scale" aria-hidden="true"><i class="band"></i><i class="mk"></i></div><p class="st" aria-live="polite"></p></div>
+        <div class="rd" data-key="ph"><label for="c-ph">pH</label><input id="c-ph" type="number" inputmode="decimal" step="0.1" min="6" max="9" value="7.9"><span class="u"></span>
+          <div class="scale" aria-hidden="true"><i class="band"></i><i class="mk"></i></div><p class="st" aria-live="polite"></p></div>
+        <div class="rd" data-key="ta"><label for="c-ta">Total alkalinity</label><input id="c-ta" type="number" inputmode="numeric" step="5" min="0" max="300" value="92"><span class="u">ppm</span>
+          <div class="scale" aria-hidden="true"><i class="band"></i><i class="mk"></i></div><p class="st" aria-live="polite"></p></div>
+        <div class="rd" data-key="cya"><label for="c-cya">Stabilizer (CYA)</label><input id="c-cya" type="number" inputmode="numeric" step="5" min="0" max="200" value="45"><span class="u">ppm</span>
+          <div class="scale" aria-hidden="true"><i class="band"></i><i class="mk"></i></div><p class="st" aria-live="polite"></p></div>
+      </div>
+      <div class="calc-out">
+        <h3 class="calc-h">Suggested doses</h3>
+        <ul class="doses" data-doses role="list">
+          <li><b>Liquid chlorine</b><span>0.2 gal</span></li>
+          <li><b>Muriatic acid</b><span>0.4 gal</span><small>Capped: re-test before adding more</small></li>
+        </ul>
+        <p class="calc-note" id="calc-note">Targets 4.0 ppm FC, pH 7.5, 90 ppm TA and 50 ppm CYA, the app's defaults. Every company sets its own targets and bands in Admin.</p>
+      </div>
+    </form>
+  </section>
+
+  <section class="features" aria-labelledby="feat-h">
+    <h2 id="feat-h" class="h2 col">Everything a pool company runs on</h2>
+
+    <article class="mod">
+      <div class="mod-pic tall" data-ui><img src="shots/phone-water.webp" width="900" height="1948" alt="The water step of a visit on a phone, with each reading against its target band" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">A visit in six steps</h3>
+        <p>Arrival, water, chemicals, tasks, photos and notes, then finish. Readings show low, in range or high as the tech types, in words, not just colour.</p>
+        <p>Dose suggestions come from your targets. Nothing counts as added until the tech records it.</p>
+      </div>
+    </article>
+
+    <article class="mod">
+      <div class="mod-pic" data-ui><img src="shots/customer-360.webp" width="2400" height="1500" alt="A customer's page with properties, pools, service history and balance" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">Every customer on one page</h3>
+        <p>Properties, pools and spas, gate codes and dogs, equipment and warranties, service history, water trends, invoices and contracts.</p>
+        <p>Customers get their own portal link for visit reports, photos and invoices.</p>
+      </div>
+    </article>
+
+    <article class="mod">
+      <div class="mod-pic" data-ui><img src="shots/billing.webp" width="2400" height="1500" alt="QuickBooks billing: monthly drafts moving from review to sent" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">Billing that QuickBooks collects</h3>
+        <p>Finished visits and jobs become monthly drafts. You review and approve them; QuickBooks Online invoices the customer and takes the payment.</p>
+        <p>Prefer your own invoices? Branded PDFs, sales tax, receivables by age and payment reminders are built in.</p>
+      </div>
+    </article>
+
+    <article class="mod">
+      <div class="mod-pic" data-ui><img src="shots/route-planner.webp" width="2400" height="1500" alt="The route planner: a map of one technician's stops for the day" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">Routes you can see</h3>
+        <p>Each technician's day on a map, in stop order. Move a stop to another route, or let the balancer even out the week.</p>
+        <p>Owners can keep a route of their own, set by hand.</p>
+      </div>
+    </article>
+
+    <article class="mod">
+      <div class="mod-pic" data-ui><img src="shots/analytics.webp" width="2400" height="1500" alt="Analytics: revenue by month split into service, chemicals and repairs" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">Numbers worth reading</h3>
+        <p>Revenue by month and where it came from, revenue per visit, customers gained and lost, and the properties whose chemical costs have outgrown their rate.</p>
+        <p>Every chart has a table view and exports to CSV, Excel or PDF.</p>
+      </div>
+    </article>
+
+    <article class="mod">
+      <div class="mod-pic" data-ui><img src="shots/palettes.webp" width="1800" height="898" alt="Six colour palettes to choose from, each with a small preview of the app" decoding="async"></div>
+      <div class="mod-text">
+        <h3 class="h3">Your colours, light or dark</h3>
+        <p>Pick a palette or your own brand colour; every shade is checked so text stays readable. Customers see it on the portal and in emails.</p>
+        <p>Each person chooses light or dark, text size and density for themselves.</p>
+      </div>
+    </article>
+  </section>
+
+  <section class="yours" aria-labelledby="yours-h">
+    <div class="col">
+      <h2 id="yours-h" class="h2">Your server, your data</h2>
+      <p class="lead">No subscription and no per-technician fee. Customer records never leave a machine you own, and nothing phones home.</p>
+    </div>
+    <div class="yours-grid">
+      <figure class="yours-clip">
+        <video autoplay muted loop playsinline preload="metadata" poster="img/pool-clip-poster.webp" width="1280" height="720" aria-label="An automatic pool cleaner working its way across a backyard pool">
+          <source src="img/pool-clip.webm" type="video/webm">
+        </video>
+      </figure>
+      <ul class="yours-list" role="list">
+        <li><b>No default password.</b> The first owner is created in setup, proven by a code from the server log.</li>
+        <li><b>Two-step sign-in</b> with backup codes, offered on day one and required by policy if you like.</li>
+        <li><b>Nightly backups</b>, plus an optional copy to a NAS or cloud folder.</li>
+        <li><b>Everything logged:</b> sign-ins, money changes and settings, in an audit log only owners can read.</li>
+        <li><b>Updates are one pull.</b> Migrations run on start, after a backup.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="proof col" aria-labelledby="proof-h">
+    <h2 id="proof-h" class="proof-say">Built on open tools</h2>
+    <ul class="proof-row" role="list">
+      <li>Python</li><li>FastAPI</li><li>SQLite</li><li>HTMX</li><li>Docker</li><li>IBM Plex</li>
+    </ul>
+  </section>
+
+  <section class="faq" aria-labelledby="faq-h">
+    <div class="grid">
+      <div class="faq-list" data-faq>
+        <h2 id="faq-h" class="faq-h">Common questions</h2>
+        <button type="button" class="q is-on" aria-expanded="true" aria-controls="a-cost" data-q="cost">What does it cost?</button>
+        <div class="a" id="a-cost" data-a="cost"><p>Nothing. OpenPoolPro is free and open source under the AGPL-3.0 licence. You pay only for the server you run it on; a small VPS is plenty for a company with a handful of technicians.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-need" data-q="need">What do I need to run it?</button>
+        <div class="a" id="a-need" data-a="need" hidden><p>A Linux machine with Docker: a VPS, a home server or a NAS such as Unraid. Put a reverse proxy with HTTPS in front of it, such as Caddy, Traefik or Nginx, so your crew can reach it from the road.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-phone" data-q="phone">Is there a phone app?</button>
+        <div class="a" id="a-phone" data-a="phone" hidden><p>It's an installable web app. Open it on the phone, choose Add to Home Screen, and it opens full screen like a native app. Visits finished without signal are saved on the phone and sent when it's back.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-qbo" data-q="qbo">Does it work with QuickBooks?</button>
+        <div class="a" id="a-qbo" data-a="qbo" hidden><p>Yes, QuickBooks Online. You approve each month's charges in OpenPoolPro and QuickBooks invoices the customer and collects payment. A CSV export is there too if you'd rather import by hand.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-data" data-q="data">Where does my data live?</button>
+        <div class="a" id="a-data" data-a="data" hidden><p>In a single folder on your server: one SQLite database plus photos, PDFs and nightly backups. Copy the folder and you have everything. Nothing is sent anywhere unless you connect email or QuickBooks.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-update" data-q="update">How do updates work?</button>
+        <div class="a" id="a-update" data-a="update" hidden><p>Each release is published to Docker Hub and the GitHub container registry. Run docker compose pull, then up -d. The app backs up the database before it changes anything.</p></div>
+        <button type="button" class="q" aria-expanded="false" aria-controls="a-team" data-q="team">Can I control what technicians see?</button>
+        <div class="a" id="a-team" data-a="team" hidden><p>Yes. Technicians see their own route and customers and none of the money. You can grant individual permissions, such as seeing all routes, managing customers, marking cash or approving billing.</p></div>
+      </div>
+      <div class="faq-pane" aria-hidden="true" data-pane></div>
+    </div>
+  </section>
+
+  <section class="cta col" id="install" aria-labelledby="cta-h">
+    <div><h2 id="cta-h" class="cta-say">Install it this afternoon</h2>
+    <p class="cta-sub">It's free, it runs on your own server, and the setup walks you through the rest.</p></div>
+    <div class="cta-row">
+      <a class="btn" href="https://github.com/dlommm/OpenPoolPro#run">Install from GitHub</a>
+      <a class="link" href="https://hub.docker.com/r/dendlomm/openpoolpro">Image on Docker Hub</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p class="foot-what">OpenPoolPro, pool service software</p>
+  <nav class="foot-links" aria-label="Project">
+    <a href="https://github.com/dlommm/OpenPoolPro">GitHub</a>
+    <a href="https://github.com/dlommm/OpenPoolPro/releases">Releases</a>
+    <a href="https://hub.docker.com/r/dendlomm/openpoolpro">Docker Hub</a>
+    <a href="https://github.com/dlommm/OpenPoolPro/blob/main/LICENSE">Licence</a>
+  </nav>
+  <p class="foot-year">2026 · AGPL-3.0</p>
+  <p class="foot-credits">Screens show made-up demo data. Photos: “Caustic light” by fdecomite, CC BY 2.0; “Outdoor swimming pool 1” by F ASTILY, CC BY-SA 4.0; both via Wikimedia Commons.</p>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>
