@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Sign your {{ contract.season_year }} agreement{% endblock %}
-{% block nav %}{% endblock %}
-{% block main_offset %}{% endblock %}
+{% set bare = true %}
 {% block content %}
 {# DocuSign-style flow: the agreement renders as a real in-page document (no
    PDF iframe — phone-friendly), with the signature panel embedded exactly at

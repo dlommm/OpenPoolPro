@@ -1,0 +1,3 @@
+{#- Light/dark before first paint, for pages outside the staff shell: the
+    stored choice (localStorage `mode`) or the device setting. -#}
+<script nonce="{{ csp_nonce() }}">(function(){var d=document.documentElement,q=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)');function m(){try{return localStorage.getItem('mode')}catch(e){return null}}function a(){var v=m(),k=v==='dark'||(v!=='light'&&!!(q&&q.matches));d.classList.toggle('dark',k);d.classList.toggle('light',!k)}a();window.__applyMode=a;if(q&&q.addEventListener)q.addEventListener('change',a)})();</script>

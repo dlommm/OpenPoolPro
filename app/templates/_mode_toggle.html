@@ -1,27 +1,18 @@
-{# Shared light/dark MODE toggle wiring — included once per base template.
-   Binds every [data-mode-toggle] button on the page (topbar + sidebar).
-   The no-flash script in <head> (see base.html) applies any stored mode
-   before first paint; this just flips it on click and persists it.
-   `preventDefault`/`stopPropagation` matter here: the topbar's toggle
-   button lives inside a native <details><summary>, and without them a
-   click would also toggle the mobile nav menu open/closed. #}
+{# Light/dark toggle wiring — included once by base.html. Binds every
+   [data-mode-toggle] on the page. The head script in base.html applies the
+   stored mode before first paint (window.__applyMode); this flips it on
+   click and stores it per device. #}
 <script nonce="{{ csp_nonce() }}">
 (function () {
   var root = document.documentElement;
-  function effectiveMode() {
-    var m = root.getAttribute("data-mode");
-    if (m === "light" || m === "dark") return m;
-    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-  }
-  function toggleMode(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    var next = effectiveMode() === "dark" ? "light" : "dark";
-    root.setAttribute("data-mode", next);
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest && e.target.closest("[data-mode-toggle]");
+    if (!t) return;
+    e.preventDefault();
+    var next = root.classList.contains("dark") ? "light" : "dark";
     try { localStorage.setItem("mode", next); } catch (err) {}
-  }
-  var btns = document.querySelectorAll("[data-mode-toggle]");
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].addEventListener("click", toggleMode);
-  }
+    if (window.__applyMode) window.__applyMode();
+    else { root.classList.toggle("dark", next === "dark"); root.classList.toggle("light", next !== "dark"); }
+  });
 })();
 </script>

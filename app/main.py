@@ -15,7 +15,7 @@ from app.db import Base, make_engine
 # app.main, and the require_auth middleware below resolves ALLOWED_THEMES via
 # this module's namespace (which keeps monkeypatch.setattr(app.main, ...)
 # working). New code should import from app.templating directly.
-from app.templating import ALLOWED_THEMES, DEFAULT_THEME, ThemeAwareLoader, active_theme_var, templates  # noqa: F401
+from app.templating import UI_DEFAULTS, templates, ui_settings  # noqa: F401
 
 log = logging.getLogger("openpoolpro.app")
 
@@ -204,22 +204,16 @@ def create_app(engine=None) -> FastAPI:
         exempt = path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
         request.state.user = None
         # Every path (incl. exempt/login/static, which also render base.html)
-        # gets a theme so `data-theme` and the theme-aware loader always
-        # resolve. Authenticated requests below override with the saved theme.
-        request.state.active_theme = DEFAULT_THEME
-        active_theme_var.set(DEFAULT_THEME)
+        # gets appearance defaults; signed-in requests below read the saved
+        # company choices.
+        request.state.ui = dict(UI_DEFAULTS)
         # The customer-facing pages are exempt from auth but they are still
-        # this company's storefront: a company on control-room was emailing
-        # portal and e-sign links that opened in warm-coastal, a skin the
-        # customer had never seen. Resolve the saved theme for those two
-        # prefixes only -- /static/ must not pay a DB read per asset.
+        # this company's storefront, so they read the saved appearance too --
+        # for those two prefixes only: /static/ must not pay a DB read per asset.
         if path.startswith(("/sign/", "/portal/")):
             from sqlalchemy.orm import Session as _S
             with _S(app.state.engine) as s:
-                theme = models.get_setting(s, "active_theme", DEFAULT_THEME)
-            if theme in ALLOWED_THEMES:
-                request.state.active_theme = theme
-                active_theme_var.set(theme)
+                request.state.ui = ui_settings(s)
         if not exempt:
             uid = request.session.get("user_id")
             # Missing "epoch" (cookie issued before this field existed) is
@@ -233,14 +227,8 @@ def create_app(engine=None) -> FastAPI:
                     if user is not None and user.active and epoch == user.session_epoch:
                         s.expunge(user)
                         request.state.user = user
-                        # Reuse this session to read the active theme once the
-                        # user is confirmed; validate against the allowed set,
-                        # falling back to the default on anything unexpected.
-                        theme = models.get_setting(s, "active_theme", DEFAULT_THEME)
-                        if theme not in ALLOWED_THEMES:
-                            theme = DEFAULT_THEME
-                        request.state.active_theme = theme
-                        active_theme_var.set(theme)
+                        # Reuse this session for the company's appearance.
+                        request.state.ui = ui_settings(s)
             # No valid session cookie? Try trusted-header SSO before bouncing
             # to /login: a proxy that already authenticated the user (Pangolin
             # et al.) injects PROXY_AUTH_HEADER, and we mint a normal session
@@ -254,6 +242,7 @@ def create_app(engine=None) -> FastAPI:
                     if puser is not None:
                         s.expunge(puser)
                         request.state.user = puser
+                        request.state.ui = ui_settings(s)
             if request.state.user is None:
                 request.session.clear()
                 return RedirectResponse("/login", status_code=303)

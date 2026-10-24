@@ -7,11 +7,11 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax
+from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax, templating
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
-from app.templating import ALLOWED_THEMES, DEFAULT_THEME, templates
+from app.templating import templates
 from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -116,7 +116,7 @@ def settings_page(request: Request, rules_created: str | None = None,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "labor_rate_dollars": "%.2f" % (rates.default_labor_rate_cents(session) / 100),
-        "active_theme": models.get_setting(session, "active_theme", DEFAULT_THEME),
+        "ui": templating.ui_settings(session),
         "business_name": models.get_setting(session, "business_name", ""),
         "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -562,13 +562,14 @@ async def save_job_templates(request: Request, session: Session = Depends(get_se
 @router.post("/settings/appearance")
 async def save_appearance(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
-    theme = (form.get("active_theme") or "").strip()
-    # Only persist a recognized theme; anything else (garbage/tampering) keeps
-    # whatever was previously stored rather than saving an invalid value that
-    # the middleware would just fall back on -- mirrors save_general/save_targets.
-    if theme in ALLOWED_THEMES:
-        models.set_setting(session, "active_theme", theme)
-        session.commit()
+    # Only persist recognized values; anything else (garbage/tampering) keeps
+    # whatever was previously stored -- mirrors save_general/save_targets.
+    for key, allowed in (("nav_layout", templating.NAV_LAYOUTS),
+                         ("header_style", templating.HEADER_STYLES)):
+        value = (form.get(key) or "").strip()
+        if value in allowed:
+            models.set_setting(session, key, value)
+    session.commit()
     return RedirectResponse("/settings", status_code=303)
 
 

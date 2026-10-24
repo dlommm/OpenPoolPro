@@ -1,12 +1,10 @@
 """Chemistry trend history and the customer-facing service report."""
 from datetime import date, timedelta
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import charts, models, water_history
-from app.main import ALLOWED_THEMES
 
 
 def _property_with_readings(engine, rows):
@@ -135,30 +133,20 @@ def test_chart_handles_a_single_reading(engine):
 
 # ------------------------------------------------------------------ page ----
 
-@pytest.mark.parametrize("theme", sorted(ALLOWED_THEMES))
-def test_water_page_renders_in_every_theme(client, engine, theme):
+def test_water_page_renders(client, engine):
     pid = _property_with_readings(engine, [(date(2026, 6, 1), 3.0, 7.4),
                                            (date(2026, 6, 8), 4.0, 7.5)])
-    with Session(engine) as s:
-        models.set_setting(s, "active_theme", theme)
-        s.commit()
     r = client.get(f"/properties/{pid}/water")
     assert r.status_code == 200
     assert "Free chlorine" in r.text and "<svg" in r.text
 
 
-def test_water_page_is_linked_from_customer_detail_in_every_theme(client, engine):
-    """The link lives in a template with a fork per theme, so it is exactly the
-    kind of thing that ships in one skin and silently not the others."""
+def test_water_page_is_linked_from_customer_detail(client, engine):
     pid = _property_with_readings(engine, [(date(2026, 6, 1), 3.0, 7.4)])
     with Session(engine) as s:
         cid = s.get(models.Property, pid).customer_id
-    for theme in sorted(ALLOWED_THEMES):
-        with Session(engine) as s:
-            models.set_setting(s, "active_theme", theme)
-            s.commit()
-        body = client.get(f"/customers/{cid}").text
-        assert f"/properties/{pid}/water" in body, f"no link under {theme}"
+    body = client.get(f"/customers/{cid}").text
+    assert f"/properties/{pid}/water" in body
 
 
 def test_water_page_with_no_readings_is_not_an_error(client, engine):

@@ -708,21 +708,8 @@ def test_pool_panel_shows_contract_and_new_contract_form(client, engine):
     assert "New contract" in body
 
 
-def test_detail_has_custab_tab_bar_and_panels(client, engine, monkeypatch):
-    # Task 1 tabs the shared/base customers/detail.html. The live route is
-    # theme-aware (DEFAULT_THEME="warm-coastal") and all 3 ALLOWED_THEMES
-    # already ship their own customers/detail.html override, which would
-    # shadow the base template we just changed (those overrides get tabbed
-    # in later tasks). Route this request through a synthetic theme name
-    # with no template directory so ThemeAwareLoader falls back to the
-    # shared base template for every lookup -- i.e. exercise exactly the
-    # file this task modified.
-    from app import main as app_main
-    monkeypatch.setattr(app_main, "ALLOWED_THEMES", app_main.ALLOWED_THEMES | {"__base_test__"})
+def test_detail_has_custab_tab_bar_and_panels(client, engine):
     cid = _mk_customer(client, engine, "Tabbed Co", city="Cocoa Beach")
-    with Session(engine) as s:
-        models.set_setting(s, "active_theme", "__base_test__")
-        s.commit()
     body = client.get(f"/customers/{cid}").text
     for name in ("profile", "photos", "pool"):
         assert f'data-custab-btn="{name}"' in body

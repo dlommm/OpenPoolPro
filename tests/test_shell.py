@@ -23,16 +23,38 @@ def test_base_template_blocks_and_nav(client):
         assert f'href="{href}"' in html
 
 
-def test_sidebar_and_topbar_coexist(client):
+def test_masthead_is_the_default_navigation(client):
     html = client.get("/").text
-    assert 'id="sidebar"' in html and "hidden lg:flex" in html
-    assert 'id="topbar"' in html and "lg:hidden" in html
-    assert "<details" in html and "<summary" in html  # hamburger menu is a native disclosure
-    assert html.count('action="/search"') == 2  # sidebar + hamburger menu
+    assert '<body class="nav-top hdr-lit">' in html
+    assert 'class="mast"' in html and 'class="side"' not in html
+    assert 'id="menu-sheet"' in html  # tablet/phone menu
+    assert 'class="bnav"' in html     # phone bottom bar
+    assert 'action="/search"' in html
     assert 'action="/logout"' in html
 
 
-def test_login_page_has_no_sidebar_offset(client, engine, monkeypatch):
+def test_sidebar_layout_is_an_admin_setting(client, engine):
+    from sqlalchemy.orm import Session
+
+    from app import models
+    r = client.post("/settings/appearance", data={"nav_layout": "side"}, follow_redirects=False)
+    assert r.status_code == 303
+    html = client.get("/").text
+    assert "nav-side" in html and 'class="side"' in html
+    # garbage keeps the stored value
+    client.post("/settings/appearance", data={"nav_layout": "sideways", "header_style": "x"})
+    with Session(engine) as s:
+        assert models.get_setting(s, "nav_layout", "") == "side"
+        assert models.get_setting(s, "header_style", "lit") == "lit"
+
+
+def test_active_page_is_marked_once(client):
+    html = client.get("/customers").text
+    assert html.count('class="sn on"') == 1  # Customers group: second row
+    assert 'class="mn on"' in html
+
+
+def test_login_page_has_no_staff_chrome(client, engine, monkeypatch):
     from fastapi.testclient import TestClient
 
     import app.config as config
@@ -40,5 +62,5 @@ def test_login_page_has_no_sidebar_offset(client, engine, monkeypatch):
     monkeypatch.setattr(config, "APP_PASSWORD", "x-unused-1")
     c = TestClient(create_app(engine=engine))
     html = c.get("/login").text
-    assert "lg:ml-56" not in html
-    assert "lg:ml-56" in client.get("/").text
+    assert 'class="mast"' not in html and "bare-shell" in html
+    assert 'class="mast"' in client.get("/").text

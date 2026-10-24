@@ -90,7 +90,7 @@ def test_offline_html_serves_200_anon(engine, monkeypatch):
 def test_base_html_has_sync_badge_and_flush_queue_script(client):
     html = client.get("/").text
     assert 'id="sync-badge"' in html
-    assert 'class="tag tag-safety"' in html
+    assert "mast-sync" in html
     assert "flush-queue" in html
     assert "queue-count" in html
 

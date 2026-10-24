@@ -479,7 +479,7 @@
       if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
       return;
     }
-    var main = document.querySelector("main");
+    var main = document.querySelector(".page") || document.querySelector("main");
     if (!main) return;
     if (!banner) {
       banner = el("button", "pending-banner");

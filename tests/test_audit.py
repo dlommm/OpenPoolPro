@@ -100,9 +100,12 @@ def test_audit_admin_can_view(client):
 
 
 def test_audit_nav_link_admin_only(client, tech_client):
-    assert '/audit' in client.get("/").text
+    # The audit log is a section of the one Admin page (design v0.12); the main
+    # navigation links Admin, and only for administrators.
+    assert 'href="/settings"' in client.get("/").text
     t = tech_client(name="navcheck")
-    assert '/audit' not in t.get("/").text
+    html = t.get("/").text
+    assert 'href="/settings"' not in html and '/audit' not in html
 
 
 # ---------------------------------------------------------------------------

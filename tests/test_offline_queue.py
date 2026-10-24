@@ -17,20 +17,16 @@ These tests assert against the sw.js source that:
   * what gets queued (urlencoded POSTs to /visit/*/complete|skip) is unchanged.
 
 Plus, through the rendered page: the queue screen and the global htmx error
-handlers actually ship, in every theme.
+handlers actually ship in the page shell.
 """
 import pathlib
 import re
 
 import pytest
 
-from app.main import ALLOWED_THEMES
-
 SW_PATH = pathlib.Path("app/static/sw.js")
 OFFLINE_PARTIAL = pathlib.Path("app/templates/_offline.html")
-BASES = [pathlib.Path("app/templates/base.html")] + [
-    pathlib.Path("app/templates/themes") / t / "base.html" for t in sorted(ALLOWED_THEMES)
-]
+BASES = [pathlib.Path("app/templates/base.html")]
 
 
 def sw_source():
@@ -221,8 +217,8 @@ def test_queued_entry_records_the_stop_page_for_the_pending_overlay():
 
 @pytest.mark.parametrize("base", BASES, ids=lambda p: p.parent.name)
 def test_every_base_template_ships_the_offline_partial(base):
-    """All four shells must include it — a theme that dropped it would give a
-    tech a badge with nothing behind it."""
+    """The shell must include it — dropping it would give a tech a badge with
+    nothing behind it."""
     src = base.read_text()
     assert '{% include "_offline.html" %}' in src
     assert src.count("data-sync-open") == 2, \
@@ -232,21 +228,21 @@ def test_every_base_template_ships_the_offline_partial(base):
             f"{badge} must be a real button — a <span> is not tappable or focusable"
 
 
-@pytest.mark.parametrize("theme", sorted(ALLOWED_THEMES))
-def test_queue_screen_and_htmx_handlers_render_in_every_theme(client, engine, theme):
+@pytest.mark.parametrize("layout", ["top", "side"])
+def test_queue_screen_and_htmx_handlers_render_in_both_layouts(client, engine, layout):
     from sqlalchemy.orm import Session
 
     from app import models
     with Session(engine) as s:
-        models.set_setting(s, "active_theme", theme)
+        models.set_setting(s, "nav_layout", layout)
         s.commit()
 
     html = client.get("/").text
-    assert 'id="sync-sheet"' in html, f"{theme}: no queue screen in the page shell"
+    assert 'id="sync-sheet"' in html, f"{layout}: no queue screen in the page shell"
     assert 'id="sync-sheet-body"' in html
     assert "data-sync-open" in html
-    assert "htmx:sendError" in html, f"{theme}: htmx send failures are still silent"
-    assert "htmx:responseError" in html, f"{theme}: htmx error responses are still silent"
+    assert "htmx:sendError" in html, f"{layout}: htmx send failures are still silent"
+    assert "htmx:responseError" in html, f"{layout}: htmx error responses are still silent"
 
 
 def test_queue_screen_offers_retry_and_a_confirmed_discard(client):

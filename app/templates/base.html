@@ -1,131 +1,149 @@
 <!doctype html>
-{% set active_theme = (request.state.active_theme if request else none) or 'warm-coastal' %}
-<html lang="en" data-theme="{{ active_theme }}">
+{#- The staff shell (Aqua Atelier). One layout for every screen:
+    desktop  -- deep-water masthead with group tabs and the active group's
+                pages in a second row, the working sheet floating over it; or,
+                when the company chose it in Admin › Appearance, a sidebar.
+    tablet   -- masthead with the page title, search and a menu sheet.
+    phone    -- the same, plus a five-slot bottom bar.
+    A page that sets `bare = true` (sign-in, customer e-sign) gets the plain
+    centred shell with no staff chrome. -#}
+{% set ui_cfg = (request.state.ui if request is not none and request.state is defined and request.state.ui is defined else {}) %}
+{% set nav_layout = ui_cfg.get("nav_layout", "top") %}
+{% set header_style = ui_cfg.get("header_style", "lit") %}
+{% set org_name = ui_cfg.get("company", "") %}
+<html lang="en" data-theme="aqua-atelier">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="color-scheme" content="light dark">
-  {% set theme_colors = {'warm-coastal': '#16303B', 'control-room': '#0E141B', 'fresh-field': '#0F172A'} %}
-  <meta name="theme-color" content="{{ theme_colors.get(active_theme, '#16303B') }}">
+  <meta name="theme-color" content="#0E2A3B">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="preload" href="/static/fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
-  <script nonce="{{ csp_nonce() }}">(function(){try{var m=localStorage.getItem('mode');if(m==='light'||m==='dark')document.documentElement.setAttribute('data-mode',m);}catch(e){}})();</script>
+  {% include "_mode_head.html" %}
   <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
   <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
   <title>{% block title %}OpenPoolPro{% endblock %}</title>
 </head>
-<body class="pb-8 lg:pt-[env(safe-area-inset-top)]">
-  {% import "_ui.html" as ui %}
-  {% block nav %}
-  {% set path = request.url.path if request else "/" %}
-  {% set u = request.state.user if request is not none and request.state is defined else None %}
-  {% set items = [] %}
-  {% if u is none or u.role == "admin" %}{% set items = items + [("/dashboard", "Dashboard", "money")] %}{% endif %}
-  {% if u is none or u.role == "admin" %}{% set items = items + [("/analytics", "Analytics", "week")] %}{% endif %}
-  {% if u is none or u.role == "admin" %}{% set items = items + [("/invoices", "Invoices", "money")] %}{% endif %}
-  {% if u is none or u.can("view_money") or u.can("approve_billing") %}{% set items = items + [("/billing", "QuickBooks billing", "money")] %}{% endif %}
-  {% set items = items + [("/", "Today", "route"), ("/week", "Week", "week"),
-    ("/customers", "Customers", "customers"), ("/jobs", "Service / Jobs", "jobs")] %}
-  {% if u is none or u.can("manage_customers") %}{% set items = items + [("/quotes", "Quotes", "money")] %}{% endif %}
-  {% if u is none or u.can("manage_customers") %}{% set items = items + [("/contracts", "Contracts", "document")] %}{% endif %}
-  {% if u is none or u.can("view_money") %}{% set items = items + [("/money", "Money", "money")] %}{% endif %}
-  {% if u is none or u.role == "admin" %}{% set items = items + [("/inventory", "Inventory", "inventory")] %}{% endif %}
-  {% if u is none or u.role == "admin" %}{% set items = items + [("/settings", "Settings", "settings")] %}{% endif %}
-  {% if u is not none and u.role == "admin" %}{% set items = items + [("/operations", "Operations", "settings")] %}{% endif %}
-  {% set low_count = low_stock_count(request) if request is not none and (u is none or u.role == "admin") else 0 %}
-  <aside id="sidebar" class="overflow-y-auto hidden lg:flex fixed inset-y-0 left-0 w-56 flex-col border-r border-seam bg-white p-4">
-    <a href="/" class="mb-6 flex items-center gap-2.5">
-      {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-12">
-      {% else %}<img src="/static/brand/openpoolpro-mark.png" alt="" class="h-9 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight">OpenPool<b class="text-pool">Pro</b></span>{% endif %}
-    </a>
-    <form method="get" action="/search" class="mb-4">
-      <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
-    </form>
-    <div class="flex flex-col gap-1">
-      {% for href, label, name in items %}
-      {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
-      <a href="{{ href }}" class="flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-         {{ 'bg-shallow text-pool' if active else 'text-mist' }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}
-        {% if href == "/inventory" and low_count > 0 %}<span class="tag tag-safety ml-auto">{{ low_count }}</span>{% endif %}
-      </a>
-      {% endfor %}
-    </div>
-    <div class="mt-auto pt-4 text-sm text-mist">
-      <button type="button" data-mode-toggle class="mode-toggle-row mb-2" aria-label="Toggle light/dark">
-        {{ ui.icon("sun", "mode-icon mode-icon-sun h-4 w-4") }}
-        {{ ui.icon("moon", "mode-icon mode-icon-moon h-4 w-4") }}
-        <span>Light / dark</span>
-      </button>
-      {% if u %}
-      <a href="/account" class="mb-2 flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-         {{ 'bg-shallow text-pool' if path == '/account' else 'text-mist' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
-      {% if u.role == "admin" %}
-      <a href="/audit" class="mb-2 flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-         {{ 'bg-shallow text-pool' if path == '/audit' else 'text-mist' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
-      {% endif %}
-      {{ u.name }}
-      <button type="button" id="sync-badge-desktop" class="tag tag-safety ml-1" hidden data-sync-open>0 waiting</button>
-      {% endif %}
-      <form method="post" action="/logout"><button class="mt-1 text-safety">Sign out</button></form>
-    </div>
-  </aside>
-  <header id="topbar" class="lg:hidden sticky top-0 z-40 border-b border-seam bg-white/95 backdrop-blur"
-          style="padding-top: env(safe-area-inset-top)">
-    <details class="group relative">
-      <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 [&::-webkit-details-marker]:hidden">
-        <span class="flex items-center gap-2">
-          {% if has_logo_check() %}<img src="/branding/logo" alt="Logo" class="max-h-8">
-          {% else %}<img src="/static/brand/openpoolpro-mark.png" alt="" class="h-7 w-auto shrink-0"><span class="font-display text-lg font-extrabold tracking-tight">OpenPool<b class="text-pool">Pro</b></span>{% endif %}
-        </span>
-        <span class="flex items-center gap-2">
-          <button type="button" data-mode-toggle class="mode-toggle" aria-label="Toggle light/dark">
-            {{ ui.icon("sun", "mode-icon mode-icon-sun h-5 w-5") }}
-            {{ ui.icon("moon", "mode-icon mode-icon-moon h-5 w-5") }}
-          </button>
-          <button type="button" id="sync-badge" class="tag tag-safety" hidden data-sync-open>0 waiting</button>
-          <span class="relative flex h-11 w-11 items-center justify-center rounded-lg" aria-label="Menu">
-            <span class="group-open:hidden">{{ ui.icon("menu", "h-6 w-6") }}</span>
-            <span class="hidden group-open:block">{{ ui.icon("plus", "h-6 w-6 rotate-45") }}</span>
-            {% if low_count > 0 %}<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-safety group-open:hidden"></span>{% endif %}
-          </span>
-        </span>
-      </summary>
-      <div class="absolute inset-x-0 top-full max-h-[calc(100vh-5rem)] overflow-y-auto border-b border-seam bg-white shadow-lg">
-        <form method="get" action="/search" class="px-4 pb-1 pt-3">
-          <input type="search" name="q" placeholder="Search customers…" class="field text-sm">
-        </form>
-        <nav class="flex flex-col gap-1 px-4 pb-3" aria-label="Main">
-          {% for href, label, name in items %}
-          {% set active = (path == href) or (href != "/" and path.startswith(href)) %}
-          <a href="{{ href }}" {% if active %}aria-current="page"{% endif %}
-             class="flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-             {{ 'bg-shallow text-pool' if active else 'text-mist' }}">{{ ui.icon(name, "h-4 w-4") }}{{ label }}
-            {% if href == "/inventory" and low_count > 0 %}<span class="tag tag-safety ml-auto">{{ low_count }}</span>{% endif %}
-          </a>
+{% import "_ui.html" as ui %}
+{% if bare %}
+<body class="bare-shell">
+  <main class="bare">
+{% else %}
+{% set u = request.state.user if request is not none and request.state is defined else None %}
+{% set navm = nav() %}
+<body class="nav-{{ nav_layout }} hdr-{{ header_style }}">
+  <a class="sr skip" href="#main">Skip to content</a>
+  <div class="shell">
+    <header class="mast">
+      {% if header_style == "lit" %}<div class="mast-fx" aria-hidden="true"><i></i><i></i><i></i></div>{% endif %}
+      <div class="mast-r1">
+        <a class="mast-brand" href="/">
+          {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
+          <div><b>OpenPoolPro</b>{% if org_name %}<span>{{ org_name }}</span>{% endif %}</div>
+        </a>
+        <span class="mast-ttl">{{ navm.title or "OpenPoolPro" }}</span>
+        <nav class="mast-nav" aria-label="Main navigation">
+          {% for t in navm.top %}
+          <a class="mn {{ 'on' if t.on }}" href="{{ t.href }}"{% if t.on %} aria-current="{{ 'page' if navm.single else 'true' }}"{% endif %}>{{ t.label }}{% if not navm.single and t.alert %}<i class="mn-dot" aria-hidden="true"></i>{% endif %}</a>
           {% endfor %}
-          {% if u %}
-          <div class="my-1 border-t border-seam"></div>
-          <a href="/account" class="flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-             {{ 'bg-shallow text-pool' if path == '/account' else 'text-mist' }}">{{ ui.icon("user", "h-4 w-4") }}Account</a>
-          {% if u.role == "admin" %}
-          <a href="/audit" class="flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-sm font-medium
-             {{ 'bg-shallow text-pool' if path == '/audit' else 'text-mist' }}">{{ ui.icon("week", "h-4 w-4") }}Audit</a>
-          {% endif %}
-          <div class="flex min-h-11 items-center justify-between px-3 text-sm text-mist">
-            <span>{{ u.name }}</span>
-            <form method="post" action="/logout"><button class="font-medium text-safety">Sign out</button></form>
-          </div>
-          {% endif %}
         </nav>
+        <div class="mast-acts">
+          <form class="mast-search" method="get" action="/search" role="search">
+            <a class="sr" href="/search">Search</a>
+            {{ ui.icon("search") }}
+            <label class="sr" for="mast-q">Search customers{{ ", jobs and invoices" if u is none or u.role == "admin" }}</label>
+            <input id="mast-q" type="search" name="q" placeholder="Search" autocomplete="off">
+          </form>
+          <a class="mast-ic mast-search-ic" href="/search" aria-label="Search">{{ ui.icon("search") }}</a>
+          <button type="button" id="sync-badge" class="mast-ic mast-sync" hidden data-sync-open>0 waiting</button>
+          <button type="button" class="mast-ic mast-mode" data-mode-toggle aria-label="Switch light or dark">
+            {{ ui.icon("sun", "mode-icon mode-icon-sun") }}{{ ui.icon("moon", "mode-icon mode-icon-moon") }}
+          </button>
+          <button type="button" class="mast-ic mast-menu" aria-label="Open menu" aria-controls="menu-sheet" data-open="menu-sheet">{{ ui.icon("menu", "ic20") }}</button>
+          {% if u %}<button type="button" class="av mast-av" title="{{ u.name }}" aria-label="{{ u.name }} — account and sign out" aria-controls="menu-sheet" data-open="menu-sheet">{{ u.name|initials }}</button>{% endif %}
+        </div>
       </div>
-    </details>
-  </header>
-  {% endblock %}
-  <main class="mx-auto max-w-lg px-4 pt-3 md:max-w-2xl md:px-6 {% block main_offset %}lg:ml-56 lg:max-w-none lg:px-8{% endblock %}">{% block content %}{% endblock %}</main>
+      {% if navm.sub %}
+      <nav class="mast-r2" aria-label="{{ navm.sub_label }}">
+        {% for i in navm.sub %}
+        <a class="sn {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
+        {% endfor %}
+      </nav>
+      {% endif %}
+    </header>
+
+    {% if nav_layout == "side" %}
+    <aside class="side" aria-label="Main navigation">
+      <a class="brand" href="/">
+        {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
+        <div><b>OpenPoolPro</b>{% if org_name %}<span>{{ org_name }}</span>{% endif %}</div>
+      </a>
+      <form class="search" method="get" action="/search" role="search">
+        {{ ui.icon("search") }}<label class="sr" for="side-q">Search</label>
+        <input id="side-q" type="search" name="q" placeholder="Search" autocomplete="off">
+      </form>
+      {% for g in navm.groups %}
+        {% if g.label and not navm.single and g.label != "Home" %}<div class="side-grp">{{ g.label }}</div>{% endif %}
+        {% for i in g.items %}
+        <a class="nav-i {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ ui.icon(i.icon, "ic18") }}{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
+        {% endfor %}
+      {% endfor %}
+      <div class="side-foot">
+        <button type="button" id="sync-badge-desktop" class="nav-i" hidden data-sync-open>0 waiting</button>
+        <button type="button" class="nav-i" data-mode-toggle>{{ ui.icon("sun", "ic18 mode-icon mode-icon-sun") }}{{ ui.icon("moon", "ic18 mode-icon mode-icon-moon") }}Light or dark</button>
+        {% if u %}
+        <a class="me" href="/account">{{ ui.av(u.name) }}<div><div>{{ u.name }}</div><div class="muted small">{{ "Owner · administrator" if u.role == "admin" else "Technician" }}</div></div></a>
+        <form method="post" action="/logout"><button class="nav-i" type="submit">{{ ui.icon("logout", "ic18") }}Sign out</button></form>
+        {% endif %}
+      </div>
+    </aside>
+    {% endif %}
+
+    <div class="body">
+      <main class="sheet" id="main">
+        <div class="page">
+{% endif %}
+          {% block content %}{% endblock %}
+{% if bare %}
+  </main>
+{% else %}
+        </div>
+      </main>
+      <nav class="bnav" aria-label="Quick navigation">
+        {% for key, href, label, icon in navm.bnav %}
+        {% set on = navm.current is not none and navm.current.key == key %}
+        <a class="bn {{ 'on' if on }}" href="{{ href }}"{% if on %} aria-current="page"{% endif %}>{{ ui.icon(icon, "ic20") }}{{ label }}</a>
+        {% endfor %}
+        <button type="button" class="bn" aria-controls="menu-sheet" data-open="menu-sheet">{{ ui.icon("menu", "ic20") }}More</button>
+      </nav>
+    </div>
+  </div>
+
+  {# Menu sheet (tablet and phone; also reachable on desktop from nothing). #}
+  <div class="scrim menu-sheet" id="menu-sheet" hidden data-close-self>
+    <div class="dlg" role="dialog" aria-modal="true" aria-label="Menu">
+      <div class="dlg-h">
+        {% if u %}<div class="row">{{ ui.av(u.name) }}<div><div class="strong">{{ u.name }}</div><div class="muted small">{{ "Owner · administrator" if u.role == "admin" else "Technician" }}{% if org_name %} · {{ org_name }}{% endif %}</div></div></div>{% else %}<span></span>{% endif %}
+        <button type="button" class="icbtn plain" aria-label="Close menu" data-close>{{ ui.icon("close", "ic20") }}</button>
+      </div>
+      {% for g in navm.groups %}
+        {% if g.label and not navm.single and g.label != "Home" %}<div class="side-grp" style="padding-left:2px">{{ g.label }}</div>{% endif %}
+        {% for i in g.items %}
+        <a class="nav-i {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ ui.icon(i.icon, "ic18") }}{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
+        {% endfor %}
+      {% endfor %}
+      {% if u %}
+      <div class="side-grp" style="padding-left:2px">You</div>
+      {% if not navm.single %}<a class="nav-i" href="/account">{{ ui.icon("user", "ic18") }}Account</a>{% endif %}
+      <button type="button" class="nav-i" data-mode-toggle>{{ ui.icon("sun", "ic18 mode-icon mode-icon-sun") }}{{ ui.icon("moon", "ic18 mode-icon mode-icon-moon") }}Light or dark</button>
+      <form method="post" action="/logout"><button class="nav-i" type="submit">{{ ui.icon("logout", "ic18") }}Sign out</button></form>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
   {% include "_uploads.html" %}
   {% include "_offline.html" %}
   {% include "_behaviors.html" %}

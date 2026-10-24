@@ -85,15 +85,15 @@ def test_sign_page_renders_without_a_session(client, engine, monkeypatch):
     assert r.headers["content-disposition"].startswith("inline")
 
 
-def test_sign_page_wears_the_company_theme(client, engine, monkeypatch):
+def test_sign_page_wears_the_company_appearance(client, engine, monkeypatch):
     """The e-sign page is the same storefront as the portal: the theme has to be
     resolved for it too, even though the request carries no session."""
     _, token, _ = _sent_contract(client, engine, monkeypatch)
     with Session(engine) as s:
-        models.set_setting(s, "active_theme", "fresh-field")
+        models.set_setting(s, "business_name", "Coastline Pool Co.")
         s.commit()
     client.cookies.clear()
-    assert 'data-theme="fresh-field"' in client.get(f"/sign/{token}").text
+    assert 'data-theme="aqua-atelier"' in client.get(f"/sign/{token}").text
 
 
 def test_signer_ip_is_the_customer_public_ip_not_the_proxy(client, engine, monkeypatch):
