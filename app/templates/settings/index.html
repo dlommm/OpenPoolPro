@@ -884,6 +884,76 @@
           </script>
         </div>
 
+        <div class="card p-4 lg:col-span-2 clook" id="customer-look">
+          <h2 class="set-h">What customers see</h2>
+          <p class="mb-3 text-sm text-mist">The emails OpenPoolPro sends customers: visit summaries, invoices, reminders and signing requests.</p>
+          {% if customer_look_saved %}<p class="clook-note" role="status">Saved. New emails use these settings.</p>{% endif %}
+          {% if customer_look_error %}<p class="clook-note bad" role="alert">The sign-off is too long (up to {{ signoff_max }} characters on 6 lines), so it was not changed.</p>{% endif %}
+          <div class="clook-grid">
+            <form method="post" action="/settings/customer-look" class="clook-opts" data-clook-form>
+              <input type="hidden" name="brand" value="0">
+              <label class="chk"><input type="checkbox" name="brand" value="1" {{ "checked" if customer_look.brand }}>
+                <span><span class="strong">Use the company palette</span><span class="help">Email headers and buttons take your colours. Off uses the standard OpenPoolPro teal.</span></span></label>
+              <input type="hidden" name="logo" value="0">
+              <label class="chk"><input type="checkbox" name="logo" value="1" {{ "checked" if customer_look.logo }}>
+                <span><span class="strong">Show the company logo</span><span class="help">{% if company.has_logo %}Change it under Business.{% else %}No logo uploaded yet. Add one under Business.{% endif %}</span></span></label>
+              <fieldset class="clook-fmt">
+                <legend class="lbl">Email format</legend>
+                <div class="seg" role="radiogroup" aria-label="Email format">
+                  {% for value, label in [("html", "Branded"), ("plain", "Plain text")] %}
+                  <label class="{{ 'on' if customer_look.format == value }}"><input type="radio" name="format" value="{{ value }}" class="sr-only" {{ "checked" if customer_look.format == value }}>{{ label }}</label>
+                  {% endfor %}
+                </div>
+                <p class="help">Branded emails always carry a plain-text copy for mail apps that block images and styling.</p>
+              </fieldset>
+              <label class="lbl" for="clook-signoff">Sign-off</label>
+              <textarea id="clook-signoff" name="signoff" class="inp" rows="3" maxlength="{{ signoff_max }}" placeholder="{{ appearance.company or 'Your company name' }}">{{ customer_look.signoff }}</textarea>
+              <p class="help">Closes visit, invoice and reminder emails. Leave it blank to sign with the company name. Contract emails keep the wording set under Contract.</p>
+              <button class="btn-secondary w-full">Save what customers see</button>
+            </form>
+            <div class="clook-prev">
+              <div class="seg" role="tablist" aria-label="Email preview">
+                {% for kind, label in email_preview_kinds %}
+                <a href="/settings/customer-look/preview/{{ kind }}" target="clook-frame" role="tab" data-clook-tab="{{ kind }}" class="{{ 'on' if loop.first }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ label }}</a>
+                {% endfor %}
+              </div>
+              <iframe name="clook-frame" class="clook-frame" title="Email preview" sandbox="" loading="lazy" referrerpolicy="no-referrer"
+                      src="/settings/customer-look/preview/{{ email_preview_kinds[0][0] }}" data-clook-frame></iframe>
+              <p class="help">A sample with made-up customers. Invoices sent through QuickBooks use QuickBooks' own email design; these settings cover the emails OpenPoolPro sends itself.</p>
+            </div>
+          </div>
+          <script nonce="{{ csp_nonce() }}">
+          (function () {
+            var form = document.querySelector("[data-clook-form]"), frame = document.querySelector("[data-clook-frame]");
+            if (!form || !frame) return;
+            var tabs = document.querySelectorAll("[data-clook-tab]"), kind = tabs.length ? tabs[0].getAttribute("data-clook-tab") : "visit", timer;
+            function src() {
+              var p = new URLSearchParams();
+              p.set("brand", form.querySelector('input[type=checkbox][name="brand"]').checked ? "1" : "0");
+              p.set("logo", form.querySelector('input[type=checkbox][name="logo"]').checked ? "1" : "0");
+              var f = form.querySelector('input[name="format"]:checked');
+              if (f) p.set("format", f.value);
+              p.set("signoff", form.querySelector('textarea[name="signoff"]').value);
+              return "/settings/customer-look/preview/" + encodeURIComponent(kind) + "?" + p.toString();
+            }
+            function refresh() { frame.src = src(); }
+            tabs.forEach(function (t) {
+              t.addEventListener("click", function (e) {
+                e.preventDefault();
+                kind = t.getAttribute("data-clook-tab");
+                tabs.forEach(function (o) { o.classList.toggle("on", o === t); o.setAttribute("aria-selected", o === t ? "true" : "false"); });
+                refresh();
+              });
+            });
+            form.addEventListener("change", function (e) {
+              if (e.target.name === "format") form.querySelectorAll(".clook-fmt label").forEach(function (l) { l.classList.toggle("on", l.contains(e.target)); });
+              refresh();
+            });
+            form.querySelector('textarea[name="signoff"]').addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(refresh, 350); });
+          })();
+          </script>
+        </div>
+
         <div class="card p-4">
           <h2 class="set-h">Backups</h2>
           <div class="space-y-1">

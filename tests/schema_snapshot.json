@@ -113,6 +113,7 @@
     "body",
     "created_at",
     "customer_id",
+    "html",
     "id",
     "last_error",
     "sent_at",

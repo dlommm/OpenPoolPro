@@ -11,6 +11,7 @@ from app import (
     chem_presets,
     chem_targets,
     config,
+    email_brand,
     mailer,
     models,
     palettes,
@@ -141,6 +142,11 @@ def settings_page(request: Request, rules_created: str | None = None,
         "appearance": appearance,
         "palette_cards": palette_cards,
         "palette_custom_fix": palette_custom_fix,
+        "customer_look": email_brand.look(session),
+        "customer_look_saved": request.query_params.get("look") == "saved",
+        "customer_look_error": request.query_params.get("look") == "error",
+        "email_preview_kinds": email_brand.PREVIEW_KINDS,
+        "signoff_max": email_brand.SIGNOFF_MAX,
         "business_name": models.get_setting(session, "business_name", ""),
         "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -619,6 +625,59 @@ async def save_appearance(request: Request, session: Session = Depends(get_sessi
         models.set_setting(session, "palette_custom", custom)
     session.commit()
     return RedirectResponse("/settings", status_code=303)
+
+
+def _look_flag(form, key):
+    """A checkbox posted as a hidden "0" followed by the box's "1": the last
+    value wins. Missing or anything else -> None (keep the stored value)."""
+    values = form.getlist(key)
+    return values[-1] if values and values[-1] in ("0", "1") else None
+
+
+@router.post("/settings/customer-look")
+async def save_customer_look(request: Request, session: Session = Depends(get_session)):
+    """What customers see: palette on emails, logo, email format, sign-off.
+    Only recognized values are stored; anything else keeps the stored value."""
+    form = await request.form()
+    for field, key in (("brand", "email_brand"), ("logo", "email_logo")):
+        flag = _look_flag(form, field)
+        if flag is not None:
+            models.set_setting(session, key, flag)
+    fmt = (form.get("format") or "").strip()
+    if fmt in email_brand.FORMATS:
+        models.set_setting(session, "email_format", fmt)
+    outcome = "saved"
+    if "signoff" in form:
+        signoff = email_brand.clean_signoff(form.get("signoff"))
+        if signoff is None:
+            outcome = "error"
+        else:
+            models.set_setting(session, "email_signoff", signoff)
+    session.commit()
+    return RedirectResponse(f"/settings?look={outcome}#customer-look", status_code=303)
+
+
+@router.get("/settings/customer-look/preview/{kind}")
+def customer_look_preview(kind: str, request: Request, session: Session = Depends(get_session)):
+    """One sample email, rendered by the same template the mailer uses, for
+    the settings card's sandboxed iframe. Unsaved choices may be passed as
+    query parameters (validated exactly like the save) so the preview follows
+    the form; anything invalid falls back to the saved value."""
+    if kind not in dict(email_brand.PREVIEW_KINDS):
+        return HTMLResponse("not found", status_code=404)
+    lk = email_brand.look(session)
+    q = request.query_params
+    for field in ("brand", "logo"):
+        if q.get(field) in ("0", "1"):
+            lk[field] = q.get(field) == "1"
+    if q.get("format") in email_brand.FORMATS:
+        lk["format"] = q.get("format")
+    if "signoff" in q:
+        signoff = email_brand.clean_signoff(q.get("signoff"))
+        if signoff is not None:
+            lk["signoff"] = signoff
+    return HTMLResponse(email_brand.preview(session, kind, lk),
+                        headers={"Cache-Control": "no-store"})
 
 
 @router.post("/settings/general")
@@ -1158,8 +1217,11 @@ async def send_test_email(request: Request, session: Session = Depends(get_sessi
     to_addr = (form.get("to_addr") or "").strip()
     if not to_addr or "@" not in to_addr:
         return RedirectResponse("/settings?mail_error=1", status_code=303)
-    mailer.queue(session, to_addr, "OpenPoolPro test email",
-                "This is a test email from OpenPoolPro.")
+    lk = email_brand.look(session)
+    mail = email_brand.smtp_test_mail(company_name=email_brand.company(session)["name"],
+                                      signoff=lk["signoff"])
+    mailer.queue(session, to_addr, mail.subject, mail.text,
+                 html=email_brand.html_for(session, mail))
     session.commit()
     sent, failed = mailer.flush_outbox(session)
     session.commit()

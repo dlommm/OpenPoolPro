@@ -16,8 +16,8 @@ from app.timefmt import business_today, from_local_hhmm, local_date
 router = APIRouter()
 
 
-def service_report(session, v, business: str, tech_name: str) -> str:
-    """The plain-text visit summary the homeowner receives.
+def service_mail(session, v, business: str, tech_name: str, signoff: str = ""):
+    """The visit summary the homeowner receives, as an email_brand.Mail.
 
     Proof of work is what answers "did anyone actually come?", justifies a rate
     increase, and settles a dispute — so it includes what was measured and what
@@ -27,21 +27,17 @@ def service_report(session, v, business: str, tech_name: str) -> str:
     Deliberately excludes money: this goes out automatically on every visit,
     and pricing conversations belong on the invoice, not in a service note.
     """
-    from app import water_history
+    from app import email_brand, water_history
 
     tgt = water_history.targets(session)
-    lines = [f"{business}", f"{v.property.label} — {v.date.strftime('%B %-d, %Y')}", ""]
-
     readings = []
     for key, label, unit, *_ in water_history.METRICS:
         value = getattr(v, key, None)
         if value is None:
             continue
         target = tgt.get(key)
-        suffix = f" (target {target:g})" if target is not None else ""
-        readings.append(f"  {label}: {value:g}{' ' + unit if unit else ''}{suffix}")
-    if readings:
-        lines += ["Water test:"] + readings + [""]
+        readings.append((label, f"{value:g}{' ' + unit if unit else ''}",
+                         f"target {target:g}" if target is not None else ""))
 
     # Queried rather than read off v.chemicals: complete() inserts the new lines
     # by visit_id, so the already-loaded relationship collection is stale at
@@ -49,20 +45,16 @@ def service_report(session, v, business: str, tech_name: str) -> str:
     session.flush()
     added = session.scalars(select(models.VisitChemical).where(
         models.VisitChemical.visit_id == v.id)).all()
-    if added:
-        lines.append("Chemicals added:")
-        for vc in added:
-            lines.append(f"  {vc.chemical.name}: {vc.amount:g} {vc.chemical.unit}")
-        lines.append("")
+    chemicals = [(vc.chemical.name, f"{vc.amount:g} {vc.chemical.unit}") for vc in added]
+    return email_brand.visit_mail(
+        business=business, property_label=v.property.label, day=v.date, tech_name=tech_name,
+        readings=readings, chemicals=chemicals, tasks=list(v.tasks_done or []),
+        notes=v.notes or "", signoff=signoff)
 
-    if v.tasks_done:
-        lines += ["Completed:"] + [f"  {t}" for t in v.tasks_done] + [""]
 
-    if v.notes:
-        lines += ["Notes:", f"  {v.notes}", ""]
-
-    lines.append(f"Technician: {tech_name}")
-    return "\n".join(lines)
+def service_report(session, v, business: str, tech_name: str) -> str:
+    """The plain-text part of the visit summary (see service_mail)."""
+    return service_mail(session, v, business, tech_name).text
 
 
 def _get_or_create(session: Session, property_id: int, d: date) -> models.Visit:
@@ -357,10 +349,13 @@ async def complete(visit_id: int, request: Request, session: Session = Depends(g
     # arrives against an already-done visit and either 409s above or, matching,
     # is a deliberate edit that still shouldn't re-send.
     if was_due and customer.email and customer.notify_email:
+        from app import email_brand
+
         business = models.get_setting(session, "business_name", "OpenPoolPro") or "OpenPoolPro"
-        mailer.queue(session, customer.email, f"{business} — service visit completed",
-                     service_report(session, v, business, request.state.user.name),
-                     customer_id=customer.id)
+        mail = service_mail(session, v, business, request.state.user.name,
+                            email_brand.look(session)["signoff"])
+        mailer.queue(session, customer.email, mail.subject, mail.text,
+                     customer_id=customer.id, html=email_brand.html_for(session, mail))
     session.commit()
     return RedirectResponse("/", status_code=303)
 

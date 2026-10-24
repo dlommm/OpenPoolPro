@@ -45,7 +45,7 @@ def _sent_with_token(client, engine, monkeypatch):
     cid = _approved_contract(client, engine)
     captured = {}
     monkeypatch.setattr(mailer, "send_message",
-                        lambda to, sub, body, conf=None, attachments=None:
+                        lambda to, sub, body, conf=None, attachments=None, html=None:
                         captured.__setitem__("body", body))
     client.post(f"/contracts/{cid}/send", follow_redirects=False)
     token = re.search(r"/sign/([A-Za-z0-9_-]+)", captured["body"]).group(1)

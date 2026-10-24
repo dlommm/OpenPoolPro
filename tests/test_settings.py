@@ -380,7 +380,7 @@ def test_send_test_email_no_at_sign_errors_and_queues_nothing(client, engine):
 
 def test_send_test_email_queues_and_flushes(client, engine, monkeypatch):
     monkeypatch.setattr(config, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(mailer, "send_message", lambda *a: None)
+    monkeypatch.setattr(mailer, "send_message", lambda *a, **kw: None)
     r = client.post("/settings/mail/test", data={"to_addr": "dest@example.com"},
                     follow_redirects=False)
     assert r.status_code == 303
