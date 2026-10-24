@@ -210,13 +210,24 @@ def _contract_tab_ctx(session) -> dict:
     palette, a preview rendered against the sample context, and the editable
     e-sign message templates."""
     from app import contract_tokens, sign_messages
-    from app.contract_defaults import get_template
-    from app.routers.contract_template import _preview_html, sample_context
+    from app.company import company_info
+    from app.contract_defaults import (
+        STALE_DAYS_MAX,
+        STALE_DAYS_MIN,
+        get_stale_days,
+        get_template,
+    )
+    from app.routers.contract_template import _preview_html, sample_context, sample_objects
     tpl = get_template(session)
+    company = company_info(session)
     return {
         "contract_template": tpl,
         "contract_tokens": contract_tokens.TOKENS,
-        "contract_preview_html": _preview_html(tpl, sample_context()),
+        "contract_company": company,
+        "contract_preview_html": _preview_html(tpl, sample_context(company=company),
+                                               sample_objects(company=company)),
+        "contract_stale_days": get_stale_days(session),
+        "contract_stale_range": (STALE_DAYS_MIN, STALE_DAYS_MAX),
         "sign_messages": {k: sign_messages.get_message(session, k)
                           for k in sign_messages.DEFAULTS},
         "sign_message_tokens": sign_messages.TOKENS,
