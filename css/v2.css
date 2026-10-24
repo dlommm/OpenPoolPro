@@ -1604,3 +1604,7 @@ a.rp-tech,a.rp-li{text-decoration:none;color:inherit}
 .portal .pmain>section .space-y-3>*+*,.portal .pmain>section .space-y-2>*+*{margin-top:10px}
 .denied-ic{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--as);color:var(--ai)}
 @media (max-width: 720px){ .etbl thead{display:none} .etbl td:nth-child(3),.etbl td:nth-child(4){display:none} }
+.lgd>summary{list-style:none}
+.lgd>summary::-webkit-details-marker{display:none}
+.lgd+.lgd{border-top:1px solid var(--rule)}
+.lgd .lg{border-top:0}

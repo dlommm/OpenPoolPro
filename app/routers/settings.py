@@ -1157,3 +1157,40 @@ def reset_tax_state(state: str, session: Session = Depends(get_session)):
         row.overridden = False
         session.commit()
     return RedirectResponse("/settings#tax", status_code=303)
+
+
+@router.get("/settings/logs")
+def logs_page(request: Request, level: str = "", q: str = ""):
+    """Admin › Logs: the recent in-memory log lines, newest first, filtered by
+    level and text. Download returns the same lines as plain text."""
+    from app.observability import RECENT
+    order = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
+    floor = order.get(level, 0)
+    needle = (q or "").strip().lower()[:80]
+    lines = [r for r in reversed(RECENT.lines)
+             if order.get(r["level"], 1) >= floor
+             and (not needle or needle in r["line"].lower())][:500]
+    sources = sorted({r["source"] for r in RECENT.lines})
+    return templates.TemplateResponse(request, "settings/logs.html", {
+        "lines": lines, "level": level, "q": needle, "sources": sources,
+        "total": len(RECENT.lines)})
+
+
+@router.get("/settings/logs.txt")
+def logs_download():
+    from fastapi.responses import PlainTextResponse
+
+    from app.observability import RECENT
+    return PlainTextResponse("\n".join(r["line"] for r in RECENT.lines) + "\n",
+                             headers={"Content-Disposition": "attachment; filename=openpoolpro-recent.log"})
+
+
+@router.get("/settings/about")
+def about_page(request: Request):
+    """Admin › About: what is running, and where releases come from."""
+    import platform
+    import sys
+
+    return templates.TemplateResponse(request, "settings/about.html", {
+        "version": config.APP_VERSION, "python": sys.version.split()[0],
+        "platform": platform.platform(terse=True)})

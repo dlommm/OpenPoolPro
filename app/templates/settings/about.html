@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}About{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+<header class="ph">
+  <div><p class="crumbs"><a href="/settings">Admin</a><span aria-hidden="true">›</span><span>About</span></p><h1 class="h1">About and updates</h1></div>
+</header>
+<div class="cols c-main">
+  <section class="card">
+    <div class="about-h"><img src="/static/brand/openpoolpro-mark.png" alt=""><div><p class="muted small">OpenPoolPro</p><p class="about-v num">{{ version }}</p></div></div>
+    <dl class="kvl" style="margin-top:16px">
+      <dt>Version</dt><dd class="num">{{ version }}</dd>
+      <dt>Runtime</dt><dd>Python {{ python }} · {{ platform }}</dd>
+      <dt>Images</dt><dd class="mono small">ghcr.io/dlommm/openpoolpro · dendlomm/openpoolpro</dd>
+      <dt>Licence</dt><dd>AGPL-3.0-only</dd>
+      <dt>Source</dt><dd><a href="https://github.com/dlommm/OpenPoolPro" rel="noopener noreferrer">github.com/dlommm/OpenPoolPro</a></dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2 class="card-t">Updating</h2>
+    <p class="muted small" style="margin-top:4px">Releases are published on <a href="https://github.com/dlommm/OpenPoolPro/releases" rel="noopener noreferrer">GitHub</a>. The app never updates itself.</p>
+    <ol class="howto">
+      <li><b>Back up</b><small>Admin › Connections and system › Backups, or copy the data folder.</small></li>
+      <li><b>Pull the new image</b><small class="mono">docker compose pull</small></li>
+      <li><b>Restart</b><small class="mono">docker compose up -d</small></li>
+      <li><b>Check this page</b><small>The version above should show the new release.</small></li>
+    </ol>
+  </section>
+</div>
+{% endblock %}

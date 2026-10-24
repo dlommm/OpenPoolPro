@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+{% import "_ui.html" as ui %}
+<header class="ph">
+  <div><p class="crumbs"><a href="/settings">Admin</a><span aria-hidden="true">›</span><span>Logs</span></p>
+    <h1 class="h1">Logs</h1><p class="lede">The last {{ total }} lines since the app started (up to 2,000, kept in memory). Requests are logged by method and path only; signing links are redacted.</p></div>
+  <div class="acts"><a class="btn" href="/settings/logs.txt">{{ ui.icon("dl") }}Download</a><a class="btn" href="/settings/logs?level={{ level }}&q={{ q | urlencode }}">{{ ui.icon("sync") }}Refresh</a></div>
+</header>
+<form method="get" class="loghead">
+  <div class="seg" role="group" aria-label="Level">{% for v, l in [("", "All"), ("info", "Info and up"), ("warning", "Warnings"), ("error", "Errors")] %}<a class="{{ 'on' if level == v }}" href="/settings/logs?level={{ v }}&q={{ q | urlencode }}">{{ l }}</a>{% endfor %}</div>
+  <input type="hidden" name="level" value="{{ level }}">
+  <label class="sr" for="lg-q">Search</label><input id="lg-q" class="inp" type="search" name="q" value="{{ q }}" placeholder="Search the lines" style="width:260px;height:34px">
+  <button class="btn sm">Search</button>
+</form>
+{% if lines %}
+<section class="card logs">
+  {% for r in lines %}
+  <details class="lgd {{ r.level }}">
+    <summary class="lg {{ r.level }}"><span class="lg-t num">{{ r.line[:19] }}</span><span class="lg-l"><i></i>{{ r.level | capitalize }}</span><span class="lg-s">{{ r.source }}</span><span class="lg-m">{{ r.message }}</span></summary>
+    <div class="lg-x"><pre>{{ r.line }}</pre></div>
+  </details>
+  {% endfor %}
+</section>
+{% else %}
+<div class="empty"><p class="strong" style="color:var(--t)">No lines{{ " match" if q or level }}</p><p>Lines appear here as the app works.</p></div>
+{% endif %}
+{% endblock %}
