@@ -142,6 +142,14 @@ def _record_failure(session: Session, user_id: int | None, user_key: str, ip_key
         session.commit()
 
 
+def _home(session, user) -> str:
+    """Where a fresh sign-in lands: an owner part-way through setup resumes it."""
+    from app import setup_flow
+    if user.role == "admin" and setup_flow.status(session) == "in_progress":
+        return "/setup"
+    return "/"
+
+
 @router.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": None})
@@ -182,7 +190,7 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     _establish_session(request, user)
     models.audit(session, user.id, "auth.login", detail="password")
     session.commit()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse(_home(session, user), status_code=303)
 
 
 @router.get("/login/2fa")
@@ -250,7 +258,8 @@ def login_2fa(request: Request, code: str = Form(""), session: Session = Depends
     models.audit(session, user.id, "auth.login", detail="password+2fa")
     session.commit()
 
-    target = "/" if backup_remaining is None else f"/?backup_remaining={backup_remaining}"
+    home = _home(session, user)
+    target = home if backup_remaining is None or home != "/" else f"/?backup_remaining={backup_remaining}"
     resp = RedirectResponse(target, status_code=303)
     resp.delete_cookie(PENDING_2FA_COOKIE, path="/")
     return resp

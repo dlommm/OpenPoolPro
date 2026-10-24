@@ -12,6 +12,7 @@ import app.config as config
 from app import models, security
 from app.main import create_app
 from app.routers import auth
+from tests.conftest import make_owner
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +26,7 @@ def _clean_limiter():
 
 
 def make_client(engine, monkeypatch, password="testpass", base_url="http://testserver"):
-    monkeypatch.setattr(config, "APP_PASSWORD", password)
+    make_owner(engine, password=password)
     return TestClient(create_app(engine=engine), base_url=base_url)
 
 

@@ -16,3 +16,4 @@
 @import "./css/v2-billing.css" layer(components);
 @import "./css/v2-analytics.css" layer(components);
 @import "./css/v2-routes.css" layer(components);
+@import "./css/v2-setup.css" layer(components);

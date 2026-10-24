@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import app.config as config
 from app import models
 from app.main import create_app
+from tests.conftest import make_owner
 
 SECURITY_HEADERS = {
     "x-content-type-options": "nosniff",
@@ -50,7 +50,7 @@ def _seed_rows(engine, n, action="test.bulk", user_id=None, start=None):
 # ---------------------------------------------------------------------------
 
 def test_headers_on_anonymous_login_page(engine, monkeypatch):
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
+    make_owner(engine)
     c = TestClient(create_app(engine=engine))
     r = c.get("/login")
     assert r.status_code == 200
@@ -78,7 +78,7 @@ def test_headers_on_static_asset(client):
 
 
 def test_headers_on_redirect_when_logged_out(engine, monkeypatch):
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
+    make_owner(engine)
     c = TestClient(create_app(engine=engine))
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303

@@ -57,9 +57,7 @@ def test_active_page_is_marked_once(client):
 def test_login_page_has_no_staff_chrome(client, engine, monkeypatch):
     from fastapi.testclient import TestClient
 
-    import app.config as config
     from app.main import create_app
-    monkeypatch.setattr(config, "APP_PASSWORD", "x-unused-1")
     c = TestClient(create_app(engine=engine))
     html = c.get("/login").text
     assert 'class="mast"' not in html and "bare-shell" in html

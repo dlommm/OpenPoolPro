@@ -3,7 +3,7 @@
 Catches the failure class where markup ships but the stylesheet is stale or
 broken (naked-HTML pages). Run against a live instance:
 
-    APP_URL=http://localhost:8000 APP_PASSWORD=... python scripts/visual_check.py [shots_dir]
+    APP_URL=http://localhost:8000 OWNER_USER=... OWNER_PASSWORD=... python scripts/visual_check.py [shots_dir]
 
 Requires: pip install playwright && playwright install chromium
 Exit code 0 = all screens styled; non-zero = a screen failed a check.
@@ -21,7 +21,8 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("APP_URL", "http://localhost:8000")
-PASSWORD = os.environ.get("APP_PASSWORD", "coastline-demo")
+OWNER_USER = os.environ.get("OWNER_USER", "alex.morgan")
+PASSWORD = os.environ.get("OWNER_PASSWORD", "demo-owner-pass-1")
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else None
 
 # Every page a staff user can reach. The list was previously 11 screens, and
@@ -156,7 +157,7 @@ with sync_playwright() as p:
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
     page = ctx.new_page()
     visit(page, f"{BASE}/login")
-    page.fill("input[name=username]", "owner")
+    page.fill("input[name=username]", OWNER_USER)
     page.fill("input[name=password]", PASSWORD)
     page.click("button")
     page.wait_for_load_state("networkidle")
@@ -308,7 +309,7 @@ with sync_playwright() as p:
                                 device_scale_factor=2, color_scheme="dark")
     dkpage = dkctx.new_page()
     visit(dkpage, f"{BASE}/login")
-    dkpage.fill("input[name=username]", "owner")
+    dkpage.fill("input[name=username]", OWNER_USER)
     dkpage.fill("input[name=password]", PASSWORD)
     dkpage.click("button")
     dkpage.wait_for_load_state("networkidle")
@@ -328,7 +329,7 @@ with sync_playwright() as p:
     tabctx = browser.new_context(viewport={"width": 834, "height": 1194}, device_scale_factor=2)
     tabpage = tabctx.new_page()
     visit(tabpage, f"{BASE}/login")
-    tabpage.fill("input[name=username]", "owner")
+    tabpage.fill("input[name=username]", OWNER_USER)
     tabpage.fill("input[name=password]", PASSWORD)
     tabpage.click("button")
     tabpage.wait_for_load_state("networkidle")
@@ -363,7 +364,7 @@ with sync_playwright() as p:
     dctx = browser.new_context(viewport={"width": 1280, "height": 900})
     dpage = dctx.new_page()
     visit(dpage, f"{BASE}/login")
-    dpage.fill("input[name=username]", "owner")
+    dpage.fill("input[name=username]", OWNER_USER)
     dpage.fill("input[name=password]", PASSWORD)
     dpage.click("button")
     dpage.wait_for_load_state("networkidle")

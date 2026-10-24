@@ -5,11 +5,12 @@
 <div class="auth">
   <div class="auth-brand">
     {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
-    <div><b>OpenPoolPro</b><span>Pool service planner</span></div>
+    <div><b>{{ request.state.ui.get("company") or "OpenPoolPro" }}</b><span>{{ "OpenPoolPro" if request.state.ui.get("company") else "Pool service planner" }}</span></div>
   </div>
   <section class="card auth-card">
     <h1 class="h1">Sign in</h1>
     <p class="lede">Use the username your office gave you.</p>
+    {% if request.query_params.get("reset") %}<p class="flash" role="status" style="margin:14px 0 0">Password changed. Sign in with the new one.</p>{% endif %}
     {% if error %}<p class="flash neg" role="alert" style="margin:14px 0 0">{{ error }}</p>{% endif %}
     <form method="post" action="/login" class="stack" style="margin-top:18px;gap:14px">
       <div><label class="lbl" for="l-user">Username</label><input id="l-user" name="username" autofocus autocapitalize="none" autocomplete="username" class="inp"></div>

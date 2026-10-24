@@ -40,6 +40,9 @@ def resolve_user(request, session) -> "models.User | None":
         user = session.scalars(
             select(models.User).where(models.User.username == username)).first()
     else:
+        # No username header: the first active owner (there is no fixed
+        # "owner" account any more).
         user = session.scalars(
-            select(models.User).where(models.User.username == "owner")).first()
+            select(models.User).where(models.User.role == "admin", models.User.active)
+            .order_by(models.User.id)).first()
     return user if (user is not None and user.active) else None

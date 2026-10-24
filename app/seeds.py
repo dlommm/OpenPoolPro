@@ -127,23 +127,16 @@ def run(engine) -> None:
                 s.add(models.SizePreset(kind=kind, label=label, shape=shape, length_ft=length,
                                         width_ft=width, avg_depth_ft=depth, ref_gallons=ref_g,
                                         sort_order=i))
-        from app import config
-        from app.auth_core import hash_password, verify_password
-
-        owner = s.scalars(select(models.User).where(models.User.username == "owner")).first()
-        if owner is None:
-            # Recovery path: APP_PASSWORD env is authoritative for the owner account.
-            # Any future in-app owner password change will be overwritten at next boot
-            # unless .env is updated in lockstep.
-            legacy = s.scalars(select(models.User).where(models.User.username.is_(None))).first()
-            if legacy is not None:
-                legacy.username, legacy.role, legacy.active = "owner", "admin", True
-                legacy.password_hash = hash_password(config.APP_PASSWORD)
-            else:
-                s.add(models.User(name="Owner", username="owner", role="admin", active=True,
-                                  password_hash=hash_password(config.APP_PASSWORD)))
-        elif not verify_password(config.APP_PASSWORD, owner.password_hash):
-            owner.password_hash = hash_password(config.APP_PASSWORD)  # env = recovery path
+        # No owner is created here: the first-run setup (app/setup_flow.py)
+        # makes one. An install upgraded from the APP_PASSWORD era keeps its
+        # "owner" account and is asked once to finish the profile.
+        if not models.get_setting(s, "setup_status", ""):
+            admin = s.scalars(select(models.User).where(
+                models.User.role == "admin", models.User.active,
+                models.User.password_hash.is_not(None)).order_by(models.User.id)).first()
+            if admin is not None:
+                models.set_setting(s, "setup_status",
+                                   "legacy" if admin.username == "owner" else "done")
         for chem in s.scalars(select(models.Chemical)).all():
             if chem.role == "other" and chem.name in ROLE_SEED:
                 chem.role, chem.strength_pct = ROLE_SEED[chem.name]

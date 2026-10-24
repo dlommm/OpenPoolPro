@@ -48,6 +48,11 @@
   you do, the rest of the app is locked for your account.
 </div>
 {% endif %}
+{% if user.must_change_password %}
+<div class="flash neg" role="alert">
+  You're signed in with a temporary password. Choose your own below to continue.
+</div>
+{% endif %}
 {% if banner %}
 <div class="flash" role="status">{{ banner }}</div>
 {% endif %}

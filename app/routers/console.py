@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -106,7 +107,14 @@ def dashboard(request: Request, session: Session = Depends(get_session),
         r["pct"] = round(r["cents"] / scale * 100, 1)
     hour = local_now().hour
     greeting = "Good morning" if hour < 12 else ("Good afternoon" if hour < 18 else "Good evening")
+    from app import setup_flow
+    me = session.get(models.User, request.state.user.id)
+    gs = setup_flow.checklist(session, me) if setup_flow.show_checklist(session) else []
+    if gs and all(i["done"] for i in gs):
+        gs = []
     return templates.TemplateResponse(request, "dashboard.html", {
+        "getting_started": gs,
+        "setup_in_progress": setup_flow.status(session) == "in_progress",
         "revenue_mtd_cents": sum(r.total_cents for r in rows),
         "stops_done": sum(1 for s_ in stops if s_.status != "due"),
         "stops_total": len(stops), "missed_count": len(missed),
@@ -131,6 +139,13 @@ def nice_ceiling(cents: int) -> int:
         if cents <= step * exp:
             return int(step * exp)
     return int(10 * exp)
+
+
+@router.post("/dashboard/getting-started/hide")
+def hide_getting_started(session: Session = Depends(get_session), user=Depends(require_admin)):
+    models.set_setting(session, "getting_started_hidden", "1")
+    session.commit()
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 @router.get("/today/print")

@@ -554,6 +554,7 @@ def new_property_form(request: Request, cid: int, session: Session = Depends(get
     customer = get_or_404(session, models.Customer, cid)
     ctx = _property_form_context(session, None, customer, request.state.user,
                                  suggested_tech=suggest_tech(session, 0))
+    ctx["default_state"] = models.get_setting(session, "default_state", "") or ""
     return templates.TemplateResponse(request, "customers/property_form.html", ctx)
 
 

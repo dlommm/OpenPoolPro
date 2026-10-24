@@ -46,6 +46,7 @@ from app.routers import (  # noqa: E402
     quotes,
     routes,
     settings,
+    setup,
     sign,
     testers,
     today,
@@ -62,6 +63,7 @@ ROUTERS = (
     analytics.router, inventory.router, invoices.router, routes.router,
     contracts.router, contract_template.router, sign.router,
     improvements.router, portal.router, qbo_billing.router, testers.router,
+    setup.router,
 )
 
 
@@ -148,6 +150,16 @@ def create_app(engine=None) -> FastAPI:
     from sqlalchemy.orm import Session as _BootS
     with _BootS(app.state.engine) as _bs:
         app.state.require_2fa = models.get_setting(_bs, "require_2fa", "0") == "1"
+        config.set_timezone(models.get_setting(_bs, "timezone", "") or "")
+        from app import setup_flow
+        # No owner yet: everything goes to /setup, which needs this one-time
+        # code from the log. setup_status "legacy": the upgraded owner finishes
+        # their profile once. Both are refreshed in place by app/routers/setup.py.
+        app.state.needs_owner = not setup_flow.owner_exists(_bs)
+        app.state.setup_legacy = setup_flow.status(_bs) == "legacy"
+    app.state.setup_code = setup_flow.new_setup_code() if app.state.needs_owner else None
+    if app.state.setup_code:
+        setup_flow.announce_setup_code(app.state.setup_code)
 
     EXEMPT_EXACT = {"/login", "/login/2fa", "/manifest.json", "/sw.js", "/health", "/branding/logo"}
     # /sign/ is the customer-facing contract e-sign flow: its routes are gated
@@ -201,7 +213,15 @@ def create_app(engine=None) -> FastAPI:
     @app.middleware("http")
     async def require_auth(request, call_next):
         path = request.url.path
-        exempt = path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
+        in_setup = path == "/setup" or path.startswith("/setup/")
+        if app.state.needs_owner and not (in_setup or path.startswith("/static/")
+                                          or path in ("/manifest.json", "/sw.js", "/health")):
+            return RedirectResponse("/setup", status_code=303)
+        # /setup/reset/<token> is gated by its own single-use token (issued by
+        # `python -m app.manage reset-owner`); the rest of /setup is public
+        # only until the owner exists.
+        exempt = (path in EXEMPT_EXACT or any(path.startswith(p) for p in EXEMPT_PREFIX)
+                  or path.startswith("/setup/reset/") or (in_setup and app.state.needs_owner))
         request.state.user = None
         # Every path (incl. exempt/login/static, which also render base.html)
         # gets appearance defaults; signed-in requests below read the saved
@@ -210,7 +230,7 @@ def create_app(engine=None) -> FastAPI:
         # The customer-facing pages are exempt from auth but they are still
         # this company's storefront, so they read the saved appearance too --
         # for those two prefixes only: /static/ must not pay a DB read per asset.
-        if path.startswith(("/sign/", "/portal/")):
+        if path.startswith(("/sign/", "/portal/")) or path in ("/login", "/login/2fa") or in_setup:
             from sqlalchemy.orm import Session as _S
             with _S(app.state.engine) as s:
                 request.state.ui = ui_settings(s)
@@ -256,6 +276,15 @@ def create_app(engine=None) -> FastAPI:
             if (app.state.require_2fa and not request.state.user.totp_enabled
                     and not path.startswith("/account") and path != "/logout"):
                 return RedirectResponse("/account?force2fa=1", status_code=303)
+            # A temporary password from the owner: choose your own first.
+            if (request.state.user.must_change_password
+                    and not path.startswith("/account") and path != "/logout"):
+                return RedirectResponse("/account?change=1", status_code=303)
+            # Upgraded from the APP_PASSWORD era: the owner finishes their
+            # profile (real name, username, own password) once.
+            if (app.state.setup_legacy and request.state.user.role == "admin"
+                    and not in_setup and path != "/logout"):
+                return RedirectResponse("/setup/profile", status_code=303)
         return await call_next(request)
 
     # CSRF defense-in-depth: reject state-changing requests whose Origin (or,

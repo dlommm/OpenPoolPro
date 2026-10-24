@@ -1,7 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import app.config as config
 from app import models, security, seeds
 from app.auth_core import MAX_PASSWORD_LEN, hash_password, verify_password
 
@@ -37,43 +36,41 @@ def test_long_password_truncates_like_passlib_instead_of_raising():
     assert verify_password(pw, hash_password(pw)) is True
 
 
-def _prep(engine, monkeypatch, password):
-    monkeypatch.setattr(config, "APP_PASSWORD", password)
+def _boot(engine):
     from app.db import Base
     Base.metadata.create_all(engine)
     seeds.run(engine)
 
 
-def test_fresh_install_creates_owner(engine, monkeypatch):
-    _prep(engine, monkeypatch, "first-pass")
+def test_fresh_install_creates_no_owner(engine):
+    """No owner from the environment any more: first-run setup makes one."""
+    _boot(engine)
     with Session(engine) as s:
-        owner = s.scalars(select(models.User).where(models.User.username == "owner")).one()
-        assert owner.role == "admin" and owner.active
-        assert verify_password("first-pass", owner.password_hash)
-        total = len(s.scalars(select(models.User)).all())
-        assert total == 1  # upgraded in place, not duplicated
+        assert s.scalars(select(models.User)).all() == []
+        assert models.get_setting(s, "setup_status", "") == ""
 
 
-def test_legacy_phase0_row_upgraded_in_place(engine, monkeypatch):
-    monkeypatch.setattr(config, "APP_PASSWORD", "boot-pass")
+def test_upgraded_owner_account_must_finish_profile(engine):
     from app.db import Base
     Base.metadata.create_all(engine)
     with Session(engine) as s:
-        s.add(models.User(name="Owner", role="owner"))  # Phase 0 shape: no username/hash
+        s.add(models.User(name="Owner", username="owner", role="admin", active=True,
+                          password_hash=hash_password("old-env-pass")))
         s.commit()
     seeds.run(engine)
     with Session(engine) as s:
-        users = s.scalars(select(models.User)).all()
-        assert len(users) == 1  # upgraded in place, not duplicated
-        u = users[0]
-        assert u.username == "owner" and u.role == "admin" and u.active
-        assert verify_password("boot-pass", u.password_hash)
+        assert models.get_setting(s, "setup_status", "") == "legacy"
+        owner = s.scalars(select(models.User)).one()
+        assert verify_password("old-env-pass", owner.password_hash)   # never rewritten
 
 
-def test_env_change_resyncs_owner_password(engine, monkeypatch):
-    _prep(engine, monkeypatch, "first-pass")
-    monkeypatch.setattr(config, "APP_PASSWORD", "rotated-pass")
+def test_named_owner_counts_as_set_up(engine):
+    from app.db import Base
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        s.add(models.User(name="Alex Morgan", username="alex.morgan", role="admin", active=True,
+                          password_hash=hash_password("x" * 12)))
+        s.commit()
     seeds.run(engine)
     with Session(engine) as s:
-        owner = s.scalars(select(models.User).where(models.User.username == "owner")).one()
-        assert verify_password("rotated-pass", owner.password_hash)
+        assert models.get_setting(s, "setup_status", "") == "done"

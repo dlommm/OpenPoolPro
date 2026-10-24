@@ -9,11 +9,13 @@ invoices that are paid, part-paid and overdue, equipment with warranties
 running out, and a low-stock chemical.
 
 Every name, address and amount is made up. Refuses to touch a database that
-already has customers. Run after the app has booted once (so the owner login
-and catalog exist):
+already has customers. Run after the app has booted once (so the catalog
+exists). With no owner yet it creates one, alex.morgan, with the password in
+DEMO_OWNER_PASSWORD (default demo-owner-pass-1), and marks setup finished:
 
     DATA_DIR=./data .venv/bin/python scripts/seed_demo.py
 """
+import os
 import random
 from datetime import date, timedelta
 
@@ -82,8 +84,16 @@ def run() -> None:
 
         owner = s.scalars(select(models.User).where(models.User.role == "admin")
                           .order_by(models.User.id)).first()
-        if owner is not None and owner.name in ("", "Owner", "owner"):
+        if owner is None:
+            # A fresh install has no owner until first-run setup; the demo
+            # makes one so it can be explored straight away.
+            owner = models.User(name="Alex Morgan", username="alex.morgan", role="admin", active=True,
+                                password_hash=hash_password(os.environ.get("DEMO_OWNER_PASSWORD",
+                                                                           "demo-owner-pass-1")))
+            s.add(owner)
+        elif owner.name in ("", "Owner", "owner"):
             owner.name = "Alex Morgan"
+        models.set_setting(s, "setup_status", "done")
         techs = {}
         for key, name, user in (("jordan", "Jordan Reyes", "jordan"), ("sam", "Sam Okafor", "sam")):
             t = models.User(name=name, role="tech", username=user,

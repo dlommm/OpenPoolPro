@@ -5,14 +5,14 @@ being reachable anonymously, the base.html sync-badge/flush-queue wiring,
 and the queued-banner query param on the Today page."""
 from fastapi.testclient import TestClient
 
-import app.config as config
 from app.main import create_app
+from tests.conftest import make_owner
 
 
 def _anon_client(engine, monkeypatch):
     """Same convention as tests/test_auth.py's make_client -- a client that
     never logs in, for exercising the auth-exemption allowlist."""
-    monkeypatch.setattr(config, "APP_PASSWORD", "unused-anon")
+    make_owner(engine, password="unused-anon")
     return TestClient(create_app(engine=engine))
 
 

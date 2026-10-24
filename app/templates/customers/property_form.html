@@ -17,7 +17,7 @@
     {% call f.row("Label", "Home, Beach house, Clubhouse…", "p-label") %}<input id="p-label" name="label" value="{{ p.label if p else 'Home' }}" class="inp">{% endcall %}
     {% call f.row("Street", "", "p-street") %}<input id="p-street" name="street" value="{{ p.street if p else '' }}" class="inp" autocomplete="address-line1">{% endcall %}
     {% call f.row("City", "", "p-city") %}<input id="p-city" name="city" value="{{ p.city if p else '' }}" class="inp" autocomplete="address-level2">{% endcall %}
-    {% call f.row("State and zip") %}<div class="fgrid"><div><label class="sr" for="p-state">State</label><input id="p-state" name="state" value="{{ p.state if p else '' }}" class="inp" placeholder="State" autocomplete="address-level1"></div><div><label class="sr" for="p-zip">Zip</label><input id="p-zip" name="zip" value="{{ p.zip if p else '' }}" class="inp num" placeholder="Zip" autocomplete="postal-code"></div></div>{% endcall %}
+    {% call f.row("State and zip") %}<div class="fgrid"><div><label class="sr" for="p-state">State</label><input id="p-state" name="state" value="{{ p.state if p else (default_state or '') }}" class="inp" placeholder="State" autocomplete="address-level1"></div><div><label class="sr" for="p-zip">Zip</label><input id="p-zip" name="zip" value="{{ p.zip if p else '' }}" class="inp num" placeholder="Zip" autocomplete="postal-code"></div></div>{% endcall %}
   {% endcall %}
 
   {% call f.group("On arrival", "What the technician needs at the gate.") %}

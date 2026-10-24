@@ -487,6 +487,9 @@ class User(Base):
     totp_secret: Mapped[str | None] = mapped_column(String(200), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     session_epoch: Mapped[int] = mapped_column(Integer, default=0)
+    # Set for a temporary password handed out by the owner; the person must
+    # choose their own at first sign-in.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
 
     PERMISSION_FLAGS = ("view_money", "manage_customers", "can_repairs", "view_all_routes",
                         "mark_cash", "approve_billing")

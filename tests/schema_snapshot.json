@@ -477,6 +477,7 @@
     "id",
     "manage_customers",
     "mark_cash",
+    "must_change_password",
     "name",
     "password_hash",
     "role",

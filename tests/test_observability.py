@@ -219,7 +219,6 @@ def test_create_app_wraps_every_scheduler_job(engine, monkeypatch, tmp_path):
     from app.maintenance import run_nightly
 
     monkeypatch.setattr(config, "RUN_SCHEDULER", True)
-    monkeypatch.setattr(config, "APP_PASSWORD", "testpass")
     monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
     app = create_app(engine=engine)
     try:

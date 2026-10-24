@@ -21,7 +21,7 @@ def test_seeds_idempotent(engine):
         assert pool_tiers[-1].max_gallons is None
         tasks = s.scalars(select(models.TaskTemplate)).all()
         assert len(tasks) == 8
-        assert s.scalars(select(models.User)).one().role == "admin"
+        assert s.scalars(select(models.User)).all() == []   # setup makes the owner
 
 
 def test_seeds_backfills_spa_tiers_on_upgraded_install(engine):

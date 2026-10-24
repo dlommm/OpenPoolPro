@@ -145,6 +145,7 @@ INDEXES = [
 
 COLUMNS = {
     "users": [
+        ("must_change_password", "BOOLEAN DEFAULT 0"),
         ("username", "VARCHAR(40)"),
         ("active", "BOOLEAN DEFAULT 1"),
         ("view_money", "BOOLEAN DEFAULT 0"),

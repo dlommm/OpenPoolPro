@@ -12,6 +12,23 @@
   <div class="acts"><a class="btn pri" href="/">Open today's route</a></div>
 </header>
 
+{% if setup_in_progress %}
+<div class="note" style="margin:0 0 var(--gap)">{{ ui.icon("gear", "ic18") }}<div style="flex:1">Setup isn't finished yet. Your choices so far are saved.</div><a class="btn sm" href="/setup">Continue setup</a></div>
+{% endif %}
+{% if getting_started %}
+{% set gs_done = getting_started | selectattr("done") | list | length %}
+<section class="card gs-card" aria-labelledby="d-gs" style="margin-bottom:var(--gap)">
+  <div class="card-h"><h2 class="card-t" id="d-gs">Getting started</h2><span class="muted small num">{{ gs_done }} of {{ getting_started | length }} done</span></div>
+  <div class="gs-bar" aria-hidden="true"><i style="width:{{ (gs_done / getting_started | length * 100) | round(0) }}%"></i></div>
+  {% for i in getting_started %}
+  <div class="gs-row"><span class="gs-dot {{ 'y' if i.done }}" aria-hidden="true">{% if i.done %}{{ ui.icon("check") }}{% endif %}</span>
+    <span style="flex:1">{{ i.label }}{% if i.done %}<span class="sr"> (done)</span>{% elif i.warn %} {{ ui.pill("Recommended", "warn") }}{% endif %}</span>
+    {% if not i.done and i.href %}<a class="btn sm" href="{{ i.href }}">{{ i.cta }}</a>{% endif %}</div>
+  {% endfor %}
+  <form method="post" action="/dashboard/getting-started/hide" style="margin-top:10px"><button class="btn ghost sm">Hide this list</button></form>
+</section>
+{% endif %}
+
 <div class="cols c-main">
   <section class="card" aria-labelledby="d-route">
     <div class="card-h"><h2 class="card-t" id="d-route">Route today</h2><a class="btn ghost sm" href="/?crew=1">View stops</a></div>

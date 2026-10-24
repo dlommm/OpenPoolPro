@@ -7,11 +7,12 @@
 #      volume at the disk directly (/mnt/cache/appdata/openpoolpro). SQLite in
 #      WAL mode corrupts on Unraid's /mnt/user FUSE layer once the mover runs —
 #      the same failure that bites Plex/Sonarr appdata.
-#   2. Edit APP_PASSWORD and SECRET_KEY below (both REQUIRED — the container now
-#      REFUSES TO START on the placeholder values, so this is not optional).
-#      Generate a SECRET_KEY on the Unraid terminal:  openssl rand -hex 32
+#   2. Edit SECRET_KEY below (REQUIRED — the container REFUSES TO START on the
+#      placeholder value). Generate one on the Unraid terminal:  openssl rand -hex 32
 #   3. Adjust the host port (left side of 8000:8000) if 8000 is taken.
-#   4. Start the stack. Open the WebUI from the Unraid Docker tab.
+#   4. Start the stack. Open the WebUI from the Unraid Docker tab and follow
+#      first-time setup. It asks for a setup code printed in the container log
+#      (Docker tab → the container's Logs, look for "Setup code").
 #
 # Image is pulled from GitHub Container Registry (ghcr.io), published by CI on
 # every merge to main. The same image is on Docker Hub — swap the image line
@@ -57,7 +58,6 @@ services:
 
     environment:
       # --- REQUIRED ---
-      APP_PASSWORD: "CHANGE_ME_owner_login_password"
       SECRET_KEY: "CHANGE_ME_run_openssl_rand_hex_32"
 
       # --- Recommended ---

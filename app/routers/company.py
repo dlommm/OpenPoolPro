@@ -1,13 +1,11 @@
-import io
 import os
 
 from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
-from PIL import Image
 from sqlalchemy.orm import Session
 
 from app import models
-from app.company import COMPANY_KEYS, company_info, logo_path  # noqa: F401
+from app.company import COMPANY_KEYS, MAX_LOGO_BYTES, company_info, logo_path, store_logo  # noqa: F401
 from app.db import get_session
 from app.deps import require_admin
 from app.templating import templates
@@ -15,7 +13,6 @@ from app.templating import templates
 router = APIRouter(dependencies=[Depends(require_admin)])
 serve_router = APIRouter()
 
-MAX_LOGO_BYTES = 2 * 1024 * 1024
 
 
 @router.post("/settings/company")
@@ -30,24 +27,10 @@ async def save_company(request: Request, session: Session = Depends(get_session)
 @router.post("/settings/company/logo")
 async def upload_logo(request: Request, file: UploadFile,
                       session: Session = Depends(get_session)):
-    if file.content_type not in ("image/png", "image/jpeg"):
+    problem = store_logo(await file.read(), file.content_type)
+    if problem:
         return templates.TemplateResponse(request, "settings/_logo_error.html",
-                                          {"message": "Logo must be a PNG or JPEG"})
-    data = await file.read()
-    if len(data) > MAX_LOGO_BYTES:
-        return templates.TemplateResponse(request, "settings/_logo_error.html",
-                                          {"message": "Logo must be under 2 MB"})
-    try:
-        img = Image.open(io.BytesIO(data))
-        if img.format not in ("PNG", "JPEG"):
-            return templates.TemplateResponse(request, "settings/_logo_error.html",
-                                              {"message": "Logo must be a PNG or JPEG"})
-        img = img.convert("RGBA") if img.mode in ("RGBA", "LA", "P") else img.convert("RGB")
-    except Exception:
-        return templates.TemplateResponse(request, "settings/_logo_error.html",
-                                          {"message": "That file isn't a readable logo image (PNG/JPEG)"})
-    img.thumbnail((600, 600))
-    img.save(logo_path(), "PNG")
+                                          {"message": problem})
     return RedirectResponse("/settings", status_code=303)
 
 
