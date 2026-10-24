@@ -3,8 +3,24 @@
 {% block content %}
 {% import "_ui.html" as ui %}
 <header class="ph">
-  <div><h1 class="h1">Analytics</h1><p class="lede">{{ start | short_date }} – {{ end | short_date }}. Revenue is billed service, chemicals at your markup and finished jobs.</p></div>
+  <div><p class="crumbs"><span>Money</span></p><h1 class="h1">Analytics</h1>
+  {% if tab == "overview" %}
+  <p class="lede">{% if ov.has_revenue %}{{ v.whole(ov.revenue_cents) }} from {{ '{:,}'.format(ov.visits) }} visit{{ 's' if ov.visits != 1 }}, {{ ov.span }}.{% else %}Nothing billed in {{ ov.span }} yet.{% endif %}{% if ov.flagged %} {{ ov.flagged | length }} {{ 'property costs' if ov.flagged | length == 1 else 'properties cost' }} 15% or more of the rate in chemicals.{% endif %}</p>
+  {% else %}
+  <p class="lede">{{ start | short_date }} – {{ end | short_date }}. Revenue is billed service, chemicals at your markup and finished jobs.</p>
+  {% endif %}</div>
+  {% if tab == "overview" %}
+  <div class="acts"><a class="btn" href="/analytics/export?tab=income&start={{ start }}&end={{ end }}">{{ ui.icon("document") }}Export CSV</a><a class="btn" href="/analytics/export.pdf?tab=income&start={{ start }}&end={{ end }}">PDF</a></div>
+  {% endif %}
 </header>
+
+<nav class="tabs" aria-label="Analytics views">
+  {% for key, label in tab_labels.items() %}<a href="/analytics?tab={{ key }}{% if key != 'overview' %}&start={{ start }}&end={{ end }}{% endif %}" class="tab {{ 'on' if key == tab }}"{% if key == tab %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+
+{% if tab == "overview" %}
+{% include "_analytics_overview.html" %}
+{% else %}
 
 <div class="afilters" role="group" aria-label="Date range">
   <span class="muted small">Showing</span>
@@ -26,10 +42,6 @@
   <section class="card atile"><div class="l">Top customer</div><div class="v" style="font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ summary.top_customer or '' }}">{{ summary.top_customer or "—" }}</div><div class="c num">{{ summary.top_customer_cents | dollars if summary.top_customer else "" }}</div></section>
 </div>
 {% endif %}
-
-<nav class="tabs" aria-label="Analytics views">
-  {% for key, label in tab_labels.items() %}<a href="/analytics?tab={{ key }}&start={{ start }}&end={{ end }}" class="tab {{ 'on' if key == tab }}"{% if key == tab %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
-</nav>
 
 {% if too_large %}
 <div class="card p-6 text-center">
@@ -309,4 +321,5 @@
 {% endif %}
 </div>
 {% endif %}
+{% endif %}{# overview / detailed tabs #}
 {% endblock %}
