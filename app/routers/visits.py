@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import dosing, inventory, mailer, models, qbo, tax, water_readings
+from app import chem_targets, dosing, inventory, mailer, models, qbo, tax, water_readings
 from app.db import get_or_404, get_session
 from app.rates import effective_rate_cents
 from app.templating import templates
@@ -165,20 +165,9 @@ def visit_doses(request: Request, visit_id: int,
     if all(val is None for val in readings.values()):
         return templates.TemplateResponse(request, "visits/_doses.html",
                                           {"doses": None, "hint": "Enter readings to get dose suggestions"})
-    try:
-        targets = {
-            "fc": float(models.get_setting(session, "target_fc", "4.0")),
-            "ph": float(models.get_setting(session, "target_ph", "7.5")),
-            "ta": float(models.get_setting(session, "target_ta", "90")),
-            "cya": float(models.get_setting(session, "target_cya", "50")),
-            "salt": float(models.get_setting(session, "target_salt", "3200")),
-        }
-        if not all(math.isfinite(v) for v in targets.values()):
-            raise ValueError("non-finite target")
-    except (ValueError, OverflowError):
-        targets = {"fc": 4.0, "ph": 7.5, "ta": 90.0, "cya": 50.0, "salt": 3200.0}
+    targets, bands = chem_targets.current(session)
     chems = session.scalars(select(models.Chemical).where(models.Chemical.active)).all()
-    doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets)
+    doses = dosing.recommend(readings, pool.gallons, pool.water_type, chems, targets, bands)
     return templates.TemplateResponse(request, "visits/_doses.html",
                                       {"doses": doses, "hint": None})
 

@@ -374,15 +374,15 @@ def customer_detail(request: Request, cid: int, ptag: str = "",
     # against the same bands the visit screen and water history use, the
     # local invoices with what is still owed, the contact log, and the water
     # trend for the main property.
-    from app import charts, water_history
+    from app import charts, chem_targets, water_history
     prop_ids = [p.id for p in props]
     history = session.scalars(
         select(models.Visit).where(models.Visit.property_id.in_(prop_ids),
                                    models.Visit.status != "due")
         .options(selectinload(models.Visit.chemicals), selectinload(models.Visit.completed_by))
         .order_by(models.Visit.date.desc()).limit(26)).all() if prop_ids else []
-    tgt = water_history.targets(session)
-    out_of_band = {(v.id, k) for v in history for k, half in water_history.BAND.items()
+    tgt, band = chem_targets.current(session)
+    out_of_band = {(v.id, k) for v in history for k, half in band.items()
                    if getattr(v, k) is not None and abs(getattr(v, k) - tgt[k]) > half}
     invoices = session.scalars(
         select(models.Invoice).where(models.Invoice.customer_id == cid)

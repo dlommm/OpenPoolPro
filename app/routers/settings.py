@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, config, mailer, models, qbo, rates, receivables, sizes, tax, templating
+from app import chem_presets, chem_targets, config, mailer, models, qbo, rates, receivables, sizes, tax, templating
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
@@ -16,7 +16,6 @@ from app.timefmt import business_today
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
-TARGET_KEYS = ("target_fc", "target_ph", "target_ta", "target_cya", "target_salt")
 
 # Older than this and the nightly snapshot is presumed to have stopped running.
 BACKUP_STALE_HOURS = 36
@@ -97,9 +96,10 @@ def settings_page(request: Request, rules_created: str | None = None,
                            .order_by(models.User.role, models.User.name)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
-    targets = {k: models.get_setting(session, k, d) for k, d in [
-        ("target_fc", "4.0"), ("target_ph", "7.5"), ("target_ta", "90"),
-        ("target_cya", "50"), ("target_salt", "3200")]}
+    chem_t, chem_b = chem_targets.current(session)
+    rejected = set((request.query_params.get("chem_rejected") or "").split(","))
+    target_rows = [{"spec": sp, "target": chem_t[sp.key], "band": chem_b[sp.key],
+                    "rejected": sp.key in rejected} for sp in chem_targets.SPECS]
     outbox = session.scalars(select(models.EmailOutbox)
                              .order_by(models.EmailOutbox.created_at.desc())
                              .limit(50)).all()
@@ -127,7 +127,8 @@ def settings_page(request: Request, rules_created: str | None = None,
         "backup_at": models.get_setting(session, "last_backup_at", ""),
         "backup_stale": _backup_is_stale(session),
         "role_values": models.ROLE_VALUES,
-        "targets": targets,
+        "chem_targets": target_rows,
+        "chem_saved": request.query_params.get("chem"),
         "rules_created": _parse_count(rules_created),
         "company": company_info(session),
         "smtp_configured": mailer.smtp_configured(session),
@@ -207,18 +208,35 @@ def run_maintenance_now(session: Session = Depends(get_session)):
 
 @router.post("/settings/targets")
 async def save_targets(request: Request, session: Session = Depends(get_session)):
+    """Target and band per reading, saved as a pair: a pair that fails the
+    limits in app/chem_targets.py keeps what was stored, so a typo can't
+    switch dosing off. A field left out of the form keeps its stored value."""
     form = await request.form()
-    for key in TARGET_KEYS:
-        raw = (form.get(key) or "").strip()
-        try:
-            v = float(raw)
-        except ValueError:
-            continue  # invalid keeps the previously stored value
-        if not math.isfinite(v):
-            continue  # inf/nan keeps the previously stored value
-        models.set_setting(session, key, raw)
+    if form.get("reset"):
+        for spec in chem_targets.SPECS:
+            models.set_setting(session, f"target_{spec.key}", f"{spec.target:g}")
+            models.set_setting(session, f"band_{spec.key}", f"{spec.band:g}")
+        session.commit()
+        return RedirectResponse("/settings?chem=reset#chemistry", status_code=303)
+    targets, bands = chem_targets.current(session)
+    rejected = []
+    for spec in chem_targets.SPECS:
+        pair, raws = {}, {}
+        for prefix, stored in (("target", targets), ("band", bands)):
+            raw = (form.get(f"{prefix}_{spec.key}") or "").strip()
+            raws[prefix] = raw or f"{stored[spec.key]:g}"
+            try:
+                pair[prefix] = float(raws[prefix])
+            except ValueError:
+                pair[prefix] = math.nan
+        if chem_targets.problem(spec.key, pair["target"], pair["band"]):
+            rejected.append(spec.key)
+            continue  # invalid keeps the previously stored pair
+        models.set_setting(session, f"target_{spec.key}", raws["target"])
+        models.set_setting(session, f"band_{spec.key}", raws["band"])
     session.commit()
-    return RedirectResponse("/settings", status_code=303)
+    q = f"chem_rejected={','.join(rejected)}" if rejected else "chem=saved"
+    return RedirectResponse(f"/settings?{q}#chemistry", status_code=303)
 
 
 async def _save_tiers_of_kind(request: Request, session: Session, kind: str) -> None:

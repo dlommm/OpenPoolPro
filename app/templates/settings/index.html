@@ -363,19 +363,63 @@
           </form>
         </div>
 
-        <div class="card p-4">
-          <h2 class="set-h">Water targets</h2>
-          <p class="mb-3 text-sm text-mist">The ideal readings the dose calculator aims for.</p>
-          <form method="post" action="/settings/targets" class="space-y-3">
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-              {% for key, label in [("target_fc","Free Chlorine"),("target_ph","pH"),("target_ta","Total Alkalinity"),("target_cya","Cyanuric Acid"),("target_salt","Salt")] %}
-              <label class="block text-center"><span class="field-label leading-tight">{{ label }}</span>
-                <input inputmode="decimal" name="{{ key }}" value="{{ targets[key] }}" class="field text-center font-data"></label>
+        <section class="card lg:col-span-2" id="chem-targets" aria-labelledby="ct-t">
+          <div class="card-h"><div><h2 class="card-t" id="ct-t">Chemistry targets and bands</h2>
+            <p class="muted small">The target is where you want each reading; the band is how far it may drift before anything happens.</p></div>
+            <form method="post" action="/settings/targets"><input type="hidden" name="reset" value="1"><button class="btn sm ghost">Reset to defaults</button></form></div>
+          {% if chem_saved == "saved" %}<p class="flash" role="status">Targets and bands saved. The visit screen, dose suggestions and water alerts now use them.</p>
+          {% elif chem_saved == "reset" %}<p class="flash" role="status">Back to the default targets and bands.</p>{% endif %}
+          {% if chem_targets | selectattr("rejected") | list %}<p class="flash neg" role="alert">Some rows were outside the allowed limits and kept their previous values.</p>{% endif %}
+          <form method="post" action="/settings/targets" data-chem-form>
+            <div class="chem">
+              {% for row in chem_targets %}{% set sp = row.spec %}
+              {% set span = sp.hi - sp.lo %}
+              {% set pc_lo = ((([row.target - row.band, sp.lo] | max) - sp.lo) / span * 100) | round(1) %}
+              {% set pc_hi = ((([row.target + row.band, sp.hi] | min) - sp.lo) / span * 100) | round(1) %}
+              {% set fmt = "%." ~ sp.decimals ~ "f" %}
+              <div class="chem-r {{ 'bad' if row.rejected }}" data-chem-row data-lo="{{ sp.lo }}" data-hi="{{ sp.hi }}" data-bmin="{{ sp.band_min }}" data-bmax="{{ sp.band_max }}" data-dec="{{ sp.decimals }}">
+                <div class="chem-n"><b>{{ sp.label }}</b><span class="muted small">{{ sp.unit }}{% if sp.key == "salt" %} · salt pools only{% endif %}</span></div>
+                <div><label class="lbl" for="tg-{{ sp.key }}">Target</label><input id="tg-{{ sp.key }}" class="inp amt num" type="text" inputmode="decimal" name="target_{{ sp.key }}" value="{{ fmt | format(row.target) }}" data-t></div>
+                <div><label class="lbl" for="tb-{{ sp.key }}">Band ±</label><input id="tb-{{ sp.key }}" class="inp amt num" type="text" inputmode="decimal" name="band_{{ sp.key }}" value="{{ '%g' | format(row.band) }}" data-b></div>
+                <div class="chem-s">
+                  <div class="scale" aria-hidden="true"><div class="trk"></div><div class="band" style="left:{{ pc_lo }}%;width:{{ (pc_hi - pc_lo) | round(1) }}%" data-band></div><div class="tgt" style="left:{{ (((row.target - sp.lo) / span) * 100) | round(1) }}%" data-tgt></div></div>
+                  <div class="scale-ax"><span>{{ '%g' | format(sp.lo) }}</span><span class="strong" data-range>In range {{ fmt | format(row.target - row.band) }}–{{ fmt | format(row.target + row.band) }}</span><span>{{ '%g' | format(sp.hi) }}</span></div>
+                  <p class="err" data-err {{ 'hidden' if not row.rejected }}>{% if row.rejected %}Outside the allowed limits: target {{ '%g' | format(sp.lo) }}–{{ '%g' | format(sp.hi) }}, band ±{{ '%g' | format(sp.band_min) }} to ±{{ '%g' | format(sp.band_max) }}.{% endif %}</p>
+                  {% if row.target != sp.target or row.band != sp.band %}<p class="muted small">Default: {{ fmt | format(sp.target) }} ± {{ '%g' | format(sp.band) }}</p>{% endif %}
+                </div>
+              </div>
               {% endfor %}
             </div>
-            <button class="btn-secondary w-full">Save targets</button>
+            <div class="note" style="margin-top:16px">{{ ui.icon("drop", "ic18") }}<div>Dose suggestions start only outside the band, and water alerts flag readings outside it. Both read this one setting. Changes apply to new suggestions and alerts; past visits keep their readings.</div></div>
+            <div class="row" style="margin-top:14px"><button class="btn pri">Save targets and bands</button></div>
           </form>
-        </div>
+        </section>
+        <script nonce="{{ csp_nonce() }}">
+        (function () {
+          document.querySelectorAll("[data-chem-row]").forEach(function (row) {
+            var lo = +row.dataset.lo, hi = +row.dataset.hi, bmin = +row.dataset.bmin, bmax = +row.dataset.bmax, dec = +row.dataset.dec;
+            var t = row.querySelector("[data-t]"), b = row.querySelector("[data-b]");
+            var band = row.querySelector("[data-band]"), tgt = row.querySelector("[data-tgt]");
+            var range = row.querySelector("[data-range]"), err = row.querySelector("[data-err]");
+            function pc(x) { return (Math.max(lo, Math.min(hi, x)) - lo) / (hi - lo) * 100; }
+            function update() {
+              var v = parseFloat(t.value), w = parseFloat(b.value), msg = "";
+              if (!isFinite(v)) msg = "Enter a number for the target.";
+              else if (v < lo || v > hi) msg = "Keep the target between " + lo + " and " + hi + ".";
+              else if (!isFinite(w)) msg = "Enter a number for the band.";
+              else if (w < bmin || w > bmax) msg = "Keep the band between ±" + bmin + " and ±" + bmax + "; outside that, doses would be suggested too often or not at all.";
+              else if (v - w < lo) msg = "The band reaches below " + lo + ".";
+              row.classList.toggle("bad", !!msg);
+              err.hidden = !msg; err.textContent = msg;
+              if (msg) { band.style.display = "none"; range.textContent = "In range —"; return; }
+              band.style.display = ""; band.style.left = pc(v - w) + "%"; band.style.width = (pc(v + w) - pc(v - w)) + "%";
+              tgt.style.left = pc(v) + "%";
+              range.textContent = "In range " + (v - w).toFixed(dec) + "–" + (v + w).toFixed(dec);
+            }
+            t.addEventListener("input", update); b.addEventListener("input", update);
+          });
+        })();
+        </script>
       </div>
     </section>
 

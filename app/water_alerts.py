@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app import models, water_history
+from app import chem_targets, models, water_history
 
 
 def current(session, today):
@@ -24,12 +24,12 @@ def current(session, today):
             value = getattr(visit, metric)
             if value is not None and math.isfinite(value) and len(histories[visit.property_id, metric]) < 3:
                 histories[visit.property_id, metric].append((visit, value))
-    targets = water_history.targets(session)
+    targets, bands = chem_targets.current(session)
     reviews = {r.fingerprint: r.job_id for r in session.scalars(select(models.WaterReview)).all()}
     alerts = []
     labels = {key: label for key, label, *_ in water_history.METRICS}
     for (pid, metric), points in histories.items():
-        target, band = targets[metric], water_history.BAND[metric]
+        target, band = targets[metric], bands[metric]
         if len(points) < 2 or not math.isfinite(target):
             continue
         prop = points[0][0].property
