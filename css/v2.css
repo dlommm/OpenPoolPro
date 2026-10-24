@@ -1591,3 +1591,15 @@ a.rp-tech,a.rp-li{text-decoration:none;color:inherit}
   .tabnav .setnav-g{display:none}
   .tab-label{border:1px solid var(--b);border-radius:999px;min-height:34px;padding:0 12px}
 }
+/* Sign-in and other bare pages: a deep-water band with the card floating over it */
+.bare-shell:has(.auth){background:linear-gradient(165deg,var(--mast-a) 0%,var(--mast-b) 58%,var(--mast-c) 100%) top/100% 300px no-repeat,var(--g)}
+.auth{max-width:440px;margin:0 auto;padding-top:min(10vh,80px)}
+.auth-brand{display:flex;align-items:center;gap:12px;color:var(--mast-t);margin-bottom:22px}
+.auth-brand img{width:44px;height:44px;border-radius:12px;box-shadow:0 0 0 1px rgba(255,255,255,.2),0 8px 18px -8px rgba(0,0,0,.5)}
+.auth-brand b{display:block;font-size:18px;font-weight:600}
+.auth-brand span{display:block;font-size:13px;color:var(--mast-m)}
+.auth-card{padding:28px;border-radius:18px;box-shadow:0 28px 60px -30px rgba(14,42,59,.55)}
+.portal .pmain>.ph .lede{color:rgba(255,255,255,.8)}
+.portal .pmain>section h2{font-size:18px;margin-bottom:12px}
+.portal .pmain>section .space-y-3>*+*,.portal .pmain>section .space-y-2>*+*{margin-top:10px}
+.denied-ic{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--as);color:var(--ai)}

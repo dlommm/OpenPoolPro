@@ -2,30 +2,20 @@
 {% block title %}Sign in — OpenPoolPro{% endblock %}
 {% set bare = true %}
 {% block content %}
-<div class="flex min-h-[70vh] flex-col justify-center pb-16">
-  <div class="text-center">
-    {% if has_logo_check() %}
-    <img src="/branding/logo" alt="" class="mx-auto mb-4 max-h-16">
-    <h1 class="sr-only">OpenPoolPro</h1>
-    {% else %}
-    {# Mark + theme-colored HTML wordmark (same lockup as the app header) so the
-       brand stays legible in BOTH light and dark mode. The flat logo PNG has
-       dark-navy "OpenPool" text that vanished on the dark-mode login canvas. #}
-    <div class="mb-3 flex items-center justify-center gap-3">
-      <img src="/static/brand/openpoolpro-mark.png" alt="" class="h-14 w-auto shrink-0">
-      <span class="font-display text-4xl font-extrabold tracking-tight">OpenPool<b class="text-pool">Pro</b></span>
-    </div>
-    <h1 class="sr-only">OpenPoolPro</h1>
-    {% endif %}
-    <p class="page-eyebrow">Pool service planner</p>
+<div class="auth">
+  <div class="auth-brand">
+    {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
+    <div><b>OpenPoolPro</b><span>Pool service planner</span></div>
   </div>
-  {% if error %}<p class="mt-6 text-center font-medium text-safety">{{ error }}</p>{% endif %}
-  <form method="post" action="/login" class="mt-8 space-y-3">
-    <input name="username" placeholder="Username" autofocus autocapitalize="none"
-           autocomplete="username" class="field text-center">
-    <input type="password" name="password" placeholder="Password"
-           autocomplete="current-password" class="field text-center">
-    <button class="btn-primary">Sign in</button>
-  </form>
+  <section class="card auth-card">
+    <h1 class="h1">Sign in</h1>
+    <p class="lede">Use the username your office gave you.</p>
+    {% if error %}<p class="flash neg" role="alert" style="margin:14px 0 0">{{ error }}</p>{% endif %}
+    <form method="post" action="/login" class="stack" style="margin-top:18px;gap:14px">
+      <div><label class="lbl" for="l-user">Username</label><input id="l-user" name="username" autofocus autocapitalize="none" autocomplete="username" class="inp"></div>
+      <div><label class="lbl" for="l-pass">Password</label><input id="l-pass" type="password" name="password" autocomplete="current-password" class="inp"></div>
+      <button class="btn pri xl block" type="submit">Sign in</button>
+    </form>
+  </section>
 </div>
 {% endblock %}
