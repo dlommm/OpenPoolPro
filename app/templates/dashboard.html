@@ -74,7 +74,7 @@
       <a class="rowbtn" href="/inventory"><div><span class="nm strong">{{ c.name }}</span><span class="sub">{{ "%g"|format(c.stock_qty) }} {{ c.unit }} on hand · reorder at {{ "%g"|format(c.reorder_point) }} {{ c.unit }}</span></div><span class="pill p-warn">Low stock</span></a>
       {% endfor %}
       {% for e in warranty_items %}
-      <a class="rowbtn" href="/customers/{{ e.pool.property.customer.id }}"><div><span class="nm strong">{{ e.kind | capitalize }}{% if e.brand %} · {{ e.brand }}{% endif %}{% if e.model %} {{ e.model }}{% endif %} · {{ e.pool.property.customer.name }}</span><span class="sub">Warranty {{ "ended" if e.warranty_end < d else "ends" }} {{ e.warranty_end.strftime("%b %-d, %Y") }}</span></div>{% if e.warranty_end < d %}<span class="pill p-neg">Past due</span>{% else %}<span class="muted small num">{{ (e.warranty_end - d).days }} days</span>{% endif %}</a>
+      <a class="rowbtn" href="/equipment?show=soon"><div><span class="nm strong">{{ e.kind | capitalize }}{% if e.brand %} · {{ e.brand }}{% endif %}{% if e.model %} {{ e.model }}{% endif %} · {{ e.pool.property.customer.name }}</span><span class="sub">Warranty {{ "ended" if e.warranty_end < d else "ends" }} {{ e.warranty_end.strftime("%b %-d, %Y") }}</span></div>{% if e.warranty_end < d %}<span class="pill p-neg">Past due</span>{% else %}<span class="muted small num">{{ (e.warranty_end - d).days }} days</span>{% endif %}</a>
       {% endfor %}
       {% if not low_chems and not warranty_items %}<p class="muted">Stock is fine and no warranty ends in the next 60 days.</p>{% endif %}
     </div>

@@ -2,16 +2,54 @@
 {% block title %}Account{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Your account", user.name) }}
+<header class="ph"><div><h1 class="h1">Account</h1><p class="lede">{{ user.name }} · {{ "Owner · administrator" if user.role == "admin" else "Technician" }}</p></div>
+  <div class="acts"><form method="post" action="/logout"><button class="btn">{{ ui.icon("logout") }}Sign out</button></form></div></header>
+
+<section class="card" style="margin-bottom:var(--gap)" aria-labelledby="a-disp">
+  <div class="card-h"><div><h2 class="card-t" id="a-disp">Display on this device</h2><p class="muted small">Saved on this phone or computer only.</p></div></div>
+  <div class="prefs" data-prefs>
+    {% for key, label, help, opts in [
+      ("mode", "Light or dark", "Follow device switches with the phone's setting.", [("", "Follow device"), ("light", "Light"), ("dark", "Dark")]),
+      ("dens", "Density", "Compact fits more rows on a desktop screen.", [("", "Comfortable"), ("compact", "Compact")]),
+      ("txt", "Text size", "Bigger text for sun and gloves.", [("", "Standard"), ("lg", "Large"), ("xl", "Largest")]),
+      ("mot", "Motion", "Reduced keeps fades and drops movement.", [("", "Full"), ("reduced", "Reduced")])] %}
+    <div class="pref"><div><b>{{ label }}</b><small>{{ help }}</small></div>
+      <div class="seg" role="group" aria-label="{{ label }}">{% for v, l in opts %}<button type="button" data-pref="{{ key }}" data-val="{{ v }}">{{ l }}</button>{% endfor %}</div></div>
+    {% endfor %}
+  </div>
+</section>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var root = document.documentElement;
+  var CLS = {dens: {compact: "dens-compact"}, txt: {lg: "txt-lg", xl: "txt-xl"}, mot: {reduced: "mot-reduced"}};
+  function get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function paint() {
+    document.querySelectorAll("[data-pref]").forEach(function (b) {
+      var on = get(b.dataset.pref) === b.dataset.val;
+      b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-pref]");
+    if (!b) return;
+    var k = b.dataset.pref, v = b.dataset.val;
+    try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (err) {}
+    if (k === "mode") { if (window.__applyMode) window.__applyMode(); }
+    else { for (var c in CLS[k]) root.classList.remove(CLS[k][c]); if (v) root.classList.add(CLS[k][v]); }
+    paint();
+  });
+  paint();
+})();
+</script>
 
 {% if request.query_params.get("force2fa") and not user.totp_enabled %}
-<div class="card mb-3 border-safety/50 bg-safety/10 p-3 text-sm font-medium text-safety">
+<div class="flash neg" role="alert">
   Two-factor authentication is required for all staff. Please set it up below to continue — until
   you do, the rest of the app is locked for your account.
 </div>
 {% endif %}
 {% if banner %}
-<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">{{ banner }}</div>
+<div class="flash" role="status">{{ banner }}</div>
 {% endif %}
 {% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
 
@@ -21,7 +59,7 @@
     #sidebar, #topbar, .no-print { display: none !important; }
   }
 </style>
-<div class="card mb-4 p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="mb-1 font-display text-lg font-bold uppercase tracking-wide">Your backup codes</h2>
   <p class="mb-3 text-sm text-mist">Save these somewhere safe — each one works once, and this is
     the only time they'll be shown. Print this page or write them down now.</p>
@@ -34,7 +72,7 @@
 </div>
 {% endif %}
 
-<div class="card mb-4 p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Password</h2>
   <form method="post" action="/account/password" class="space-y-2">
     <label class="block"><span class="field-label">Current password</span>
@@ -47,7 +85,7 @@
   </form>
 </div>
 
-<div class="card mb-4 p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Two-factor authentication</h2>
 
   {% if user.totp_enabled %}
@@ -82,7 +120,7 @@
   {% endif %}
 </div>
 
-<div class="card mb-4 p-4">
+<div class="card" style="margin-bottom:var(--gap)">
   <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Sessions</h2>
   <p class="mb-3 text-sm text-mist">Ends every other session signed in as you. This device stays
     signed in.</p>

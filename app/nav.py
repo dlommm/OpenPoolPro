@@ -68,6 +68,7 @@ OWNER = (
         Item("alerts", "/water-alerts", "Water alerts", "drop", _admin,
              also=("/water-tests",)),
         Item("inventory", "/inventory", "Inventory", "box", _admin),
+        Item("equipment", "/equipment", "Equipment", "cog", _admin),
         Item("ops", "/operations", "Operations health", "pulse", _admin),
         Item("analytics", "/analytics", "Analytics", "chart", _admin),
     )),

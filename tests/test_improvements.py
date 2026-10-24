@@ -371,3 +371,29 @@ def test_failed_offbox_sync_is_surfaced_in_settings_and_operations(client, engin
         s.commit()
     assert 'Off-box copy: Last attempt failed' in client.get('/operations').text
     assert 'Off-box backup sync failed (CalledProcessError (exit 3))' in client.get('/settings').text
+
+
+def test_equipment_page_lists_warranties_soonest_first(client, engine, tech_client):
+    from datetime import timedelta
+
+    from sqlalchemy.orm import Session
+
+    from app import models
+    from app.timefmt import business_today
+    today = business_today()
+    with Session(engine) as s:
+        c = models.Customer(name="GearCo")
+        p = models.Property(customer=c, label="Home")
+        pool = models.Pool(property=p, label="Main pool")
+        s.add_all([c, p, pool])
+        s.flush()
+        s.add(models.Equipment(pool_id=pool.id, kind="pump", brand="Later", model="X",
+                               warranty_end=today + timedelta(days=300)))
+        s.add(models.Equipment(pool_id=pool.id, kind="heater", brand="Sooner", model="Y",
+                               warranty_end=today + timedelta(days=20)))
+        s.commit()
+    html = client.get("/equipment").text
+    assert html.index("Sooner") < html.index("Later")
+    soon = client.get("/equipment?show=soon").text
+    assert "Sooner" in soon and "Later" not in soon
+    assert tech_client(name="geartech").get("/equipment").status_code == 403

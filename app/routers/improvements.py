@@ -135,3 +135,28 @@ def inspect_water(request: Request, fingerprint: str = Form(..., max_length=64),
         session.rollback()
         raise HTTPException(409, "An inspection was already created. Refresh the alerts.") from None
     return RedirectResponse(f"/jobs/{job.id}", 303)
+
+
+@router.get("/equipment", dependencies=[Depends(require_admin)])
+def equipment_page(request: Request, show: str = "", session: Session = Depends(get_session)):
+    """Every piece of equipment on an active pool, warranties running out
+    first (design v0.2 Operations). `show=soon` keeps the next 60 days and
+    anything already ended; the dashboard's reminder links here."""
+    from datetime import timedelta
+
+    from sqlalchemy.orm import selectinload
+
+    today = business_today()
+    items = session.scalars(
+        select(models.Equipment).join(models.Pool).join(models.Property).join(models.Customer)
+        .where(models.Pool.active, models.Property.active, models.Customer.active)
+        .options(selectinload(models.Equipment.pool).selectinload(models.Pool.property)
+                 .selectinload(models.Property.customer))).all()
+    soon = today + timedelta(days=60)
+    items.sort(key=lambda e: (e.warranty_end is None, e.warranty_end or today, e.kind))
+    counts = {"all": len(items),
+              "soon": sum(1 for e in items if e.warranty_end and e.warranty_end <= soon)}
+    if show == "soon":
+        items = [e for e in items if e.warranty_end and e.warranty_end <= soon]
+    return templates.TemplateResponse(request, "improvements/equipment.html", {
+        "items": items, "today": today, "soon": soon, "show": show, "counts": counts})
