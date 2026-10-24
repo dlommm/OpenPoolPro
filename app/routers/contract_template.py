@@ -7,7 +7,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import contract_tokens, models
-from app.contract_defaults import TEMPLATE_KEY
+from app.company import company_info
+from app.contract_defaults import (
+    STALE_DAYS_KEY,
+    STALE_DAYS_MAX,
+    STALE_DAYS_MIN,
+    TEMPLATE_KEY,
+    parse_stale_days,
+)
 from app.db import get_session
 from app.deps import require_admin
 
@@ -69,59 +76,114 @@ async def save(request: Request, session: Session = Depends(get_session)):
     return RedirectResponse("/settings#contract", status_code=303)
 
 
-def sample_context() -> dict:
+_SAMPLE_COMPANY = {"business_name": "Your Company", "company_address": "1 Main St",
+                   "company_phone": "(000) 000-0000", "company_email": "you@example.com",
+                   "company_license": "LIC-0000"}
+
+
+def sample_objects(includes_spa: bool = True, company: dict | None = None):
+    """The made-up contract the editor previews against. Real company details,
+    where filled in, replace the placeholders so the preview reads like the
+    owner's own paperwork; everything customer-side stays synthetic."""
     contract = SimpleNamespace(weekly_cents=8500, spa_cents=6000, open_close_cents=40000,
                                green_clean_cents=12000, storm_cents=9000, service_call_cents=15000,
-                               weeks=32, includes_spa=True)
+                               weeks=32, includes_spa=includes_spa)
     pool = SimpleNamespace(label="Main pool", gallons=18432, water_type="salt", surface="plaster",
                            length_ft=16, width_ft=32, avg_depth_ft=5)
-    customer = SimpleNamespace(name="Sample Customer")
+    customer = SimpleNamespace(name="Sample Customer", phone="(000) 000-0001",
+                               email="customer@example.com")
     prop = SimpleNamespace(label="Home", address="123 Example Ave, Your City, FL 30000",
                            gate_code="0000", city="Your City", state="FL", zip="30000")
-    company = {"business_name": "Your Company", "company_address": "1 Main St",
-               "company_phone": "(000) 000-0000", "company_email": "you@example.com",
-               "company_license": "LIC-0000"}
-    return contract_tokens.resolve_tokens(contract, pool, prop, customer, company, tax_rate_ppm=0)
+    merged = dict(_SAMPLE_COMPANY)
+    merged.update({k: v for k, v in (company or {}).items() if k in merged and v})
+    return contract, pool, prop, customer, merged
 
 
-def _preview_html(tpl: dict, ctx: dict) -> str:
+def sample_context(includes_spa: bool = True, company: dict | None = None) -> dict:
+    contract, pool, prop, customer, merged = sample_objects(includes_spa, company)
+    return contract_tokens.resolve_tokens(contract, pool, prop, customer, merged, tax_rate_ppm=0)
+
+
+def _text_html(title: str, body: str, esc) -> str:
+    """Same line rules as the PDF and the editor's page view: blank lines split
+    paragraphs, consecutive "- " lines group into a bullet list."""
+    out = [f'<h3 class="ct-h">{esc(title)}</h3>'] if title else []
+    for i, para in enumerate(body.split("\n\n")):
+        if i:
+            out.append('<span class="ct-p gap"></span>')
+        bullets = []
+        for ln in (line for line in para.split("\n") if line.strip()):
+            if ln.lstrip().startswith("- "):
+                bullets.append(ln.lstrip()[2:])
+                continue
+            if bullets:
+                out.append("<ul>" + "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
+                bullets = []
+            out.append(f'<p class="ct-p">{esc(ln)}</p>')
+        if bullets:
+            out.append("<ul>" + "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
+    return "".join(out)
+
+
+def _preview_html(tpl: dict, ctx: dict, sample=None) -> str:
+    """The editor's sample preview: the template rendered the way a real
+    contract renders it (spa-only sections dropped for a pool-only contract,
+    built-in blocks filled from the sample objects)."""
+    from app.contract_html import _parties_block, _rates_block
+
     def esc(s):
         return _html.escape(str(s))
 
-    out = [f'<h2 class="mb-2 text-center font-display text-lg font-bold">'
+    contract, _pool, prop, customer, company = sample or sample_objects()
+    out = [f'<h2 class="ct-title">'
            f'{esc(contract_tokens.apply_tokens(tpl.get("title", ""), ctx))}</h2>']
     for block in tpl.get("blocks", []):
         kind = block.get("kind")
         if kind == "text":
+            if block.get("when") == "includes_spa" and not contract.includes_spa:
+                continue
             title = contract_tokens.apply_tokens(block.get("title", ""), ctx)
             body = contract_tokens.apply_tokens(block.get("body", ""), ctx)
-            if title:
-                out.append(f'<h3 class="mt-3 font-semibold text-ink">{esc(title)}</h3>')
-            # Line-by-line, matching the PDF: consecutive "- " lines group into a
-            # <ul>; other lines are paragraphs. Handles blocks that mix an intro
-            # line with bullets (e.g. Customer Requirements).
-            for para in body.split("\n\n"):
-                bullets = []
-                for ln in (l for l in para.split("\n") if l.strip()):
-                    if ln.lstrip().startswith("- "):
-                        bullets.append(ln.lstrip()[2:])
-                    else:
-                        if bullets:
-                            out.append("<ul class='ml-5 list-disc text-sm'>" +
-                                       "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
-                            bullets = []
-                        out.append(f'<p class="mt-1 text-sm">{esc(ln)}</p>')
-                if bullets:
-                    out.append("<ul class='ml-5 list-disc text-sm'>" +
-                               "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
+            out.append(f'<div class="ce-sec">{_text_html(title, body, esc)}</div>')
         elif kind in _COMPUTED and block.get("visible", True):
-            out.append(f'<p class="mt-3 rounded border border-dashed border-seam '
-                       f'px-2 py-1 text-xs uppercase tracking-wide text-mist">[{esc(kind)} block]</p>')
+            if kind == "parties":
+                inner = _parties_block(prop, customer)
+            elif kind == "rates":
+                inner = _rates_block(contract, 0)
+            else:
+                inner = ('<div class="ce-sig"><div><span class="ce-line"></span><b>Client</b>'
+                         f'<span>{esc(customer.name)}</span></div>'
+                         '<div><span class="ce-line"></span>'
+                         f'<b>{esc(company.get("business_name", ""))}</b>'
+                         '<span>Authorised signature</span></div></div>')
+            out.append(f'<div class="ce-sec">{inner}</div>')
     return "".join(out)
 
 
 @router.post("/settings/contract/preview", response_class=HTMLResponse)
-async def preview(request: Request):
+async def preview(request: Request, session: Session = Depends(get_session)):
+    """Renders the posted (unsaved) editor form. `ct_sample_spa` picks whether
+    the sample contract includes a spa; the save route ignores it."""
     form = await request.form()
     tpl = {"title": form.get("doc_title", ""), "blocks": _blocks_from_form(form)}
-    return HTMLResponse(_preview_html(tpl, sample_context()))
+    sample = sample_objects(includes_spa=form.get("ct_sample_spa", "1") != "0",
+                            company=company_info(session))
+    contract, pool, prop, customer, company = sample
+    ctx = contract_tokens.resolve_tokens(contract, pool, prop, customer, company, tax_rate_ppm=0)
+    return HTMLResponse(_preview_html(tpl, ctx, sample))
+
+
+@router.post("/settings/contract/rules")
+async def save_rules(request: Request, session: Session = Depends(get_session)):
+    """The contract follow-up rule: days before a sent, unsigned contract is
+    flagged on the Contracts hub."""
+    form = await request.form()
+    days = parse_stale_days(form.get("stale_days", ""))
+    if days is None:
+        raise HTTPException(status_code=400,
+                            detail=f"days must be a whole number from {STALE_DAYS_MIN} to {STALE_DAYS_MAX}")
+    models.set_setting(session, STALE_DAYS_KEY, str(days))
+    models.audit(session, request.state.user.id, "contract.rules.save",
+                 detail=f"stale after {days} days")
+    session.commit()
+    return RedirectResponse("/settings#contract", status_code=303)
