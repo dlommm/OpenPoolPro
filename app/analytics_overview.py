@@ -358,9 +358,9 @@ class Movement:
 def customer_movement(session: Session, keys: list[tuple[int, int]], today: date) -> Movement:
     """Customers gained (by when they were added) and lost, per month of the window.
 
-    A lost customer is one marked inactive. Nothing records the day that
-    happened, so it is dated by their last completed visit (falling back to
-    when they were added, for a customer who never had one).
+    A lost customer is one marked inactive, dated by when that happened.
+    Customers deactivated before that was recorded fall back to their last
+    completed visit, then to when they were added.
     """
     mv = Movement(by_month={k: (0, 0) for k in keys})
     if not keys:
@@ -386,7 +386,8 @@ def customer_movement(session: Session, keys: list[tuple[int, int]], today: date
         if added:
             add(Move(c.name, c.id, "gained", added), 0)
         if not c.active:
-            ended = last_visit.get(c.id) or added
+            ended = (local_date(c.deactivated_at) if c.deactivated_at else None) \
+                or last_visit.get(c.id) or added
             if ended:
                 add(Move(c.name, c.id, "lost", ended), 1)
     mv.gained.sort(key=lambda m: (m.on, m.name), reverse=True)

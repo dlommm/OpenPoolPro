@@ -78,6 +78,7 @@
   "customers": [
     "active",
     "created_at",
+    "deactivated_at",
     "email",
     "id",
     "name",

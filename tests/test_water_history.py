@@ -193,7 +193,7 @@ def test_service_report_includes_readings_doses_and_notes(client, engine):
     assert "pH: 7.8" in body
     assert "Chemicals added:" in body and "Liquid chlorine: 2 gal" in body
     assert "Skimmer basket cleared" in body
-    assert "Technician:" in body
+    assert "Serviced by:" in body
 
 
 def test_service_report_never_mentions_money(client, engine):
@@ -206,7 +206,7 @@ def test_service_report_never_mentions_money(client, engine):
 def test_service_report_omits_empty_sections(client, engine):
     row = _complete_a_visit(client, engine)      # no readings submitted
     assert "Water test:" not in row.body
-    assert "Technician:" in row.body
+    assert "Serviced by:" in row.body
 
 
 def test_no_email_when_the_customer_has_not_opted_in(client, engine):

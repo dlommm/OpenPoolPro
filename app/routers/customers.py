@@ -437,7 +437,9 @@ def edit_customer(cid: int, name: str = Form(...), qb_display_name: str = Form("
 @router.post("/customers/{cid}/deactivate")
 def deactivate_customer(cid: int, session: Session = Depends(get_session),
                         user=Depends(require_perm("manage_customers"))):
-    get_or_404(session, models.Customer, cid).active = False
+    c = get_or_404(session, models.Customer, cid)
+    if c.active:
+        c.active, c.deactivated_at = False, models.utcnow()
     session.commit()
     return RedirectResponse("/customers", status_code=303)
 
@@ -445,7 +447,8 @@ def deactivate_customer(cid: int, session: Session = Depends(get_session),
 @router.post("/customers/{cid}/reactivate")
 def reactivate_customer(cid: int, session: Session = Depends(get_session),
                         user=Depends(require_perm("manage_customers"))):
-    get_or_404(session, models.Customer, cid).active = True
+    c = get_or_404(session, models.Customer, cid)
+    c.active, c.deactivated_at = True, None
     session.commit()
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
@@ -485,18 +488,27 @@ def add_comm_log(cid: int, request: Request, kind: str = Form("note"), note: str
     return RedirectResponse(f"/customers/{cid}", status_code=303)
 
 
-def _parse_tech_id(assigned_tech_id: str) -> int | None:
+def _parse_tech_id(assigned_tech_id: str, session=None, keep: int | None = None) -> int | None:
+    """The chosen assignee: blank clears it; anyone who can't hold a route
+    (unknown, inactive, wrong role) keeps the current assignee instead of
+    saving a stale or forged id -- the same rule /routes/assign enforces."""
     if not assigned_tech_id.strip():
         return None
     try:
-        return int(assigned_tech_id)
+        tid = int(assigned_tech_id)
     except ValueError:
-        return None
+        return keep
+    if tid == keep or session is None:
+        return tid
+    from app.route_planning import ROUTE_ROLES
+    u = session.get(models.User, tid)
+    return tid if u is not None and u.active and u.role in ROUTE_ROLES else keep
 
 
 def _apply_property(p: models.Property, label, street, city, state, zip, gate_code, dog_warning,
                     dog_note, notes, frequency, weekday, anchor_date, rate_override_dollars,
-                    assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True):
+                    assigned_tech_id, spa_rate_override_dollars="", allow_rate: bool = True,
+                    session=None):
     p.label, p.gate_code, p.notes = label, gate_code, notes
     p.street, p.city, p.state, p.zip = street.strip(), city.strip(), state.strip(), zip.strip()
     p.address = addresses.compose_address(p.street, p.city, p.state, p.zip)
@@ -506,7 +518,7 @@ def _apply_property(p: models.Property, label, street, city, state, zip, gate_co
     if allow_rate:
         p.rate_override_cents = cents(rate_override_dollars)
         p.spa_rate_override_cents = cents(spa_rate_override_dollars)
-    p.assigned_tech_id = _parse_tech_id(assigned_tech_id)
+    p.assigned_tech_id = _parse_tech_id(assigned_tech_id, session, keep=p.assigned_tech_id)
 
 
 def _maybe_geocode(p: models.Property, key: str, old_address: str) -> None:
@@ -573,7 +585,8 @@ def create_property(cid: int, request: Request, label: str = Form("Home"),
     p = models.Property(customer_id=cid)
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"),
+                    session=session)
     key = models.get_setting(session, "geoapify_key", "")
     _maybe_geocode(p, key, old_address="")
     session.add(p)
@@ -623,7 +636,8 @@ def edit_property(pid: int, request: Request, label: str = Form("Home"),
     old_address = p.address
     _apply_property(p, label, street, city, state, zip, gate_code, dog_warning, dog_note, notes,
                     frequency, weekday, anchor_date, rate_override_dollars, assigned_tech_id,
-                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"))
+                    spa_rate_override_dollars, allow_rate=request.state.user.can("view_money"),
+                    session=session)
     key = models.get_setting(session, "geoapify_key", "")
     _maybe_geocode(p, key, old_address)
     session.commit()

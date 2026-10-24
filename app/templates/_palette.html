@@ -1,0 +1,3 @@
+{#- The company palette (app/palettes.py): derived tokens only, from a validated hex. -#}
+{% set _pal_css = (request.state.ui.get("palette_css") if request is not none and request.state is defined and request.state.ui is defined else "") %}
+{% if _pal_css %}<style>{{ _pal_css }}</style>{% endif %}

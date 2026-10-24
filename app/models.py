@@ -57,6 +57,8 @@ class Customer(Base):
     email: Mapped[str] = mapped_column(String(120), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # When the customer was last marked inactive (None while active).
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     notify_email: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="aqua-atelier"><head><meta charset="utf-8">{% include "_mode_head.html" %}<meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>{{ company }} — Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head>
+<html lang="en" data-theme="aqua-atelier"><head><meta charset="utf-8">{% include "_mode_head.html" %}<meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>{{ company }} — Customer portal</title><link rel="stylesheet" href="/static/app.css?v={{ app_version }}">{% include "_palette.html" %}</head>
 <body class="pbrand portal"><div class="pmast"><div class="pmast-in">{% if has_logo_check() %}<img src="/branding/logo" alt="">{% endif %}<div><b>{{ company }}</b><div class="pmast-sub small">Customer portal</div></div></div></div>
 <main class="pmain stack">
 <header class="ph"><div><h1 class="h1">Your service records</h1><p class="lede">{{ customer.name }}</p></div></header>

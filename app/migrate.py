@@ -198,7 +198,7 @@ COLUMNS = {
         ("reorder_point", "REAL"),
         ("reorder_qty", "REAL"),
     ],
-    "customers": [("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0"),
+    "customers": [("deactivated_at", "DATETIME"), ("tags", "TEXT DEFAULT '[]'"), ("notify_email", "BOOLEAN DEFAULT 0"),
                   ("qbo_customer_id", "VARCHAR(40) DEFAULT ''"),
                   ("qbo_customer_scope", "VARCHAR(100) DEFAULT ''")],
     "equipment": [("warranty_end", "DATE")],

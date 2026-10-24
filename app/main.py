@@ -234,6 +234,11 @@ def create_app(engine=None) -> FastAPI:
             from sqlalchemy.orm import Session as _S
             with _S(app.state.engine) as s:
                 request.state.ui = ui_settings(s)
+                # Admin › What customers see: "Use the company palette" off
+                # puts the customer's own pages back on standard Lagoon.
+                if (path.startswith(("/sign/", "/portal/"))
+                        and models.get_setting(s, "email_brand", "1") == "0"):
+                    request.state.ui["palette_css"] = ""
         if not exempt:
             uid = request.session.get("user_id")
             # Missing "epoch" (cookie issued before this field existed) is

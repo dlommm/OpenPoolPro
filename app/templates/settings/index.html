@@ -893,7 +893,7 @@
             <form method="post" action="/settings/customer-look" class="clook-opts" data-clook-form>
               <input type="hidden" name="brand" value="0">
               <label class="chk"><input type="checkbox" name="brand" value="1" {{ "checked" if customer_look.brand }}>
-                <span><span class="strong">Use the company palette</span><span class="help">Email headers and buttons take your colours. Off uses the standard OpenPoolPro teal.</span></span></label>
+                <span><span class="strong">Use the company palette</span><span class="help">The customer portal, signing pages, email headers and buttons take your colours. Off uses the standard OpenPoolPro teal.</span></span></label>
               <input type="hidden" name="logo" value="0">
               <label class="chk"><input type="checkbox" name="logo" value="1" {{ "checked" if customer_look.logo }}>
                 <span><span class="strong">Show the company logo</span><span class="help">{% if company.has_logo %}Change it under Business.{% else %}No logo uploaded yet. Add one under Business.{% endif %}</span></span></label>

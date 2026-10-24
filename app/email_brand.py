@@ -246,7 +246,7 @@ def visit_mail(*, business: str, property_label: str, day: date, tech_name: str,
         lines += ["Completed:"] + [f"  {t}" for t in tasks] + [""]
     if notes:
         lines += ["Notes:", f"  {notes}", ""]
-    lines.append(f"Technician: {tech_name}")
+    lines.append(f"Serviced by: {tech_name}")
     if signoff:
         lines += ["", signoff]
     sections = []
