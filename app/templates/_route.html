@@ -7,7 +7,7 @@
 {% if s.effective_tech_id == assigned_id %}
   {% if assigned_id and s.property.assigned_tech %}<span class="pill p-acc" title="{{ s.property.assigned_tech.name }}">{{ s.property.assigned_tech.name | initials }}</span>{% endif %}
   {% if not assigned_id %}<span class="pill p-neg">unassigned</span>{% endif %}
-  {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="pill p-neg">disabled tech</span>{% endif %}
+  {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="pill p-neg">disabled {{ "owner" if s.property.assigned_tech.role == "admin" else "tech" }}</span>{% endif %}
 {% elif s.effective_tech_id %}
   <span class="pill p-warn" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
 {% else %}

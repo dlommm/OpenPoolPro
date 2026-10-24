@@ -8,6 +8,19 @@ from sqlalchemy.orm import selectinload
 
 from app import models
 
+# Roles that can hold a route. Technicians are balanced automatically; an
+# owner (admin) holds a route only by hand, so the balancer never moves stops
+# onto or off one (design v0.13, "set by hand").
+ROUTE_ROLES = ("tech", "admin")
+
+
+def route_people(session) -> list[models.User]:
+    """Everyone who can hold a route: active technicians by name, then active
+    owners by name. Pickers list owners last and label them "by hand"."""
+    users = session.scalars(select(models.User).where(
+        models.User.active, models.User.role.in_(ROUTE_ROLES))).all()
+    return sorted(users, key=lambda u: (u.role != "tech", u.name.lower(), u.id))
+
 
 def properties(session, weekday: int, tech_id: int):
     return session.scalars(select(models.Property).join(models.Customer).where(

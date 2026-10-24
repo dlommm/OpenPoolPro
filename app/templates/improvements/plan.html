@@ -9,21 +9,22 @@
   <div class="acts"><a class="btn" href="/routes/balance">{{ ui.icon("users") }}Balance assignments</a></div>
 </header>
 {% if request.query_params.get('saved') %}<div class="flash" role="status">{{ ui.icon("check", "ic18") }}Route order saved.</div>{% endif %}
+{% if assigned_to %}<div class="flash" role="status">{{ ui.icon("check", "ic18") }}Stop moved to the end of {{ assigned_to.name }}’s {{ days[weekday] }} route{% if assigned_to.role == "admin" %}, set by hand{% endif %}.</div>{% endif %}
 
 <section class="card rp-pick">
   <div><span class="lbl">Weekday</span>
     <div class="chips">{% for d in days %}<a class="chip {{ 'on' if loop.index0 == weekday }}" href="/routes/plan?weekday={{ loop.index0 }}&tech_id={{ tech_id }}">{{ d[:3] }} <span class="muted num">{{ day_counts[loop.index0] }}</span></a>{% endfor %}</div></div>
   <div><span class="lbl">Route</span>
     <div class="rp-techs">
-      {% for t in techs %}<a class="rp-tech {{ 'on' if t.id == tech_id }} {{ 'none' if not tech_counts.get(t.id) }}" href="/routes/plan?weekday={{ weekday }}&tech_id={{ t.id }}">{{ ui.av(t.name) }}<span><b>{{ t.name }}{% if t.id == request.state.user.id %} (you){% endif %}</b><small>{{ tech_counts.get(t.id, 0) }} stops</small></span></a>{% endfor %}
+      {% for t in techs %}<a class="rp-tech {{ 'on' if t.id == tech_id }} {{ 'none' if not tech_counts.get(t.id) }}" href="/routes/plan?weekday={{ weekday }}&tech_id={{ t.id }}">{{ ui.av(t.name) }}<span><b>{{ t.name }}{% if t.id == request.state.user.id %} (you){% endif %}</b><small>{{ tech_counts.get(t.id, 0) }} stop{{ "s" if tech_counts.get(t.id, 0) != 1 }}{% if t.role == "admin" %} · set by hand{% endif %}</small></span></a>{% endfor %}
       <a class="rp-tech {{ 'on' if tech_id == 0 }} {{ 'none' if not tech_counts.get(0) }}" href="/routes/plan?weekday={{ weekday }}&tech_id=0"><span class="av">–</span><span><b>Unassigned</b><small>{{ tech_counts.get(0, 0) }} stops</small></span></a>
     </div></div>
-  <noscript><form method="get" class="row"><select class="inp" name="weekday">{% for d in days %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == weekday }}>{{ d }}</option>{% endfor %}</select><select class="inp" name="tech_id"><option value="0">Unassigned</option>{% for tech in techs %}<option value="{{ tech.id }}" {{ 'selected' if tech.id == tech_id }}>{{ tech.name }}</option>{% endfor %}</select><button class="btn">Load route</button></form></noscript>
+  <noscript><form method="get" class="row"><select class="inp" name="weekday">{% for d in days %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == weekday }}>{{ d }}</option>{% endfor %}</select><select class="inp" name="tech_id"><option value="0">Unassigned</option>{% for tech in techs %}<option value="{{ tech.id }}" {{ 'selected' if tech.id == tech_id }}>{{ tech.name }}{% if tech.role == "admin" %} · by hand{% endif %}</option>{% endfor %}</select><button class="btn">Load route</button></form></noscript>
 </section>
 
 <div class="rp-ws">
   <section class="card rp-map" aria-labelledby="rp-mt">
-    <div class="card-h"><h2 class="card-t" id="rp-mt">{{ days[weekday] }} · {{ who.name if who else "Unassigned" }}</h2><span class="muted small num">{{ rows|length }} stops</span></div>
+    <div class="card-h"><h2 class="card-t" id="rp-mt">{{ days[weekday] }} · {{ who.name if who else "Unassigned" }}{% if who and who.role == "admin" %} <span class="pill p-neu rp-hand-pill">by hand</span>{% endif %}</h2><span class="muted small num">{{ rows|length }} stops</span></div>
     <div class="rp-cmp">
       <div><span class="muted small">Saved order</span><b class="num">{{ (before.minutes ~ ' min') if before else '—' }}</b><span class="muted small num">{{ (before.miles ~ ' miles') if before else 'estimate unavailable' }}</span></div>
       <div><span class="muted small">This order</span><b class="num" id="route-estimate">{{ (after.minutes ~ ' min · ' ~ after.miles ~ ' miles') if after else 'Estimate unavailable' }}</b></div>
@@ -33,6 +34,7 @@
     <p class="muted small" style="margin-top:10px">Approximate travel between stops only: straight-line distance × 1.3 at 25 mph. No live traffic, service time, depot travel, or road restrictions.</p>
   </section>
 
+  <div class="stack">
   <form method="post" action="/routes/plan" class="stack">
     <input type="hidden" name="weekday" value="{{ weekday }}"><input type="hidden" name="tech_id" value="{{ tech_id }}"><input type="hidden" name="fingerprint" value="{{ fingerprint }}">
     <section class="card rp-list">
@@ -53,6 +55,20 @@
     </section>
     {% if rows %}<div class="formbar"><span class="muted small">Saving changes the order on every future {{ days[weekday] }}.</span><button class="btn pri">Save this order</button></div>{% endif %}
   </form>
+  {% set targets = techs | rejectattr("id", "equalto", tech_id) | list %}
+  {% if rows and targets %}
+  <section class="card rp-hand" aria-labelledby="rp-ht">
+    <h2 class="card-t" id="rp-ht">Move a stop to another route</h2>
+    <p class="muted small">It joins the end of that person’s {{ days[weekday] }} route. Owners only get stops chosen here or in Balance assignments; balancing never moves them.</p>
+    <form method="post" action="/routes/plan/assign" class="rp-hand-f">
+      <input type="hidden" name="from_tech_id" value="{{ tech_id }}">
+      <label><span class="lbl">Stop</span><select class="inp" name="property_id" required>{% for prop in rows %}<option value="{{ prop.id }}">{{ prop.customer.name }}{% if prop.label and prop.label != "Home" %} — {{ prop.label }}{% endif %}</option>{% endfor %}</select></label>
+      <label><span class="lbl">Route</span><select class="inp" name="tech_id" required>{% for t in targets %}<option value="{{ t.id }}">{{ t.name }}{% if t.role == "admin" %} · by hand{% endif %}</option>{% endfor %}</select></label>
+      <button class="btn">Move stop</button>
+    </form>
+  </section>
+  {% endif %}
+  </div>
 </div>
 
 <script type="application/json" id="rp-saved">{{ rows | map(attribute="id") | list | tojson if not request.query_params.get("optimize") else "[]" }}</script>

@@ -24,9 +24,12 @@ def plan_page(request: Request, weekday: int = Query(0, ge=0, le=6), tech_id: in
               optimize: bool = False, session: Session = Depends(get_session)):
     rows = route_planning.properties(session, weekday, tech_id)
     suggested = route_planning.suggest(rows) if optimize else rows
-    techs = session.scalars(select(models.User).where(models.User.active).order_by(models.User.name)).all()
+    # Technicians first, then owners: an owner's route is set by hand here or
+    # in Balance assignments and never touched by the balancer.
+    techs = route_planning.route_people(session)
     return templates.TemplateResponse(request, "improvements/plan.html", {
         "rows": suggested, "weekday": weekday, "tech_id": tech_id, "techs": techs,
+        "assigned_to": next((t for t in techs if str(t.id) == request.query_params.get("assigned")), None),
         "before": route_planning.estimate(rows), "after": route_planning.estimate(suggested),
         "fingerprint": route_planning.fingerprint(rows),
         "coordinates": {p.id: route_planning.coordinates(p) for p in rows},
