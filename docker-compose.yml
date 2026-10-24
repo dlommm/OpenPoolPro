@@ -1,6 +1,7 @@
 # OpenPoolPro from the published image (Docker Hub; the same image is at
 # ghcr.io/dlommm/openpoolpro). For a server with your own reverse proxy.
-# On a fresh VPS with nothing else on it, docker-compose.vps.yml adds Caddy
+# Behind Pangolin use docker-compose.pangolin.yml; on a bare VPS,
+# docker-compose.caddy.yml adds Caddy
 # with automatic HTTPS instead.
 #
 #   echo "SECRET_KEY=$(openssl rand -hex 32)" > .env

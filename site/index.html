@@ -91,9 +91,9 @@
         <h2 id="how-h" class="h2">Up and running this afternoon</h2>
         <div class="how-step is-on" data-step="0">
           <p class="how-say">Run one command on your server.</p>
-          <p class="how-sub">Any Linux VPS with Docker, x86 or ARM. Caddy gets your HTTPS certificate; the app, the database and the nightly backups live in one folder.</p>
-          <figure class="how-pic" aria-hidden="true"><pre class="term"><code><span class="c">$</span> docker compose -f docker-compose.vps.yml up -d
-<span class="c">$</span> docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+          <p class="how-sub">Any VPS with Docker, x86 or ARM. Use the bundled Caddy for HTTPS, or put it behind Pangolin, Traefik or Nginx. The app, the database and the nightly backups live in one folder.</p>
+          <figure class="how-pic" aria-hidden="true"><pre class="term"><code><span class="c">$</span> docker compose -f docker-compose.caddy.yml up -d
+<span class="c">$</span> docker compose -f docker-compose.caddy.yml logs app | grep "Setup code"
 <span class="o">Setup code: 9SZS-GBEK-82NZ</span></code></pre></figure>
         </div>
         <div class="how-step" data-step="1">
@@ -111,10 +111,10 @@
         <div class="stage-in">
           <div class="stage-card st-0 is-on" data-stage="0">
             <pre class="term"><code><span class="c">$</span> mkdir openpoolpro &amp;&amp; cd openpoolpro
-<span class="c">$</span> curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/docker-compose.vps.yml
+<span class="c">$</span> curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/docker-compose.caddy.yml
 <span class="c">$</span> printf 'SECRET_KEY=%s\nDOMAIN=pools.example.com\n' "$(openssl rand -hex 32)" &gt; .env
-<span class="c">$</span> docker compose -f docker-compose.vps.yml up -d
-<span class="c">$</span> docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+<span class="c">$</span> docker compose -f docker-compose.caddy.yml up -d
+<span class="c">$</span> docker compose -f docker-compose.caddy.yml logs app | grep "Setup code"
 <span class="o">No owner account yet. Setup code: 9SZS-GBEK-82NZ</span></code></pre>
           </div>
           <div class="stage-card st-1" data-stage="1"><img src="shots/setup-account.webp" width="2400" height="1500" alt="" loading="lazy"></div>
@@ -251,7 +251,7 @@
         <button type="button" class="q is-on" aria-expanded="true" aria-controls="a-cost" data-q="cost">What does it cost?</button>
         <div class="a" id="a-cost" data-a="cost"><p>Nothing. OpenPoolPro is free and open source under the AGPL-3.0 licence. You pay only for the server you run it on; a small VPS is plenty for a company with a handful of technicians.</p></div>
         <button type="button" class="q" aria-expanded="false" aria-controls="a-need" data-q="need">What do I need to run it?</button>
-        <div class="a" id="a-need" data-a="need" hidden><p>A Linux machine with Docker, x86 or ARM, and a domain name. The VPS setup brings its own HTTPS proxy and certificate. Already run Traefik or Nginx? Use the plain compose file behind it. Unraid has its own file too.</p></div>
+        <div class="a" id="a-need" data-a="need" hidden><p>A Linux machine with Docker, x86 or ARM, from any provider, and a domain name. There is a compose file for a bare VPS (it brings its own HTTPS), one for Pangolin, one for any other proxy and one for Unraid. The <a href="https://github.com/dlommm/OpenPoolPro/blob/main/docs/deploy.md">deploy guide</a> walks through each.</p></div>
         <button type="button" class="q" aria-expanded="false" aria-controls="a-phone" data-q="phone">Is there a phone app?</button>
         <div class="a" id="a-phone" data-a="phone" hidden><p>It's an installable web app. Open it on the phone, choose Add to Home Screen, and it opens full screen like a native app. Visits finished without signal are saved on the phone and sent when it's back.</p></div>
         <button type="button" class="q" aria-expanded="false" aria-controls="a-qbo" data-q="qbo">Does it work with QuickBooks?</button>

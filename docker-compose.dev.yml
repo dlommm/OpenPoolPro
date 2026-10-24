@@ -4,7 +4,7 @@
 #
 #   docker compose -f docker-compose.dev.yml up --build
 #
-# Servers use docker-compose.yml or docker-compose.vps.yml instead.
+# Servers use docker-compose.yml, .caddy.yml or .pangolin.yml (docs/deploy.md).
 services:
   app:
     build: .

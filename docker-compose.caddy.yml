@@ -1,4 +1,7 @@
-# OpenPoolPro on a VPS with automatic HTTPS (Caddy + Let's Encrypt).
+# OpenPoolPro with its own Caddy proxy and automatic HTTPS (Let's Encrypt),
+# for a VPS with nothing else on ports 80 and 443. Already run Pangolin,
+# Traefik, Nginx or another proxy? Use docker-compose.pangolin.yml or
+# docker-compose.yml instead (see docs/deploy.md).
 #
 # Before you start:
 #   1. Point your domain's DNS A record (and AAAA, if you use IPv6) at this
@@ -7,12 +10,12 @@
 #        SECRET_KEY=<output of: openssl rand -hex 32>
 #        DOMAIN=pools.example.com
 #        APP_TZ=America/New_York
-#   3. docker compose -f docker-compose.vps.yml up -d
-#   4. docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+#   3. docker compose -f docker-compose.caddy.yml up -d
+#   4. docker compose -f docker-compose.caddy.yml logs app | grep "Setup code"
 #      then open https://<your domain> and enter the code.
 #
-# Updating: docker compose -f docker-compose.vps.yml pull && \
-#           docker compose -f docker-compose.vps.yml up -d
+# Updating: docker compose -f docker-compose.caddy.yml pull && \
+#           docker compose -f docker-compose.caddy.yml up -d
 services:
   app:
     image: dendlomm/openpoolpro:${OPENPOOLPRO_TAG:-latest}

@@ -26,30 +26,25 @@ one box (Docker + SQLite) and to be used from an iPhone in the field.
 
 ## Run
 
-**On a VPS (automatic HTTPS).** Point your domain at the server, open ports 80
-and 443, then:
+One image (`dendlomm/openpoolpro`, x86 and ARM) on any VPS or home server. Pick
+the compose file for the proxy that gives you HTTPS:
 
-    mkdir openpoolpro && cd openpoolpro
-    curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/docker-compose.vps.yml
-    printf 'SECRET_KEY=%s\nDOMAIN=pools.example.com\n' "$(openssl rand -hex 32)" > .env
-    docker compose -f docker-compose.vps.yml up -d
-    docker compose -f docker-compose.vps.yml logs app | grep "Setup code"
+| You have | Use |
+| --- | --- |
+| Pangolin on the same server | `docker-compose.pangolin.yml` |
+| A bare VPS, nothing on ports 80/443 | `docker-compose.caddy.yml` (bundled Caddy + Let's Encrypt) |
+| Nginx, NPM, Traefik, Caddy on the host, or a Cloudflare Tunnel | `docker-compose.yml` (app on `127.0.0.1:8000`) |
+| Unraid | `docker-compose.unraid.yml` |
 
-Open `https://<your domain>`, enter the setup code, and the setup creates your
-owner account. Caddy gets and renews the certificate; the app is reachable only
-through it.
+    curl -O https://raw.githubusercontent.com/dlommm/OpenPoolPro/main/<the file>
+    echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
+    docker compose -f <the file> up -d
+    docker compose -f <the file> logs app | grep "Setup code"
 
-**Behind your own reverse proxy.** `docker-compose.yml` runs the same published
-image bound to `127.0.0.1:8000`. Put SECRET_KEY in `.env`, run
-`docker compose up -d`, point the proxy at `127.0.0.1:8000`, and set
-`FORWARDED_ALLOW_IPS` to the address the proxy connects from (by default the
-Docker bridge, `172.17.0.1`).
-
-Images are built for x86 (amd64) and ARM (arm64) servers. Pin a release with
-`OPENPOOLPRO_TAG=vX.Y.Z` in `.env`. Forgot the owner password? Print a one-time
-reset link with `docker compose exec app python -m app.manage reset-owner
-[--clear-2fa]` (add `-f docker-compose.vps.yml` after `compose` on the VPS
-stack). On iPhone, Share → Add to Home Screen.
+Then open the site, enter the setup code, and first-time setup creates your
+owner account. [docs/deploy.md](docs/deploy.md) has the details for each proxy
+(Pangolin resource and bypass rules, single sign-on, firewalls, updating and
+owner password recovery).
 
 All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
 folder.
