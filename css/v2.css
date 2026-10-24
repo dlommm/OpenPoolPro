@@ -1399,3 +1399,25 @@ a.stop{text-decoration:none}
 .st .ic{width:14px;height:14px}
 .st-bad{color:var(--negt)}
 .card-t[tabindex="-1"]:focus{outline:none}
+/* Week (app) */
+.week{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:start}
+.wday{padding:14px}
+.wday-h{font-size:15px;display:flex;align-items:center;gap:8px}
+.wlist{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.wstop>summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:pointer;font-size:13.5px}
+.wstop>summary::-webkit-details-marker{display:none}
+.wstop .dot{width:24px;height:24px;font-size:11px}
+.wstop .dot .ic{width:12px;height:12px}
+.wname{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wstop[open]>summary{background:var(--as)}
+@media (hover: hover) and (pointer: fine){ .wstop>summary:hover{background:var(--r)} }
+.wmore{padding:10px 0 12px;border-bottom:1px solid var(--rule);margin-bottom:6px;animation:opp-rise 200ms var(--ease-out) both}
+.wmove{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.wmove .chk{min-height:32px}
+/* Route sheet (app) */
+.print{max-width:980px}
+.print-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.print-h b{font-size:18px}
+.print td.box{width:48px;border-left:1px solid #ddd}
+.print td.notes{width:40%}
+.print-sub{font-size:15px;font-weight:600;margin:20px 0 8px}

@@ -61,8 +61,11 @@ def route_sheet(request: Request, tech: int | None = None,
     elif tech is not None:
         stops = [s_ for s_ in stops if s_.property.assigned_tech_id == tech]
         jobs = [j for j in jobs if j.assigned_tech_id == tech]
+    who = user if not user.can("view_all_routes") else (
+        session.get(models.User, tech) if tech is not None else None)
     return templates.TemplateResponse(request, "print_route.html",
-                                      {"stops": stops, "jobs": jobs, "d": d})
+                                      {"stops": stops, "jobs": jobs, "d": d,
+                                       "who": who.name if who is not None else ""})
 
 
 @router.get("/search")

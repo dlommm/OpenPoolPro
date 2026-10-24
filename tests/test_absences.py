@@ -252,7 +252,7 @@ def test_week_chip_renders_plain_tech_initials(client, engine):
     sam = _tech(engine, "samplain")
     _prop(engine, "PlainChipStop", today.weekday(), sam)
     html = client.get(f"/week?start={start}").text
-    assert '<span class="tag ml-1">S</span>' in html
+    assert '<span class="pill p-acc" title="Samplain">S</span>' in html
     assert 'title="covering"' not in html
 
 

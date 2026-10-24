@@ -11,6 +11,7 @@ from app import config, models
 from app.db import get_or_404, get_session
 from app.scheduling import ScheduleWindow, stops_for_date, visible_to
 from app.templating import templates
+from app.timefmt import business_today
 
 router = APIRouter()
 
@@ -45,7 +46,7 @@ def week_page(request: Request, start: date | None = None, tech: int | None = No
         "start": start, "days": days, "day_stops": day_stops,
         "prev": start - timedelta(days=7), "next": start + timedelta(days=7),
         "techs": techs, "tech_filter": tech, "tech_counts": tech_counts,
-        "tech_by_id": {t.id: t for t in techs}})
+        "tech_by_id": {t.id: t for t in techs}, "today_date": business_today()})
 
 
 @router.post("/week/move")

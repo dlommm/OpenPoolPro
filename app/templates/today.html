@@ -66,20 +66,8 @@
 </a>
 {%- endmacro %}
 
-{# Who is on this stop, when the viewer can see every route: initials, a
-   covering technician, or a problem worth fixing. #}
-{% macro tech_tag(s) -%}
-{% set assigned_id = s.property.assigned_tech_id %}
-{% if s.effective_tech_id == assigned_id %}
-  {% if assigned_id and s.property.assigned_tech %}<span class="pill p-acc" title="{{ s.property.assigned_tech.name }}">{{ s.property.assigned_tech.name | initials }}</span>{% endif %}
-  {% if not assigned_id %}<span class="pill p-neg">unassigned</span>{% endif %}
-  {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="pill p-neg">disabled tech</span>{% endif %}
-{% elif s.effective_tech_id %}
-  <span class="pill p-warn" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
-{% else %}
-  <span class="pill p-neg">unassigned</span>
-{% endif %}
-{%- endmacro %}
+{% from "_route.html" import tech_tag as _tech_tag %}
+{% macro tech_tag(s) %}{{ _tech_tag(s, tech_by_id) }}{% endmacro %}
 
 {% macro maps_links(addr, big=false) -%}
 <a class="btn {{ 'xl' if big }}" href="https://maps.apple.com/?daddr={{ addr | urlencode }}">{{ ui.icon("nav", "ic20" if big else "") }}Navigate</a>
@@ -92,7 +80,7 @@
     <p class="lede">{{ d.strftime("%A, %b %-d") }}{% if total %} · {{ total }} stop{{ "s" if total != 1 }}{% if one_route and techs and tech_filter == u.id %} on your route{% elif one_route and tech_filter in tech_by_id %} for {{ tech_by_id[tech_filter].name }}{% endif %}{% endif %}</p>
   </div>
   <div class="acts no-print">
-    <a href="/today/print" class="btn d-only">{{ ui.icon("print") }}Route sheet</a>
+    <a href="/today/print{{ '?tech=%d'|format(tech_filter) if tech_filter is not none }}" class="btn d-only">{{ ui.icon("print") }}Route sheet</a>
     {% if u.can("view_all_routes") %}<a href="/routes/plan" class="btn">{{ ui.icon("map") }}Plan routes</a>{% endif %}
   </div>
 </header>
