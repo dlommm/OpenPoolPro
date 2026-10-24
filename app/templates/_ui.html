@@ -132,3 +132,11 @@
 {% macro photo(ph) -%}
 <figure class="photo"><img src="/photos/file/{{ ph.id }}?thumb=1" alt="{{ (ph.tag or 'Photo') | capitalize }}">{% if ph.tag %}<figcaption class="pill p-neu">{{ ph.tag }}</figcaption>{% endif %}</figure>
 {%- endmacro %}
+
+{# A short numbered flow (CSV import, tester import): each step done, current
+   or still to come. `steps` is a list of labels; `current` is 1-based. #}
+{% macro flow_steps(steps, current) -%}
+<ol class="fsteps" aria-label="Steps">
+  {% for s in steps %}<li class="{{ 'dn' if loop.index < current else ('on' if loop.index == current) }}"{% if loop.index == current %} aria-current="step"{% endif %}><i>{% if loop.index < current %}✓{% else %}{{ loop.index }}{% endif %}</i>{{ s }}</li>{% endfor %}
+</ol>
+{%- endmacro %}

@@ -1500,3 +1500,17 @@ a.pill{text-decoration:none}
 .search-big{max-width:640px}
 .search-big .inp{height:48px;padding-left:40px;font-size:16px}
 .search-big .search-ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--m)}
+/* numbered flow (imports) */
+.fsteps{display:flex;gap:0;flex-wrap:wrap;margin:0 0 var(--gap)}
+.fsteps li{display:flex;align-items:center;gap:8px;padding-right:22px;position:relative;font-size:13.5px;color:var(--m)}
+.fsteps li:not(:last-child)::after{content:"";position:absolute;right:6px;top:50%;width:10px;height:2px;background:var(--b);border-radius:2px}
+.fsteps i{font-style:normal;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;background:var(--r);box-shadow:inset 0 0 0 1px var(--b)}
+.fsteps li.on{color:var(--t);font-weight:600}
+.fsteps li.on i{background:var(--pri);color:var(--prit);box-shadow:0 0 0 4px color-mix(in srgb,var(--a) 22%,transparent)}
+.fsteps li.dn{color:var(--t)}
+.fsteps li.dn i{background:var(--a);color:#fff;box-shadow:none}
+.result-list{max-height:420px;overflow:auto}
+.result-list li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;padding:7px 0;border-top:1px solid var(--rule);font-size:13.5px}
+.result-list li:first-child{border-top:0}
+.result-list li.error{color:var(--negt)}
+.result-list li.skip{color:var(--m)}

@@ -2,22 +2,31 @@
 {% block title %}Preview import{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Import CSV", "Dry run") }}
-<p class="mb-3 font-data text-sm">{{ ok }} ok · {{ skips }} skipped · <span class="{{ 'text-safety' if errors }}">{{ errors }} errors</span></p>
-<div class="card mb-4 max-h-96 space-y-1 overflow-y-auto p-3 text-sm">
-  {% for n, row, status, why in results %}
-  <div class="flex gap-2 {{ 'text-safety' if status == 'error' else ('text-mist' if status == 'skip') }}">
-    <span class="font-data w-10 shrink-0">{{ n }}</span>
-    <span class="truncate">{{ row[0] if row else "" }}</span>
-    <span class="ml-auto shrink-0 font-data">{{ status }}{{ " — " + why if why }}</span>
-  </div>
-  {% endfor %}
+{% set import_steps = ["Upload", "Map columns", "Dry run", "Done"] %}
+<header class="ph"><div>
+  <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><a href="/customers/import">Import</a><span aria-hidden="true">›</span><span>Dry run</span></p>
+  <h1 class="h1">Dry run</h1>
+  <p class="lede">Nothing has been saved yet. The import runs all-or-nothing.</p>
+</div></header>
+{{ ui.flow_steps(import_steps, 3) }}
+<div class="kpis k3" style="margin-bottom:var(--gap)">
+  <div class="kpi"><div class="l">Ready</div><div class="v num">{{ ok }}</div><div class="c">ok</div></div>
+  <div class="kpi"><div class="l">Skipped</div><div class="v num">{{ skips }}</div><div class="c">duplicates or blank</div></div>
+  <div class="kpi"><div class="l">Errors</div><div class="v num {{ 'st-bad' if errors }}">{{ errors }}</div><div class="c">{{ "fix and re-upload" if errors else "none" }}</div></div>
 </div>
+<section class="card">
+  <ul class="result-list">
+    {% for n, row, status, why in results %}
+    <li class="{{ status }}"><span class="num muted">{{ n }}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row[0] if row else "" }}</span><span class="num">{{ status }}{{ " — " + why if why }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
 {% if errors %}
-<p class="mb-3 text-sm text-safety">Fix the error rows in your spreadsheet and re-upload — the import runs all-or-nothing.</p>
+<div class="banner fail" role="alert" style="margin-top:var(--gap)">{{ ui.icon("alert", "ic18") }}<span>Fix the error rows in your spreadsheet and re-upload — the import runs all-or-nothing.</span></div>
 {% endif %}
-<form method="post" action="/customers/import/{{ token }}/commit">
+<form method="post" action="/customers/import/{{ token }}/commit" class="row" style="margin-top:var(--gap)">
   {% for t, h in mapping.items() %}<input type="hidden" name="map_{{ t }}" value="{{ h }}">{% endfor %}
-  <button class="btn-primary" {{ "disabled" if errors }}>Import {{ ok }} customers</button>
+  <button class="btn pri" {{ "disabled" if errors }}>Import {{ ok }} customers</button>
+  <a class="btn" href="/customers/import">Start over</a>
 </form>
 {% endblock %}

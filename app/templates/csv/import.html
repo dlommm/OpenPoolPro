@@ -2,13 +2,20 @@
 {% block title %}Import customers{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Customer files", "Import CSV") }}
-{% if error %}<p class="mb-3 font-medium text-safety">{{ error }}</p>{% endif %}
-<form method="post" enctype="multipart/form-data" class="card space-y-3 p-4">
-  <p class="text-sm text-mist">One row per property. Columns are mapped on the next step — any spreadsheet export works. 5 MB max.</p>
-  {% call ui.upload("Choose CSV file", "document") %}
+{% set import_steps = ["Upload", "Map columns", "Dry run", "Done"] %}
+<header class="ph"><div>
+  <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><span>Import</span></p>
+  <h1 class="h1">Import customers</h1>
+  <p class="lede">One row per property. Columns are matched on the next step, so any spreadsheet export works.</p>
+</div></header>
+{{ ui.flow_steps(import_steps, 1) }}
+{% if error %}<div class="banner fail" role="alert">{{ ui.icon("alert", "ic18") }}<span>{{ error }}</span></div>{% endif %}
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:640px">
+  <h2 class="card-t">Choose a CSV file</h2>
+  <p class="muted small" style="margin:4px 0 14px">Up to 5 MB. Nothing is saved until you confirm the dry run.</p>
+  {% call ui.upload("Choose CSV file", "file") %}
   <input type="file" name="file" accept=".csv,text/csv" required class="upload-input">
   {% endcall %}
-  <button class="btn-primary">Upload and map columns</button>
+  <div class="row" style="margin-top:16px"><button class="btn pri">Upload and map columns</button><a class="btn" href="/customers">Cancel</a></div>
 </form>
 {% endblock %}

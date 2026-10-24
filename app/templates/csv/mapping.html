@@ -2,19 +2,25 @@
 {% block title %}Map columns{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Import CSV", "Map columns") }}
-<p class="mb-3 text-sm text-mist">{{ count }} rows found. Match your spreadsheet's columns to the app's fields — guessed matches are pre-selected.</p>
-<form method="post" action="/customers/import/{{ token }}/preview" class="space-y-2">
-  {% for t in targets %}
-  <label class="flex items-center gap-2">
-    <span class="field-label mb-0 w-40 shrink-0">{{ t.replace("_", " ") }}</span>
-    <select name="map_{{ t }}" class="field">
-      <option value="">— skip —</option>
-      {% for h in headers %}
-      <option value="{{ h }}" {{ "selected" if guesses[t] == h }}>{{ h }}</option>
-      {% endfor %}
-    </select></label>
-  {% endfor %}
-  <button class="btn-primary mt-3">Preview import</button>
+{% import "_form.html" as f %}
+{% set import_steps = ["Upload", "Map columns", "Dry run", "Done"] %}
+<header class="ph"><div>
+  <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><a href="/customers/import">Import</a><span aria-hidden="true">›</span><span>Map columns</span></p>
+  <h1 class="h1">Map columns</h1>
+  <p class="lede">{{ count }} rows found. Match your spreadsheet's columns to the app's fields — guessed matches are pre-selected.</p>
+</div></header>
+{{ ui.flow_steps(import_steps, 2) }}
+<form method="post" action="/customers/import/{{ token }}/preview" class="formwrap stack">
+  {% call f.group("Columns", "Leave a field on “skip” when your file has no column for it.") %}
+    {% for t in targets %}
+    {% call f.row(t.replace("_", " ") | capitalize, "", "map-" ~ t) %}
+      <select id="map-{{ t }}" name="map_{{ t }}" class="inp">
+        <option value="">— skip —</option>
+        {% for h in headers %}<option value="{{ h }}" {{ "selected" if guesses[t] == h }}>{{ h }}</option>{% endfor %}
+      </select>
+    {% endcall %}
+    {% endfor %}
+  {% endcall %}
+  {{ f.savebar("Preview import", cancel="/customers") }}
 </form>
 {% endblock %}
