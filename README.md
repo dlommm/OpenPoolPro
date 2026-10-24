@@ -46,7 +46,8 @@ owner account. [docs/deploy.md](docs/deploy.md) has the details for each proxy
 (Pangolin resource and bypass rules, single sign-on, firewalls, updating and
 owner password recovery).
 
-All data lives in ./data (SQLite DB, photos, nightly backups). Back up that
+All data lives in /opt/openpoolpro/data (SQLite DB, photos, nightly backups; set
+HOST_DIR to move it). Back up that
 folder.
 
 **Upgrading from a version that used `APP_PASSWORD`:** your `owner` account keeps

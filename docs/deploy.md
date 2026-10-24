@@ -31,7 +31,12 @@ and follow first-time setup:
 docker compose -f <the file> logs app | grep "Setup code"
 ```
 
-All data lives in `./data` next to the compose file. Back that folder up.
+All data lives in `/opt/openpoolpro/data` (set `HOST_DIR` to move it). Back
+that folder up.
+
+**Control panels.** Every file also works pasted into a panel such as
+Hostinger's Docker Manager: set `SECRET_KEY` (and the other variables you need)
+in the panel's variables form instead of a `.env` file.
 
 ## Pangolin
 
@@ -45,8 +50,10 @@ network with no published port, so the only way in is through Pangolin.
    `8000`.
 3. Read the setup code (above) and open the resource's URL.
 
-If your Pangolin network has another name (`docker network ls`), set
-`PANGOLIN_NETWORK=<name>` in `.env`.
+The network must already exist, or the project won't deploy (a panel may
+report it as "project not found"). Check its name with `docker network ls`;
+if it isn't `pangolin` (for example `pangolin_default` when Pangolin was
+installed from a panel template), set `PANGOLIN_NETWORK=<name>`.
 
 **Pangolin sign-in in front of the app.** If you leave Pangolin's
 authentication on for this resource, add bypass rules so customers can still
@@ -82,7 +89,7 @@ and point the resource at the address Newt can reach the app on.
 4. `docker compose -f docker-compose.caddy.yml up -d`
 
 Caddy gets and renews the certificate itself and redirects HTTP to HTTPS. Keep
-the `./caddy` folder; it holds the certificates.
+the `caddy` folder under `HOST_DIR`; it holds the certificates.
 
 ## Your own proxy on the host
 
@@ -104,7 +111,7 @@ docker compose -f <the file> up -d
 ```
 
 The app backs up its database before applying any migration. To stay on one
-release, set `OPENPOOLPRO_TAG=v2.0.1` (for example) in `.env`.
+release, set `OPENPOOLPRO_IMAGE=dendlomm/openpoolpro:v2.0.1` (for example).
 
 ## Forgotten owner password
 

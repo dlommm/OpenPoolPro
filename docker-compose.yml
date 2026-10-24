@@ -9,9 +9,13 @@
 #   docker compose logs app | grep "Setup code"
 #
 # Then open the app through your proxy and enter the setup code.
+#
+# Pasting into a control panel (Hostinger's Docker Manager and similar)? Set
+# SECRET_KEY in its variables form; data goes to HOST_DIR (default
+# /opt/openpoolpro).
 services:
   app:
-    image: dendlomm/openpoolpro:${OPENPOOLPRO_TAG:-latest}
+    image: ${OPENPOOLPRO_IMAGE:-dendlomm/openpoolpro:latest}
     ports:
       # Loopback-only. The app trusts X-Forwarded-* from the configured proxy,
       # so anything that can reach this port directly can forge the client IP
@@ -19,7 +23,7 @@ services:
       # 127.0.0.1:8000; don't publish this on 0.0.0.0.
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./data:/data
+      - ${HOST_DIR:-/opt/openpoolpro}/data:/data
     environment:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env (openssl rand -hex 32)}
       APP_TZ: ${APP_TZ:-America/New_York}
@@ -36,3 +40,8 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

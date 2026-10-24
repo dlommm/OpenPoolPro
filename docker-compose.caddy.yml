@@ -18,12 +18,12 @@
 #           docker compose -f docker-compose.caddy.yml up -d
 services:
   app:
-    image: dendlomm/openpoolpro:${OPENPOOLPRO_TAG:-latest}
+    image: ${OPENPOOLPRO_IMAGE:-dendlomm/openpoolpro:latest}
     # Not published to the internet: only Caddy reaches it, on the private
     # network below, so nobody can bypass the proxy and forge their address.
     expose: ["8000"]
     volumes:
-      - ./data:/data
+      - ${HOST_DIR:-/opt/openpoolpro}/data:/data
     environment:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env (openssl rand -hex 32)}
       APP_TZ: ${APP_TZ:-America/New_York}
@@ -37,6 +37,11 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   caddy:
     image: caddy:2
@@ -46,13 +51,18 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./caddy/data:/data       # certificates; keep this folder
-      - ./caddy/config:/config
+      - ${HOST_DIR:-/opt/openpoolpro}/caddy/data:/data       # certificates; keep this folder
+      - ${HOST_DIR:-/opt/openpoolpro}/caddy/config:/config
     networks:
       web:
         ipv4_address: 172.30.80.2
     depends_on: [app]
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 networks:
   web:
