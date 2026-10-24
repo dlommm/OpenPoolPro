@@ -7,7 +7,20 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import chem_presets, chem_targets, config, mailer, models, qbo, rates, receivables, sizes, tax, templating
+from app import (
+    chem_presets,
+    chem_targets,
+    config,
+    mailer,
+    models,
+    palettes,
+    qbo,
+    rates,
+    receivables,
+    sizes,
+    tax,
+    templating,
+)
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
@@ -96,6 +109,15 @@ def settings_page(request: Request, rules_created: str | None = None,
                            .order_by(models.User.role, models.User.name)).all()
     backups_dir = os.path.join(config.DATA_DIR, "backups")
     backups = sorted(os.listdir(backups_dir), reverse=True) if os.path.isdir(backups_dir) else []
+    appearance = templating.ui_settings(session)
+    palette_cards = [{"key": p.key, "name": p.name, "desc": p.desc, "on": appearance["palette"] == p.key,
+                      "v": palettes.preview(p.key, p.base)} for p in palettes.PALETTES]
+    custom = appearance["palette_custom"]
+    palette_cards.append({"key": "custom", "name": "Your colour",
+                          "desc": "Any brand colour; contrast is corrected for you.",
+                          "on": appearance["palette"] == "custom", "v": palettes.preview("custom", custom)})
+    fixed = palettes.derive(custom, "light")["--a"]
+    palette_custom_fix = fixed if fixed != custom else ""
     chem_t, chem_b = chem_targets.current(session)
     rejected = set((request.query_params.get("chem_rejected") or "").split(","))
     target_rows = [{"spec": sp, "target": chem_t[sp.key], "band": chem_b[sp.key],
@@ -116,7 +138,9 @@ def settings_page(request: Request, rules_created: str | None = None,
         "chem_presets": chem_presets.CHEM_PRESETS,
         "markup": models.get_setting(session, "chem_markup_percent", "0"),
         "labor_rate_dollars": "%.2f" % (rates.default_labor_rate_cents(session) / 100),
-        "appearance": templating.ui_settings(session),
+        "appearance": appearance,
+        "palette_cards": palette_cards,
+        "palette_custom_fix": palette_custom_fix,
         "business_name": models.get_setting(session, "business_name", ""),
         "invoice_net_days": receivables.default_net_days(session),
         "backup_error": models.get_setting(session, "last_backup_error", ""),
@@ -587,6 +611,12 @@ async def save_appearance(request: Request, session: Session = Depends(get_sessi
         value = (form.get(key) or "").strip()
         if value in allowed:
             models.set_setting(session, key, value)
+    pal = (form.get("palette") or "").strip()
+    if pal in palettes.BY_KEY or pal == "custom":
+        models.set_setting(session, "palette", pal)
+    custom = palettes.clean_hex(form.get("palette_custom"))
+    if custom:
+        models.set_setting(session, "palette_custom", custom)
     session.commit()
     return RedirectResponse("/settings", status_code=303)
 

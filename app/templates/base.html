@@ -24,6 +24,8 @@
   <link rel="preload" href="/static/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
   {% include "_mode_head.html" %}
   <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
+  {#- The company palette (app/palettes.py): derived tokens only, from a validated hex. -#}
+  {% if _ui_cfg.get("palette_css") %}<style>{{ _ui_cfg.palette_css }}</style>{% endif %}
   <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
   <title>{% block title %}OpenPoolPro{% endblock %}</title>
 </head>

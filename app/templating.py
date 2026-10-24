@@ -32,12 +32,19 @@ def ui_settings(session) -> dict:
     """The company-wide appearance choices, each validated against its allowed
     set so a hand-edited or stale setting falls back instead of reaching
     markup."""
-    from app import models
+    from app import models, palettes
 
     nav = models.get_setting(session, "nav_layout", UI_DEFAULTS["nav_layout"])
     hdr = models.get_setting(session, "header_style", UI_DEFAULTS["header_style"])
+    pal = models.get_setting(session, "palette", palettes.DEFAULT)
+    custom = palettes.clean_hex(models.get_setting(session, "palette_custom", "")) \
+        or palettes.DEFAULT_CUSTOM
+    if pal != "custom" and pal not in palettes.BY_KEY:
+        pal = palettes.DEFAULT
     return {"nav_layout": nav if nav in NAV_LAYOUTS else UI_DEFAULTS["nav_layout"],
             "header_style": hdr if hdr in HEADER_STYLES else UI_DEFAULTS["header_style"],
+            "palette": pal, "palette_custom": custom,
+            "palette_css": palettes.css(pal, custom),
             "company": models.get_setting(session, "business_name", "") or ""}
 
 
