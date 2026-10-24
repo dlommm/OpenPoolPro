@@ -7,10 +7,10 @@
     phone    -- the same, plus a five-slot bottom bar.
     A page that sets `bare = true` (sign-in, customer e-sign) gets the plain
     centred shell with no staff chrome. -#}
-{% set ui_cfg = (request.state.ui if request is not none and request.state is defined and request.state.ui is defined else {}) %}
-{% set nav_layout = ui_cfg.get("nav_layout", "top") %}
-{% set header_style = ui_cfg.get("header_style", "lit") %}
-{% set org_name = ui_cfg.get("company", "") %}
+{% set _ui_cfg = (request.state.ui if request is not none and request.state is defined and request.state.ui is defined else {}) %}
+{% set _nav_layout = _ui_cfg.get("nav_layout", "top") %}
+{% set _hdr = _ui_cfg.get("header_style", "lit") %}
+{% set _org = _ui_cfg.get("company", "") %}
 <html lang="en" data-theme="aqua-atelier">
 <head>
   <meta charset="utf-8">
@@ -32,29 +32,29 @@
 <body class="bare-shell">
   <main class="bare">
 {% else %}
-{% set u = request.state.user if request is not none and request.state is defined else None %}
-{% set navm = nav() %}
-<body class="nav-{{ nav_layout }} hdr-{{ header_style }}">
+{% set _me = request.state.user if request is not none and request.state is defined else None %}
+{% set _navm = nav() %}
+<body class="nav-{{ _nav_layout }} hdr-{{ _hdr }}">
   <a class="sr skip" href="#main">Skip to content</a>
   <div class="shell">
     <header class="mast">
-      {% if header_style == "lit" %}<div class="mast-fx" aria-hidden="true"><i></i><i></i><i></i></div>{% endif %}
+      {% if _hdr == "lit" %}<div class="mast-fx" aria-hidden="true"><i></i><i></i><i></i></div>{% endif %}
       <div class="mast-r1">
         <a class="mast-brand" href="/">
           {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
-          <div><b>OpenPoolPro</b>{% if org_name %}<span>{{ org_name }}</span>{% endif %}</div>
+          <div><b>OpenPoolPro</b>{% if _org %}<span>{{ _org }}</span>{% endif %}</div>
         </a>
-        <span class="mast-ttl">{{ navm.title or "OpenPoolPro" }}</span>
+        <span class="mast-ttl">{{ _navm.title or "OpenPoolPro" }}</span>
         <nav class="mast-nav" aria-label="Main navigation">
-          {% for t in navm.top %}
-          <a class="mn {{ 'on' if t.on }}" href="{{ t.href }}"{% if t.on %} aria-current="{{ 'page' if navm.single else 'true' }}"{% endif %}>{{ t.label }}{% if not navm.single and t.alert %}<i class="mn-dot" aria-hidden="true"></i>{% endif %}</a>
+          {% for t in _navm.top %}
+          <a class="mn {{ 'on' if t.on }}" href="{{ t.href }}"{% if t.on %} aria-current="{{ 'page' if _navm.single else 'true' }}"{% endif %}>{{ t.label }}{% if not _navm.single and t.alert %}<i class="mn-dot" aria-hidden="true"></i>{% endif %}</a>
           {% endfor %}
         </nav>
         <div class="mast-acts">
           <form class="mast-search" method="get" action="/search" role="search">
             <a class="sr" href="/search">Search</a>
             {{ ui.icon("search") }}
-            <label class="sr" for="mast-q">Search customers{{ ", jobs and invoices" if u is none or u.role == "admin" }}</label>
+            <label class="sr" for="mast-q">Search customers{{ ", jobs and invoices" if _me is none or _me.role == "admin" }}</label>
             <input id="mast-q" type="search" name="q" placeholder="Search" autocomplete="off">
           </form>
           <a class="mast-ic mast-search-ic" href="/search" aria-label="Search">{{ ui.icon("search") }}</a>
@@ -63,30 +63,30 @@
             {{ ui.icon("sun", "mode-icon mode-icon-sun") }}{{ ui.icon("moon", "mode-icon mode-icon-moon") }}
           </button>
           <button type="button" class="mast-ic mast-menu" aria-label="Open menu" aria-controls="menu-sheet" data-open="menu-sheet">{{ ui.icon("menu", "ic20") }}</button>
-          {% if u %}<button type="button" class="av mast-av" title="{{ u.name }}" aria-label="{{ u.name }} — account and sign out" aria-controls="menu-sheet" data-open="menu-sheet">{{ u.name|initials }}</button>{% endif %}
+          {% if _me %}<button type="button" class="av mast-av" title="{{ _me.name }}" aria-label="{{ _me.name }} — account and sign out" aria-controls="menu-sheet" data-open="menu-sheet">{{ _me.name|initials }}</button>{% endif %}
         </div>
       </div>
-      {% if navm.sub %}
-      <nav class="mast-r2" aria-label="{{ navm.sub_label }}">
-        {% for i in navm.sub %}
+      {% if _navm.sub %}
+      <nav class="mast-r2" aria-label="{{ _navm.sub_label }}">
+        {% for i in _navm.sub %}
         <a class="sn {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
         {% endfor %}
       </nav>
       {% endif %}
     </header>
 
-    {% if nav_layout == "side" %}
+    {% if _nav_layout == "side" %}
     <aside class="side" aria-label="Main navigation">
       <a class="brand" href="/">
         {% if has_logo_check() %}<img src="/branding/logo" alt="">{% else %}<img src="/static/brand/openpoolpro-mark.png" alt="">{% endif %}
-        <div><b>OpenPoolPro</b>{% if org_name %}<span>{{ org_name }}</span>{% endif %}</div>
+        <div><b>OpenPoolPro</b>{% if _org %}<span>{{ _org }}</span>{% endif %}</div>
       </a>
       <form class="search" method="get" action="/search" role="search">
         {{ ui.icon("search") }}<label class="sr" for="side-q">Search</label>
         <input id="side-q" type="search" name="q" placeholder="Search" autocomplete="off">
       </form>
-      {% for g in navm.groups %}
-        {% if g.label and not navm.single and g.label != "Home" %}<div class="side-grp">{{ g.label }}</div>{% endif %}
+      {% for g in _navm.groups %}
+        {% if g.label and not _navm.single and g.label != "Home" %}<div class="side-grp">{{ g.label }}</div>{% endif %}
         {% for i in g.items %}
         <a class="nav-i {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ ui.icon(i.icon, "ic18") }}{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
         {% endfor %}
@@ -94,8 +94,8 @@
       <div class="side-foot">
         <button type="button" id="sync-badge-desktop" class="nav-i" hidden data-sync-open>0 waiting</button>
         <button type="button" class="nav-i" data-mode-toggle>{{ ui.icon("sun", "ic18 mode-icon mode-icon-sun") }}{{ ui.icon("moon", "ic18 mode-icon mode-icon-moon") }}Light or dark</button>
-        {% if u %}
-        <a class="me" href="/account">{{ ui.av(u.name) }}<div><div>{{ u.name }}</div><div class="muted small">{{ "Owner · administrator" if u.role == "admin" else "Technician" }}</div></div></a>
+        {% if _me %}
+        <a class="me" href="/account">{{ ui.av(_me.name) }}<div><div>{{ _me.name }}</div><div class="muted small">{{ "Owner · administrator" if _me.role == "admin" else "Technician" }}</div></div></a>
         <form method="post" action="/logout"><button class="nav-i" type="submit">{{ ui.icon("logout", "ic18") }}Sign out</button></form>
         {% endif %}
       </div>
@@ -114,8 +114,8 @@
       </main>
       {% if not hide_bnav %}
       <nav class="bnav" aria-label="Quick navigation">
-        {% for key, href, label, icon in navm.bnav %}
-        {% set on = navm.current is not none and navm.current.key == key %}
+        {% for key, href, label, icon in _navm.bnav %}
+        {% set on = _navm.current is not none and _navm.current.key == key %}
         <a class="bn {{ 'on' if on }}" href="{{ href }}"{% if on %} aria-current="page"{% endif %}>{{ ui.icon(icon, "ic20") }}{{ label }}</a>
         {% endfor %}
         <button type="button" class="bn" aria-controls="menu-sheet" data-open="menu-sheet">{{ ui.icon("menu", "ic20") }}More</button>
@@ -128,18 +128,18 @@
   <div class="scrim menu-sheet" id="menu-sheet" hidden data-close-self>
     <div class="dlg" role="dialog" aria-modal="true" aria-label="Menu">
       <div class="dlg-h">
-        {% if u %}<div class="row">{{ ui.av(u.name) }}<div><div class="strong">{{ u.name }}</div><div class="muted small">{{ "Owner · administrator" if u.role == "admin" else "Technician" }}{% if org_name %} · {{ org_name }}{% endif %}</div></div></div>{% else %}<span></span>{% endif %}
+        {% if _me %}<div class="row">{{ ui.av(_me.name) }}<div><div class="strong">{{ _me.name }}</div><div class="muted small">{{ "Owner · administrator" if _me.role == "admin" else "Technician" }}{% if _org %} · {{ _org }}{% endif %}</div></div></div>{% else %}<span></span>{% endif %}
         <button type="button" class="icbtn plain" aria-label="Close menu" data-close>{{ ui.icon("close", "ic20") }}</button>
       </div>
-      {% for g in navm.groups %}
-        {% if g.label and not navm.single and g.label != "Home" %}<div class="side-grp" style="padding-left:2px">{{ g.label }}</div>{% endif %}
+      {% for g in _navm.groups %}
+        {% if g.label and not _navm.single and g.label != "Home" %}<div class="side-grp" style="padding-left:2px">{{ g.label }}</div>{% endif %}
         {% for i in g.items %}
         <a class="nav-i {{ 'on' if i.on }}" href="{{ i.href }}"{% if i.on %} aria-current="page"{% endif %}>{{ ui.icon(i.icon, "ic18") }}{{ i.label }}{% if i.badge %}<span class="badge{{ " " ~ i.badge_cls if i.badge_cls }}">{{ i.badge }}</span>{% endif %}</a>
         {% endfor %}
       {% endfor %}
-      {% if u %}
+      {% if _me %}
       <div class="side-grp" style="padding-left:2px">You</div>
-      {% if not navm.single %}<a class="nav-i" href="/account">{{ ui.icon("user", "ic18") }}Account</a>{% endif %}
+      {% if not _navm.single %}<a class="nav-i" href="/account">{{ ui.icon("user", "ic18") }}Account</a>{% endif %}
       <button type="button" class="nav-i" data-mode-toggle>{{ ui.icon("sun", "ic18 mode-icon mode-icon-sun") }}{{ ui.icon("moon", "ic18 mode-icon mode-icon-moon") }}Light or dark</button>
       <form method="post" action="/logout"><button class="nav-i" type="submit">{{ ui.icon("logout", "ic18") }}Sign out</button></form>
       {% endif %}

@@ -24,7 +24,7 @@ def message(session, invoice):
     subject = f"{company} — reminder for invoice {invoice.number}"
     body = (f"Hello {invoice.customer.name},\n\n"
             f"Our records show ${invoice.balance_cents / 100:,.2f} outstanding on invoice {invoice.number}, "
-            f"due {invoice.due_date}.\n\n"
+            f"due {invoice.due_date.strftime('%B %-d, %Y') if invoice.due_date else 'on receipt'}.\n\n"
             "If you have already paid, thank you — please reply with the payment details so we can update "
             f"our records. For payment arrangements or questions, please reply to this email.\n\n{company}")
     return subject, body

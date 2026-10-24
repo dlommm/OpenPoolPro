@@ -64,3 +64,12 @@ def test_login_page_has_no_staff_chrome(client, engine, monkeypatch):
     html = c.get("/login").text
     assert 'class="mast"' not in html and "bare-shell" in html
     assert 'class="mast"' in client.get("/").text
+
+
+def test_shell_variables_do_not_leak_into_pages(client):
+    """base.html keeps its own state in _-prefixed names: a top-level `u`
+    once shadowed the users form's `u` (the person being edited), so
+    "New crew member" opened pre-filled with the signed-in owner."""
+    html = client.get("/users/new").text
+    assert 'name="username" value="owner"' not in html
+    assert 'value="owner"' not in html
