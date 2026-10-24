@@ -2,32 +2,86 @@
 {% block title %}QuickBooks billing{% endblock %}
 {% block content %}
 {% import '_ui.html' as ui %}
-{{ ui.page_header('Business billing', 'QuickBooks billing') }}
-<p class="mb-4 text-sm">Prepare charges from completed work, review and approve them here, then let QuickBooks invoice the customer and collect payment. Synced records remain available here.</p>
-{% if request.query_params.get('message') %}<p role="status" class="card mb-4 p-3">{{ request.query_params.get('message') }}</p>{% endif %}
-<div class="card mb-4 p-4">
-<p>Connection: <strong>{{ 'Connected' if connected else 'Not connected' }}</strong> · Delivery: <strong>{{ 'Enabled after approval' if enabled else 'Disabled' }}</strong></p>
-<p class="mt-2 text-sm">Last reconciliation: {{ last_sync or 'Not yet completed' }}. Automatic reconciliation runs every 5 minutes while QuickBooks is connected. Disconnected balances may be stale.</p>
-{% if sync_error %}<p role="alert" class="text-safety">{{ sync_error }}</p>{% endif %}
-<div class="mt-3 flex gap-2"><form method="post" action="/billing/sync"><button class="btn-secondary" {{ 'disabled' if not connected }}>Sync now</button></form>{% if request.state.user.role == 'admin' %}<a class="btn-secondary" href="/settings#system">Connection and item mappings</a>{% endif %}</div>
+{#- The QuickBooks billing workspace (design v0.13): month stepper and Prepare
+    drafts, the connection bar, a five-stage pipeline that doubles as the
+    filter, then the drafts. -#}
+{% set y, m = ym.split('-') | map('int') | list %}
+{% set prev_ym = "%d-%02d"|format(y if m > 1 else y - 1, m - 1 if m > 1 else 12) %}
+{% set next_ym = "%d-%02d"|format(y if m < 12 else y + 1, m + 1 if m < 12 else 1) %}
+{% set stage_of = {"draft": "review", "ready": "review", "mismatch": "exceptions", "delivery_unknown": "exceptions", "create_unknown": "exceptions",
+                   "held": "held", "approved": "qbo", "creating": "qbo", "sending": "qbo", "done": "sent", "sent": "sent", "discarding": "held"} %}
+{% set stages = [("review", "Needs review", "k-acc"), ("exceptions", "Exceptions", "k-neg"), ("held", "Held", "k-warn"), ("qbo", "In QuickBooks", "k-neu"), ("sent", "Sent", "k-pos")] %}
+{% set pick = request.query_params.get('stage', '') %}
+<header class="ph">
+  <div><h1 class="h1">QuickBooks billing</h1><p class="lede">Prepare charges from finished work, review and approve them, then QuickBooks invoices the customer and collects payment.</p></div>
+  <div class="acts">
+    <div class="mstep"><a class="icbtn plain" href="/billing?ym={{ prev_ym }}" aria-label="Previous month">{{ ui.icon("back") }}</a><b>{{ ym | month_name }}</b><a class="icbtn plain" href="/billing?ym={{ next_ym }}" aria-label="Next month">{{ ui.icon("next") }}</a></div>
+    <form method="post" action="/billing/prepare"><input type="hidden" name="ym" value="{{ ym }}"><button class="btn pri" {{ 'disabled' if not connected }}>Prepare drafts</button></form>
+  </div>
+</header>
+{% if request.query_params.get('message') %}<div class="flash" role="status">{{ request.query_params.get('message') }}</div>{% endif %}
+
+<section class="card qb-conn">
+  <span class="qb-dot {{ '' if connected and not sync_error else 'warn' }}" aria-hidden="true"></span>
+  <div class="qb-ci"><b>{{ 'Connected to QuickBooks' if connected else 'QuickBooks is not connected' }}</b>
+    <span class="muted small">{{ 'Reconciled ' ~ last_sync if last_sync else 'Not reconciled yet' }} · checks every 5 minutes · delivery {{ 'on after approval' if enabled else 'off' }}</span></div>
+  <div class="qb-cs"><span class="muted small">QuickBooks outstanding</span><b class="num">{{ qbo_balance_cents | dollars }}</b></div>
+  <span class="sp" style="flex:1"></span>
+  <form method="post" action="/billing/sync"><button class="btn sm" {{ 'disabled' if not connected }}>{{ ui.icon("sync") }}Sync now</button></form>
+  {% if request.state.user.role == 'admin' %}<button type="button" class="btn sm" data-open="billing-setup">Billing setup</button><a class="btn sm ghost" href="/settings#system">Connection and item mappings</a>{% endif %}
+</section>
+{% if sync_error %}<div class="banner fail" role="alert">{{ ui.icon("alert", "ic18") }}<span>{{ sync_error }}</span></div>{% endif %}
+{% if not connected %}<p class="muted small" style="margin:-8px 0 var(--gap)">Preparing drafts needs a connected QuickBooks company but does not contact customers. Disconnected balances may be stale.</p>{% endif %}
+
+{% set counts = {} %}{% set sums = {} %}
+{% for d in drafts %}{% set st = stage_of.get(d.status, "review") %}{% set _ = counts.update({st: counts.get(st, 0) + 1}) %}{% set _ = sums.update({st: sums.get(st, 0) + d.total_cents}) %}{% endfor %}
+{% set all_n = drafts | length %}
+<div class="pipe" role="group" aria-label="Billing stages">
+  {% for key, label, k in stages %}
+  <a class="pipe-s {{ 'on' if pick == key }}" href="/billing?ym={{ ym }}{{ '' if pick == key else '&stage=' ~ key }}"{% if pick == key %} aria-current="true"{% endif %}>
+    <span class="pipe-k"><i class="{{ k }}"></i>{{ label }}</span><b class="num">{{ counts.get(key, 0) }}</b><span class="muted small num">{{ sums.get(key, 0) | dollars }}</span></a>
+  {% endfor %}
+</div>
+<div class="pipe-bar" aria-hidden="true">{% for key, label, k in stages %}{% if counts.get(key) %}<span class="{{ k }}" style="flex:{{ counts.get(key) }}"></span>{% endif %}{% endfor %}</div>
+
+<section class="card" style="padding:6px">
+  <div class="qb-lh between"><b>{{ (stages | selectattr(0, "equalto", pick) | first)[1] if pick else "All drafts" }} · {{ ym | month_name }}</b>{% if pick %}<a class="btn ghost sm" href="/billing?ym={{ ym }}">Show all</a>{% endif %}</div>
+  {% set shown = namespace(n=0) %}
+  {% for draft in drafts if not pick or stage_of.get(draft.status, "review") == pick %}
+  {% set shown.n = shown.n + 1 %}
+  {% set st = stage_of.get(draft.status, "review") %}
+  <a class="qb-row" href="/billing/drafts/{{ draft.id }}">
+    {{ ui.av(draft.customer.name) }}
+    <span class="qb-rm"><b>{{ draft.customer.name }}</b><small class="{{ 'warnt' if not draft.email }}">{{ draft.email or 'Missing billing email' }}</small></span>
+    <span class="qb-rr"><span class="num">{{ draft.total_cents | dollars }}</span>{{ ui.pill(draft.status | replace('_', ' ') | capitalize, {"review": "acc", "exceptions": "neg", "held": "warn", "qbo": "neu", "sent": "pos"}[st]) }}</span>
+  </a>
+  {% endfor %}
+  {% if not shown.n %}<div class="qb-empty"><p class="muted">{{ "No drafts in this stage." if pick else "No drafts for this month. Prepare drafts to collect billable work." }}</p></div>{% endif %}
+</section>
+
+{% if mapping_customers %}
+<details class="card" style="margin-top:var(--gap)"><summary class="card-t" style="cursor:pointer">Verify existing QuickBooks customer matches</summary>
+  <p class="muted small" style="margin:8px 0">Existing customer IDs must be verified against the connected company before billing. New customers can be synced from Admin.</p>
+  <div class="chips">{% for c in mapping_customers %}<a class="chip" href="/billing/customers/{{ c.id }}/link">{{ c.name }}</a>{% endfor %}</div>
+</details>
+{% endif %}
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-h"><h2 class="card-t">QuickBooks invoices and payments</h2><span class="muted small num">{{ qbo_balance_cents | dollars }} outstanding</span></div>
+  {% include 'billing/_invoices.html' %}
+</section>
+
 {% if request.state.user.role == 'admin' %}
-<details class="mt-4"><summary class="cursor-pointer font-semibold">Billing setup</summary>
-<form method="post" action="/billing/settings" class="mt-3 space-y-3">
-<p class="text-sm">Before enabling delivery, verify the company, USD currency, United States tax configuration, customer mappings, service and chemical items, and QuickBooks Payments. Turn off automatic invoice delivery in QuickBooks so only approved invoices are emailed. Initial setup and exceptional accounting corrections may require QuickBooks.</p>
-<label class="flex items-start gap-2"><input type="checkbox" name="reviewed" value="true" required><span>I have checked this setup and disabled automatic invoice delivery in QuickBooks.</span></label>
-<label class="flex items-start gap-2"><input type="checkbox" name="enabled" value="true" {{ 'checked' if enabled }}><span>Enable approved invoice delivery</span></label>
-<button class="btn-primary">Save billing setup</button>
-</form></details>{% endif %}
+<div class="drawer-scrim" id="billing-setup" hidden data-close-self>
+  <aside class="drawer" role="dialog" aria-labelledby="bs-t">
+    <div class="dlg-h"><h2 class="h2" id="bs-t">Billing setup</h2><button type="button" class="icbtn plain" aria-label="Close" data-close>{{ ui.icon("close", "ic20") }}</button></div>
+    <form method="post" action="/billing/settings">
+      <p class="muted">Before enabling delivery, verify the company, USD currency, United States tax configuration, customer mappings, service and chemical items, and QuickBooks Payments. Turn off automatic invoice delivery in QuickBooks so only approved invoices are emailed. Initial setup and exceptional accounting corrections may require QuickBooks.</p>
+      <label class="chk" style="margin-top:12px"><input type="checkbox" name="reviewed" value="true" required><span>I have checked this setup and disabled automatic invoice delivery in QuickBooks.</span></label>
+      <label class="chk"><input type="checkbox" name="enabled" value="true" {{ 'checked' if enabled }}><span>Enable approved invoice delivery</span></label>
+      <div class="dlg-f"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save billing setup</button></div>
+    </form>
+  </aside>
 </div>
-<div class="card mb-4 p-4">
-<form method="get" action="/billing" class="flex flex-wrap items-end gap-2"><div><label for="ym" class="field-label">Billing month</label><input class="field" id="ym" type="month" name="ym" value="{{ ym }}"></div><button class="btn-secondary">View</button></form>
-<form class="mt-3" method="post" action="/billing/prepare"><input type="hidden" name="ym" value="{{ ym }}"><button class="btn-primary">Prepare billing drafts for {{ ym | month_name }}</button></form>
-<p class="mt-2 text-sm text-mist">Preparing drafts requires a connected QuickBooks company but does not contact customers. Periods already reserved for billing are skipped. Drafts are snapshots; review charges before approval.</p>
-</div>
-{% if mapping_customers %}<details class="card mb-4 p-4"><summary class="cursor-pointer font-semibold">Verify existing QuickBooks customer matches</summary><p class="my-2 text-sm">Existing customer IDs must be verified against the connected company before billing. New customers can be synced from Settings.</p><div class="flex flex-wrap gap-2">{% for c in mapping_customers %}<a class="btn-secondary" href="/billing/customers/{{ c.id }}/link">{{ c.name }}</a>{% endfor %}</div></details>{% endif %}
-<h2 class="mb-3 font-display text-2xl">Drafts and delivery</h2>
-<div class="mb-6 space-y-2">{% for draft in drafts %}<a class="card flex flex-wrap items-center justify-between gap-2 p-4" href="/billing/drafts/{{ draft.id }}"><span>{{ draft.customer.name }} · {{ draft.email or 'Missing billing email' }}</span><span>{{ draft.total_cents | dollars }} · <strong>{{ draft.status | replace('_', ' ') }}</strong> · Review →</span></a>{% else %}<p>No drafts for this month. Prepare drafts to collect billable work.</p>{% endfor %}</div>
-<h2 class="mb-3 font-display text-2xl">Invoices and payments</h2>
-<p class="mb-3">QuickBooks outstanding: <strong>{{ qbo_balance_cents | dollars }}</strong></p>
-{% include 'billing/_invoices.html' %}
+{% endif %}
 {% endblock %}

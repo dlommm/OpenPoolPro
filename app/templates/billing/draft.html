@@ -1,13 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}Review billing · {{ draft.customer.name }}{% endblock %}
 {% block content %}
-<a class="btn-secondary mb-4" href="/billing?ym={{ '%04d-%02d'|format(draft.period_year,draft.period_month) }}">Back to billing</a>
-<h1 class="mb-2 font-display text-3xl">Review billing: {{ draft.customer.name }}</h1>
-<p class="mb-4">{{ '%04d-%02d'|format(draft.period_year,draft.period_month) }} · {{ draft.status | replace('_',' ') }} · Revision {{ draft.revision }}</p>
-{% if request.query_params.get('message') %}<p role="status" class="card mb-4 p-3">{{ request.query_params.get('message') }}</p>{% endif %}
-{% if draft.last_error %}<p role="alert" class="card mb-4 p-3 text-safety">{{ draft.last_error }}</p>{% endif %}
-{% if not enabled or not connected %}<p class="card mb-4 p-3">Drafts can be prepared and reviewed. Connect and enable QuickBooks billing before approval.</p>{% endif %}
-{% if not service_item or not chemical_item %}<p class="card mb-4 p-3">Check service and chemical item mappings in Settings before approving billable lines.</p>{% endif %}
+{% import '_ui.html' as ui %}
+{% set ymd = '%04d-%02d'|format(draft.period_year, draft.period_month) %}
+{# Prepared → Approved → Invoice created → Totals checked → Emailed. #}
+{% set order = {"draft": 1, "held": 1, "ready": 2, "approved": 2, "creating": 2, "create_unknown": 3, "mismatch": 4, "sending": 4, "delivery_unknown": 5, "sent": 5, "done": 6} %}
+{% set reached = order.get(draft.status, 1) %}
+{% set bad = draft.status in ("mismatch", "delivery_unknown", "create_unknown") %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/billing?ym={{ ymd }}">QuickBooks billing</a><span aria-hidden="true">›</span><span>{{ ymd | month_name }}</span></p>
+    <h1 class="h1">{{ draft.customer.name }}</h1>
+    <p class="lede">{{ ymd | month_name }} · revision {{ draft.revision }}</p>
+  </div>
+  <div class="acts">{{ ui.pill(draft.status | replace('_', ' ') | capitalize, "neg" if bad else ("warn" if draft.status == "held" else ("pos" if draft.status in ("sent", "done") else "acc"))) }}<span class="big num" style="font-size:26px">{{ draft.total_cents | dollars }}</span></div>
+</header>
+<ol class="qb-steps card" style="padding:14px 18px;margin:0 0 var(--gap)">
+  {% for label in ["Prepared", "Approved", "Invoice created", "Totals checked", "Emailed"] %}
+  {% set n = loop.index %}
+  <li class="{{ 'done' if reached > n else ('bad' if bad and reached == n else ('busy' if reached == n else '')) }}"><span class="qb-sd">{{ "✓" if reached > n else n }}</span><span>{{ label }}</span></li>
+  {% endfor %}
+</ol>
+{% if request.query_params.get('message') %}<p role="status" class="flash">{{ request.query_params.get('message') }}</p>{% endif %}
+{% if draft.last_error %}<p role="alert" class="flash neg">{{ draft.last_error }}</p>{% endif %}
+{% if not enabled or not connected %}<p class="flash warn">Drafts can be prepared and reviewed. Connect and enable QuickBooks billing before approval.</p>{% endif %}
+{% if not service_item or not chemical_item %}<p class="flash warn">Check service and chemical item mappings in Settings before approving billable lines.</p>{% endif %}
 <form method="post" action="/billing/drafts/{{ draft.id }}/edit" class="card mb-4 space-y-4 p-4">
 <input type="hidden" name="revision" value="{{ draft.revision }}">
 <div class="grid gap-3 sm:grid-cols-2"><div><label class="field-label" for="email">Customer invoice email</label><input class="field" id="email" type="email" name="email" value="{{ draft.email }}" required {{ 'readonly' if not editable }}></div><div><label class="field-label" for="due_date">Payment due date</label><input class="field" id="due_date" type="date" name="due_date" value="{{ draft.due_date }}" required {{ 'readonly' if not editable }}></div></div>

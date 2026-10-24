@@ -1546,3 +1546,12 @@ a.icbtn{text-decoration:none;color:inherit}
 .inv-drawer:target{display:flex}
 .drawer-close-area{flex:1}
 @media (max-width: 720px){ .itbl thead{display:none} .itbl td:nth-child(2),.itbl td:nth-child(3),.itbl td:nth-child(5){display:none} }
+.ar-row{padding:14px 18px;margin-bottom:10px}
+.ar-row>summary{cursor:pointer}
+a.pipe-s,a.qb-row{text-decoration:none}
+.qb-row .av{width:34px;height:34px}
+.pipe-bar .k-acc{background:var(--a)}
+.qbi{padding:12px 0;border-top:1px solid var(--rule)}
+.qbis>.qbi:first-child{border-top:0}
+.qbi-hist{margin-top:12px;padding-top:12px;border-top:1px solid var(--rule)}
+.qbi-hist>summary{cursor:pointer;font-weight:600}
