@@ -1,11 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Visit{% endblock %}
+{% block title %}Visit · {{ prop.customer.name }}{% endblock %}
+{# The visit has its own sticky Back / Next bar; the phone bottom bar would
+   stack a second row of buttons under the thumb. #}
+{% set hide_bnav = true %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Log visit", prop.customer.name) }}
-<p class="mb-4 font-data text-sm text-mist">{{ prop.label }} · {{ v.date }}{% if show_money %} · <span class="money">{{ rate | dollars }}</span>/visit{% endif %}</p>
+{#- The visit, as six steps (design v0.2/C): Arrival, Water, Chemicals, Tasks,
+    Photos and notes, Finish. It is ONE form. With JavaScript the steps show
+    one at a time behind a connected stepper and a sticky Back / Next bar;
+    without it every step renders in order and "Mark done" still posts the
+    whole form, so nothing depends on the script. -#}
+{% set steps = [("arrival", "Arrival"), ("water", "Water"), ("chems", "Chemicals"),
+                ("tasks", "Tasks"), ("photos", "Photos and notes"), ("finish", "Finish")] %}
+{% set done_tasks = v.tasks_done or [] %}
 
-<form method="post" action="/visit/{{ v.id }}/complete" class="space-y-5">
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/">Today</a><span aria-hidden="true">›</span><span>{{ v.date | short_date }}</span></p>
+    <h1 class="h1">{{ prop.customer.name }}</h1>
+    <p class="lede">{% if prop.label and prop.label != "Home" %}{{ prop.label }} · {% endif %}{{ prop | pool_summary or prop.address }}{% if show_money %} · <span class="num">{{ rate | dollars }}</span>/visit{% endif %}</p>
+  </div>
+  <div class="acts">
+    {% if v.status == "done" %}<span class="pill p-pos">Done{% if v.completed_at %} {{ v.completed_at | hhmm }}{% endif %}</span>
+    {% elif v.status == "skipped" %}<span class="pill p-neg">Skipped</span>
+    {% elif v.started_at %}<span class="pill p-acc">Started {{ v.started_at | hhmm }}</span>{% endif %}
+  </div>
+</header>
+{# Read by the offline queue to name this stop on the unsent-work sheet. #}
+<p class="sr">{{ prop.label }} · {{ v.date }}</p>
+
+<nav class="steps" aria-label="Visit steps" data-steps hidden>
+  {% for key, label in steps %}<button type="button" class="step" data-step-go="{{ loop.index0 }}">{{ label }}</button>{% endfor %}
+</nav>
+
+<form method="post" action="/visit/{{ v.id }}/complete" id="visit-form" data-visit-form>
   {# Status as of when this form was RENDERED. complete() compares it to the
      visit's current status and 409s on mismatch, so a completion queued
      offline and replayed days later can't silently overwrite a newer record. #}
@@ -14,129 +42,204 @@
      catches two people editing the SAME state at once -- form_status alone
      cannot, since both edits saw the identical status. #}
   <input type="hidden" name="revision" value="{{ v.revision }}">
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">Started</span>
-      <input type="time" name="started_hhmm" value="{{ v.started_at | hhmm }}" class="field font-data"></label>
-    <label class="block"><span class="field-label">Finished</span>
-      <input type="time" name="ended_hhmm" value="{{ v.completed_at | hhmm }}" class="field font-data"></label>
-  </div>
 
-  <div>
-    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Readings</h2>
-    {% if tester_reading %}<p class="mb-2 text-sm text-mist">Saved readings came from {{ tester_sources[tester_reading.source] }}{% if tester_reading.device_serial %} #{{ tester_reading.device_serial }}{% endif %}, tested {{ tester_reading.measured_at | stamp }}{% if tester_reading.edited %} — edited by hand before saving{% endif %}.</p>{% endif %}
-    {% set values = {} %}
-    {% for name in ["fc","ph","ta","cya","salt"] %}{% set _ = values.update({name: v|attr(name) if v|attr(name) is not none else ''}) %}{% endfor %}
-    {% include "visits/_readings.html" %}
-    <div class="mt-2">
-      {# The panel fetches on tap only: listing candidates may refresh the
-         LabCOM cloud and this pool's monitors, which a page render must not. #}
-      <button type="button" class="btn-secondary" hx-get="/tester-readings/visit/{{ v.id }}"
-              hx-target="#tester-panel" hx-swap="innerHTML">Find tester readings</button>
-      <div id="tester-panel" class="mt-2" aria-live="polite"></div>
-    </div>
-  </div>
+  <div class="cols c-rail" style="margin-top:20px">
+    <div class="stack" style="min-width:0">
 
-  <div>
-    <h2 class="font-display text-lg font-bold uppercase tracking-wide mb-1">Suggested doses</h2>
-    <div id="dose-panel" class="card bg-shallow/40 p-3">
-      <p class="text-sm text-mist">Enter readings to get dose suggestions</p>
-    </div>
-  </div>
-
-  <div>
-    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Chemicals added</h2>
-    <div class="space-y-2">
-      {% for chem in chems %}
-      <div class="card flex items-center gap-2 p-2.5">
-        <input type="hidden" name="chem_id" value="{{ chem.id }}">
-        <span class="flex-1 text-sm">{{ chem.name }} <span class="text-mist">({{ chem.unit }}{% if show_money %}, {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }}{% endif %})</span></span>
-        <input inputmode="decimal" name="chem_amount" placeholder="0" min="0"
-               value="{{ existing[chem.id].amount if chem.id in existing else '' }}"
-               data-chem-input="{{ chem.id }}"
-               class="field w-20 text-center font-data">
+    {# ---------------- 1 Arrival ---------------- #}
+    <section class="card vstep" data-step="0" aria-labelledby="v-arr">
+      <h2 class="card-t" id="v-arr">Arrival</h2>
+      <dl class="kvl" style="margin-top:12px">
+        <dt>Address</dt><dd><a href="https://maps.apple.com/?daddr={{ prop.address | urlencode }}">{{ prop.address }}</a></dd>
+        <dt>Gate code</dt><dd>{% if prop.gate_code %}<details class="gate-d"><summary class="linkbtn">On file · show</summary><span class="mono strong">{{ prop.gate_code }}</span></details>{% else %}<span class="muted">None on file</span>{% endif %}</dd>
+        {% if prop.notes %}<dt>Notes</dt><dd>{{ prop.notes }}</dd>{% endif %}
+      </dl>
+      {% if prop.dog_warning %}<div class="note warn">{{ ui.icon("alert", "ic18") }}<div>{{ prop.dog_note or "Dog in the yard." }} Close the gate behind you.</div></div>{% endif %}
+      <div class="fgrid" style="margin-top:18px;max-width:420px">
+        <div><label class="lbl" for="v-start">Started</label>
+          <input id="v-start" type="time" name="started_hhmm" value="{{ v.started_at | hhmm }}" class="inp num"></div>
+        <div><label class="lbl" for="v-end">Finished</label>
+          <input id="v-end" type="time" name="ended_hhmm" value="{{ v.completed_at | hhmm }}" class="inp num">
+          <p class="help">Blank means now, when you mark it done.</p></div>
       </div>
-      {% endfor %}
-    </div>
-  </div>
+      {% if v.status == "due" %}
+      <div class="row" style="margin-top:16px"><button type="button" class="btn" data-open="skip-sheet">Can't service it</button></div>
+      {% endif %}
+    </section>
 
-  <div>
-    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Tasks</h2>
-    <div class="flex flex-wrap gap-2">
+    {# ---------------- 2 Water ---------------- #}
+    <section class="card vstep" data-step="1" aria-labelledby="v-wat">
+      <div class="card-h"><h2 class="card-t" id="v-wat">Water readings</h2>
+        {# The panel fetches on tap only: listing candidates may refresh the
+           LabCOM cloud and this pool's monitors, which a page render must not. #}
+        <button type="button" class="btn sm" hx-get="/tester-readings/visit/{{ v.id }}"
+                hx-target="#tester-panel" hx-swap="innerHTML">{{ ui.icon("drop") }}Find tester readings</button></div>
+      {% if tester_reading %}<p class="muted small" style="margin-bottom:8px">Saved readings came from {{ tester_sources[tester_reading.source] }}{% if tester_reading.device_serial %} #{{ tester_reading.device_serial }}{% endif %}, tested {{ tester_reading.measured_at | stamp }}{% if tester_reading.edited %} — edited by hand before saving{% endif %}.</p>{% endif %}
+      <div id="tester-panel" aria-live="polite"></div>
+      {% set values = {} %}
+      {% for name in ["fc","ph","ta","cya","salt"] %}{% set _ = values.update({name: v|attr(name) if v|attr(name) is not none else ''}) %}{% endfor %}
+      {% include "visits/_readings.html" %}
+    </section>
+
+    {# ---------------- 3 Chemicals ---------------- #}
+    <div class="stack vstep" data-step="2">
+      <section class="card" aria-labelledby="v-sug">
+        <div class="card-h"><h2 class="card-t" id="v-sug">Suggested doses</h2></div>
+        <div id="dose-panel" hx-get="/visit/{{ v.id }}/doses" hx-include="#visit-form" hx-trigger="load">
+          <p class="muted">Enter readings to get dose suggestions.</p>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="v-add">
+        <div class="card-h"><h2 class="card-t" id="v-add">Chemicals added</h2><span class="muted small num" data-added-count></span></div>
+        <p class="empty" data-added-empty hidden>Nothing recorded yet.</p>
+        <ul class="rows chem-rows">
+          {% for chem in chems %}
+          {% set amt = existing[chem.id].amount if chem.id in existing else '' %}
+          <li class="chem-row" data-chem-row="{{ chem.id }}">
+            <input type="hidden" name="chem_id" value="{{ chem.id }}">
+            <div><label class="strong" for="chem-{{ chem.id }}">{{ chem.name }}</label>
+              <small>{{ chem.unit }}{% if show_money %} · {{ chem.cost_per_unit_cents | dollars }}/{{ chem.unit }}{% endif %}</small></div>
+            <div class="row" style="flex-wrap:nowrap">
+              <input id="chem-{{ chem.id }}" inputmode="decimal" name="chem_amount" placeholder="0" min="0" autocomplete="off"
+                     value="{{ amt }}" data-chem-input="{{ chem.id }}" class="inp amt">
+              <span class="muted small chem-unit">{{ chem.unit }}</span>
+              <button type="button" class="icbtn plain" data-chem-remove="{{ chem.id }}" aria-label="Remove {{ chem.name }}" hidden>{{ ui.icon("close") }}</button>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="chem-add" data-chem-add hidden>
+          <label class="lbl" for="v-addsel">Add a chemical</label>
+          <select id="v-addsel" class="inp" data-chem-picker><option value="">Choose from the catalog…</option>
+            {% for chem in chems %}<option value="{{ chem.id }}">{{ chem.name }} ({{ chem.unit }})</option>{% endfor %}
+          </select>
+        </div>
+      </section>
+    </div>
+
+    {# ---------------- 4 Tasks ---------------- #}
+    <section class="card vstep" data-step="3" aria-labelledby="v-tasks">
+      <div class="card-h"><h2 class="card-t" id="v-tasks">Tasks</h2>{% if task_templates %}<button type="button" class="btn sm" data-all-tasks>Mark all done</button>{% endif %}</div>
       {% for t in task_templates %}
-      <label class="flex min-h-11 items-center rounded-full border border-seam px-3 has-[:checked]:border-pool has-[:checked]:bg-shallow has-[:checked]:text-ink">
-        <input type="checkbox" name="tasks" value="{{ t.label }}" class="sr-only"
-               {{ "checked" if t.label in v.tasks_done }}>{{ t.label }}
-      </label>
+      <label class="chk"><input type="checkbox" name="tasks" value="{{ t.label }}" {{ "checked" if t.label in done_tasks }}><span>{{ t.label }}</span></label>
+      {% else %}
+      <p class="muted">No checklist set up. Admin › Service holds the visit checklist.</p>
       {% endfor %}
+    </section>
+
+    {# ---------------- 5 Photos and notes ---------------- #}
+    <div class="stack vstep" data-step="4">
+      <section class="card" aria-labelledby="v-ph">
+        <h2 class="card-t" id="v-ph">Photos</h2>
+        <div class="fgrid" style="margin-top:12px;align-items:end">
+          <div><label class="lbl" for="visit-photo-tag">Tag</label>
+            <select id="visit-photo-tag" name="tag" class="inp">
+              <option value="">No tag</option><option value="before">Before</option>
+              <option value="after">After</option><option value="issue">Issue</option>
+            </select></div>
+          <div>
+            {% call ui.upload("Take or upload a photo", "camera") %}
+            <input type="file" accept="image/*" capture="environment" multiple name="files"
+                   hx-post="/photos/visit/{{ v.id }}" hx-encoding="multipart/form-data"
+                   hx-include="#visit-photo-tag"
+                   hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change"
+                   class="upload-input">
+            {% endcall %}
+          </div>
+        </div>
+        <p class="help">Photo uploads need a connection; they are never saved offline.</p>
+        <div id="photo-strip" class="photo-strip">
+          {% for ph in photos %}
+          {{ ui.photo(ph) }}
+          {% endfor %}
+        </div>
+        <p class="muted small">New photos stay private. Share one with the customer from their profile.</p>
+      </section>
+      <section class="card" aria-labelledby="v-notes">
+        <h2 class="card-t" id="v-notes">Notes</h2>
+        <label class="lbl" for="v-note" style="margin-top:12px">Note for the office</label>
+        <textarea id="v-note" name="notes" class="inp" placeholder="Anything the office or the next technician should know">{{ v.notes }}</textarea>
+      </section>
     </div>
+
+    {# ---------------- 6 Finish ---------------- #}
+    <div class="stack vstep" data-step="5">
+      <section class="card" aria-labelledby="v-fin">
+        <h2 class="card-t" id="v-fin">Amount to collect</h2>
+        <dl class="kvl num" style="margin-top:12px">
+          <dt>Service</dt>
+          <dd>{% if show_money %}
+            <div class="unitw" style="max-width:160px"><span class="pre">$</span>
+              <label class="sr" for="collect-service-input">Service amount</label>
+              <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
+                     value="{{ '%.2f'|format(collect.service_cents / 100) }}" class="inp num"></div>
+            <span class="help">{{ collect.service_cents | dollars }} by default</span>
+            {% else %}
+            {# Without view_money the server discards labor_override_dollars, so showing
+               an editable box here would let a tech "apply" a discount, watch the total
+               change, collect that amount, and still have the visit bill full rate. #}
+            <span id="collect-service">{{ collect.service_cents | dollars }}</span>
+            {% endif %}</dd>
+          <dt>Chemicals</dt><dd id="collect-chems">{{ collect.chem_cents | dollars }}</dd>
+          <dt>Tax</dt><dd id="collect-tax">{{ collect.tax_cents | dollars }}</dd>
+          <dt class="strong" style="color:var(--t)">Collect</dt><dd class="strong collect-total" id="collect-total">{{ collect.total_cents | dollars }}</dd>
+        </dl>
+        {% if can_cash %}
+        <label class="chk" style="margin-top:10px"><input type="checkbox" name="paid_cash" value="1" {{ "checked" if v.paid_cash }}><span>Paid in cash (kept off the QuickBooks export)</span></label>
+        {% endif %}
+      </section>
+      <section class="card" aria-labelledby="v-rev">
+        <h2 class="card-t" id="v-rev">Before you finish</h2>
+        <ul class="rows" style="margin-top:6px">
+          <li><span>Readings</span><span class="st" data-sum-readings>—</span></li>
+          <li><span>Chemicals added</span><span class="num" data-sum-chems>—</span></li>
+          <li><span>Tasks</span><span class="num" data-sum-tasks>—</span></li>
+          <li><span>Photos</span><span class="num">{{ photos|length }}</span></li>
+        </ul>
+      </section>
+      <div class="vsubmit"><button class="btn pri xl block" type="submit">{{ "Save changes" if v.status == "done" else "Mark done" }}</button></div>
+    </div>
+    </div>
+
+    <aside class="stack d-only" aria-label="Visit summary">
+      <section class="card"><h2 class="card-t">This visit</h2>
+        <ul class="rows" style="margin-top:6px">
+          {% for m in reading_scales() %}<li><span>{{ m.label }}</span><span class="st st-none" data-sum-for="{{ m.key }}">Not tested</span></li>{% endfor %}
+          <li><span>Chemicals</span><span class="num" data-sum-chems>—</span></li>
+          <li><span>Tasks</span><span class="num" data-sum-tasks>—</span></li>
+        </ul>
+      </section>
+      {% if last_visit %}
+      <section class="card"><h2 class="card-t">Last visit · {{ last_visit.date | short_date }}</h2>
+        <p class="muted small" style="margin-top:6px">{% set parts = [] %}{% for k, lbl in [("fc","FC"),("ph","pH"),("ta","TA"),("cya","CYA"),("salt","Salt")] %}{% if last_visit|attr(k) is not none and last_visit|attr(k) %}{% set _ = parts.append(lbl ~ " " ~ ("%g"|format(last_visit|attr(k)))) %}{% endif %}{% endfor %}{{ parts | join(" · ") or "No readings" }}{% if last_visit.completed_by %} · {{ last_visit.completed_by.name }}{% endif %}</p>
+        {% if last_visit.notes %}<p class="small" style="margin-top:6px">“{{ last_visit.notes }}”</p>{% endif %}
+      </section>
+      {% endif %}
+    </aside>
   </div>
 
-  <div>
-    <h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Photos</h2>
-    <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
-      {% for ph in photos %}
-      <div class="relative h-20 w-20">
-        <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-        {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-      </div>
-      {% endfor %}
-    </div>
-    <select id="visit-photo-tag" name="tag" class="field mb-2">
-      <option value="">No tag</option>
-      <option value="before">Before</option>
-      <option value="after">After</option>
-      <option value="issue">Issue</option>
-    </select>
-    {% call ui.upload("Take / upload photo", "camera") %}
-    <input type="file" accept="image/*" capture="environment" multiple name="files"
-           hx-post="/photos/visit/{{ v.id }}" hx-encoding="multipart/form-data"
-           hx-include="#visit-photo-tag"
-           hx-target="#photo-strip" hx-swap="beforeend" hx-trigger="change"
-           class="upload-input">
-    {% endcall %}
+  <div class="vfoot" data-vfoot hidden>
+    <button type="button" class="btn" data-step-back>Back to Today</button>
+    <button type="button" class="btn pri xl" data-step-next>Next</button>
+    <button type="submit" class="btn pri xl" data-step-finish hidden>{{ "Save changes" if v.status == "done" else "Mark done" }}</button>
   </div>
-
-  <label class="block"><span class="field-label">Notes</span>
-    <textarea name="notes" class="field min-h-24 py-2">{{ v.notes }}</textarea></label>
-
-  <div class="card p-3.5 space-y-2">
-    <h2 class="font-display text-lg font-bold uppercase tracking-wide">Amount to collect</h2>
-    {% if show_money %}
-    <label class="block">
-      <span class="field-label">Service <span class="money">({{ collect.service_cents | dollars }} default)</span></span>
-      <div class="money-in"><span>$</span>
-        <input inputmode="decimal" id="collect-service-input" name="labor_override_dollars"
-               value="{{ '%.2f'|format(collect.service_cents / 100) }}"
-               class="field font-data font-semibold"></div>
-    </label>
-    {% else %}
-    {# Without view_money the server discards labor_override_dollars, so showing
-       an editable box here would let a tech "apply" a discount, watch the total
-       change, collect that amount, and still have the visit bill full rate. #}
-    <div class="flex justify-between font-data text-sm text-mist">
-      <span>Service</span>
-      <span id="collect-service" class="money">{{ collect.service_cents | dollars }}</span>
-    </div>
-    {% endif %}
-    <div class="flex justify-between font-data text-sm text-mist">
-      <span>Chemicals</span><span id="collect-chems" class="money">{{ collect.chem_cents | dollars }}</span>
-    </div>
-    <div class="flex justify-between font-data text-sm text-mist">
-      <span>Tax</span><span id="collect-tax" class="money">{{ collect.tax_cents | dollars }}</span>
-    </div>
-    <div class="flex justify-between border-t border-seam pt-2 font-display text-lg font-bold uppercase tracking-wide">
-      <span>Collect</span><span id="collect-total" class="money">{{ collect.total_cents | dollars }}</span>
-    </div>
-    {% if can_cash %}
-    <label class="flex min-h-11 items-center gap-2.5 pt-1">
-      <input type="checkbox" name="paid_cash" value="1" class="h-5 w-5"
-             {{ "checked" if v.paid_cash }}>
-      <span class="text-sm">Paid in cash (kept off QuickBooks export)</span></label>
-    {% endif %}
-  </div>
-
-  <button class="btn-primary">Mark done</button>
 </form>
+
+{% if v.status == "due" %}
+<div class="scrim" id="skip-sheet" hidden data-close-self>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="skip-t">
+    <div class="dlg-h"><h2 class="h2" id="skip-t">Skip {{ prop.customer.name }}?</h2><button type="button" class="icbtn plain" aria-label="Close" data-close>{{ ui.icon("close", "ic20") }}</button></div>
+    <p class="muted">The stop is recorded as skipped with your reason, and the office sees it on Today.</p>
+    <form method="post" action="/visit/{{ v.id }}/skip">
+      <input type="hidden" name="revision" value="{{ v.revision }}">
+      <label class="lbl" for="skip-r" style="margin-top:14px">Reason</label>
+      <input id="skip-r" name="reason" class="inp" list="skip-reasons" placeholder="Gate locked, dog loose, customer asked…">
+      <datalist id="skip-reasons"><option value="Gate locked"><option value="Dog loose in the yard"><option value="Customer asked to skip"><option value="Weather"></datalist>
+      <div class="dlg-f"><button type="button" class="btn" data-close>Keep the visit</button><button class="btn danger">Skip this stop</button></div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <script type="application/json" id="collect-data">{{ collect | tojson }}</script>
 <script nonce="{{ csp_nonce() }}">
@@ -199,14 +302,6 @@
 })();
 </script>
 
-{% if v.status == "due" %}
-<form method="post" action="/visit/{{ v.id }}/skip" class="mt-3 flex gap-2">
-  <input type="hidden" name="revision" value="{{ v.revision }}">
-  <input name="reason" placeholder="Skip reason (optional)" class="field flex-1">
-  <button class="btn-secondary">Skip</button>
-</form>
-{% endif %}
-
 <script nonce="{{ csp_nonce() }}">
 document.addEventListener("click", function (e) {
   if (e.target.id !== "apply-doses") return;
@@ -221,5 +316,182 @@ document.addEventListener("click", function (e) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 });
+</script>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  "use strict";
+  var form = document.querySelector("[data-visit-form]");
+  if (!form) return;
+
+  // ---------- readings: move the marker and say Low / In range / High ----------
+  var ICON = { ok: "M5 12l5 5L20 7", low: "M12 5v14M19 12l-7 7-7-7", high: "M12 19V5M5 12l7-7 7 7" };
+  var WORD = { ok: "In range", low: "Low", high: "High", none: "Not tested", bad: "Not a number" };
+  function readingState(row) {
+    var input = row.querySelector("input.inp");
+    if (!input) return null;
+    var raw = input.value.trim();
+    if (raw === "") return { st: "none", input: input };
+    var v = Number(raw.replace(",", "."));
+    if (!isFinite(v)) return { st: "bad", input: input };
+    var lo = +row.dataset.lo, hi = +row.dataset.hi;
+    return { st: v < lo ? "low" : (v > hi ? "high" : "ok"), v: v, input: input };
+  }
+  function paintReading(row) {
+    var r = readingState(row);
+    if (!r) return;
+    var slo = +row.dataset.slo, shi = +row.dataset.shi;
+    var mk = row.querySelector(".mk"), st = row.querySelector("[data-st]");
+    if (mk) {
+      mk.hidden = r.v === undefined;
+      if (r.v !== undefined) mk.style.left = Math.max(0, Math.min(100, (r.v - slo) / (shi - slo) * 100)) + "%";
+    }
+    if (st) {
+      st.className = "st st-" + (r.st === "bad" ? "bad" : r.st);
+      st.innerHTML = (ICON[r.st] ? '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="' + ICON[r.st] + '"/></svg>' : "") + WORD[r.st];
+    }
+    row.classList.toggle("out", r.st === "low" || r.st === "high");
+    r.input.classList.toggle("bad", r.st === "bad");
+    var key = r.input.name, sum = document.querySelector('[data-sum-for="' + key + '"]');
+    if (sum) {
+      sum.className = "st st-" + r.st;
+      sum.textContent = r.v !== undefined ? (r.input.value.trim() + " · " + WORD[r.st].toLowerCase()) : WORD[r.st];
+    }
+  }
+  function paintAllReadings() {
+    var rows = form.querySelectorAll("[data-reading]"), out = 0, tested = 0;
+    rows.forEach(function (row) {
+      paintReading(row);
+      var r = readingState(row);
+      if (r && r.st !== "none") tested++;
+      if (r && (r.st === "low" || r.st === "high")) out++;
+    });
+    var s = form.querySelector("[data-sum-readings]");
+    if (s) {
+      s.className = "st " + (!tested ? "st-none" : (out ? "st-warn" : "st-ok"));
+      s.textContent = !tested ? "None entered" : (out ? out + " out of range" : "All " + tested + " in range");
+    }
+  }
+  form.addEventListener("input", function (e) {
+    var row = e.target.closest && e.target.closest("[data-reading]");
+    if (row) paintAllReadings();
+    if (e.target.matches && e.target.matches("[data-chem-input]")) paintChems();
+  });
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target && e.target.id === "readings-grid" || (e.detail && e.detail.target && e.detail.target.id === "readings-grid")) paintAllReadings();
+  });
+  document.body.addEventListener("htmx:afterSettle", paintAllReadings);
+
+  // ---------- chemicals: only the ones added are listed ----------
+  var picker = form.querySelector("[data-chem-picker]");
+  function chemRows() { return form.querySelectorAll("[data-chem-row]"); }
+  function paintChems() {
+    var n = 0;
+    chemRows().forEach(function (row) {
+      var input = row.querySelector("[data-chem-input]");
+      var has = parseFloat(input.value) > 0 || row.hasAttribute("data-shown");
+      row.hidden = !has;
+      if (parseFloat(input.value) > 0) n++;
+      var opt = picker && picker.querySelector('option[value="' + row.dataset.chemRow + '"]');
+      if (opt) opt.hidden = has;
+    });
+    var empty = form.querySelector("[data-added-empty]");
+    if (empty) empty.hidden = n > 0 || form.querySelector("[data-chem-row]:not([hidden])") !== null;
+    var label = n ? n + " chemical" + (n === 1 ? "" : "s") : "None";
+    form.querySelectorAll("[data-added-count], [data-sum-chems]").forEach(function (el) { el.textContent = label; });
+  }
+  form.querySelector("[data-chem-add]").hidden = false;
+  form.querySelectorAll("[data-chem-remove]").forEach(function (b) { b.hidden = false; });
+  if (picker) picker.addEventListener("change", function () {
+    var row = form.querySelector('[data-chem-row="' + picker.value + '"]');
+    picker.value = "";
+    if (!row) return;
+    row.setAttribute("data-shown", "");
+    paintChems();
+    row.querySelector("[data-chem-input]").focus();
+  });
+  form.addEventListener("click", function (e) {
+    var rm = e.target.closest && e.target.closest("[data-chem-remove]");
+    if (rm) {
+      var row = form.querySelector('[data-chem-row="' + rm.dataset.chemRemove + '"]');
+      var input = row.querySelector("[data-chem-input]");
+      input.value = "";
+      row.removeAttribute("data-shown");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      paintChems();
+      return;
+    }
+    var use = e.target.closest && e.target.closest("[data-use-dose]");
+    if (use) {
+      var target = form.querySelector('[data-chem-input="' + use.dataset.useDose + '"]');
+      if (!target) return;
+      target.value = use.dataset.amount;
+      target.closest("[data-chem-row]").setAttribute("data-shown", "");
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      paintChems();
+      return;
+    }
+    if (e.target.closest && e.target.closest("#apply-doses")) setTimeout(function () {
+      document.querySelectorAll("#dose-panel [data-chem-id]").forEach(function (el) {
+        var row = form.querySelector('[data-chem-row="' + el.dataset.chemId + '"]');
+        if (row) row.setAttribute("data-shown", "");
+      });
+      paintChems();
+    }, 0);
+    if (e.target.closest && e.target.closest("[data-all-tasks]")) {
+      form.querySelectorAll('input[name="tasks"]').forEach(function (c) { c.checked = true; });
+      paintTasks();
+    }
+  });
+
+  // ---------- tasks ----------
+  function paintTasks() {
+    var all = form.querySelectorAll('input[name="tasks"]'), on = 0;
+    all.forEach(function (c) { if (c.checked) on++; });
+    form.querySelectorAll("[data-sum-tasks]").forEach(function (el) { el.textContent = all.length ? on + " of " + all.length : "None"; });
+  }
+  form.addEventListener("change", function (e) { if (e.target.name === "tasks") paintTasks(); });
+
+  // ---------- steps ----------
+  var steps = Array.prototype.slice.call(form.querySelectorAll(".vstep"));
+  var nav = document.querySelector("[data-steps]");
+  var navBtns = nav ? Array.prototype.slice.call(nav.querySelectorAll("[data-step-go]")) : [];
+  var foot = form.querySelector("[data-vfoot]");
+  var back = foot.querySelector("[data-step-back]"), next = foot.querySelector("[data-step-next]"),
+      finish = foot.querySelector("[data-step-finish]");
+  var names = navBtns.map(function (b) { return b.textContent; });
+  var seen = {}, cur = 0;
+  function show(i, focus) {
+    cur = Math.max(0, Math.min(steps.length - 1, i));
+    seen[cur] = true;
+    steps.forEach(function (s, k) { s.hidden = k !== cur; });
+    navBtns.forEach(function (b, k) {
+      b.className = "step" + (k === cur ? " on" : (seen[k] && k < cur ? " dn" : ""));
+      if (k === cur) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    });
+    back.textContent = cur === 0 ? "Back to Today" : "Back";
+    var last = cur === steps.length - 1;
+    next.hidden = last;
+    finish.hidden = !last;
+    if (!last) next.textContent = "Next: " + names[cur + 1];
+    try { history.replaceState(null, "", "#" + cur); } catch (err) {}
+    if (focus) {
+      var h = steps[cur].querySelector(".card-t");
+      if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+  form.classList.add("is-stepped");
+  if (nav) nav.hidden = false;
+  foot.hidden = false;
+  form.querySelectorAll(".vsubmit").forEach(function (el) { el.hidden = true; });
+  navBtns.forEach(function (b, k) { b.addEventListener("click", function () { show(k, true); }); });
+  next.addEventListener("click", function () { show(cur + 1, true); });
+  back.addEventListener("click", function () { if (cur === 0) location.href = "/"; else show(cur - 1, true); });
+  var start = parseInt((location.hash || "").slice(1), 10);
+  show(isFinite(start) ? start : ({{ 5 if v.status != "due" else 0 }}), false);
+  paintAllReadings();
+  paintChems();
+  paintTasks();
+})();
 </script>
 {% endblock %}

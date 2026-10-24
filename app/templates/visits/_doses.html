@@ -1,21 +1,21 @@
+{# Dose suggestions for the readings typed so far. A suggestion is never
+   recorded as added: "Use" copies it into Chemicals added, where it counts. #}
 {% if hint %}
-<p class="text-sm text-mist">{{ hint }}</p>
+<p class="muted">{{ hint }}</p>
 {% elif not doses %}
-<p class="text-sm text-mist">Water looks balanced — no doses needed.</p>
+<p class="st st-ok">Water looks balanced — no doses needed.</p>
 {% else %}
-<div class="space-y-1">
+<ul class="rows">
   {% for d in doses %}
-  <div class="flex items-center gap-2 text-sm {{ 'text-safety' if not d.applyable and d.note }}">
-    {% if d.amount %}<span class="font-data font-semibold"
-        {% if d.applyable %}data-chem-id="{{ d.chemical_id }}" data-amount="{{ d.amount }}"{% endif %}
-        >{{ d.amount }} {{ d.unit }}</span>{% endif %}
-    <span>{{ d.chemical_name }}</span>
-    {% if d.note %}<span class="tag {{ 'tag-safety' if not d.applyable }}">{{ d.note }}</span>{% endif %}
-  </div>
+  <li>
+    <div><span class="strong">{{ d.chemical_name }}</span>
+      <small>{% if d.amount %}Suggested <span class="num"{% if d.applyable %} data-chem-id="{{ d.chemical_id }}" data-amount="{{ d.amount }}"{% endif %}>{{ d.amount }} {{ d.unit }}</span>{% endif %}{% if d.note %}{{ " · " if d.amount }}<span class="{{ 'dose-warn' if not d.applyable }}">{{ d.note }}</span>{% endif %}</small></div>
+    {% if d.applyable and d.amount %}<button type="button" class="btn sm" data-use-dose="{{ d.chemical_id }}" data-amount="{{ d.amount }}">Use {{ d.amount }} {{ d.unit }}</button>{% endif %}
+  </li>
   {% endfor %}
-</div>
+</ul>
 {% if doses | selectattr("applyable") | list %}
-<button type="button" id="apply-doses"
-        class="btn-secondary mt-2 w-full">Apply suggested doses</button>
+<button type="button" id="apply-doses" class="btn" style="margin-top:12px">Apply suggested doses</button>
 {% endif %}
+<p class="muted small" style="margin-top:10px">From the dose engine for the readings above. A suggestion isn't recorded as added until it's in Chemicals added.</p>
 {% endif %}

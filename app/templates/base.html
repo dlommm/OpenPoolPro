@@ -112,6 +112,7 @@
 {% else %}
         </div>
       </main>
+      {% if not hide_bnav %}
       <nav class="bnav" aria-label="Quick navigation">
         {% for key, href, label, icon in navm.bnav %}
         {% set on = navm.current is not none and navm.current.key == key %}
@@ -119,6 +120,7 @@
         {% endfor %}
         <button type="button" class="bn" aria-controls="menu-sheet" data-open="menu-sheet">{{ ui.icon("menu", "ic20") }}More</button>
       </nav>
+      {% endif %}
     </div>
   </div>
 

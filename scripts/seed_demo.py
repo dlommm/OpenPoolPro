@@ -111,6 +111,8 @@ def run() -> None:
                 cust.tags = ["Dog"]
             if "gate" in note:
                 prop.gate_code = "4417"
+            if "Dog" in note:
+                prop.dog_warning, prop.dog_note = True, "Dog in the yard — friendly"
             s.add(prop)
             length, width, depth = rnd.choice([(32, 16, 5.0), (30, 15, 4.5), (36, 18, 5.5), (28, 14, 4.5)])
             if "Condos" in name or "Club" in name or "HOA" in name:
@@ -150,6 +152,10 @@ def run() -> None:
                     tasks_done=["Skim surface", "Brush walls", "Test water"]))
 
         by_name = {p.customer.name: p for p, _, _ in props}
+        s.add(models.ServiceHold(property_id=by_name["Diane Foster"].id,
+                                 start_date=today - timedelta(days=10),
+                                 resume_date=today + timedelta(days=22), reason="Travelling"))
+        by_name["Diane Foster"].weekday = weekday
         for cname, title, status, prio, jtype in [
             ("The Whitfield Estate", "Spa heater igniter", "open", "high", "repair"),
             ("Ruth Delgado", "Leak check", "scheduled", "normal", "service"),

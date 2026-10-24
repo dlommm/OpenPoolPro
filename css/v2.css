@@ -1343,3 +1343,59 @@ a.mast-brand,a.brand,a.me{color:inherit;text-decoration:none}
 .mast-brand b{color:var(--mast-t)}
 .mn,.sn{display:inline-flex;align-items:center;text-decoration:none}
 .bn{text-decoration:none}
+/* Today (app) */
+.lane{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 54px;gap:12px;align-items:center;padding:8px 0}
+.lane-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane-c{text-align:right;color:var(--t);text-decoration:none}
+.lane-h{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:var(--m);margin:14px 0 8px}
+.lane-h:first-of-type{margin-top:4px}
+a.stop{text-decoration:none}
+.stop .ic{width:14px;height:14px}
+.dot .ic{width:15px;height:15px;stroke-width:2.4}
+.progress-card{margin-bottom:18px;padding:14px 18px}
+.today-empty{text-align:center;padding:28px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.today-empty .ok{color:var(--post)}
+.card-neg{border-color:var(--pni)}
+.card-neg>.card-t{color:var(--negt)}
+.stop-d>summary{list-style:none}
+.stop-d>summary::-webkit-details-marker{display:none}
+.stop-d[open] .chev{transform:rotate(180deg)}
+.stop-d .chev{transition:transform 200ms var(--ease-out);color:var(--m)}
+.stop-d[open]>summary{box-shadow:inset 0 0 0 2px var(--a)}
+.stop-more{margin:-4px 0 10px;animation:opp-rise 200ms var(--ease-out) both}
+.nextc .gate summary{cursor:pointer;text-decoration:underline;text-underline-offset:3px;display:inline}
+.nextc .gate{display:inline}
+.nextc .gate[open] summary{display:none}
+.nextc .gate .mono{font-weight:600;letter-spacing:.06em}
+.next-alt{margin-top:10px}
+.nextc .next-alt a{color:rgba(242,250,251,.85)}
+.nextc a.btn{text-decoration:none}
+.d-only{}
+@media (max-width: 720px){ .d-only{display:none!important} .lane{grid-template-columns:minmax(0,1fr) 48px} .lane .rib{grid-column:1/-1;grid-row:2} }
+/* Visit (app) */
+.is-stepped .vstep[hidden]{display:none}
+.vstep{scroll-margin-top:12px}
+.steps{margin-top:4px}
+.step[data-step-go]{flex:none}
+.gate-d summary{display:inline;list-style:none;cursor:pointer}
+.gate-d summary::-webkit-details-marker{display:none}
+.gate-d[open] summary{display:none}
+.chem-rows .chem-row[hidden]{display:none}
+.chem-unit{min-width:28px}
+.chem-add{margin-top:12px;max-width:340px}
+.dose-warn{color:var(--pwi);font-weight:500}
+.photo-strip{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 6px}
+.photo-strip:empty{display:none}
+.photo{position:relative;width:110px;margin:0}
+.photo img{width:110px;height:84px;object-fit:cover;border-radius:10px;display:block}
+.photo figcaption{position:absolute;left:6px;bottom:6px}
+.collect-total{font-size:22px}
+.kvl dd .help{display:block}
+.vfoot[hidden]{display:none}
+.vfoot{gap:12px}
+.vfoot .btn.xl{flex:1;max-width:360px}
+@media (max-width: 720px){ .vfoot .btn.xl{max-width:none} .vfoot{padding-bottom:calc(10px + env(safe-area-inset-bottom))} }
+.reading .scl{min-width:0}
+.st .ic{width:14px;height:14px}
+.st-bad{color:var(--negt)}
+.card-t[tabindex="-1"]:focus{outline:none}

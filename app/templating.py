@@ -193,3 +193,42 @@ def _nav(ctx):
 
 
 templates.env.globals["nav"] = _nav
+
+
+def _pool_summary(prop) -> str:
+    """'Pool + spa · 19,200 gal · salt' for a property's active bodies of water:
+    what a technician needs to know before walking in, on one line."""
+    pools = [p for p in (getattr(prop, "pools", None) or []) if p.active]
+    if not pools:
+        return ""
+    kinds = sorted({p.kind for p in pools}, key=lambda k: k != "pool")
+    label = " + ".join(kinds).capitalize()
+    gal = sum(p.gallons or 0 for p in pools if p.kind == "pool") or sum(p.gallons or 0 for p in pools)
+    water = sorted({p.water_type for p in pools if p.water_type})
+    parts = [label]
+    if gal:
+        parts.append(f"{gal:,} gal")
+    if water:
+        parts.append(" and ".join(water))
+    return " · ".join(parts)
+
+
+templates.env.filters["pool_summary"] = _pool_summary
+
+
+@jinja2.pass_context
+def _reading_scales(ctx) -> list:
+    """water_history.scales() for templates that render the readings partial
+    from more than one route (the visit page and the tester-reading swap)."""
+    from sqlalchemy.orm import Session
+
+    from app import water_history
+
+    request = ctx.get("request")
+    if request is None:
+        return []
+    with Session(request.app.state.engine) as s:
+        return water_history.scales(s)
+
+
+templates.env.globals["reading_scales"] = _reading_scales

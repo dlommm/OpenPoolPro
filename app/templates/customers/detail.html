@@ -206,10 +206,7 @@
 </div>
 <div class="mb-5 flex flex-wrap gap-2">
   {% for ph, prop in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-  </div>
+  {{ ui.photo(ph) }}
   {% else %}
   <p class="text-sm text-mist">No photos yet.</p>
   {% endfor %}

@@ -244,7 +244,12 @@ def visit_form(request: Request, property_id: int, visit_date: date,
         "existing": existing, "show_money": request.state.user.can("view_money"),
         "collect": collect, "can_cash": request.state.user.can("mark_cash"),
         "tester_reading": water_readings.visit_reading(session, v.id),
-        "tester_sources": water_readings.SOURCES})
+        "tester_sources": water_readings.SOURCES,
+        "last_visit": session.scalars(
+            select(models.Visit).where(models.Visit.property_id == v.property_id,
+                                       models.Visit.status == "done",
+                                       models.Visit.date < v.date)
+            .order_by(models.Visit.date.desc())).first()})
 
 
 @router.post("/visit/{visit_id}/complete")

@@ -51,23 +51,24 @@ async def upload(entity_type: str, entity_id: int, files: list[UploadFile],
         # time the cap is consulted, which is an OOM, not a rejection.
         if (f.size or 0) > MAX_PHOTO_BYTES:
             frags.append(
-                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} too large (max 20 MB)</span>")
+                f'<span class="photo-failed">{html.escape(f.filename or "")} too large (max 20 MB)</span>')
             continue
         data = await f.read()
         if len(data) > MAX_PHOTO_BYTES:
             frags.append(
-                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} too large (max 20 MB)</span>")
+                f'<span class="photo-failed">{html.escape(f.filename or "")} too large (max 20 MB)</span>')
             continue
         try:
             ph = photos_svc.save_photo(session, entity_type, entity_id, data, tag=tag)
             session.commit()
-            chip = f"<span class='tag absolute bottom-1 left-1'>{tag}</span>" if tag else ""
+            # Same markup as the _ui.html photo macro, so a fresh upload and
+            # a reloaded page look identical.
+            chip = f'<figcaption class="pill p-neu">{html.escape(tag)}</figcaption>' if tag else ""
             frags.append(
-                f"<div class='relative h-20 w-20'>"
-                f"<img src='/photos/file/{ph.id}?thumb=1' class='h-20 w-20 rounded-lg object-cover'>"
-                f"{chip}</div>")
+                f'<figure class="photo"><img src="/photos/file/{ph.id}?thumb=1" alt="">'
+                f"{chip}</figure>")
         except ValueError:
             session.rollback()
             frags.append(
-                f"<span class='text-safety text-sm'>{html.escape(f.filename or '')} failed — retry</span>")
+                f'<span class="photo-failed">{html.escape(f.filename or "")} failed — retry</span>')
     return HTMLResponse("".join(frags))

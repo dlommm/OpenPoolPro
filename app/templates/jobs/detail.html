@@ -38,10 +38,7 @@
 
 <div id="photo-strip" class="mb-2 flex flex-wrap gap-2">
   {% for ph in photos %}
-  <div class="relative h-20 w-20">
-    <img src="/photos/file/{{ ph.id }}?thumb=1" class="h-20 w-20 rounded-lg object-cover">
-    {% if ph.tag %}<span class="tag absolute bottom-1 left-1">{{ ph.tag }}</span>{% endif %}
-  </div>
+  {{ ui.photo(ph) }}
   {% endfor %}
 </div>
 <select id="job-photo-tag" name="tag" class="field mb-2">

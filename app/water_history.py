@@ -69,6 +69,29 @@ def targets(session: Session) -> dict[str, float]:
     return out
 
 
+# The visit screen's band scales: where each reading's track starts and ends.
+# Narrower than the chart axes so the "good" band is wide enough to read and
+# to hit with a thumb-sized marker.
+SCALE = {"fc": (0.0, 8.0), "ph": (6.8, 8.2), "ta": (40.0, 160.0),
+         "cya": (0.0, 100.0), "salt": (2000.0, 4400.0)}
+
+
+def scales(session: Session) -> list[dict]:
+    """One entry per reading for the visit screen: label, unit, target, the
+    good band around it, and the scale the band is drawn on. The band is the
+    same BAND the history chart and the dose engine use."""
+    tgt = targets(session)
+    out = []
+    for key, label, unit, _floor, _ceil in METRICS:
+        lo, hi = SCALE[key]
+        t = tgt[key]
+        half = BAND[key]
+        out.append({"key": key, "label": label, "unit": unit, "target": t,
+                    "band_lo": t - half, "band_hi": t + half,
+                    "scale_lo": min(lo, t - 2 * half), "scale_hi": max(hi, t + 2 * half)})
+    return out
+
+
 def for_property(session: Session, property_id: int, limit: int = 26) -> list[Series]:
     """Most recent `limit` visits that carry at least one reading, oldest first.
 

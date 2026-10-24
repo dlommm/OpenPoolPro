@@ -126,3 +126,9 @@
 
 {# Avatar initials disc. #}
 {% macro av(name, cls="") -%}<span class="av {{ cls }}" aria-hidden="true">{{ name|initials }}</span>{%- endmacro %}
+
+{# One photo thumbnail with its tag; matches the upload response markup in
+   app/routers/photos.py. #}
+{% macro photo(ph) -%}
+<figure class="photo"><img src="/photos/file/{{ ph.id }}?thumb=1" alt="{{ (ph.tag or 'Photo') | capitalize }}">{% if ph.tag %}<figcaption class="pill p-neu">{{ ph.tag }}</figcaption>{% endif %}</figure>
+{%- endmacro %}

@@ -230,7 +230,7 @@ def test_covering_chip_has_tag_safety_and_title(client, engine):
     _absence(engine, sam, date.today(), date.today(), cover_id=lee)
     html = client.get("/").text
     assert 'title="covering"' in html
-    assert "tag-safety" in html
+    assert 'pill p-warn" title="covering"' in html
 
 
 def test_week_chip_renders_covering(client, engine):
@@ -271,7 +271,7 @@ def test_disabled_cover_tech_renders_unassigned_not_question_chip(client, engine
     html = client.get("/").text
     assert "DisabledCoverStop" in html
     assert 'title="covering"' not in html
-    assert 'tag tag-safety">unassigned' in html
+    assert 'pill p-neg">unassigned' in html
 
 
 def test_today_filter_bar_shows_counts(client, engine):

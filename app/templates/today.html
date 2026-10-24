@@ -2,109 +2,251 @@
 {% block title %}Today{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Today's route", d.strftime("%A, %b %-d")) }}
+{% set u = request.state.user %}
+
+{% macro missed_card(missed) -%}
+{% if missed %}
+<section class="card card-neg" aria-labelledby="t-missed">
+  <h2 class="card-t" id="t-missed">Missed</h2>
+  <p class="muted small" style="margin-top:2px">Needs a decision: open it to do it late, or dismiss it.</p>
+  <ul class="rows" style="margin-top:8px">
+    {% for m in missed %}
+    <li>
+      <div><a class="strong" href="/visit/{{ m.property.id }}/{{ m.date }}">{{ m.property.customer.name }}{% if m.property.label and m.property.label != "Home" %} — {{ m.property.label }}{% endif %}</a>
+        <small>{{ m.date | short_date }}{% if techs and m.effective_tech_id in tech_by_id %} · {{ tech_by_id[m.effective_tech_id].name }}{% endif %} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</small></div>
+      <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss"><button class="btn sm">Dismiss</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro hold_card() -%}
+{% if on_hold %}
+<section class="card"><h2 class="card-t">Not due today</h2>
+  <ul class="rows" style="margin-top:6px">
+    {% for p in on_hold %}<li><div>{{ p.customer.name }}<small>Service hold</small></div><span class="pill p-warn">On hold</span></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro jobs_card() -%}
+{% if jobs %}
+<section class="card" aria-labelledby="t-jobs">
+  <div class="card-h"><h2 class="card-t" id="t-jobs">Service / Jobs today</h2><span class="muted small num">{{ jobs|length }}</span></div>
+  <ul class="rows">
+    {% for j in jobs %}
+    <li><div><a class="strong" href="/jobs/{{ j.id }}">{{ j.title }}</a><small>{{ j.property.customer.name }}{% if j.property.label and j.property.label != "Home" %} — {{ j.property.label }}{% endif %}</small></div>{{ ui.icon("next", "muted") }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{%- endmacro %}
+
+
+{# One stop row. `n` is its place on the route; `seg` its progress state. #}
+{% macro stop_row(s, n, seg) -%}
+{% set url = "/visit/%s/%s"|format(s.property.id, d) %}
+<a class="stop" href="{{ url }}">
+  <span class="dot {{ seg }}">{% if s.status == "done" %}{{ ui.icon("check") }}{% else %}{{ n }}{% endif %}</span>
+  <span style="min-width:0">
+    <b>{{ s.property.customer.name }}{% if s.property.label and s.property.label != "Home" %} — {{ s.property.label }}{% endif %}</b>
+    <small>{% if s.status == "done" and s.visit and s.visit.completed_at %}Done {{ s.visit.completed_at | hhmm }}{% if s.visit.duration_minutes is not none %} · {{ s.visit.duration_minutes | minutes_display }}{% endif %}{% elif s.status == "skipped" %}Skipped{% else %}{{ s.property.city or s.property.address }}{% endif %}{% if s.property.dog_warning and s.status == "due" %} · {{ s.property.dog_note or "dog in the yard" }}{% endif %}</small>
+  </span>
+  <span class="row" style="gap:6px;flex-wrap:nowrap">
+    {% if s.moved_in %}<span class="pill p-neu">Moved</span>{% endif %}
+    {% if techs %}{{ tech_tag(s) }}{% endif %}
+    {% if s.status == "done" %}<span class="pill p-pos">Done</span>
+    {% elif s.status == "skipped" %}<span class="pill p-neg">Skipped</span>
+    {% elif seg == "next" %}<span class="pill p-next">Next</span>
+    {% else %}<span class="pill p-neu">Upcoming</span>{% endif %}
+  </span>
+</a>
+{%- endmacro %}
+
+{# Who is on this stop, when the viewer can see every route: initials, a
+   covering technician, or a problem worth fixing. #}
+{% macro tech_tag(s) -%}
+{% set assigned_id = s.property.assigned_tech_id %}
+{% if s.effective_tech_id == assigned_id %}
+  {% if assigned_id and s.property.assigned_tech %}<span class="pill p-acc" title="{{ s.property.assigned_tech.name }}">{{ s.property.assigned_tech.name | initials }}</span>{% endif %}
+  {% if not assigned_id %}<span class="pill p-neg">unassigned</span>{% endif %}
+  {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="pill p-neg">disabled tech</span>{% endif %}
+{% elif s.effective_tech_id %}
+  <span class="pill p-warn" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
+{% else %}
+  <span class="pill p-neg">unassigned</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro maps_links(addr, big=false) -%}
+<a class="btn {{ 'xl' if big }}" href="https://maps.apple.com/?daddr={{ addr | urlencode }}">{{ ui.icon("nav", "ic20" if big else "") }}Navigate</a>
+{%- endmacro %}
+
+{% set mine_count = tech_counts.get(u.id, 0) %}
+<header class="ph">
+  <div>
+    <h1 class="h1">Today</h1>
+    <p class="lede">{{ d.strftime("%A, %b %-d") }}{% if total %} · {{ total }} stop{{ "s" if total != 1 }}{% if one_route and techs and tech_filter == u.id %} on your route{% elif one_route and tech_filter in tech_by_id %} for {{ tech_by_id[tech_filter].name }}{% endif %}{% endif %}</p>
+  </div>
+  <div class="acts no-print">
+    <a href="/today/print" class="btn d-only">{{ ui.icon("print") }}Route sheet</a>
+    {% if u.can("view_all_routes") %}<a href="/routes/plan" class="btn">{{ ui.icon("map") }}Plan routes</a>{% endif %}
+  </div>
+</header>
 
 {% if queued %}
-<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium text-safety">Saved offline — will sync when back online</div>
+<div class="banner off" role="status">{{ ui.icon("wifioff", "ic18") }}<span>Saved offline — will sync when back online. Photo uploads need a connection.</span><span class="sp"></span><button type="button" class="btn sm" data-sync-open>View unsent work</button></div>
 {% endif %}
-
 {% if backup_remaining is not none %}
-<div class="card mb-3 border-pool bg-shallow p-3 text-sm font-medium">Backup code used — {{ backup_remaining }} remaining. Generate new codes from your Account page.</div>
-{% endif %}
-
-<a href="/today/print" class="btn-secondary hidden lg:inline-flex no-print mb-3">Print route sheet</a>
-
-{% if total or missed %}
-<div class="gauge mb-1" role="progressbar" aria-valuenow="{{ done }}" aria-valuemax="{{ total }}"
-     aria-label="Route progress" style="--ticks: {{ total if total else 1 }}">
-  <div class="gauge-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></div>
-  <div class="gauge-ticks"></div>
-  <div class="gauge-label">{{ done }} of {{ total }} done</div>
-</div>
-<p class="mb-5 font-data text-[11px] uppercase tracking-[0.18em] text-mist">Route level</p>
+<div class="banner off" role="status">{{ ui.icon("lock", "ic18") }}<span>Backup code used — {{ backup_remaining }} remaining. Generate new codes from your <a href="/account">Account</a> page.</span></div>
 {% endif %}
 
 {% if techs %}
-<div class="mb-4 flex flex-wrap gap-1.5">
-  <a href="/" class="tag {{ 'border-pool bg-shallow' if tech_filter is none }}">All</a>
-  {% for t in techs %}
-  <a href="/?tech={{ t.id }}" class="tag {{ 'border-pool bg-shallow' if tech_filter == t.id }}">{{ t.name | initials }} {{ t.name.split()[0] }} ({{ tech_counts.get(t.id, 0) }})</a>
+<div class="chips" role="group" aria-label="Whose route" style="margin-bottom:18px">
+  {% if mine_count %}<a class="chip {{ 'on' if tech_filter == u.id }}" href="/?tech={{ u.id }}"{% if tech_filter == u.id %} aria-current="page"{% endif %}>My route ({{ mine_count }})</a>{% endif %}
+  <a class="chip {{ 'on' if crew_view }}" href="/?crew=1"{% if crew_view %} aria-current="page"{% endif %}>Whole crew</a>
+  {% for t in techs if t.id != u.id %}
+  <a class="chip {{ 'on' if tech_filter == t.id }}" href="/?tech={{ t.id }}"{% if tech_filter == t.id %} aria-current="page"{% endif %}>{{ t.name }} ({{ tech_counts.get(t.id, 0) }})</a>
   {% endfor %}
 </div>
 {% endif %}
 
-{% if missed %}
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide text-safety">Missed</h2>
-<div class="rise mb-5 space-y-2">
-  {% for m in missed %}
-  <div class="stop stop-missed p-3">
-    <a href="/visit/{{ m.property.id }}/{{ m.date }}" class="block font-semibold">
-      {{ m.property.customer.name }} — {{ m.property.label }}</a>
-    <div class="mt-0.5 text-xs text-mist">{{ m.date | short_date }} · {{ "skipped" if m.visit and m.visit.status == "skipped" else "not done" }}</div>
-    <form method="post" action="/visit/{{ m.property.id }}/{{ m.date }}/dismiss" class="mt-1">
-      <button class="min-h-11 text-sm font-medium text-safety">Dismiss</button>
-    </form>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Weekly service</h2>
-<div class="rise space-y-2.5">
-  {% for s in stops %}
-  <div class="stop p-3.5 {{ 'stop-done' if s.status != 'due' }}">
-    <div class="flex items-start justify-between gap-2">
-      <a href="/visit/{{ s.property.id }}/{{ d }}"
-         class="font-semibold leading-snug {{ 'text-mist line-through decoration-seam' if s.status == 'done' }}">
-        {{ s.property.customer.name }} — {{ s.property.label }}
-        {% if s.moved_in %}<span class="tag ml-1 align-middle">moved</span>{% endif %}
-        {% if techs %}{% set assigned_id = s.property.assigned_tech_id %}
-        {% if s.effective_tech_id == assigned_id %}
-        {% if assigned_id %}<span class="tag ml-1">{{ (s.property.assigned_tech | attr("name") if s.property.assigned_tech else "") | initials }}</span>{% endif %}
-        {% if not assigned_id %}<span class="tag tag-safety">unassigned</span>{% endif %}
-        {% if s.property.assigned_tech and not s.property.assigned_tech.active %}<span class="tag tag-safety">disabled tech</span>{% endif %}
-        {% elif s.effective_tech_id %}
-        <span class="tag tag-safety ml-1" title="covering">{{ (tech_by_id[s.effective_tech_id].name if s.effective_tech_id in tech_by_id else "") | initials }}</span>
-        {% else %}
-        <span class="tag tag-safety">unassigned</span>
-        {% endif %}{% endif %}</a>
-      <div class="flex items-center gap-1.5">
-        {% if s.status == "done" %}{{ ui.icon("check", "h-5 w-5 shrink-0 text-pool") }}{% endif %}
-        {% if s.visit and s.visit.duration_minutes is not none %}<span class="tag font-data">{{ s.visit.duration_minutes | minutes_display }}</span>{% endif %}
-        {% if s.status == "skipped" %}<span class="tag shrink-0">skipped</span>{% endif %}
+{% if crew_view %}
+{# ======================= WHOLE CREW ======================= #}
+<div class="cols c-main">
+  <div class="stack">
+    {% if total %}
+    <section class="card" aria-labelledby="t-crew">
+      <div class="card-h"><h2 class="card-t" id="t-crew">Crew progress</h2><span class="muted small num" role="status">{{ done }} of {{ total }} done</span></div>
+      {% for l in lanes %}
+      <div class="lane">
+        <div class="row" style="gap:8px;flex-wrap:nowrap;min-width:0">{{ ui.av(l.tech.name if l.tech else "?") }}<span class="lane-n">{{ l.tech.name if l.tech else "Inactive" }}{% if l.id == u.id %} <span class="muted">(you)</span>{% endif %}</span></div>
+        <div class="rib" role="img" aria-label="{{ l.done }} of {{ l.stops|length }} stops done">{% for g in l.segs %}<span class="{{ g }}"></span>{% endfor %}</div>
+        <a class="num lane-c" href="/?tech={{ l.id }}">{{ l.done }}/{{ l.stops|length }}</a>
       </div>
-    </div>
-    <a href="https://maps.apple.com/?q={{ s.property.address | urlencode }}"
-       class="mt-1 flex min-h-11 items-center gap-1.5 text-sm text-pool">
-      {{ ui.icon("pin", "h-4 w-4 shrink-0") }}{{ s.property.address }}</a>
-    <div class="mt-1 flex flex-wrap items-center gap-1.5">
-      <a href="https://maps.google.com/?q={{ s.property.address | urlencode }}"
-         class="tag">G-Maps</a>
-      {% if s.property.gate_code %}<span class="tag">Gate {{ s.property.gate_code }}</span>{% endif %}
-      {% if s.property.dog_warning %}<span class="tag tag-safety">{{ ui.icon("dog", "h-3.5 w-3.5") }}{{ s.property.dog_note or "Dog" }}</span>{% endif %}
-    </div>
+      {% endfor %}
+      {% if unassigned %}
+      <div class="note warn">{{ ui.icon("alert", "ic18") }}<div style="flex:1">{{ unassigned|length }} stop{{ "s" if unassigned|length != 1 }} due today with no technician: {{ unassigned | map(attribute="property.customer.name") | join(", ") }}.</div>{% if u.can("view_all_routes") %}<a class="btn sm" href="/routes/balance">Assign</a>{% endif %}</div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section aria-labelledby="t-weekly">
+      <div class="sec" style="margin-top:4px"><h2 class="h2" id="t-weekly">Weekly service</h2><span class="muted small num">{{ total }} total{{ " · %d done"|format(done) if total }}</span></div>
+      {% for l in lanes %}
+        {% if lanes|length > 1 %}<h3 class="lane-h">{{ l.tech.name if l.tech else "Inactive" }}{% if l.id == u.id %} (you){% endif %} <span class="muted small num">{{ l.done }} of {{ l.stops|length }}</span></h3>{% endif %}
+        {% for s in l.stops %}{{ stop_row(s, loop.index, l.segs[loop.index0]) }}{% endfor %}
+      {% endfor %}
+      {% if unassigned %}
+        <h3 class="lane-h">Unassigned <span class="muted small num">{{ unassigned|length }}</span></h3>
+        {% for s in unassigned %}{{ stop_row(s, loop.index, "") }}{% endfor %}
+      {% endif %}
+      {% if not stops %}
+      <section class="card today-empty"><h2 class="h2">No stops today</h2><p class="muted">The route is clear. Add a customer or check the week ahead.</p></section>
+      {% endif %}
+    </section>
   </div>
-  {% else %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No stops today</p>
-    <p class="mt-1 text-sm text-mist">Your route is clear. Add a customer or check the week ahead.</p>
+  <div class="stack">
+    {{ missed_card(missed) }}
+    {{ hold_card() }}
+    {{ jobs_card() }}
   </div>
-  {% endfor %}
 </div>
 
-{% if jobs %}
-<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Service / Jobs today</h2>
-<div class="rise space-y-2.5">
-  {% for j in jobs %}
-  <a href="/jobs/{{ j.id }}" class="card flex items-center gap-3 p-3.5">
-    {{ ui.icon("jobs", "h-5 w-5 shrink-0 text-mist") }}
-    <span class="min-w-0">
-      <span class="block truncate font-semibold">{{ j.title }}</span>
-      <span class="block truncate text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}</span>
-    </span>
-    {{ ui.icon("chevron", "ml-auto h-4 w-4 shrink-0 text-mist") }}
-  </a>
-  {% endfor %}
+{% else %}
+{# ======================= ONE ROUTE ======================= #}
+{% if total %}
+<section class="card progress-card" aria-label="Route progress">
+  <div class="ribhead">
+    <span><b class="num">{{ done }} of {{ total }} done</b> <span class="muted">{{ "· route complete" if not next_stop else "· %d to go"|format(upcoming|length + 1) }}</span></span>
+    <span class="riblegend" aria-hidden="true"><span><i style="background:var(--done)"></i>Done</span><span><i style="background:var(--next)"></i>Next</span><span><i style="background:color-mix(in srgb,var(--m) 22%,transparent)"></i>To go</span></span>
+  </div>
+  <div class="rib" role="progressbar" aria-valuenow="{{ done }}" aria-valuemin="0" aria-valuemax="{{ total }}" aria-label="Route progress">{% for g in segments %}<span class="{{ g }}"></span>{% endfor %}</div>
+</section>
+{% endif %}
+
+<div class="cols c-main">
+  <div class="stack">
+    {% if next_stop %}
+    {% set p = next_stop.property %}
+    {% set n_index = (stops.index(next_stop) + 1) %}
+    <section class="nextc" aria-labelledby="t-next">
+      <span class="tag-next">{{ ui.icon("next") }}Next stop · {{ n_index }} of {{ total }}</span>
+      <h2 id="t-next">{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</h2>
+      <p class="lede" style="margin-top:6px">{{ p.address }}</p>
+      {% if p | pool_summary %}<p class="muted" style="margin-top:2px">{{ p | pool_summary }}</p>{% endif %}
+      {% if p.notes or p.gate_code or p.dog_warning %}
+      <div class="note">{{ ui.icon("alert", "ic18") }}<div>
+        {% if p.dog_warning %}<b>{{ p.dog_note or "Dog in the yard" }}.</b> {% endif %}
+        {% if p.notes %}{{ p.notes }}{% endif %}
+        {% if p.gate_code %}<details class="gate"><summary>Gate code on file — show</summary><span class="mono">{{ p.gate_code }}</span></details>{% endif %}
+      </div></div>
+      {% endif %}
+      <div class="field-acts">
+        {{ maps_links(p.address, true) }}
+        <a class="btn pri xl" href="/visit/{{ p.id }}/{{ d }}">Start visit</a>
+      </div>
+      <p class="small next-alt"><a href="https://maps.google.com/?q={{ p.address | urlencode }}">Open in Google Maps</a></p>
+    </section>
+    {% elif total %}
+    <section class="card today-empty">{{ ui.icon("check", "ic24 ok") }}<h2 class="h2">Route complete</h2><p class="muted">Every stop today has been done or skipped.</p></section>
+    {% else %}
+    <section class="card today-empty"><h2 class="h2">No stops today</h2><p class="muted">Your route is clear. Check the <a href="/week">week ahead</a>.</p></section>
+    {% endif %}
+
+    {% if upcoming %}
+    <section aria-labelledby="t-up">
+      <div class="sec" style="margin-top:6px"><h2 class="h2" id="t-up">Coming up</h2><span class="muted small num">{{ upcoming|length }}</span></div>
+      {% for s in upcoming %}
+      {% set p = s.property %}
+      <details class="stop-d">
+        <summary class="stop"><span class="dot">{{ stops.index(s) + 1 }}</span><span style="min-width:0"><b>{{ p.customer.name }}{% if p.label and p.label != "Home" %} — {{ p.label }}{% endif %}</b><small>{{ p.city or p.address }}{% if p.dog_warning %} · {{ p.dog_note or "dog in the yard" }}{% endif %}</small></span><span class="row" style="gap:6px;flex-wrap:nowrap">{% if s.moved_in %}<span class="pill p-neu">Moved</span>{% endif %}{{ ui.icon("chevD", "ic20 chev") }}</span></summary>
+        <div class="card stop-more">
+          <p><a href="https://maps.apple.com/?q={{ p.address | urlencode }}">{{ p.address }}</a></p>
+          <p class="muted small" style="margin-top:2px">{{ p | pool_summary }}{% if p.notes %} · {{ p.notes }}{% endif %}{% if p.gate_code %} · gate {{ p.gate_code }}{% endif %}</p>
+          <div class="row" style="margin-top:12px">{{ maps_links(p.address) }}<a class="btn" href="/visit/{{ p.id }}/{{ d }}">Start this visit now</a><a class="btn ghost" href="https://maps.google.com/?q={{ p.address | urlencode }}">Google Maps</a></div>
+        </div>
+      </details>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    {% if rest %}
+    <section class="card" aria-labelledby="t-rest">
+      <div class="card-h"><h2 class="card-t" id="t-rest">Rest of the crew</h2><span class="muted small num">{{ rest.done }} of {{ rest.total }} stops</span></div>
+      <ul class="rows">
+        {% for s in rest.unassigned %}<li><div>{{ s.property.customer.name }}<small>Due today · no technician</small></div><span class="pill p-neg">Unassigned</span></li>{% endfor %}
+        {% for m in rest.missed %}<li><div>{{ m.property.customer.name }}<small>Missed {{ m.date | short_date }}{% if m.effective_tech_id in tech_by_id %} · {{ tech_by_id[m.effective_tech_id].name }}{% endif %}</small></div><span class="pill p-neg">Missed</span></li>{% endfor %}
+        {% if not rest.unassigned and not rest.missed %}<li><div class="muted">Nothing needs you.</div></li>{% endif %}
+      </ul>
+      <div class="row" style="margin-top:10px"><a class="btn" href="/?crew=1">See whole crew</a></div>
+    </section>
+    {% endif %}
+    {{ missed_card(missed) }}
+    <section class="card" aria-labelledby="t-done">
+      <div class="card-h"><h2 class="card-t" id="t-done">Done today</h2><span class="muted small num">{{ finished|length }}</span></div>
+      {% if finished %}
+      <ul class="rows">
+        {% for s in finished %}
+        <li><div><a class="strong" href="/visit/{{ s.property.id }}/{{ d }}">{{ s.property.customer.name }}</a><small>{% if s.status == "done" %}Done{% if s.visit and s.visit.completed_at %} {{ s.visit.completed_at | hhmm }}{% endif %}{% if s.visit and s.visit.duration_minutes is not none %} · {{ s.visit.duration_minutes | minutes_display }}{% endif %}{% else %}Skipped{% endif %}</small></div>{{ ui.pill("Done", "pos") if s.status == "done" else ui.pill("Skipped", "neg") }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">Nothing finished yet.</p>{% endif %}
+    </section>
+    {{ jobs_card() }}
+    {{ hold_card() }}
+    <section class="card"><h2 class="card-t">Before you go</h2>
+      <ul class="rows" style="margin-top:6px">
+        {% if low_stock %}<li><div>Chemicals<small>Low at the shop: {{ low_stock | map(attribute="name") | join(", ") }}</small></div></li>{% endif %}
+        <li><div>Photos<small>Uploads need a connection. Take them when you have signal.</small></div></li>
+      </ul>
+    </section>
+  </div>
 </div>
 {% endif %}
 {% endblock %}
