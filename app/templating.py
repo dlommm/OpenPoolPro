@@ -45,8 +45,14 @@ templates = Jinja2Templates(directory="app/templates")
 # Bust cached CSS/JS on every release so a home-screen PWA fetches new assets.
 templates.env.globals["app_version"] = config.APP_VERSION
 templates.env.filters["dollars"] = lambda cents: f"${(cents or 0) / 100:,.2f}"
-templates.env.filters["initials"] = lambda name: "".join(
-    w[0] for w in (name or "?").split()[:2]).upper()
+def _initials(name) -> str:
+    """'Ben & Ava Carter' -> 'BA': the first letters of the first two words
+    that start with a letter or digit, so '&' and '-' never become initials."""
+    words = [w for w in (name or "").split() if w[:1].isalnum()]
+    return "".join(w[0] for w in words[:2]).upper() or "?"
+
+
+templates.env.filters["initials"] = _initials
 templates.env.filters["hhmm"] = timefmt.to_local_hhmm
 templates.env.filters["localdt"] = lambda dt: (
     timefmt.to_local(dt).strftime("%Y-%m-%d %H:%M") if dt else "")

@@ -1426,3 +1426,42 @@ a.kpi{display:block;color:inherit;text-decoration:none;transition:background-col
 @media (hover: hover) and (pointer: fine){ a.kpi:hover{background:color-mix(in srgb,var(--r) 60%,var(--sheet))} }
 a.rowbtn{text-decoration:none}
 .rows .r .btn{flex:none}
+/* Customers (app) */
+.clist-bar{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.clist-q{flex:1;min-width:220px;max-width:420px}
+.clist-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.clist-filters .inp{width:auto;height:34px}
+.az{display:flex;flex-wrap:wrap;gap:2px;margin-left:auto}
+.az a{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 4px;border-radius:7px;font-size:12px;color:var(--m);text-decoration:none}
+.az a.on{background:var(--as);color:var(--ai);font-weight:600}
+@media (hover: hover) and (pointer: fine){ .az a:not(.on):hover{background:var(--r);color:var(--t)} }
+.tbl a.nm{text-decoration:none}
+.tbl td.out{color:var(--negt);font-weight:600}
+a.pill{text-decoration:none}
+.empty .strong{display:block;margin-bottom:2px}
+@media (max-width: 720px){ .az{margin-left:0} .clist-q{max-width:none} }
+/* the customer table keeps only name and status on a phone */
+@media (max-width: 720px){
+  .ctbl thead{display:none}
+  .ctbl td:not(:first-child):not(:last-child){display:none}
+  .ctbl td:last-child{text-align:right}
+}
+/* Customer 360 (app) */
+.facts dd.owed,.owed-t{color:var(--negt)}
+.tabs a.tab{text-decoration:none;display:inline-flex;align-items:center}
+.tagx{appearance:none;border:0;background:transparent;color:inherit;cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1}
+.prop-card{margin-bottom:var(--gap)}
+.prop-card.is-off{opacity:.7}
+.prop-loc{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:14px;border-radius:12px;background:var(--r)}
+.prop-photo img,.prop-nophoto{width:96px;height:96px;border-radius:10px;object-fit:cover;display:block}
+.prop-nophoto{display:grid;place-items:center;align-content:center;gap:4px;border:1px dashed var(--ctl);color:var(--m);font-size:11px}
+.prop-map{width:220px;height:96px;object-fit:cover;border-radius:10px}
+.pool-card{border:1px solid var(--b);border-radius:12px;padding:14px 16px;min-width:0}
+.pool-card a.strong{text-decoration:none}
+.contracts-mini{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:13px}
+.btn-upload-sm{width:auto;min-height:32px;padding:0 11px;font-size:13px}
+.photo-grid{display:flex;flex-wrap:wrap;gap:12px}
+.photo-grid .photo{width:150px}
+.photo-grid .photo img{width:150px;height:112px}
+.tbl .r.out,.tbl td.out{color:var(--negt);font-weight:600}
+@media (max-width: 720px){ .prop-map{width:100%} }

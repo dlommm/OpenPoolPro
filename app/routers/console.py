@@ -10,8 +10,7 @@ from app import inventory, models, qbo, receivables, water_alerts
 from app.db import get_session
 from app.deps import require_admin
 from app.maintenance import warranty_alerts
-from app.scheduling import (ScheduleWindow, missed_stops, progress_segments, stops_for_date,
-                            visible_to)
+from app.scheduling import ScheduleWindow, missed_stops, progress_segments, stops_for_date, visible_to
 from app.templating import templates
 from app.timefmt import business_today, local_now
 

@@ -8,8 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import inventory, models
 from app.db import get_session
-from app.scheduling import (ScheduleWindow, is_due, missed_stops, progress_segments,
-                            stops_for_date, visible_to)
+from app.scheduling import ScheduleWindow, is_due, missed_stops, progress_segments, stops_for_date, visible_to
 from app.templating import templates
 from app.timefmt import business_today
 

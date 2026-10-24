@@ -2,6 +2,7 @@
 {% block title %}Customers{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
+{% set is_admin = request.state.user.role == "admin" %}
 
 {% macro qs(q="", letter="", city="", sort="", tag="", show=false, page=0) -%}
 {%- set parts = [] -%}
@@ -15,120 +16,92 @@
 {{- parts | join("&") -}}
 {%- endmacro %}
 
-<div class="flex items-start justify-between gap-2">
-  {{ ui.page_header("Customer files", "Customers") }}
-  <a href="/customers/new" class="btn-secondary mt-2 shrink-0 gap-1.5">{{ ui.icon("plus", "h-4 w-4") }}Add</a>
-</div>
-<input type="search" name="q" value="{{ q }}" placeholder="Search"
-       hx-get="/customers" hx-trigger="input changed delay:300ms" hx-target="#results"
-       hx-select="#results" hx-swap="outerHTML"
-       hx-include="#letter-state, #tag-state, #show-state, #city, #sort"
-       class="field mb-4">
-{% if request is not none and request.state.user and request.state.user.role == "admin" %}
-<div class="mb-3 flex gap-2">
-  <a href="/customers/import" class="btn-secondary flex-1">Import CSV</a>
-  <a href="/customers/export" class="btn-secondary flex-1">Export CSV</a>
-</div>
-{% endif %}
-<div id="results" class="rise">
-
-  {# A-Z rail #}
-  <div class="mb-3 flex flex-wrap gap-1 text-xs">
-    <a href="/customers?{{ qs(q=q, city=city, sort=sort, tag=tag, show=show_inactive) }}"
-       class="tag {{ 'tag-safety' if not letter }}">All</a>
-    {% for L in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}
-    <a href="/customers?{{ qs(q=q, letter=L, city=city, sort=sort, tag=tag, show=show_inactive) }}"
-       class="tag {{ 'tag-safety' if letter == L }}">{{ L }}</a>
-    {% endfor %}
-    <a href="/customers?{{ qs(q=q, letter='#', city=city, sort=sort, tag=tag, show=show_inactive) }}"
-       class="tag {{ 'tag-safety' if letter == '#' }}">#</a>
+<header class="ph">
+  <div>
+    <h1 class="h1">{{ "Customers" if is_admin or request.state.user.can("view_all_routes") else "My customers" }}</h1>
+    <p class="lede">{{ total }} {{ "inactive " if show_inactive }}customer{{ "s" if total != 1 }}{% if city %} in {{ city }}{% endif %}{% if tag %} tagged “{{ tag }}”{% endif %}</p>
   </div>
+  <div class="acts">
+    {% if is_admin %}
+    <a href="/customers/import" class="btn">{{ ui.icon("upload") }}Import CSV</a>
+    <a href="/customers/export" class="btn">{{ ui.icon("dl") }}Export CSV</a>
+    {% endif %}
+    {% if can_manage %}<a href="/customers/new" class="btn pri">{{ ui.icon("plus") }}New customer</a>{% endif %}
+  </div>
+</header>
 
-  {# Filter row: city, sort, show-inactive, tag chip #}
-  <form id="filters-form" method="get" action="/customers"
-        class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+<div class="clist-bar">
+  <div class="clist-q">
+    <label class="lbl" for="c-q">Search</label>
+    <input id="c-q" type="search" name="q" value="{{ q }}" placeholder="Name, phone, email, city or street" autocomplete="off"
+           hx-get="/customers" hx-trigger="input changed delay:300ms" hx-target="#results"
+           hx-select="#results" hx-swap="outerHTML"
+           hx-include="#letter-state, #tag-state, #show-state, #city, #sort"
+           class="inp">
+  </div>
+  <div class="chips" role="group" aria-label="Status">
+    <a href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, tag=tag) }}" class="chip {{ 'on' if not show_inactive }}"{% if not show_inactive %} aria-current="page"{% endif %}>Active</a>
+    <a href="/customers?show=inactive{% set rest = qs(q=q, letter=letter, city=city, sort=sort, tag=tag) %}{% if rest %}&{{ rest }}{% endif %}" class="chip {{ 'on' if show_inactive }}"{% if show_inactive %} aria-current="page"{% endif %}>Inactive</a>
+  </div>
+</div>
+
+<div id="results">
+  <form id="filters-form" method="get" action="/customers" class="clist-filters">
     <input type="hidden" id="letter-state" name="letter" value="{{ letter }}">
     <input type="hidden" id="tag-state" name="tag" value="{{ tag }}">
     <input type="hidden" id="show-state" name="show" value="{{ 'inactive' if show_inactive else '' }}">
     <input type="hidden" name="q" value="{{ q }}">
-    <label class="sr-only" for="city">City</label>
-    <select id="city" name="city" class="field w-auto" data-autosubmit>
-      <option value="">All cities</option>
-      {% for ct in cities %}
-      <option value="{{ ct }}" {{ "selected" if city == ct }}>{{ ct }}</option>
-      {% endfor %}
-    </select>
-    <label class="sr-only" for="sort">Sort</label>
-    <select id="sort" name="sort" class="field w-auto" data-autosubmit>
-      <option value="name" {{ "selected" if sort == "name" }}>Name</option>
-      <option value="city" {{ "selected" if sort == "city" }}>City</option>
-      <option value="recent" {{ "selected" if sort == "recent" }}>Recent</option>
-    </select>
-    <noscript><button class="btn-secondary">Apply</button></noscript>
-    <a href="/customers?show={{ 'active' if show_inactive else 'inactive' }}{% set rest = qs(q=q, letter=letter, city=city, sort=sort, tag=tag) %}{% if rest %}&{{ rest }}{% endif %}"
-       class="tag">{{ "Show active" if show_inactive else "Show inactive" }}</a>
-    {% if tag %}
-    <span class="tag tag-safety">Tag: {{ tag }}</span>
-    <a href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, show=show_inactive) }}" class="text-pool">Clear tag</a>
-    {% endif %}
+    <div><label class="sr" for="city">City</label>
+      <select id="city" name="city" class="inp" data-autosubmit>
+        <option value="">All cities</option>
+        {% for ct in cities %}<option value="{{ ct }}" {{ "selected" if city == ct }}>{{ ct }}</option>{% endfor %}
+      </select></div>
+    <div><label class="sr" for="sort">Sort</label>
+      <select id="sort" name="sort" class="inp" data-autosubmit>
+        <option value="name" {{ "selected" if sort == "name" }}>Sort by name</option>
+        <option value="city" {{ "selected" if sort == "city" }}>Sort by city</option>
+        <option value="recent" {{ "selected" if sort == "recent" }}>Newest first</option>
+      </select></div>
+    <noscript><button class="btn">Apply</button></noscript>
+    {% if tag %}<span class="pill p-acc">Tag: {{ tag }}</span><a href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, show=show_inactive) }}" class="btn ghost sm">Clear tag</a>{% endif %}
+    <nav class="az" aria-label="First letter">
+      <a href="/customers?{{ qs(q=q, city=city, sort=sort, tag=tag, show=show_inactive) }}" class="{{ 'on' if not letter }}">All</a>
+      {% for L in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}<a href="/customers?{{ qs(q=q, letter=L, city=city, sort=sort, tag=tag, show=show_inactive) }}" class="{{ 'on' if letter == L }}">{{ L }}</a>{% endfor %}
+      <a href="/customers?{{ qs(q=q, letter='#', city=city, sort=sort, tag=tag, show=show_inactive) }}" class="{{ 'on' if letter == '#' }}">#</a>
+    </nav>
   </form>
 
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-seam text-left text-mist">
-          <th class="py-1.5 pr-3 font-medium">Name</th>
-          <th class="py-1.5 pr-3 font-medium">City</th>
-          <th class="py-1.5 pr-3 font-medium">Phone</th>
-          <th class="py-1.5 pr-3 font-medium">Frequency</th>
-          <th class="py-1.5 pr-3 font-medium">Tags</th>
-          <th class="py-1.5 font-medium">Status</th>
-        </tr>
-      </thead>
-      <tbody class="font-data">
+  {% if rows %}
+  <div class="card" style="padding:4px 12px">
+    <div class="tblw"><table class="tbl ctbl">
+      <thead><tr><th>Customer</th><th>Service</th><th>Pool</th>{% if show_money %}<th class="r">Rate</th><th class="r">Balance</th>{% endif %}<th>Tags</th><th>Status</th></tr></thead>
+      <tbody>
         {% for r in rows %}
-        <tr class="border-b border-seam/60">
-          <td class="py-2 pr-3">
-            <a href="/customers/{{ r.c.id }}" class="font-body font-semibold text-ink">{{ r.c.name }}</a>
-          </td>
-          <td class="py-2 pr-3 font-body">{{ r.city or "—" }}</td>
-          <td class="py-2 pr-3">{{ r.c.phone }}</td>
-          <td class="py-2 pr-3 font-body">{{ r.frequency or "—" }}</td>
-          <td class="py-2 pr-3">
-            {% if r.c.tags %}
-            <div class="flex flex-wrap gap-1">
-              {% for t in r.c.tags %}
-              <a href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, tag=t, show=show_inactive) }}" class="tag">{{ t }}</a>
-              {% endfor %}
-            </div>
-            {% else %}—{% endif %}
-          </td>
-          <td class="py-2">
-            {% if r.c.active %}<span class="tag">Active</span>
-            {% else %}<span class="tag tag-safety">Inactive</span>{% endif %}
-            {% if show_inactive and can_manage %}
-            <form method="post" action="/customers/{{ r.c.id }}/reactivate" class="mt-1">
-              <button class="btn-secondary px-2 py-0.5 text-xs">Reactivate</button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
         <tr>
-          <td colspan="6" class="py-6 text-center">
-            <p class="font-display text-xl font-bold uppercase tracking-wide">No customers</p>
-            <p class="mt-1 text-sm text-mist">{{ "No inactive customers." if show_inactive else "Add your first customer to get started." }}</p>
+          <td><div class="who">{{ ui.av(r.c.name) }}<div><a class="nm" href="/customers/{{ r.c.id }}">{{ r.c.name }}</a><div class="muted small">{{ r.city or "—" }}{% if r.c.phone %} · <span class="num">{{ r.c.phone }}</span>{% endif %}</div></div></div></td>
+          <td>{{ r.service }}</td>
+          <td>{{ (r.prop | pool_summary) if r.prop else "—" }}</td>
+          {% if show_money %}<td class="r num">{{ r.rate_cents | dollars if r.rate_cents is not none else "—" }}</td>
+          <td class="r num {{ 'out' if r.balance_cents > 0 }}">{{ r.balance_cents | dollars }}</td>{% endif %}
+          <td>{% if r.c.tags %}<span class="chips">{% for t in r.c.tags %}<a href="/customers?{{ qs(q=q, letter=letter, city=city, sort=sort, tag=t, show=show_inactive) }}" class="pill p-neu">{{ t }}</a>{% endfor %}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if r.c.active %}<span class="pill p-pos">Active</span>{% else %}<span class="pill p-neu">Inactive</span>{% endif %}
+            {% if show_inactive and can_manage %}
+            <form method="post" action="/customers/{{ r.c.id }}/reactivate" style="display:inline"><button class="btn sm">Reactivate</button></form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </div>
-
-  {% if rows %}
   {{ ui.pager(page, total_pages, total, "/customers",
               qs(q=q, letter=letter, city=city, sort=sort, tag=tag, show=show_inactive)) }}
+  {% else %}
+  <div class="empty">
+    <p class="strong" style="color:var(--t)">No customers</p>
+    <p>{% if q %}Nothing matches “{{ q }}”. Try a city or street name.{% elif show_inactive %}No inactive customers.{% else %}Add your first customer to get started.{% endif %}</p>
+  </div>
   {% endif %}
-
 </div>
 {% endblock %}

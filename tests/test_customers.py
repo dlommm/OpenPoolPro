@@ -151,7 +151,10 @@ def test_timeline_renders_date_only_and_localized_instant_times(client, engine):
                              at=dt(2026, 7, 20, 13, 30)))
         s.commit()
 
-    detail = client.get(f"/customers/{cid}").text
+    import re
+    # Links may carry ISO dates (/visit/<pid>/2026-01-15); what a person reads
+    # may not, so check the page with link targets removed.
+    detail = re.sub(r'href="[^"]*"', "", client.get(f"/customers/{cid}").text)
     # Rendered for a person ("Jan 15, 2026"), never as bare ISO. Each guarantee
     # below is the same one this test has always made, in the new format.
     assert "Jan 15, 2026" in detail

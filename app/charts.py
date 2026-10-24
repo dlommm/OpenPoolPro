@@ -2,8 +2,8 @@
 
 Self-contained SVG (no client JS, no external libs) so it satisfies the app CSP
 and renders inside the offline PWA. Marks are colored with the active theme's CSS
-custom properties (var(--color-pool) etc.), so one chart reads correctly in every
-theme and in light/dark without per-theme code. All axis/value text uses ink/mist
+custom properties (var(--color-pool), the validated --c1..--c3 categorical slots,
+--band for target bands), so one chart reads correctly in light and dark. All axis/value text uses ink/mist
 tokens — never the series color (dataviz rule). Any caller-supplied label is
 passed through html.escape before it reaches the SVG (customer/tech names are
 user data).
@@ -17,8 +17,7 @@ import html
 # Distinct hue families (teal / gold / green / rose) so they separate for most
 # CVD types; every slice is also directly labelled, which is the secondary
 # encoding the dataviz guidance requires when relying on ≤4 hues.
-_CAT = ["var(--color-pool)", "var(--color-brass)", "var(--cr-green, #10b981)",
-        "var(--color-safety)"]
+_CAT = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--m)"]
 
 
 def _esc(s) -> str:
@@ -268,10 +267,10 @@ def reading_chart(series, *, height=170):
         parts.append(
             f'<rect x="{pad_l}" y="{band_top:.1f}" width="{plot_w}" '
             f'height="{max(1.0, band_bottom - band_top):.1f}" '
-            f'fill="var(--cr-green, #10b981)" opacity="0.12"/>')
+            f'fill="var(--band)" opacity="0.75"/>')
         ty = y_of(series.target)
         parts.append(f'<line x1="{pad_l}" y1="{ty:.1f}" x2="{w - pad_r}" y2="{ty:.1f}" '
-                     f'stroke="var(--cr-green, #10b981)" stroke-width="1" '
+                     f'stroke="var(--m)" stroke-width="1" '
                      f'stroke-dasharray="4 3" opacity="0.8"/>')
 
     for value in (hi, lo):
