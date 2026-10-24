@@ -1,0 +1,34 @@
+{# Record-form building blocks (design v0.11): a card per group with a title
+   and help line, label-and-help rows beside their controls, and one save bar.
+   Usage:
+     {% import "_form.html" as f %}
+     {% call f.group("Contact", "How to reach them.") %}
+       {% call f.row("Name", "As it appears on invoices.", "c-name") %}<input id="c-name" class="inp" ...>{% endcall %}
+     {% endcall %}
+     {{ f.savebar("Save customer", cancel="/customers/7") }} #}
+
+{% macro group(title, help="", id="") -%}
+<section class="card sx-g"{% if id %} id="{{ id }}"{% endif %}>
+  {% if title %}<div class="sx-gh"><div><h2 class="card-t">{{ title }}</h2>{% if help %}<p class="muted small">{{ help }}</p>{% endif %}</div></div>{% endif %}
+  {{ caller() }}
+</section>
+{%- endmacro %}
+
+{% macro row(label, help="", for_id="", wide=false) -%}
+<div class="sx-r{{ ' wide' if wide }}">
+  <div class="sx-l">{% if for_id %}<label class="sx-lab" for="{{ for_id }}">{{ label }}</label>{% else %}<span class="sx-lab">{{ label }}</span>{% endif %}{% if help %}<p class="sx-help">{{ help }}</p>{% endif %}</div>
+  <div class="sx-c">{{ caller() }}</div>
+</div>
+{%- endmacro %}
+
+{% macro savebar(label="Save", cancel="", note="") -%}
+<div class="formbar">
+  <span class="muted small">{{ note }}</span>
+  <span class="row">{% if cancel %}<a class="btn" href="{{ cancel }}">Cancel</a>{% endif %}<button class="btn pri" type="submit">{{ label }}</button></span>
+</div>
+{%- endmacro %}
+
+{# A toggle that is a real checkbox underneath (posts name=on/1 like before). #}
+{% macro switch(name, label, checked=false, value="", id="") -%}
+<label class="swc"><input type="checkbox" name="{{ name }}"{% if value %} value="{{ value }}"{% endif %}{% if id %} id="{{ id }}"{% endif %} {{ "checked" if checked }}><i aria-hidden="true"></i><span>{{ label }}</span></label>
+{%- endmacro %}

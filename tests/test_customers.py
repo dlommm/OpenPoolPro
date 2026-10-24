@@ -271,7 +271,7 @@ def test_hold_create_validation_and_end_now(client, engine):
         assert hold.start_date == date(2026, 7, 20)
         assert hold.resume_date == date(2026, 8, 1)
         hid = hold.id
-    assert "2026-08-01" in client.get(f"/properties/{pid}/edit").text
+    assert "Aug 1, 2026" in client.get(f"/properties/{pid}/edit").text
 
     # end now
     from app.routers.today import business_today

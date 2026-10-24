@@ -172,5 +172,17 @@ def search(request: Request, q: str = "", session: Session = Depends(get_session
             models.Property.active, models.Customer.active,
             models.Property.address.ilike(like) | models.Property.label.ilike(like))
             .order_by(models.Customer.name).limit(25)).all()
+    # The office also finds jobs and invoices here (design v0.4); technicians
+    # search customers only -- the same split the rest of the app makes.
+    jobs = invoices = []
+    user = request.state.user
+    if q and user.role == "admin":
+        jobs = session.scalars(select(models.Job).join(models.Property).join(models.Customer).where(
+            models.Job.title.ilike(like) | models.Customer.name.ilike(like))
+            .order_by(models.Job.status != "open", models.Job.id.desc()).limit(15)).all()
+        invoices = session.scalars(select(models.Invoice).join(models.Customer).where(
+            models.Invoice.number.ilike(like) | models.Customer.name.ilike(like))
+            .order_by(models.Invoice.id.desc()).limit(15)).all()
     return templates.TemplateResponse(request, "search.html", {
-        "q": q, "customers": customers, "properties": properties})
+        "q": q, "customers": customers, "properties": properties,
+        "jobs": jobs, "invoices": invoices})

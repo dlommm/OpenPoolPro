@@ -44,7 +44,7 @@ def test_mandatory_inputs_carry_required(client):
         "customer name must be required client-side (server 422s without it)"
     # Source-level for templates that need seeded data to render:
     rule_edit = pathlib.Path("app/templates/customers/property_form.html").read_text()
-    assert re.search(r'<input name="title" value="\{\{ r\.title \}\}" required', rule_edit)
+    assert re.search(r'name="title" value="\{\{ r\.title \}\}" required', rule_edit)
     users = pathlib.Path("app/templates/users/form.html").read_text()
     assert re.search(r'name="password"[^>]*\brequired\b', users, re.S)
 

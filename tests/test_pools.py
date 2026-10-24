@@ -78,7 +78,7 @@ def test_add_equipment_stores_warranty_end_and_renders_it(client, engine):
         eq = s.scalars(select(models.Equipment)).one()
         assert eq.warranty_end == date(2027, 3, 1)
     html = client.get(f"/pools/{pool_id}/edit").text
-    assert "2027-03-01" in html
+    assert "Mar 1, 2027" in html
 
 
 def test_add_equipment_warranty_end_tolerant_blank_and_garbage(client, engine):

@@ -1,178 +1,141 @@
 {% extends "base.html" %}
+{% block title %}{{ ("Edit " ~ p.label) if p else "New property" }} · {{ customer.name }}{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Customer file", ("Edit property — " if p else "New property — ") ~ customer.name) }}
-<form method="post" class="space-y-3">
-  <label class="block"><span class="field-label">Label</span>
-    <input name="label" value="{{ p.label if p else 'Home' }}" class="field"></label>
-  <label class="block"><span class="field-label">Street</span>
-    <input name="street" value="{{ p.street if p else '' }}" class="field"></label>
-  <label class="block"><span class="field-label">City</span>
-    <input name="city" value="{{ p.city if p else '' }}" class="field"></label>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">State</span>
-      <input name="state" value="{{ p.state if p else '' }}" class="field"></label>
-    <label class="block"><span class="field-label">Zip</span>
-      <input name="zip" value="{{ p.zip if p else '' }}" class="field font-data"></label>
+{% import "_form.html" as f %}
+{% set freq_labels = {"weekly": "Weekly", "biweekly": "Every 2 weeks", "every4weeks": "Every 4 weeks", "none": "No regular service"} %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/customers">Customers</a><span aria-hidden="true">›</span><a href="/customers/{{ customer.id }}#pool">{{ customer.name }}</a><span aria-hidden="true">›</span><span>{{ p.label if p else "New property" }}</span></p>
+    <h1 class="h1">{{ "Edit property" if p else "New property" }}</h1>
+    <p class="lede">{{ customer.name }}</p>
   </div>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">Gate code</span>
-      <input name="gate_code" value="{{ p.gate_code if p else '' }}" class="field font-data"></label>
-    <label class="block"><span class="field-label">Dog note</span>
-      <input name="dog_note" value="{{ p.dog_note if p else '' }}" class="field"></label>
-  </div>
-  <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="dog_warning"
-         {{ "checked" if p and p.dog_warning }} class="h-5 w-5 rounded border-seam text-pool"> Dog on property</label>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">Frequency</span>
-      <select name="frequency" class="field">
-        {% for f in ["weekly","biweekly","every4weeks","none"] %}
-        <option value="{{ f }}" {{ "selected" if p and p.frequency == f }}>{{ f }}</option>
+</header>
+
+<form method="post" class="formwrap stack">
+  {% call f.group("Address", "Where the pool is. Used for routes, maps and sales tax.") %}
+    {% call f.row("Label", "Home, Beach house, Clubhouse…", "p-label") %}<input id="p-label" name="label" value="{{ p.label if p else 'Home' }}" class="inp">{% endcall %}
+    {% call f.row("Street", "", "p-street") %}<input id="p-street" name="street" value="{{ p.street if p else '' }}" class="inp" autocomplete="address-line1">{% endcall %}
+    {% call f.row("City", "", "p-city") %}<input id="p-city" name="city" value="{{ p.city if p else '' }}" class="inp" autocomplete="address-level2">{% endcall %}
+    {% call f.row("State and zip") %}<div class="fgrid"><div><label class="sr" for="p-state">State</label><input id="p-state" name="state" value="{{ p.state if p else '' }}" class="inp" placeholder="State" autocomplete="address-level1"></div><div><label class="sr" for="p-zip">Zip</label><input id="p-zip" name="zip" value="{{ p.zip if p else '' }}" class="inp num" placeholder="Zip" autocomplete="postal-code"></div></div>{% endcall %}
+  {% endcall %}
+
+  {% call f.group("On arrival", "What the technician needs at the gate.") %}
+    {% call f.row("Gate code", "Shown on the visit behind a tap, and on the printed route sheet.", "p-gate") %}<input id="p-gate" name="gate_code" value="{{ p.gate_code if p else '' }}" class="inp num">{% endcall %}
+    {% call f.row("Dog", "Flagged on Today, the visit and the route sheet.") %}
+      {{ f.switch("dog_warning", "Dog on property", p and p.dog_warning) }}
+      <label class="sr" for="p-dog">Dog note</label><input id="p-dog" name="dog_note" value="{{ p.dog_note if p else '' }}" class="inp" placeholder="Friendly, keep the side gate shut">
+    {% endcall %}
+    {% call f.row("Notes", "Shown to the technician on Today and the visit.", "p-notes") %}<textarea id="p-notes" name="notes" class="inp">{{ p.notes if p else "" }}</textarea>{% endcall %}
+  {% endcall %}
+
+  {% call f.group("Service", "How often, on which day, and by whom.") %}
+    {% call f.row("Frequency and day") %}
+      <div class="fgrid">
+        <div><label class="sr" for="p-freq">Frequency</label><select id="p-freq" name="frequency" class="inp">
+          {% for fq in ["weekly","biweekly","every4weeks","none"] %}<option value="{{ fq }}" {{ "selected" if p and p.frequency == fq }}>{{ freq_labels[fq] }}</option>{% endfor %}
+        </select></div>
+        <div><label class="sr" for="p-day">Day</label><select id="p-day" name="weekday" class="inp">
+          {% for i, dname in [(0,"Monday"),(1,"Tuesday"),(2,"Wednesday"),(3,"Thursday"),(4,"Friday"),(5,"Saturday"),(6,"Sunday")] %}<option value="{{ i }}" {{ "selected" if p and p.weekday == i }}>{{ dname }}</option>{% endfor %}
+        </select></div>
+      </div>
+    {% endcall %}
+    {% call f.row("First visit", "Every-2 and every-4 week schedules count from this date.", "p-anchor") %}<input id="p-anchor" type="date" name="anchor_date" value="{{ p.anchor_date or '' if p else '' }}" class="inp num" style="max-width:220px">{% endcall %}
+    {% call f.row("Assigned to", "Owners can hold a route too." if not p else "", "p-tech") %}
+      <select id="p-tech" name="assigned_tech_id" class="inp">
+        <option value="">— Unassigned —</option>
+        {% for t in techs %}
+        <option value="{{ t.id }}" {{ "selected" if (p and p.assigned_tech_id == t.id) or (not p and suggested_tech == t.id) }}>{{ t.name }} ({{ "owner" if t.role == "admin" else "technician" }})</option>
         {% endfor %}
-      </select></label>
-    <label class="block"><span class="field-label">Day</span>
-      <select name="weekday" class="field">
-        {% for i, d in [(0,"Mon"),(1,"Tue"),(2,"Wed"),(3,"Thu"),(4,"Fri"),(5,"Sat"),(6,"Sun")] %}
-        <option value="{{ i }}" {{ "selected" if p and p.weekday == i }}>{{ d }}</option>
-        {% endfor %}
-      </select></label>
-  </div>
-  <label class="block"><span class="field-label">Assigned tech</span>
-    <select name="assigned_tech_id" class="field">
-      <option value="">— Unassigned —</option>
-      {% for t in techs %}
-      <option value="{{ t.id }}" {{ "selected" if (p and p.assigned_tech_id == t.id)
-        or (not p and suggested_tech == t.id) }}>{{ t.name }} ({{ t.role }})</option>
-      {% endfor %}
-    </select></label>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="block"><span class="field-label">Anchor date (first visit)</span>
-      <input type="date" name="anchor_date" value="{{ p.anchor_date or '' if p else '' }}" class="field font-data"></label>
+      </select>
+    {% endcall %}
     {% if show_money %}
-    <label class="block"><span class="field-label">Rate override $ (blank = tier)</span>
-      <input inputmode="decimal" name="rate_override_dollars"
-             value="{{ '%.2f'|format(p.rate_override_cents / 100) if p and p.rate_override_cents is not none else '' }}"
-             class="field font-data"></label>
-    <label class="block"><span class="field-label">Spa rate override $</span>
-      <input inputmode="decimal" name="spa_rate_override_dollars"
-             value="{{ '%.2f'|format(p.spa_rate_override_cents / 100) if p and p.spa_rate_override_cents is not none else '' }}"
-             class="field font-data"></label>
+    {% call f.row("Rate overrides", "Leave blank to use the pricing tiers in Admin › Pricing.") %}
+      <div class="fgrid">
+        <div><label class="lbl" for="p-rate">Pool $ a visit</label><div class="unitw"><span class="pre">$</span><input id="p-rate" inputmode="decimal" name="rate_override_dollars" value="{{ '%.2f'|format(p.rate_override_cents / 100) if p and p.rate_override_cents is not none else '' }}" class="inp num"></div></div>
+        <div><label class="lbl" for="p-srate">Spa $ a visit</label><div class="unitw"><span class="pre">$</span><input id="p-srate" inputmode="decimal" name="spa_rate_override_dollars" value="{{ '%.2f'|format(p.spa_rate_override_cents / 100) if p and p.spa_rate_override_cents is not none else '' }}" class="inp num"></div></div>
+      </div>
+    {% endcall %}
     {% endif %}
-  </div>
-  <label class="block"><span class="field-label">Notes</span>
-    <textarea name="notes" class="field min-h-24 py-2">{{ p.notes if p else "" }}</textarea></label>
-  <button class="btn-primary">Save</button>
+  {% endcall %}
+  {{ f.savebar("Save property" if p else "Create property", cancel="/customers/%d#pool"|format(customer.id)) }}
 </form>
 
 {% if p %}
-<form method="post" action="/properties/{{ p.id }}/deactivate" class="mt-3">
-  <button class="btn-danger">Deactivate property</button>
-</form>
+<div class="formwrap stack" style="margin-top:var(--gap)">
+  {% call f.group("Seasonal holds", "Pause service for a stretch: snowbirds, renovations, a pool that is closed for winter.") %}
+    <div class="sx-r wide"><div class="sx-c" style="width:100%">
+      <ul class="rows" style="width:100%">
+        {% for h in holds %}
+        <li><div><span class="strong num">{{ h.start_date | short_date }} → {{ h.resume_date | short_date if h.resume_date else "indefinite" }}</span>{% if h.reason %}<small>{{ h.reason }}</small>{% endif %}</div>
+          {% if h.resume_date is none or today < h.resume_date %}<form method="post" action="/properties/{{ p.id }}/holds/{{ h.id }}/end"><button class="btn sm">End now</button></form>{% else %}<span class="pill p-neu">Ended</span>{% endif %}</li>
+        {% else %}<li><div class="muted">No holds on record.</div></li>{% endfor %}
+      </ul>
+      {% if hold_error %}<p class="err" role="alert">{{ hold_error }}</p>{% endif %}
+      <form method="post" action="/properties/{{ p.id }}/holds/new" class="row" style="margin-top:12px;align-items:flex-end">
+        <div><label class="lbl" for="h-start">Start</label><input id="h-start" type="date" name="start_date" value="{{ hold_start or today }}" class="inp num"></div>
+        <div><label class="lbl" for="h-resume">Resume (blank = indefinite)</label><input id="h-resume" type="date" name="resume_date" value="{{ hold_resume or '' }}" class="inp num"></div>
+        <div style="flex:1;min-width:180px"><label class="lbl" for="h-reason">Reason</label><input id="h-reason" name="reason" value="{{ hold_reason or '' }}" class="inp"></div>
+        <button class="btn">Add hold</button>
+      </form>
+    </div></div>
+  {% endcall %}
 
-<h2 class="mb-2 mt-6 font-display text-lg font-bold uppercase tracking-wide">Seasonal holds</h2>
-<div class="mb-3 space-y-2">
-  {% for h in holds %}
-  <div class="card p-3 text-sm">
-    <div class="flex items-center justify-between gap-2">
-      <span class="font-data">{{ h.start_date }} → {{ h.resume_date or "indefinite" }}</span>
-      {% if h.resume_date is none or today < h.resume_date %}
-      <form method="post" action="/properties/{{ p.id }}/holds/{{ h.id }}/end">
-        <button class="btn-secondary">End now</button>
+  {% call f.group("Checklist for this property", "When present, these replace the company visit checklist for this property only.") %}
+    <div class="sx-r wide"><div class="sx-c" style="width:100%">
+      <ul style="width:100%">
+        {% for t in tasks %}
+        <li class="minirow"><span>{{ t.label }}</span>
+          <span class="row" style="gap:4px">
+            <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move"><input type="hidden" name="direction" value="up"><button class="icbtn" aria-label="Move up">{{ ui.icon("chevU") }}</button></form>
+            <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move"><input type="hidden" name="direction" value="down"><button class="icbtn" aria-label="Move down">{{ ui.icon("chevD") }}</button></form>
+            <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/deactivate"><button class="btn sm danger">Remove</button></form>
+          </span></li>
+        {% else %}<li class="muted">Using the company checklist.</li>{% endfor %}
+      </ul>
+      <form method="post" action="/properties/{{ p.id }}/tasks/new" class="row" style="margin-top:10px;flex-wrap:nowrap;width:100%;max-width:480px">
+        <label class="sr" for="t-new">New checklist item</label><input id="t-new" name="label" placeholder="New checklist item" class="inp"><button class="btn">Add</button>
       </form>
-      {% endif %}
-    </div>
-    {% if h.reason %}<div class="mt-1 text-mist">{{ h.reason }}</div>{% endif %}
-  </div>
-  {% else %}<p class="text-sm text-mist">No holds on record.</p>{% endfor %}
-</div>
-{% if hold_error %}<p class="mb-2 text-sm text-safety">{{ hold_error }}</p>{% endif %}
-<form method="post" action="/properties/{{ p.id }}/holds/new" class="card mb-6 space-y-2 p-3">
-  <div class="grid grid-cols-2 gap-2">
-    <label class="block"><span class="field-label">Start</span>
-      <input type="date" name="start_date" value="{{ hold_start or today }}" class="field font-data"></label>
-    <label class="block"><span class="field-label">Resume (blank = indefinite)</span>
-      <input type="date" name="resume_date" value="{{ hold_resume or '' }}" class="field font-data"></label>
-  </div>
-  <label class="block"><span class="field-label">Reason</span>
-    <input name="reason" value="{{ hold_reason or '' }}" class="field"></label>
-  <button class="btn-secondary w-full">Add hold</button>
-</form>
+    </div></div>
+  {% endcall %}
 
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Checklist overrides</h2>
-<p class="mb-2 text-xs text-mist">When present, these replace the global visit task list for this property.</p>
-<div class="mb-3 space-y-1">
-  {% for t in tasks %}
-  <div class="card flex items-center justify-between gap-2 p-2.5 text-sm">
-    <span>{{ t.label }}</span>
-    <div class="flex items-center gap-1">
-      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move">
-        <input type="hidden" name="direction" value="up">
-        <button class="btn-secondary px-2" aria-label="Move up">↑</button>
+  {% call f.group("Maintenance rules", "Recurring work that opens a service job by itself: filter cleans, salt cell checks, acid washes.") %}
+    {% for r in rules %}
+    <div class="sx-r wide {{ 'is-off' if not r.active }}"><div class="sx-c" style="width:100%">
+      <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/edit" class="rule-form">
+        <div class="fgrid" style="max-width:none">
+          <div><label class="lbl" for="r{{ r.id }}-t">Title</label><input id="r{{ r.id }}-t" name="title" value="{{ r.title }}" required class="inp"></div>
+          <div><label class="lbl" for="r{{ r.id }}-k">Kind</label><select id="r{{ r.id }}-k" name="job_type" class="inp"><option value="service" {{ "selected" if r.job_type == "service" }}>Service</option><option value="repair" {{ "selected" if r.job_type == "repair" }}>Repair</option></select></div>
+          <div><label class="lbl" for="r{{ r.id }}-n">Next due</label><input id="r{{ r.id }}-n" type="date" name="next_due" value="{{ r.next_due }}" class="inp num"></div>
+          <div class="fgrid"><div><label class="lbl" for="r{{ r.id }}-i">Every (weeks)</label><input id="r{{ r.id }}-i" inputmode="numeric" name="interval_weeks" value="{{ r.interval_weeks }}" class="inp num"></div><div><label class="lbl" for="r{{ r.id }}-l">Lead days</label><input id="r{{ r.id }}-l" inputmode="numeric" name="lead_days" value="{{ r.lead_days }}" class="inp num"></div></div>
+        </div>
+        <label class="lbl" for="r{{ r.id }}-d" style="margin-top:10px">Description</label><textarea id="r{{ r.id }}-d" name="description" class="inp" style="height:70px">{{ r.description }}</textarea>
+        <div class="row" style="margin-top:10px"><button class="btn sm">Save rule</button>{% if not r.active %}<span class="pill p-neu">Inactive</span>{% endif %}</div>
       </form>
-      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/move">
-        <input type="hidden" name="direction" value="down">
-        <button class="btn-secondary px-2" aria-label="Move down">↓</button>
+      {% if r.active %}<form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/deactivate" style="margin-top:6px"><button class="btn sm danger">Deactivate rule</button></form>{% endif %}
+    </div></div>
+    {% else %}
+    <div class="sx-r wide"><p class="muted">No maintenance rules yet.</p></div>
+    {% endfor %}
+    <div class="sx-r wide"><div class="sx-c" style="width:100%">
+      <form method="post" action="/properties/{{ p.id }}/rules/new" class="rule-form">
+        <h3 class="strong">Add a rule</h3>
+        <div class="fgrid" style="max-width:none;margin-top:8px">
+          <div><label class="lbl" for="rn-t">Title</label><input id="rn-t" name="title" placeholder="Clean cartridge filter" required class="inp"></div>
+          <div><label class="lbl" for="rn-k">Kind</label><select id="rn-k" name="job_type" class="inp"><option value="service">Service</option><option value="repair">Repair</option></select></div>
+          <div><label class="lbl" for="rn-n">First due</label><input id="rn-n" type="date" name="next_due" class="inp num"></div>
+          <div class="fgrid"><div><label class="lbl" for="rn-i">Every (weeks)</label><input id="rn-i" inputmode="numeric" name="interval_weeks" placeholder="4" class="inp num"></div><div><label class="lbl" for="rn-l">Lead days</label><input id="rn-l" inputmode="numeric" name="lead_days" placeholder="7" class="inp num"></div></div>
+        </div>
+        <label class="lbl" for="rn-d" style="margin-top:10px">Description</label><textarea id="rn-d" name="description" placeholder="What to do" class="inp" style="height:70px"></textarea>
+        <div class="row" style="margin-top:10px"><button class="btn">Add rule</button></div>
       </form>
-      <form method="post" action="/properties/{{ p.id }}/tasks/{{ t.id }}/deactivate">
-        <button class="btn-danger px-2">Remove</button>
-      </form>
-    </div>
-  </div>
-  {% else %}<p class="text-sm text-mist">Using the global task list.</p>{% endfor %}
-</div>
-<form method="post" action="/properties/{{ p.id }}/tasks/new" class="mb-6 flex gap-2">
-  <input name="label" placeholder="New checklist item" class="field flex-1">
-  <button class="btn-secondary">Add</button>
-</form>
+    </div></div>
+  {% endcall %}
 
-<h2 class="mb-2 font-display text-lg font-bold uppercase tracking-wide">Maintenance rules</h2>
-<div class="mb-3 space-y-2">
-  {% for r in rules %}
-  <div class="{{ 'opacity-50' if not r.active }}">
-    <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/edit" class="card space-y-2 p-3 text-sm">
-      <input name="title" value="{{ r.title }}" required class="field">
-      <textarea name="description" class="field min-h-16 py-2">{{ r.description }}</textarea>
-      <div class="grid grid-cols-2 gap-2">
-        <select name="job_type" class="field">
-          <option value="service" {{ "selected" if r.job_type == "service" }}>service</option>
-          <option value="repair" {{ "selected" if r.job_type == "repair" }}>repair</option>
-        </select>
-        <input type="date" name="next_due" value="{{ r.next_due }}" class="field font-data">
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <label class="block"><span class="field-label">Interval (weeks)</span>
-          <input inputmode="numeric" name="interval_weeks" value="{{ r.interval_weeks }}" class="field font-data"></label>
-        <label class="block"><span class="field-label">Lead days</span>
-          <input inputmode="numeric" name="lead_days" value="{{ r.lead_days }}" class="field font-data"></label>
-      </div>
-      <button class="btn-secondary w-full">Save rule</button>
-    </form>
-    {% if r.active %}
-    <form method="post" action="/properties/{{ p.id }}/rules/{{ r.id }}/deactivate" class="mt-1">
-      <button class="btn-danger w-full">Deactivate rule</button>
-    </form>
-    {% endif %}
-  </div>
-  {% else %}<p class="text-sm text-mist">No maintenance rules yet.</p>{% endfor %}
+  <form method="post" action="/properties/{{ p.id }}/deactivate" class="danger-zone" data-confirm="Deactivate {{ p.label }}? It drops off routes; you can reactivate it later.">
+    <div><b>Deactivate property</b><p class="muted small">Takes it off every route. Visit history is kept.</p></div>
+    <button class="btn danger">Deactivate property</button>
+  </form>
 </div>
-<form method="post" action="/properties/{{ p.id }}/rules/new" class="card mb-3 space-y-2 p-3">
-  <h3 class="text-sm font-semibold">Add rule</h3>
-  <input name="title" placeholder="Title" required class="field">
-  <textarea name="description" placeholder="Description" class="field min-h-16 py-2"></textarea>
-  <div class="grid grid-cols-2 gap-2">
-    <select name="job_type" class="field">
-      <option value="service">service</option>
-      <option value="repair">repair</option>
-    </select>
-    <input type="date" name="next_due" class="field font-data">
-  </div>
-  <div class="grid grid-cols-2 gap-2">
-    <label class="block"><span class="field-label">Interval (weeks)</span>
-      <input inputmode="numeric" name="interval_weeks" placeholder="4" class="field font-data"></label>
-    <label class="block"><span class="field-label">Lead days</span>
-      <input inputmode="numeric" name="lead_days" placeholder="7" class="field font-data"></label>
-  </div>
-  <button class="btn-secondary w-full">Add rule</button>
-</form>
 {% endif %}
 {% endblock %}
