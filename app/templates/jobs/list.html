@@ -1,35 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Jobs{% endblock %}
+{% block title %}Service jobs{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<div class="flex items-start justify-between gap-2">
-  {{ ui.page_header("Job tickets", "Service / Jobs") }}
-  <a href="/jobs/new" class="btn-secondary mt-2 shrink-0 gap-1.5">{{ ui.icon("plus", "h-4 w-4") }}Add</a>
-</div>
-<div class="mb-4 grid grid-cols-3 gap-2">
-  {% for st in ["open","scheduled","done"] %}
-  <a href="/jobs?status={{ st }}"
-     class="flex min-h-11 items-center justify-center rounded-xl font-display text-sm font-bold uppercase tracking-wide {{ 'bg-pool text-white' if st == status else 'border border-seam bg-white text-ink' }}">{{ st }}</a>
-  {% endfor %}
-</div>
-<div class="rise space-y-2">
-  {% for j in jobs %}
-  <a href="/jobs/{{ j.id }}" class="card block p-3.5">
-    <div class="flex items-center justify-between gap-2">
-      <span class="font-semibold">{% if j.priority == "high" %}<span class="tag tag-safety mr-1 align-middle">High</span>{% endif %}{{ j.title }}</span>
-      {% if show_money %}<span class="money">{{ j.labor_cents | dollars }}</span>{% endif %}
-    </div>
-    <div class="mt-0.5 text-sm text-mist">{{ j.property.customer.name }} — {{ j.property.label }}
-      {% if j.scheduled_date %} · <span>{{ j.scheduled_date | short_date }}</span>{% endif %}</div>
-  </a>
-  {% else %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">No {{ status }} jobs</p>
-    <p class="mt-1 text-sm text-mist">Jobs you add will show up here.</p>
+{% set labels = {"open": "Open", "scheduled": "Scheduled", "done": "Done"} %}
+<header class="ph">
+  <div>
+    <h1 class="h1">Service jobs</h1>
+    <p class="lede">Repairs and one-off work, separate from weekly service. {{ counts.get("open", 0) }} open, {{ counts.get("scheduled", 0) }} scheduled.</p>
   </div>
+  <div class="acts"><a href="/jobs/new" class="btn pri">{{ ui.icon("plus") }}New job</a></div>
+</header>
+<nav class="tabs" aria-label="Job status">
+  {% for st in ["open","scheduled","done"] %}
+  <a href="/jobs?status={{ st }}" class="tab {{ 'on' if st == status }}"{% if st == status %} aria-current="page"{% endif %}>{{ labels[st] }}<span class="muted num tabn">{{ counts.get(st, 0) }}</span></a>
   {% endfor %}
-</div>
+</nav>
+
 {% if jobs %}
+<div class="card" style="padding:4px 12px">
+  <div class="tblw"><table class="tbl jtbl">
+    <thead><tr><th>Job</th><th>Customer</th><th>Assigned</th><th>When</th>{% if show_money %}<th class="r">Price</th>{% endif %}<th></th></tr></thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td><a class="nm" href="/jobs/{{ j.id }}">{{ j.title }}</a><div class="muted small">#{{ j.id }} · {{ j.job_type | capitalize }}</div></td>
+        <td>{{ j.property.customer.name }}{% if j.property.label and j.property.label != "Home" %}<div class="muted small">{{ j.property.label }}</div>{% endif %}</td>
+        <td>{{ j.assigned_tech.name if j.assigned_tech else "—" }}</td>
+        <td>{% if j.status == "done" and j.completed_at %}{{ j.completed_at | local_date | short_date }}{% elif j.scheduled_date %}{{ j.scheduled_date | short_date }}{% if j.scheduled_date < today and j.status != "done" %} <span class="pill p-neg">Late</span>{% endif %}{% else %}<span class="muted">Not scheduled</span>{% endif %}</td>
+        {% if show_money %}<td class="r num">{{ j.labor_cents | dollars }}</td>{% endif %}
+        <td class="r">{% if j.priority == "high" %}<span class="pill p-neg">High</span>{% elif j.priority == "low" %}<span class="pill p-neu">Low</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
 {{ ui.pager(page, total_pages, total, "/jobs", "status=" ~ (status | urlencode)) }}
+{% else %}
+<div class="empty"><p class="strong" style="color:var(--t)">No {{ labels.get(status, status) | lower }} jobs</p><p>Jobs you add will show up here.</p></div>
 {% endif %}
 {% endblock %}

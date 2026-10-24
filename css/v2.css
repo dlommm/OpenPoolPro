@@ -1514,3 +1514,20 @@ a.pill{text-decoration:none}
 .result-list li:first-child{border-top:0}
 .result-list li.error{color:var(--negt)}
 .result-list li.skip{color:var(--m)}
+/* jobs list keeps job, when and priority on a phone */
+@media (max-width: 720px){ .jtbl thead{display:none} .jtbl td:nth-child(2),.jtbl td:nth-child(3){display:none} }
+.tabn{margin-left:6px}
+/* Job checklist (app) */
+.taskbtn{appearance:none;font:inherit;color:var(--t);width:100%;display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 4px;border:0;border-top:1px solid var(--rule);background:transparent;text-align:left;cursor:pointer}
+form:first-of-type>.taskbtn{border-top:0}
+.taskbtn i{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--ctl);display:grid;place-items:center;flex:none;transition:background-color 160ms ease}
+.taskbtn.on i{background:var(--a);box-shadow:none;color:#fff}
+.taskbtn.on i .ic{width:14px;height:14px;stroke-width:2.6}
+.taskbtn.on span{color:var(--m);text-decoration:line-through;text-decoration-color:var(--ctl)}
+/* Legacy-markup bridge: headings and spacing written for the old themes
+   (uppercase display headings, Tailwind card padding) read in the V2 voice. */
+h1.font-display,h2.font-display,h3.font-display{text-transform:none;letter-spacing:-.01em;font-family:var(--ff)}
+h2.font-display{font-size:16px;font-weight:600}
+h3.font-display{font-size:15px;font-weight:600}
+.font-display.uppercase{text-transform:none}
+.tracking-wide.uppercase,.tracking-wider.uppercase{letter-spacing:normal}
