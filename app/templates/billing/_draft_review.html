@@ -1,0 +1,123 @@
+{#- One draft's review: charges, exceptions and every action the draft
+    supports. Rendered three ways from the same markup:
+      * the full page (/billing/drafts/{id}), pane=false
+      * the right-hand pane of the billing list on desktop, pane=true, either
+        server-rendered (/billing?ym=..&draft=ID) or swapped in by HTMX
+        (/billing/drafts/{id}/pane).
+    In the pane every form carries back=list so the redirect after an action
+    lands on the list with this draft still selected. -#}
+{% import '_ui.html' as ui %}
+{% set ymd = '%04d-%02d'|format(draft.period_year, draft.period_month) %}
+{# Prepared → Approved → Invoice created → Totals checked → Emailed. #}
+{% set order = {"draft": 1, "held": 1, "ready": 2, "approved": 2, "creating": 2, "create_unknown": 3, "mismatch": 4, "sending": 4, "delivery_unknown": 5, "sent": 5, "done": 6} %}
+{% set reached = order.get(draft.status, 1) %}
+{% set bad = draft.status in ("mismatch", "delivery_unknown", "create_unknown") %}
+{% set status_pill = ui.pill(draft.status | replace('_', ' ') | capitalize, "neg" if bad else ("warn" if draft.status == "held" else ("pos" if draft.status in ("sent", "done") else "acc"))) %}
+{% macro back_field() %}{% if pane %}<input type="hidden" name="back" value="list">{% endif %}{% endmacro %}
+<div class="qbr" data-draft="{{ draft.id }}">
+{% if pane %}
+<div class="qb-dh">
+  {{ ui.av(draft.customer.name, "qb-av") }}
+  <div class="qbr-who"><h2 class="h2" id="qb-pane-t">{{ draft.customer.name }}</h2>
+    <p class="muted small">{{ ymd | month_name }} · revision {{ draft.revision }} · {{ draft.email or 'Missing billing email' }}</p></div>
+  <div class="qbr-st">{{ status_pill }}<b class="num">{{ draft.total_cents | dollars }}</b></div>
+</div>
+<p class="qbr-full"><a class="btn ghost sm" href="/billing/drafts/{{ draft.id }}">{{ ui.icon("ext") }}Open as a page</a></p>
+{% else %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/billing?ym={{ ymd }}">QuickBooks billing</a><span aria-hidden="true">›</span><span>{{ ymd | month_name }}</span></p>
+    <h1 class="h1">{{ draft.customer.name }}</h1>
+    <p class="lede">{{ ymd | month_name }} · revision {{ draft.revision }}</p>
+  </div>
+  <div class="acts">{{ status_pill }}<span class="big num qbr-total">{{ draft.total_cents | dollars }}</span></div>
+</header>
+{% endif %}
+<ol class="qb-steps{{ '' if pane else ' card qbr-steps' }}" aria-label="Progress">
+  {% for label in ["Prepared", "Approved", "Invoice created", "Totals checked", "Emailed"] %}
+  {% set n = loop.index %}
+  <li class="{{ 'done' if reached > n else ('bad' if bad and reached == n else ('busy' if reached == n else '')) }}"{% if reached == n %} aria-current="step"{% endif %}><span class="qb-sd">{{ "✓" if reached > n else n }}</span><span>{{ label }}</span></li>
+  {% endfor %}
+</ol>
+{% if not pane and request.query_params.get('message') %}<p role="status" class="flash">{{ request.query_params.get('message') }}</p>{% endif %}
+{% if draft.last_error %}<p role="alert" class="flash neg">{{ draft.last_error }}</p>{% endif %}
+{% if not enabled or not connected %}<p class="flash warn">Drafts can be prepared and reviewed. Connect and enable QuickBooks billing before approval.</p>{% endif %}
+{% if not service_item or not chemical_item %}<p class="flash warn">Check service and chemical item mappings in Settings before approving billable lines.</p>{% endif %}
+
+<form method="post" action="/billing/drafts/{{ draft.id }}/edit" class="{{ 'qbr-form' if pane else 'card qbr-form' }}">
+  <input type="hidden" name="revision" value="{{ draft.revision }}">{{ back_field() }}
+  <div class="fgrid">
+    <div><label class="lbl" for="email">Customer invoice email</label><input class="inp" id="email" type="email" name="email" value="{{ draft.email }}" required {{ 'readonly' if not editable }}></div>
+    <div><label class="lbl" for="due_date">Payment due date</label><input class="inp" id="due_date" type="date" name="due_date" value="{{ draft.due_date }}" required {{ 'readonly' if not editable }}></div>
+  </div>
+  {% for line in draft.lines %}{% if line.amount_cents == 0 %}
+  <div class="note warn">{{ ui.icon("alert", "ic18") }}<span>Charge {{ loop.index }} has a zero price. Confirm this work should not be billed before approval.</span></div>
+  {% endif %}{% endfor %}
+  <div class="tblw qbr-lines">
+    <table class="tbl qb-lines">
+      <thead><tr><th scope="col">Date</th><th scope="col">Charge</th><th scope="col" class="r">Qty</th><th scope="col" class="r">Amount ($)</th></tr></thead>
+      <tbody>
+      {% for line in draft.lines %}
+      <tr class="{{ 'zero' if line.amount_cents == 0 }}">
+        <td class="num muted qbr-date">{{ line.service_date | short_date if line.service_date else '—' }}</td>
+        <td><label class="sr" for="description_{{ loop.index0 }}">Charge {{ loop.index }}</label>
+          <input class="inp" id="description_{{ loop.index0 }}" name="description_{{ loop.index0 }}" value="{{ line.description }}" required {{ 'readonly' if not editable }}>
+          <span class="qb-meta">{{ ui.pill(line.item_kind | title, "neu") }}{{ 'Taxable' if line.taxable else 'Non-taxable' }}</span></td>
+        <td class="r num">{% if line.quantity %}{{ line.quantity }} {{ line.unit or '' }}{% else %}—{% endif %}</td>
+        <td class="r"><label class="sr" for="amount_{{ loop.index0 }}">Charge {{ loop.index }} amount ($)</label>
+          <input class="inp amt" id="amount_{{ loop.index0 }}" name="amount_{{ loop.index0 }}" inputmode="decimal" value="{{ '%.2f'|format(line.amount_cents / 100) }}" required {{ 'readonly' if not editable }}></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if will_create_items %}
+  <div class="note">{{ ui.icon("plus", "ic18") }}<div><b>Approving will add these to QuickBooks ({{ will_create_items|length }})</b>
+    <p class="small">New items only — nothing existing is changed. An item already in QuickBooks under the same name is used instead of a second one being made.</p>
+    <ul class="qbr-items">{% for key, name in will_create_items %}<li>{{ name }}</li>{% endfor %}</ul></div></div>
+  {% endif %}
+  <div class="qb-tot">
+    <div><span>Subtotal</span><b class="num">{{ (draft.total_cents - draft.tax_cents) | dollars }}</b></div>
+    <div><span>Estimated tax</span><b class="num">{{ draft.tax_cents | dollars }}</b></div>
+    <div class="big"><span>Total to approve</span><b class="num">{{ draft.total_cents | dollars }}</b></div>
+    <p class="muted small">Save edits to recalculate this total. QuickBooks tax and totals are checked before email delivery; differences require another approval.</p>
+  </div>
+  {% if editable %}
+  <div class="qb-foot">
+    <label class="chk"><input type="checkbox" name="hold" {{ 'checked' if draft.status == 'held' }}><span>Hold this customer's billing for review</span></label>
+    <span class="sp"></span>
+    <button class="btn">Save draft changes</button>
+  </div>
+  {% endif %}
+</form>
+
+<div class="qbr-acts">
+{% if editable %}<form method="post" action="/billing/drafts/{{ draft.id }}/discard" data-confirm="Discard this unsubmitted draft? You can prepare it again to include current work."><input type="hidden" name="revision" value="{{ draft.revision }}">{{ back_field() }}<button class="btn danger">Discard unsubmitted draft</button></form>{% endif %}
+{% if request.state.user.can('approve_billing') and draft.status == 'draft' %}
+<form method="post" action="/billing/drafts/{{ draft.id }}/approve" data-confirm="Approve the saved {{ draft.total_cents | dollars }} total and authorize QuickBooks to invoice and email {{ draft.email }}? Unsaved edits are not included."><input type="hidden" name="revision" value="{{ draft.revision }}">{{ back_field() }}<button class="btn pri" {{ 'disabled' if not enabled or not connected }}>Approve and send for invoicing · {{ draft.total_cents | dollars }}</button></form>
+{% elif request.state.user.can('approve_billing') and draft.status in ('approved','create_retry','create_error','ready') %}
+<form method="post" action="/billing/drafts/{{ draft.id }}/retry">{{ back_field() }}<button class="btn pri">Retry approved submission</button></form>
+{% endif %}
+</div>
+{% if draft.approved_at %}<p class="muted small qbr-appr">Approved {{ draft.approved_at | local_date }} by user {{ draft.approved_by_id }}. The approved snapshot is retained.</p>{% endif %}
+
+{% if request.state.user.can('approve_billing') %}
+{% if draft.status == 'mismatch' and mirror %}
+<div class="qb-state neg">
+  <b>QuickBooks total requires approval</b>
+  <p>Previously approved: <span class="num">{{ draft.total_cents | dollars }}</span> · QuickBooks: <span class="num">{{ mirror.total_cents | dollars }}</span></p>
+  <ul class="qbr-mirror">{% for line in mirror.raw.get('Line', []) %}<li>{{ line.get('Description', line.get('DetailType', 'Line')) }} · ${{ line.get('Amount', 0) }}</li>{% endfor %}</ul>
+  <p class="small">QuickBooks tax: ${{ mirror.raw.get("TxnTaxDetail", {}).get("TotalTax", 0) }} · Due {{ mirror.due_date }} · Currency {{ mirror.raw.get("CurrencyRef", {}).get("value", "USD") }} · Recipient {{ mirror.raw.get("BillEmail", {}).get("Address", draft.email) }}</p>
+  <p>Review the official PDF and revised tax before authorizing delivery.</p>
+  <div class="qbr-row">
+    <a class="btn" href="/billing/invoices/{{ mirror.id }}/pdf">Review official PDF</a>
+    <form method="post" action="/billing/drafts/{{ draft.id }}/approve-total" data-confirm="Approve the revised QuickBooks total of {{ mirror.total_cents | dollars }} and email the invoice?"><input type="hidden" name="revision" value="{{ draft.revision }}"><input type="hidden" name="review_hash" value="{{ review_hash }}">{{ back_field() }}<button class="btn pri">Approve revised total and send · {{ mirror.total_cents | dollars }}</button></form>
+  </div>
+</div>
+{% elif draft.status in ('create_unknown','recovering') %}
+<div class="qb-state neg"><b>Invoice creation is being reconciled</b><p>Invoice creation is being reconciled with QuickBooks. Another invoice will not be created while the outcome is uncertain.</p></div>
+{% elif draft.status == 'delivery_unknown' %}
+<div class="qb-state neg"><b>Delivery not confirmed</b><p>Delivery is uncertain. Sync to check QuickBooks before taking further action; automatic email retry is blocked to avoid duplicate delivery.</p></div>
+{% endif %}
+{% else %}<p class="muted small qbr-appr">An owner or billing approver must approve delivery.</p>{% endif %}
+</div>
