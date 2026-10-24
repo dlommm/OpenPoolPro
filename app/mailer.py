@@ -85,21 +85,29 @@ def smtp_configured(session=None) -> bool:
 
 
 def queue(session: Session, to_addr: str, subject: str, body: str,
-          customer_id: int | None = None) -> models.EmailOutbox:
-    """Add a pending outbox row (flushed so callers see row.id). Caller commits."""
+          customer_id: int | None = None, html: str = "") -> models.EmailOutbox:
+    """Add a pending outbox row (flushed so callers see row.id). Caller commits.
+
+    `html` is the optional branded alternative (app.email_brand); "" sends
+    plain text only. It is stored with the row, so what was approved or
+    queued is exactly what is delivered, however late the flush."""
     row = models.EmailOutbox(customer_id=customer_id, to_addr=to_addr,
-                             subject=subject, body=body)
+                             subject=subject, body=body, html=html or "")
     session.add(row)
     session.flush()
     return row
 
 
 def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None,
-                  attachments: list[tuple[bytes, str]] | None = None) -> None:
+                  attachments: list[tuple[bytes, str]] | None = None,
+                  html: str | None = None) -> None:
     """The only function that touches smtplib -- tests monkeypatch this.
     `conf` is a resolved SMTP config (from smtp_settings); None -> env/config.
     `attachments` is an optional list of (data, filename) pairs attached as
     application/pdf parts; None -> no behavior change for existing callers.
+    `html` adds a text/html alternative; the plain-text `body` is always the
+    first part. A `cid:opp-logo` image in it is attached as a related part
+    (or dropped if the logo has since been removed).
     Raises on failure; never logs or surfaces credentials."""
     conf = conf or _config_conf()
     msg = EmailMessage()
@@ -107,6 +115,14 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        from app import email_brand
+
+        html, logo = email_brand.embed_logo(html)
+        msg.add_alternative(html, subtype="html")
+        if logo:
+            msg.get_payload()[1].add_related(logo, maintype="image", subtype="png",
+                                             cid=f"<{email_brand.LOGO_CID}>")
     if attachments:
         for data, name in attachments:
             msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)
@@ -167,7 +183,10 @@ def _flush_outbox(session: Session, limit: int = 20) -> tuple[int, int]:
             session.commit()
             continue
         try:
-            send_message(row.to_addr, row.subject, row.body, conf)
+            if row.html:
+                send_message(row.to_addr, row.subject, row.body, conf, html=row.html)
+            else:
+                send_message(row.to_addr, row.subject, row.body, conf)
         except Exception as exc:
             row.attempts += 1
             row.last_error = str(exc)[:200]

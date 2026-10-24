@@ -38,7 +38,7 @@ def _sent_contract(client, engine, monkeypatch, link_expiry="168"):
 
     captured = {}
 
-    def fake_send_message(to_addr, subject, body, conf=None, attachments=None):
+    def fake_send_message(to_addr, subject, body, conf=None, attachments=None, html=None):
         captured["body"] = body
 
     monkeypatch.setattr(mailer, "send_message", fake_send_message)
@@ -116,7 +116,7 @@ def test_signing_emails_the_signed_copy(client, engine, monkeypatch):
     cid, token, _ = _sent_contract(client, engine, monkeypatch)
     calls = []
     monkeypatch.setattr(mailer, "send_message",
-                        lambda to, sub, body, conf=None, attachments=None:
+                        lambda to, sub, body, conf=None, attachments=None, html=None:
                         calls.append((to, sub, attachments)))
     client.cookies.clear()
     r = client.post(f"/sign/{token}", data={"signed_name": "Ada Rivera", "agree": "yes"})
@@ -173,7 +173,7 @@ def test_resend_invalidates_previous_link(client, engine, monkeypatch):
     cid, old_token, _ = _sent_contract(client, engine, monkeypatch)
     captured = {}
     monkeypatch.setattr(mailer, "send_message",
-                        lambda to, sub, body, conf=None, attachments=None:
+                        lambda to, sub, body, conf=None, attachments=None, html=None:
                         captured.__setitem__("body", body))
     client.post(f"/contracts/{cid}/send", data={"link_expiry": "24"},
                 follow_redirects=False)
@@ -289,7 +289,7 @@ def test_public_base_url_setting_wins_in_email_link(client, engine, monkeypatch)
 
     captured = {}
     monkeypatch.setattr(mailer, "send_message",
-                        lambda to, sub, body, conf=None, attachments=None:
+                        lambda to, sub, body, conf=None, attachments=None, html=None:
                         captured.__setitem__("body", body))
     client.post(f"/contracts/{cid}/send", follow_redirects=False)
     assert "https://pool.example.com/sign/" in captured["body"]

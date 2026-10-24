@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import contract_html, contract_pdf, mailer, models, sign_messages, tax
+from app import contract_html, contract_pdf, email_brand, mailer, models, sign_messages, tax
 from app.company import company_info
 from app.contract_files import pdf_path, signed_path
 from app.db import get_session
@@ -225,12 +225,14 @@ def sign_submit(request: Request, token: str, signed_name: str = Form(""),
     mctx = _msg_ctx(contract, prop, company, signer_name=name, signed_date=signed_date)
     try:
         if customer.email and mailer.smtp_configured(session):
+            mail = email_brand.signed_copy_mail(
+                subject=sign_messages.resolved(session, "signed_email_subject", mctx),
+                body=sign_messages.resolved(session, "signed_email_body", mctx))
             mailer.send_message(
-                customer.email,
-                sign_messages.resolved(session, "signed_email_subject", mctx),
-                sign_messages.resolved(session, "signed_email_body", mctx),
+                customer.email, mail.subject, mail.text,
                 conf=mailer.send_conf(session),
-                attachments=[(signed_bytes, "signed-contract.pdf")])
+                attachments=[(signed_bytes, "signed-contract.pdf")],
+                html=email_brand.html_for(session, mail))
             emailed = True
     except Exception:
         pass

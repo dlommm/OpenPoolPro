@@ -169,7 +169,7 @@ def test_send_emails_pdf_attachment_and_flips_to_sent(client, engine, monkeypatc
 
     captured = {}
 
-    def fake_send_message(to_addr, subject, body, conf=None, attachments=None):
+    def fake_send_message(to_addr, subject, body, conf=None, attachments=None, html=None):
         captured["to_addr"] = to_addr
         captured["subject"] = subject
         captured["attachments"] = attachments

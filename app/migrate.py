@@ -219,6 +219,7 @@ COLUMNS = {
         ("sign_viewed_at", "DATETIME"),
         ("signed_pdf_hash", "VARCHAR(64) DEFAULT ''"),
     ],
+    "email_outbox": [("html", "TEXT DEFAULT ''")],
 }
 
 

@@ -712,6 +712,8 @@ class EmailOutbox(Base):
     to_addr: Mapped[str] = mapped_column(String(120))
     subject: Mapped[str] = mapped_column(String(200))
     body: Mapped[str] = mapped_column(Text)
+    # Branded HTML alternative ("" = plain text only); see app.email_brand.
+    html: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(8), default="pending")  # pending|sent|failed
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str] = mapped_column(Text, default="")

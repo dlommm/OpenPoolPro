@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app import contract_pdf, mailer, models, rates, sign_messages, tax
+from app import contract_pdf, email_brand, mailer, models, rates, sign_messages, tax
 from app.company import company_info
 from app.contract_files import pdf_path as _pdf_path
 from app.contract_files import signed_path as _signed_path
@@ -480,9 +480,11 @@ def send_contract(request: Request, cid: int, link_expiry: str = Form(""),
     }
     subject = sign_messages.resolved(session, "sign_email_subject", mctx)
     body = sign_messages.resolved(session, "sign_email_body", mctx)
+    mail = email_brand.sign_request_mail(subject=subject, body=body, sign_url=sign_url)
     try:
         mailer.send_message(customer.email, subject, body, conf=mailer.send_conf(session),
-                             attachments=[(pdf_bytes, "contract.pdf")])
+                             attachments=[(pdf_bytes, "contract.pdf")],
+                             html=email_brand.html_for(session, mail))
     except Exception:
         # The freshly minted token was never committed — the session rollback
         # discards it, so a failed send leaves no live link behind.

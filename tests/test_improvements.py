@@ -192,7 +192,7 @@ def test_followups_preview_approval_duplicate_and_delivery(client, engine, monke
     assert client.post('/followups/approve', data={'snapshot': fingerprint}).status_code == 409
     monkeypatch.setattr(mailer, 'smtp_configured', lambda s: True)
     monkeypatch.setattr(mailer, 'send_conf', lambda s: {})
-    sent = []; monkeypatch.setattr(mailer, 'send_message', lambda *args: sent.append(args))
+    sent = []; monkeypatch.setattr(mailer, 'send_message', lambda *args, **kw: sent.append(args))
     with Session(engine) as s:
         assert mailer.flush_outbox(s) == (1, 0)
         assert s.scalars(select(models.InvoiceFollowup)).one().invoice_id == iid

@@ -1,1 +1,23 @@
 /* V2 emails styles. Kept in their own file so parallel work on other screens never edits the same lines. */
+
+/* Settings > System > "What customers see": options beside a live preview. */
+.clook-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start}
+@media (min-width:1024px){.clook-grid{grid-template-columns:minmax(260px,360px) minmax(0,1fr)}}
+.clook-opts{display:flex;flex-direction:column;gap:4px;min-width:0}
+.clook-opts .chk .strong,.clook-opts .chk .help{display:block}
+.clook-opts .chk .help{margin-top:2px}
+.clook-opts .chk input{margin-top:3px;flex:none}
+.clook-opts textarea.inp{height:auto;min-height:72px;padding:10px 12px;resize:vertical}
+.clook-opts .btn-secondary{margin-top:12px}
+.clook-fmt{border:0;margin:12px 0 8px;padding:0;min-width:0}
+.clook-fmt .seg{display:inline-flex}
+.clook-fmt .seg label{display:inline-flex;align-items:center;font-size:13px;color:var(--m);height:30px;padding:0 14px;border-radius:999px;cursor:pointer;transition:background-color 180ms ease,color 180ms ease}
+.clook-fmt .seg label.on,.clook-fmt .seg label:has(input:checked){background:var(--sheet);color:var(--t);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.1),0 4px 10px -6px rgba(0,0,0,.3)}
+.clook-fmt .seg label:has(input:focus-visible){outline:2px solid var(--a);outline-offset:2px}
+.clook-prev{display:flex;flex-direction:column;gap:12px;min-width:0}
+.clook-prev .seg{align-self:flex-start;flex-wrap:wrap}
+.clook-frame{display:block;width:100%;height:620px;border:1px solid var(--b);border-radius:12px;background:#F1EEE7}
+.clook-note{margin:0 0 12px;padding:8px 12px;border-radius:8px;font-size:13.5px;background:var(--as);color:var(--ai)}
+.clook-note.bad{background:var(--pnb);color:var(--pni)}
+@media (max-width:640px){.clook-frame{height:540px}}
+@media (prefers-reduced-motion:reduce){.clook-fmt .seg label{transition:none}}

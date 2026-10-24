@@ -4,7 +4,7 @@ import json
 
 from sqlalchemy import select
 
-from app import mailer, models, receivables
+from app import email_brand, mailer, models, receivables
 from app.timefmt import business_today, local_date
 
 DEFAULT_STAGES = (7, 14, 30)
@@ -19,15 +19,18 @@ def stages(session):
         return list(DEFAULT_STAGES)
 
 
-def message(session, invoice):
+def mail(session, invoice):
+    """The follow-up as an email_brand.Mail (plain text plus HTML pieces)."""
     company = models.get_setting(session, "business_name", "OpenPoolPro") or "OpenPoolPro"
-    subject = f"{company} — reminder for invoice {invoice.number}"
-    body = (f"Hello {invoice.customer.name},\n\n"
-            f"Our records show ${invoice.balance_cents / 100:,.2f} outstanding on invoice {invoice.number}, "
-            f"due {invoice.due_date.strftime('%B %-d, %Y') if invoice.due_date else 'on receipt'}.\n\n"
-            "If you have already paid, thank you — please reply with the payment details so we can update "
-            f"our records. For payment arrangements or questions, please reply to this email.\n\n{company}")
-    return subject, body
+    return email_brand.followup_mail(
+        company_name=company, customer_name=invoice.customer.name, number=invoice.number,
+        balance_cents=invoice.balance_cents, due=invoice.due_date,
+        signoff=email_brand.look(session)["signoff"])
+
+
+def message(session, invoice):
+    m = mail(session, invoice)
+    return m.subject, m.text
 
 
 def snapshot(invoice, stage, subject, body):
@@ -67,7 +70,9 @@ def approve(session, row, user_id):
             return False
         session.delete(old)
         session.flush()
-    outbox = mailer.queue(session, inv.customer.email, row["subject"], row["body"], inv.customer_id)
+    html = email_brand.html_for(session, mail(session, inv))
+    outbox = mailer.queue(session, inv.customer.email, row["subject"], row["body"], inv.customer_id,
+                          html=html)
     session.add(models.InvoiceFollowup(invoice_id=inv.id, stage=row["stage"],
         balance_cents=inv.balance_cents, due_date=inv.due_date, outbox_id=outbox.id, approved_by_id=user_id))
     return True
