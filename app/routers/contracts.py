@@ -30,6 +30,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import contract_pdf, mailer, models, rates, sign_messages, tax
 from app.company import company_info
+from app.contract_defaults import STALE_SENT_DAYS as _STALE_DEFAULT
+from app.contract_defaults import get_stale_days
 from app.contract_files import pdf_path as _pdf_path
 from app.contract_files import signed_path as _signed_path
 from app.db import get_or_404, get_session
@@ -45,9 +47,10 @@ router = APIRouter(dependencies=[Depends(require_perm("manage_customers"))])
 
 STATUSES = ("draft", "approved", "sent", "signed", "void")
 PAGE_SIZE = 50
-# A sent contract with no signature after this many days lands in the hub's
-# needs-attention digest.
-STALE_SENT_DAYS = 14
+# Default days before a sent, unsigned contract lands in the hub's
+# needs-attention digest; the live value is the admin setting read by
+# contract_defaults.get_stale_days.
+STALE_SENT_DAYS = _STALE_DEFAULT
 
 # E-sign link lifetimes offered on the send form: (label, hours).
 SIGN_EXPIRY_CHOICES = (
@@ -186,11 +189,12 @@ def contracts_page(request: Request, season: str = "", status: str = "",
 
     # Season-wide sweep for the digest and totals (a season is at most a few
     # hundred rows — one eager query beats four aggregate round-trips).
+    stale_days = get_stale_days(session)
     season_rows = session.scalars(
         select(C).where(C.season_year == season_year).options(_EAGER_CUSTOMER)).all()
     stale_sent = sorted(
         ({"c": c, "days": (now - c.sent_at).days} for c in season_rows
-         if c.status == "sent" and c.sent_at and (now - c.sent_at).days >= STALE_SENT_DAYS),
+         if c.status == "sent" and c.sent_at and (now - c.sent_at).days >= stale_days),
         key=lambda r: -r["days"])
     covered_pool_ids = {c.pool_id for c in season_rows if c.status != "void"}
     uncovered_q = (select(P).join(Pr, P.property_id == Pr.id)
@@ -212,7 +216,7 @@ def contracts_page(request: Request, season: str = "", status: str = "",
         "rows": rows, "counts": counts, "statuses": STATUSES,
         "season": season_year, "seasons": seasons, "status": status_filter,
         "q": q.strip(), "page": p, "total_pages": total_pages, "total": total,
-        "stale_sent": stale_sent, "stale_days": STALE_SENT_DAYS,
+        "stale_sent": stale_sent, "stale_days": stale_days,
         "uncovered": uncovered, "totals": totals,
         "show_money": request.state.user.can("view_money"),
     })
