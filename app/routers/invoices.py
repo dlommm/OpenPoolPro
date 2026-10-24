@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app import email_brand, invoicing, mailer, models, receivables
+from app import email_brand, email_templates, invoicing, mailer, models, receivables
 from app.company import company_info
 from app.db import get_or_404, get_session
 from app.deps import require_admin
@@ -72,7 +72,7 @@ def _send_invoice_email(session: Session, inv: models.Invoice,
     mail = email_brand.invoice_mail(
         company_name=_company_name(session), customer_name=customer.name, number=inv.number,
         period=period, total_cents=inv.total_cents, due=inv.due_date,
-        signoff=email_brand.look(session)["signoff"])
+        signoff=email_brand.look(session)["signoff"], doc=email_templates.doc(session, "invoice"))
     try:
         mailer.send_message(customer.email, mail.subject, mail.text,
                             conf=mailer.send_conf(session),
@@ -207,7 +207,7 @@ def send_reminder(request: Request, iid: int, back: str = Form(""),
     mail = email_brand.reminder_mail(
         company_name=_company_name(session), customer_name=customer.name, number=inv.number,
         balance_cents=inv.balance_cents, days_overdue=days,
-        signoff=email_brand.look(session)["signoff"])
+        signoff=email_brand.look(session)["signoff"], doc=email_templates.doc(session, "reminder"))
     mailer.queue(session, customer.email, mail.subject, mail.text,
                  customer_id=customer.id, html=email_brand.html_for(session, mail))
     models.audit(session, request.state.user.id, "invoice.reminder",

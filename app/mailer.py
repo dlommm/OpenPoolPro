@@ -106,8 +106,9 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
     `attachments` is an optional list of (data, filename) pairs attached as
     application/pdf parts; None -> no behavior change for existing callers.
     `html` adds a text/html alternative; the plain-text `body` is always the
-    first part. A `cid:opp-logo` image in it is attached as a related part
-    (or dropped if the logo has since been removed).
+    first part. A `cid:opp-logo` image, and any `cid:opp-img-*` uploaded
+    email image, in it is attached as a related part (or dropped if it has
+    since been removed).
     Raises on failure; never logs or surfaces credentials."""
     conf = conf or _config_conf()
     msg = EmailMessage()
@@ -119,10 +120,14 @@ def send_message(to_addr: str, subject: str, body: str, conf: dict | None = None
         from app import email_brand
 
         html, logo = email_brand.embed_logo(html)
+        html, images = email_brand.embed_images(html)
         msg.add_alternative(html, subtype="html")
         if logo:
             msg.get_payload()[1].add_related(logo, maintype="image", subtype="png",
                                              cid=f"<{email_brand.LOGO_CID}>")
+        for cid, data, subtype in images:
+            msg.get_payload()[1].add_related(data, maintype="image", subtype=subtype,
+                                             cid=f"<{cid}>")
     if attachments:
         for data, name in attachments:
             msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)

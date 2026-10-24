@@ -34,6 +34,7 @@ from app.routers import (  # noqa: E402
     contracts,
     csv_io,
     customers,
+    email_builder,
     improvements,
     inventory,
     invoices,
@@ -63,7 +64,7 @@ ROUTERS = (
     analytics.router, inventory.router, invoices.router, routes.router,
     contracts.router, contract_template.router, sign.router,
     improvements.router, portal.router, qbo_billing.router, testers.router,
-    setup.router,
+    setup.router, email_builder.router,
 )
 
 

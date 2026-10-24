@@ -27,7 +27,7 @@ def service_mail(session, v, business: str, tech_name: str, signoff: str = ""):
     Deliberately excludes money: this goes out automatically on every visit,
     and pricing conversations belong on the invoice, not in a service note.
     """
-    from app import email_brand, water_history
+    from app import email_brand, email_templates, water_history
 
     tgt = water_history.targets(session)
     readings = []
@@ -49,7 +49,8 @@ def service_mail(session, v, business: str, tech_name: str, signoff: str = ""):
     return email_brand.visit_mail(
         business=business, property_label=v.property.label, day=v.date, tech_name=tech_name,
         readings=readings, chemicals=chemicals, tasks=list(v.tasks_done or []),
-        notes=v.notes or "", signoff=signoff)
+        notes=v.notes or "", signoff=signoff, customer_name=v.property.customer.name,
+        doc=email_templates.doc(session, "visit"))
 
 
 def service_report(session, v, business: str, tech_name: str) -> str:

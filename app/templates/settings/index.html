@@ -910,6 +910,13 @@
               <textarea id="clook-signoff" name="signoff" class="inp" rows="3" maxlength="{{ signoff_max }}" placeholder="{{ appearance.company or 'Your company name' }}">{{ customer_look.signoff }}</textarea>
               <p class="help">Closes visit, invoice and reminder emails. Leave it blank to sign with the company name. Contract emails keep the wording set under Contract.</p>
               <button class="btn-secondary w-full">Save what customers see</button>
+              <span class="lbl" style="margin-top:16px">Wording and layout</span>
+              <p class="help">Build each email from blocks: headings, text with fields, details, images and more.</p>
+              <div class="clook-links">
+                {% for k, l in [("visit", "Visit completed"), ("invoice", "Invoice"), ("reminder", "Payment reminder"), ("followup", "Follow-up reminder")] %}
+                <a class="btn sm" href="/settings/emails/{{ k }}">{{ l }}</a>
+                {% endfor %}
+              </div>
             </form>
             <div class="clook-prev">
               <div class="seg" role="tablist" aria-label="Email preview">

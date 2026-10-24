@@ -4,7 +4,7 @@ import json
 
 from sqlalchemy import select
 
-from app import email_brand, mailer, models, receivables
+from app import email_brand, email_templates, mailer, models, receivables
 from app.timefmt import business_today, local_date
 
 DEFAULT_STAGES = (7, 14, 30)
@@ -25,7 +25,7 @@ def mail(session, invoice):
     return email_brand.followup_mail(
         company_name=company, customer_name=invoice.customer.name, number=invoice.number,
         balance_cents=invoice.balance_cents, due=invoice.due_date,
-        signoff=email_brand.look(session)["signoff"])
+        signoff=email_brand.look(session)["signoff"], doc=email_templates.doc(session, "followup"))
 
 
 def message(session, invoice):
