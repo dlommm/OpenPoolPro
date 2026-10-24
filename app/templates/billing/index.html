@@ -38,26 +38,40 @@
 {% set all_n = drafts | length %}
 <div class="pipe" role="group" aria-label="Billing stages">
   {% for key, label, k in stages %}
-  <a class="pipe-s {{ 'on' if pick == key }}" href="/billing?ym={{ ym }}{{ '' if pick == key else '&stage=' ~ key }}"{% if pick == key %} aria-current="true"{% endif %}>
+  <a class="pipe-s {{ 'on' if pick == key }}" href="/billing?ym={{ ym }}{{ '' if pick == key else '&stage=' ~ key }}{{ '&draft=' ~ draft.id if pane is defined and pane else '' }}"{% if pick == key %} aria-current="true"{% endif %}>
     <span class="pipe-k"><i class="{{ k }}"></i>{{ label }}</span><b class="num">{{ counts.get(key, 0) }}</b><span class="muted small num">{{ sums.get(key, 0) | dollars }}</span></a>
   {% endfor %}
 </div>
 <div class="pipe-bar" aria-hidden="true">{% for key, label, k in stages %}{% if counts.get(key) %}<span class="{{ k }}" style="flex:{{ counts.get(key) }}"></span>{% endif %}{% endfor %}</div>
 
-<section class="card" style="padding:6px">
-  <div class="qb-lh between"><b>{{ (stages | selectattr(0, "equalto", pick) | first)[1] if pick else "All drafts" }} · {{ ym | month_name }}</b>{% if pick %}<a class="btn ghost sm" href="/billing?ym={{ ym }}">Show all</a>{% endif %}</div>
+{#- Master/detail: on desktop the open draft's review sits beside the list
+    (/billing?ym=..&draft=ID). Rows are real links to the full review page,
+    which is what phones, tablets and no-JS get; on desktop a small script
+    loads the pane with HTMX instead and keeps the address bar in step. -#}
+{% set sel = draft if pane is defined and pane else none %}
+{% set stage_q = '&stage=' ~ pick if pick else '' %}
+<div class="qb-ws{{ ' has-sel' if sel else '' }}" id="qb-ws">
+<section class="card qb-list" aria-labelledby="qb-list-t">
+  <div class="qb-lh between"><b id="qb-list-t">{{ (stages | selectattr(0, "equalto", pick) | first)[1] if pick else "All drafts" }} · {{ ym | month_name }}</b>{% if pick %}<a class="btn ghost sm" href="/billing?ym={{ ym }}{{ '&draft=' ~ sel.id if sel else '' }}">Show all</a>{% endif %}</div>
   {% set shown = namespace(n=0) %}
-  {% for draft in drafts if not pick or stage_of.get(draft.status, "review") == pick %}
+  {% for row in drafts if not pick or stage_of.get(row.status, "review") == pick %}
   {% set shown.n = shown.n + 1 %}
-  {% set st = stage_of.get(draft.status, "review") %}
-  <a class="qb-row" href="/billing/drafts/{{ draft.id }}">
-    {{ ui.av(draft.customer.name) }}
-    <span class="qb-rm"><b>{{ draft.customer.name }}</b><small class="{{ 'warnt' if not draft.email }}">{{ draft.email or 'Missing billing email' }}</small></span>
-    <span class="qb-rr"><span class="num">{{ draft.total_cents | dollars }}</span>{{ ui.pill(draft.status | replace('_', ' ') | capitalize, {"review": "acc", "exceptions": "neg", "held": "warn", "qbo": "neu", "sent": "pos"}[st]) }}</span>
+  {% set st = stage_of.get(row.status, "review") %}
+  {% set on = sel and sel.id == row.id %}
+  <a class="qb-row{{ ' on' if on else '' }}" href="/billing/drafts/{{ row.id }}" data-pane="/billing/drafts/{{ row.id }}/pane" data-split="/billing?ym={{ ym }}{{ stage_q }}&draft={{ row.id }}"{% if on %} aria-current="true"{% endif %}>
+    {{ ui.av(row.customer.name) }}
+    <span class="qb-rm"><b>{{ row.customer.name }}</b><small class="{{ 'warnt' if not row.email }}">{{ row.email or 'Missing billing email' }}</small></span>
+    <span class="qb-rr"><span class="num">{{ row.total_cents | dollars }}</span>{{ ui.pill(row.status | replace('_', ' ') | capitalize, {"review": "acc", "exceptions": "neg", "held": "warn", "qbo": "neu", "sent": "pos"}[st]) }}</span>
   </a>
   {% endfor %}
   {% if not shown.n %}<div class="qb-empty"><p class="muted">{{ "No drafts in this stage." if pick else "No drafts for this month. Prepare drafts to collect billable work." }}</p></div>{% endif %}
 </section>
+<section class="card qb-detail{{ '' if sel else ' qb-pane-empty' }}" id="qb-pane" {% if sel %}aria-labelledby="qb-pane-t"{% else %}aria-label="Draft review"{% endif %}>
+  {% if sel %}{% include 'billing/_draft_review.html' %}{% else %}
+  <div class="qb-pick">{{ ui.icon("file", "ic24") }}<p class="muted">{{ "Choose a draft to review its charges, hold it or approve it." if shown.n else "Prepared drafts open here for review." }}</p></div>
+  {% endif %}
+</section>
+</div>
 
 {% if mapping_customers %}
 <details class="card" style="margin-top:var(--gap)"><summary class="card-t" style="cursor:pointer">Verify existing QuickBooks customer matches</summary>
@@ -84,4 +98,63 @@
   </aside>
 </div>
 {% endif %}
+<script nonce="{{ csp_nonce() }}">
+/* Desktop master/detail. Rows stay plain links to the full review page, so
+   phones, tablets, modified clicks and failures all just navigate. On a wide
+   screen a plain click loads the review into the pane with HTMX and pushes
+   the split URL, which the server can render on its own for reloads. */
+(function () {
+  var ws = document.getElementById("qb-ws"), pane = document.getElementById("qb-pane");
+  if (!ws || !pane || !window.matchMedia) return;
+  var wide = window.matchMedia("(min-width: 1101px)");
+  var blank = pane.classList.contains("qb-pane-empty") ? pane.innerHTML : null;
+  var pending = null;
+  function rows() { return ws.querySelectorAll("a.qb-row[data-pane]"); }
+  function mark(link) {
+    Array.prototype.forEach.call(rows(), function (r) {
+      var on = r === link;
+      r.classList.toggle("on", on);
+      if (on) r.setAttribute("aria-current", "true"); else r.removeAttribute("aria-current");
+    });
+    ws.classList.toggle("has-sel", !!link);
+  }
+  function open(link, push) {
+    pending = link;
+    pane.setAttribute("aria-busy", "true");
+    htmx.ajax("GET", link.getAttribute("data-pane"), { target: "#qb-pane", swap: "innerHTML" });
+    if (push) history.pushState({ qbDraft: link.getAttribute("data-split") }, "", link.getAttribute("data-split"));
+    mark(link);
+  }
+  // htmx.ajax with only a target fires its events on <body>, so match on the target.
+  document.body.addEventListener("htmx:afterRequest", function (e) {
+    if (!e.detail || e.detail.target !== pane) return;
+    var link = pending; pending = null;
+    pane.removeAttribute("aria-busy");
+    // Anything but a clean fragment falls back to the full review page.
+    if (!e.detail.successful) { if (link) window.location.assign(link.href); return; }
+    pane.classList.remove("qb-pane-empty");
+    pane.removeAttribute("aria-label");
+    pane.setAttribute("aria-labelledby", "qb-pane-t");
+  });
+  ws.addEventListener("click", function (e) {
+    var link = e.target.closest && e.target.closest("a.qb-row[data-pane]");
+    if (!link || !wide.matches || !window.htmx) return;
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if (link.getAttribute("aria-current") === "true" && !pending) return;
+    open(link, true);
+  });
+  window.addEventListener("popstate", function () {
+    var id = new URLSearchParams(window.location.search).get("draft");
+    var link = id && ws.querySelector('a.qb-row[href="/billing/drafts/' + Number(id) + '"]');
+    if (link && window.htmx && wide.matches) { open(link, false); return; }
+    if (!id && blank !== null) {
+      pane.innerHTML = blank; pane.classList.add("qb-pane-empty");
+      pane.removeAttribute("aria-labelledby"); pane.setAttribute("aria-label", "Draft review");
+      mark(null); return;
+    }
+    window.location.reload();
+  });
+})();
+</script>
 {% endblock %}
