@@ -2,110 +2,88 @@
 {% block title %}Contracts{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Season register", "Contracts") }}
-
-<div class="mb-3 flex flex-wrap items-center gap-2">
-  <form method="get" action="/contracts" class="flex flex-wrap items-center gap-2">
-    <label class="block">
-      <span class="sr-only">Season</span>
-      <select name="season" class="field font-data" data-autosubmit>
-        {% for y in seasons %}<option value="{{ y }}" {{ "selected" if y == season }}>{{ y }}</option>{% endfor %}
-      </select>
-    </label>
-    <input type="search" name="q" value="{{ q }}" placeholder="Search customer or address…"
-           class="field min-w-[12rem] text-sm">
-    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
-    <button class="btn-secondary">Go</button>
-  </form>
-  <div class="ml-auto flex flex-wrap gap-2">
-    <a href="/contracts/renew?from_season={{ season }}" class="btn-secondary">Renew season</a>
-    <a href="/contracts/new?season={{ season }}" class="btn-primary flex items-center gap-1">
-      {{ ui.icon("plus", "h-4 w-4") }}New contract</a>
-  </div>
-</div>
-
+{% set kinds = {"draft": "neu", "approved": "acc", "sent": "warn", "signed": "pos", "void": "neg"} %}
 {% set qs_base = "season=" ~ season ~ ("&q=" ~ (q | urlencode) if q else "") %}
-<div class="mb-4 flex flex-wrap gap-1.5">
-  <a href="/contracts?{{ qs_base }}" class="tag {{ 'bg-shallow text-pool' if not status }}">
-    All {{ counts.values() | sum }}</a>
-  {% for s in statuses %}
-  <a href="/contracts?{{ qs_base }}&status={{ s }}" class="tag {{ 'bg-shallow text-pool' if status == s }}">
-    {{ s | capitalize }} {{ counts.get(s, 0) }}</a>
-  {% endfor %}
-</div>
-
-{% if show_money %}
-<div class="mb-4 grid grid-cols-2 gap-3 sm:max-w-md">
-  <div class="card p-3">
-    <p class="field-label">Signed value</p>
-    <p class="money text-lg font-semibold">{{ totals.signed | dollars }}</p>
+<header class="ph">
+  <div><h1 class="h1">Contracts</h1><p class="lede">Season service agreements, sent for e-signing. {{ counts.values() | sum }} for {{ season }}.</p></div>
+  <div class="acts">
+    {% if request.state.user.role == "admin" %}<a href="/settings#contract" class="btn">{{ ui.icon("edit") }}Edit template</a>{% endif %}
+    <a href="/contracts/renew?from_season={{ season }}" class="btn">{{ ui.icon("sync") }}Season renewal</a>
+    <a href="/contracts/new?season={{ season }}" class="btn pri">{{ ui.icon("plus") }}New contract</a>
   </div>
-  <div class="card p-3">
-    <p class="field-label">In pipeline</p>
-    <p class="money text-lg font-semibold">{{ totals.pipeline | dollars }}</p>
+</header>
+
+<form method="get" action="/contracts" class="clist-filters">
+  <div><label class="sr" for="k-season">Season</label>
+    <select id="k-season" name="season" class="inp" data-autosubmit>{% for y in seasons %}<option value="{{ y }}" {{ "selected" if y == season }}>{{ y }} season</option>{% endfor %}</select></div>
+  <div><label class="sr" for="k-q">Search</label><input id="k-q" type="search" name="q" value="{{ q }}" placeholder="Customer or address" class="inp" style="width:240px"></div>
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <button class="btn sm">Search</button>
+</form>
+<nav class="chips" aria-label="Contract status" style="margin-bottom:16px">
+  <a href="/contracts?{{ qs_base }}" class="chip {{ 'on' if not status }}">All {{ counts.values() | sum }}</a>
+  {% for s in statuses %}<a href="/contracts?{{ qs_base }}&status={{ s }}" class="chip {{ 'on' if status == s }}">{{ s | capitalize }} {{ counts.get(s, 0) }}</a>{% endfor %}
+</nav>
+
+<div class="cols c-main">
+  <div class="stack">
+    {% if rows %}
+    <div class="card" style="padding:4px 12px">
+      <div class="tblw"><table class="tbl ktbl">
+        <thead><tr><th>Customer</th><th>Property and pool</th><th>State</th>{% if show_money %}<th class="r">Season value</th>{% endif %}<th>Activity</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          {% set c = r.c %}
+          <tr>
+            <td><a href="/contracts/{{ c.id }}" class="nm">{{ c.pool.property.customer.name }}</a></td>
+            <td class="muted">{{ c.pool.property.address or c.pool.property.label }} · {{ c.pool.label }}</td>
+            <td>{{ ui.pill(c.status | capitalize, kinds.get(c.status, "neu")) }}</td>
+            {% if show_money %}<td class="r num">{{ r.value | dollars }}</td>{% endif %}
+            <td class="muted small">
+              {% if c.status == "sent" and r.days_out is not none %}sent {{ r.days_out }}d ago
+              {% elif c.status == "signed" %}signed {{ c.signed_at | local_date | short_date }}
+              {% elif c.status == "approved" %}approved {{ c.approved_at | local_date | short_date }}
+              {% else %}created {{ c.created_at | local_date | short_date }}{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {{ ui.pager(page, total_pages, total, "/contracts", qs_base ~ ("&status=" ~ status if status else "")) }}
+    {% else %}
+    <div class="empty"><p class="strong" style="color:var(--t)">No {{ status ~ " " if status }}contracts for {{ season }}{{ " matching “" ~ q ~ "”" if q }}</p>
+      <p><a href="/contracts/new?season={{ season }}">Start a new contract</a></p></div>
+    {% endif %}
+  </div>
+  <div class="stack">
+    {% if show_money %}
+    <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="kpi"><div class="l">Signed value</div><div class="v num">{{ totals.signed | dollars }}</div></div>
+      <div class="kpi"><div class="l">In pipeline</div><div class="v num">{{ totals.pipeline | dollars }}</div></div>
+    </div>
+    {% endif %}
+    {% if stale_sent or uncovered %}
+    <section class="card sx-attn">
+      <h2 class="card-t">Needs attention</h2>
+      <ul class="rows" style="margin-top:6px">
+        {% for r in stale_sent[:8] %}
+        <li><div><a href="/contracts/{{ r.c.id }}" class="strong">{{ r.c.pool.property.customer.name }}</a><small>sent {{ r.days }} days ago, still unsigned</small></div>{{ ui.pill("Unsigned", "warn") }}</li>
+        {% endfor %}
+        {% if stale_sent | length > 8 %}<li><div class="muted">…and {{ stale_sent | length - 8 }} more unsigned past {{ stale_days }} days.</div></li>{% endif %}
+        {% if uncovered %}
+        <li><div><a href="/contracts/new?season={{ season }}" class="strong">{{ uncovered | length }} pool{{ "s" if uncovered | length != 1 }} with no {{ season }} contract</a><small>{{ uncovered[:3] | map(attribute="property.customer.name") | join(", ") }}{% if uncovered | length > 3 %}, …{% endif %}</small></div></li>
+        {% endif %}
+      </ul>
+    </section>
+    {% endif %}
+    <section class="card"><h2 class="card-t">How a contract moves</h2>
+      <ol class="flow" style="padding:10px 0 0">
+        <li><span class="flow-n">1</span><div><b>Draft</b><p class="muted small">Prices from the rate tiers; edit before approving.</p></div></li>
+        <li><span class="flow-n">2</span><div><b>Approve and send</b><p class="muted small">The customer gets a signing link that expires.</p></div></li>
+        <li class="auto"><span class="flow-n">3</span><div><b>Signed</b><p class="muted small">The signed copy and certificate are emailed automatically.</p></div></li>
+      </ol>
+    </section>
   </div>
 </div>
-{% endif %}
-
-{% if stale_sent or uncovered %}
-<div class="card mb-4 border-safety/40 p-4">
-  <h2 class="set-h">Needs attention</h2>
-  <ul class="space-y-1 text-sm">
-    {% for r in stale_sent[:8] %}
-    <li><a href="/contracts/{{ r.c.id }}" class="text-pool">{{ r.c.pool.property.customer.name }}</a>
-      <span class="text-mist">— sent {{ r.days }} days ago, still unsigned</span></li>
-    {% endfor %}
-    {% if stale_sent | length > 8 %}
-    <li class="text-mist">…and {{ stale_sent | length - 8 }} more unsigned past {{ stale_days }} days.</li>
-    {% endif %}
-    {% if uncovered %}
-    <li>
-      <a href="/contracts/new?season={{ season }}" class="text-pool">{{ uncovered | length }}
-        pool{{ "s" if uncovered | length != 1 }} with no {{ season }} contract</a>
-      <span class="text-mist">— {{ uncovered[:3] | map(attribute="property.customer.name") | join(", ") }}{% if uncovered | length > 3 %}, …{% endif %}</span>
-    </li>
-    {% endif %}
-  </ul>
-</div>
-{% endif %}
-
-{% if rows %}
-<div class="card overflow-x-auto p-0">
-  <table class="w-full min-w-[34rem] text-sm">
-    <thead>
-      <tr class="border-b border-seam text-left text-mist">
-        <th class="p-3 font-medium">Customer</th>
-        <th class="p-3 font-medium">Property / pool</th>
-        <th class="p-3 font-medium">Status</th>
-        {% if show_money %}<th class="p-3 text-right font-medium">Season value</th>{% endif %}
-        <th class="p-3 font-medium">Activity</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in rows %}
-      {% set c = r.c %}
-      <tr class="border-b border-seam last:border-0">
-        <td class="p-3"><a href="/contracts/{{ c.id }}" class="font-medium text-pool">{{ c.pool.property.customer.name }}</a></td>
-        <td class="p-3 text-mist">{{ c.pool.property.address or c.pool.property.label }} · {{ c.pool.label }}</td>
-        <td class="p-3"><span class="tag {{ 'tag-safety' if c.status == 'void' }}">{{ c.status }}</span></td>
-        {% if show_money %}<td class="money p-3 text-right">{{ r.value | dollars }}</td>{% endif %}
-        <td class="p-3 text-mist">
-          {% if c.status == "sent" and r.days_out is not none %}sent {{ r.days_out }}d ago
-          {% elif c.status == "signed" %}signed {{ c.signed_at | local_date | short_date }}
-          {% elif c.status == "approved" %}approved {{ c.approved_at | local_date | short_date }}
-          {% else %}created {{ c.created_at | local_date | short_date }}{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{{ ui.pager(page, total_pages, total, "/contracts", qs_base ~ ("&status=" ~ status if status else "")) }}
-{% else %}
-<div class="card p-6 text-center text-mist">
-  <p class="mb-2">No {{ status ~ " " if status }}contracts for {{ season }}{{ " matching “" ~ q ~ "”" if q }}.</p>
-  <a href="/contracts/new?season={{ season }}" class="btn-primary inline-flex items-center gap-1">
-    {{ ui.icon("plus", "h-4 w-4") }}New contract</a>
-</div>
-{% endif %}
 {% endblock %}

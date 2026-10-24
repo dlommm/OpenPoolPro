@@ -2,44 +2,29 @@
 {% block title %}Quote{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-{{ ui.page_header("Estimate", q.title if q else "New quote") }}
-
-{% if q %}
-<div class="mb-4 flex flex-wrap items-center gap-2">
-  <span class="tag {{ 'tag-safety' if q.status == 'declined' }}">{{ q.status }}</span>
-  <span class="font-data text-sm text-mist">{{ q.created_at | local_date }}</span>
-</div>
-
-{% if q.status == "sent" %}
-<div class="mb-4 flex gap-2">
-  <form method="post" action="/quotes/{{ q.id }}/status" class="flex-1">
-    <input type="hidden" name="to" value="accepted">
-    <button class="btn-primary">Accept</button>
-  </form>
-  <form method="post" action="/quotes/{{ q.id }}/status" class="flex-1">
-    <input type="hidden" name="to" value="declined">
-    <button class="btn-danger">Decline</button>
-  </form>
-</div>
-{% endif %}
-
-{% if q.status == "accepted" %}
-<form method="post" action="/quotes/{{ q.id }}/convert" class="mb-4">
-  <button class="btn-primary">Convert to job</button>
-</form>
-{% endif %}
-
-{% if q.status == "converted" and q.job_id %}
-<a href="/jobs/{{ q.job_id }}" class="btn-secondary mb-4 w-full">View job</a>
-{% endif %}
-
-<form method="post" action="/quotes/{{ q.id }}/duplicate" class="mb-4">
-  <button class="btn-secondary w-full">Duplicate</button>
-</form>
-{% endif %}
+{% set kinds = {"draft": "neu", "sent": "acc", "accepted": "pos", "declined": "neg", "converted": "pos"} %}
+<header class="ph">
+  <div>
+    <p class="crumbs"><a href="/quotes">Quotes</a><span aria-hidden="true">›</span><span>{{ ("#%d"|format(q.id)) if q else "New" }}</span></p>
+    <h1 class="h1">{{ q.title if q else "New quote" }}</h1>
+    {% if q %}<p class="lede">{{ customer.name if customer else "" }} · created {{ q.created_at | local_date | short_date }}</p>{% endif %}
+  </div>
+  {% if q %}
+  <div class="acts">
+    {{ ui.pill(q.status | capitalize, kinds.get(q.status, "neu")) }}
+    {% if q.status == "sent" %}
+    <form method="post" action="/quotes/{{ q.id }}/status"><input type="hidden" name="to" value="declined"><button class="btn danger">Decline</button></form>
+    <form method="post" action="/quotes/{{ q.id }}/status"><input type="hidden" name="to" value="accepted"><button class="btn pri">Mark accepted</button></form>
+    {% endif %}
+    {% if q.status == "accepted" %}<form method="post" action="/quotes/{{ q.id }}/convert"><button class="btn pri">Convert to job</button></form>{% endif %}
+    {% if q.status == "converted" and q.job_id %}<a href="/jobs/{{ q.job_id }}" class="btn">View job</a>{% endif %}
+    <form method="post" action="/quotes/{{ q.id }}/duplicate"><button class="btn">Duplicate</button></form>
+  </div>
+  {% endif %}
+</header>
 
 {% if not q or q.status == "draft" %}
-<form method="post" action="{{ ('/quotes/%d/edit'|format(q.id)) if q else '/quotes/new' }}" class="space-y-3">
+<form method="post" action="{{ ('/quotes/%d/edit'|format(q.id)) if q else '/quotes/new' }}" class="formwrap card legacy-form">
   <label class="block"><span class="field-label">Customer</span>
     <select name="customer_id" class="field">
       {% for c in customers %}
@@ -76,15 +61,13 @@
     <p class="mt-1 text-xs text-mist">Blank a line's amount to remove it.</p>
   </div>
 
-  <div class="flex items-center justify-between font-data text-lg font-semibold">
-    <span>Total</span><span class="money">{{ total_cents | dollars }}</span>
-  </div>
-  <button class="btn-primary">Save</button>
+  <div class="kp-total"><span>Total</span><b class="num">{{ total_cents | dollars }}</b></div>
+  <div class="formbar"><span class="muted small">{{ "Draft quotes can be edited; send it from the quote once saved." if not q else "" }}</span><span class="row"><a class="btn" href="{{ ('/quotes/%d'|format(q.id)) if q else '/quotes' }}">Cancel</a><button class="btn pri">Save quote</button></span></div>
 </form>
 
 {% if q and job_templates %}
-<div class="card mt-4 p-3">
-  <span class="field-label">Insert template as line</span>
+<div class="card formwrap" style="margin-top:var(--gap)">
+  <span class="field-label">Insert a job template as a line</span>
   <form method="post" action="/quotes/{{ q.id }}/lines/from-template" class="mt-1 flex gap-2">
     <select name="template_id" class="field flex-1">
       {% for t in job_templates %}
@@ -97,7 +80,7 @@
 {% endif %}
 
 {% else %}
-<div class="card space-y-2 p-4">
+<div class="card formwrap space-y-2">
   <p><span class="text-mist">Customer:</span> {{ customer.name if customer else "" }}</p>
   {% if prop %}<p><span class="text-mist">Property:</span> {{ prop.label }}</p>{% endif %}
   {% if q.notes %}<p class="text-sm text-mist">{{ q.notes }}</p>{% endif %}

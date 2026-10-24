@@ -1531,3 +1531,11 @@ h2.font-display{font-size:16px;font-weight:600}
 h3.font-display{font-size:15px;font-weight:600}
 .font-display.uppercase{text-transform:none}
 .tracking-wide.uppercase,.tracking-wider.uppercase{letter-spacing:normal}
+/* Forms still on their original markup, inside one card */
+.legacy-form{padding:22px}
+.legacy-form>*+*,.legacy-form .space-y-3>*+*{margin-top:14px}
+.legacy-form label.block{display:block}
+.legacy-form .formbar{position:sticky;margin:18px -10px -10px;box-shadow:none;border-color:var(--rule)}
+.legacy-sub{font-size:13px;font-weight:600;color:var(--m);margin-top:18px}
+@media (max-width: 720px){ .qtbl thead{display:none} .qtbl td:nth-child(2),.qtbl td:nth-child(5){display:none} }
+@media (max-width: 720px){ .ktbl thead{display:none} .ktbl td:nth-child(2),.ktbl td:last-child{display:none} }

@@ -2,45 +2,36 @@
 {% block title %}Quotes{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<div class="flex items-start justify-between gap-2">
-  {{ ui.page_header("Estimates", "Quotes") }}
-  <a href="/quotes/new" class="btn-secondary mt-2 shrink-0 gap-1.5">{{ ui.icon("plus", "h-4 w-4") }}Add</a>
-</div>
-<div class="mb-4 flex flex-wrap gap-2 text-sm">
-  <a href="/quotes" class="tag {{ 'tag-safety' if not status }}">All</a>
+{% set kinds = {"draft": "neu", "sent": "acc", "accepted": "pos", "declined": "neg", "converted": "pos"} %}
+<header class="ph">
+  <div><h1 class="h1">Quotes</h1><p class="lede">An accepted quote converts into a job with the same price and lines.</p></div>
+  <div class="acts"><a href="/quotes/new" class="btn pri">{{ ui.icon("plus") }}New quote</a></div>
+</header>
+<nav class="chips" aria-label="Quote status" style="margin-bottom:16px">
+  <a href="/quotes" class="chip {{ 'on' if not status }}">All</a>
   {% for st in ["draft", "sent", "accepted", "declined", "converted"] %}
-  <a href="/quotes?status={{ st }}" class="tag {{ 'tag-safety' if status == st }}">{{ st }}</a>
+  <a href="/quotes?status={{ st }}" class="chip {{ 'on' if status == st }}">{{ st | capitalize }}</a>
   {% endfor %}
-</div>
-<div class="rise overflow-x-auto">
-<table class="w-full text-left text-sm">
-  <thead class="text-xs uppercase tracking-wide text-mist">
-    <tr>
-      <th class="py-1 pr-2">#</th>
-      <th class="py-1 pr-2">Customer</th>
-      <th class="py-1 pr-2">Title</th>
-      <th class="py-1 pr-2">Total</th>
-      <th class="py-1 pr-2">Status</th>
-      <th class="py-1">Created</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for q in quotes %}
-    <tr class="border-t border-seam">
-      <td class="py-2 pr-2 font-data"><a href="/quotes/{{ q.id }}" class="text-pool">{{ q.id }}</a></td>
-      <td class="py-2 pr-2">{{ customer_names.get(q.customer_id, "") }}</td>
-      <td class="py-2 pr-2"><a href="/quotes/{{ q.id }}" class="text-ink">{{ q.title }}</a></td>
-      <td class="py-2 pr-2 money">{{ totals[q.id] | dollars }}</td>
-      <td class="py-2 pr-2"><span class="tag {{ 'tag-safety' if q.status == 'declined' }}">{{ q.status }}</span></td>
-      <td class="py-2 font-data">{{ q.created_at | local_date }}</td>
-    </tr>
-    {% else %}
-    <tr><td colspan="6" class="py-6 text-center text-mist">No quotes yet.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-</div>
+</nav>
 {% if quotes %}
+<div class="card" style="padding:4px 12px">
+  <div class="tblw"><table class="tbl qtbl">
+    <thead><tr><th>Quote</th><th>Customer</th><th>State</th><th class="r">Amount</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for q in quotes %}
+      <tr>
+        <td><a class="nm" href="/quotes/{{ q.id }}">{{ q.title }}</a><div class="muted small">#{{ q.id }}</div></td>
+        <td>{{ customer_names.get(q.customer_id, "") }}</td>
+        <td>{{ ui.pill(q.status | capitalize, kinds.get(q.status, "neu")) }}</td>
+        <td class="r num">{{ totals[q.id] | dollars }}</td>
+        <td>{{ q.created_at | local_date | short_date }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
 {{ ui.pager(page, total_pages, total, "/quotes", ("status=" ~ (status | urlencode)) if status else "") }}
+{% else %}
+<div class="empty"><p class="strong" style="color:var(--t)">No quotes yet</p><p>Quotes you write show up here.</p></div>
 {% endif %}
 {% endblock %}
