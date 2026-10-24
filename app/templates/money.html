@@ -1,37 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Money{% endblock %}
+{% block title %}Money summary{% endblock %}
 {% block content %}
 {% import "_ui.html" as ui %}
-<div class="flex items-center justify-between gap-2">
-  <a href="/money?ym={{ prev }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Previous month">{{ ui.icon("chevron", "h-5 w-5 rotate-180") }}</a>
-  {{ ui.page_header("Monthly billing", ["January","February","March","April","May","June","July","August","September","October","November","December"][month-1] ~ " " ~ year) }}
-  <a href="/money?ym={{ next }}" class="flex min-h-11 shrink-0 items-center px-1 text-pool" aria-label="Next month">{{ ui.icon("chevron", "h-5 w-5") }}</a>
-</div>
-<p class="mb-4 font-data text-3xl font-semibold text-brass">{{ grand | dollars }} <span class="font-body text-sm font-normal normal-case text-mist">billable</span></p>
-{% if grand_tax %}
-<div class="-mt-3 mb-4 space-y-0.5 font-data text-sm text-mist">
-  <div class="flex justify-between"><span>Sales tax</span><span class="money">{{ grand_tax | dollars }}</span></div>
-  <div class="flex justify-between font-semibold text-ink"><span>Grand total</span><span class="money">{{ grand_total | dollars }}</span></div>
-</div>
-{% endif %}
-<div class="rise space-y-2">
-  {% for r in rows %}
-  <details class="card p-3.5">
-    <summary class="flex min-h-11 cursor-pointer items-center justify-between font-semibold">
-      <span>{{ r.customer.name }}</span><span class="money">{{ r.total_cents | dollars }}</span></summary>
-    <div class="mt-2 space-y-1 border-t border-seam pt-2 font-data text-sm text-mist">
-      <div class="flex justify-between"><span>Labor ({{ r.labor_visits }} visits)</span><span class="money">{{ r.labor_cents | dollars }}</span></div>
-      <div class="flex justify-between"><span>Chemicals (cost {{ r.chem_cost_cents | dollars }})</span><span class="money">{{ r.chem_billable_cents | dollars }}</span></div>
-      {% for j in r.jobs %}<div class="flex justify-between"><span>Job: {{ j.title }}</span><span class="money">{{ j.labor_cents | dollars }}</span></div>{% endfor %}
-      {% if grand_tax %}<div class="flex justify-between"><span>Sales tax</span><span class="money">{{ r.tax_cents | dollars }}</span></div>{% endif %}
-    </div>
-  </details>
-  {% else %}
-  <div class="card p-6 text-center">
-    <p class="font-display text-xl font-bold uppercase tracking-wide">Nothing billable</p>
-    <p class="mt-1 text-sm text-mist">No completed visits or jobs this month yet.</p>
+{% set month_label = "%d-%02d"|format(year, month) | month_name %}
+<header class="ph">
+  <div>
+    <h1 class="h1">Money summary</h1>
+    <p class="lede">What each customer owes for {{ month_label }}: weekly service, chemicals at your markup, and finished jobs.</p>
   </div>
-  {% endfor %}
+  <div class="acts">
+    <div class="mstep"><a class="icbtn plain" href="/money?ym={{ prev }}" aria-label="Previous month">{{ ui.icon("back") }}</a><b>{{ month_label }}</b><a class="icbtn plain" href="/money?ym={{ next }}" aria-label="Next month">{{ ui.icon("next") }}</a></div>
+    <a href="/money/export?ym={{ ym }}" class="btn pri">{{ ui.icon("dl") }}Export for QuickBooks</a>
+  </div>
+</header>
+
+<div class="kpis" style="margin-bottom:var(--gap)">
+  <div class="kpi"><div class="l">Billable</div><div class="v num">{{ grand | dollars }}</div><div class="c">{{ rows|length }} customer{{ "s" if rows|length != 1 }}</div></div>
+  <div class="kpi"><div class="l">Weekly service</div><div class="v num">{{ rows | sum(attribute="labor_cents") | dollars }}</div><div class="c">{{ rows | sum(attribute="labor_visits") }} visits</div></div>
+  <div class="kpi"><div class="l">Chemicals</div><div class="v num">{{ rows | sum(attribute="chem_billable_cents") | dollars }}</div><div class="c">cost {{ rows | sum(attribute="chem_cost_cents") | dollars }}</div></div>
+  <div class="kpi"><div class="l">{{ "Grand total" if grand_tax else "Jobs" }}</div><div class="v num">{{ (grand_total if grand_tax else rows | sum(attribute="job_cents")) | dollars }}</div><div class="c">{% if grand_tax %}includes {{ grand_tax | dollars }} sales tax{% else %}finished this month{% endif %}</div></div>
 </div>
-<a href="/money/export?ym={{ ym }}" class="btn-primary mt-4">Export for QuickBooks</a>
+
+{% if rows %}
+<div class="card" style="padding:4px 12px">
+  <div class="tblw"><table class="tbl num mtbl">
+    <thead><tr><th>Customer</th><th class="r">Visits</th><th class="r">Service</th><th class="r">Chemicals</th><th class="r">Jobs</th>{% if grand_tax %}<th class="r">Tax</th>{% endif %}<th class="r">Total</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a class="nm" href="/customers/{{ r.customer.id }}#billing">{{ r.customer.name }}</a>{% if r.jobs %}<div class="muted small">{{ r.jobs | map(attribute="title") | join(", ") }}</div>{% endif %}</td>
+        <td class="r">{{ r.labor_visits }}</td>
+        <td class="r">{{ r.labor_cents | dollars }}</td>
+        <td class="r" title="cost {{ r.chem_cost_cents | dollars }}">{{ r.chem_billable_cents | dollars }}</td>
+        <td class="r">{{ r.job_cents | dollars }}</td>
+        {% if grand_tax %}<td class="r">{{ r.tax_cents | dollars }}</td>{% endif %}
+        <td class="r strong">{{ r.total_cents | dollars }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% else %}
+<div class="empty"><p class="strong" style="color:var(--t)">Nothing billable</p><p>No completed visits or jobs this month yet.</p></div>
+{% endif %}
 {% endblock %}

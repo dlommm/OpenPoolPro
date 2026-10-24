@@ -1539,3 +1539,10 @@ h3.font-display{font-size:15px;font-weight:600}
 .legacy-sub{font-size:13px;font-weight:600;color:var(--m);margin-top:18px}
 @media (max-width: 720px){ .qtbl thead{display:none} .qtbl td:nth-child(2),.qtbl td:nth-child(5){display:none} }
 @media (max-width: 720px){ .ktbl thead{display:none} .ktbl td:nth-child(2),.ktbl td:last-child{display:none} }
+@media (max-width: 720px){ .mtbl thead{display:none} .mtbl td:not(:first-child):not(:last-child){display:none} }
+a.icbtn{text-decoration:none;color:inherit}
+/* Invoice drawers open on their #inv-<id> anchor */
+.inv-drawer{display:none}
+.inv-drawer:target{display:flex}
+.drawer-close-area{flex:1}
+@media (max-width: 720px){ .itbl thead{display:none} .itbl td:nth-child(2),.itbl td:nth-child(3),.itbl td:nth-child(5){display:none} }
