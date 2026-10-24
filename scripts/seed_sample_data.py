@@ -8,12 +8,14 @@ Run inside the app container after it boots:
 or on the host with the app's data dir:
     DATA_DIR=./data .venv/bin/python scripts/seed_sample_data.py
 """
+import os
 from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import addresses, models
+from app.auth_core import hash_password
 from app.db import make_engine
 from app.rates import effective_rate_cents, gallons
 
@@ -27,6 +29,14 @@ def run() -> None:
         if s.scalars(select(models.Customer)).first() is not None:
             print("existing customers found — refusing to change business data")
             return
+
+        # --- An owner to sign in with (a fresh install has none until
+        # first-run setup). Password from DEMO_OWNER_PASSWORD. ---
+        if s.scalars(select(models.User).where(models.User.role == "admin")).first() is None:
+            s.add(models.User(name="Alex Morgan", username="alex.morgan", role="admin", active=True,
+                              password_hash=hash_password(os.environ.get("DEMO_OWNER_PASSWORD",
+                                                                         "demo-owner-pass-1"))))
+        models.set_setting(s, "setup_status", "done")
 
         # --- Company profile + billing settings ---
         for key, value in [

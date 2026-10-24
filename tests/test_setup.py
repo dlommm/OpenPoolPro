@@ -234,3 +234,13 @@ def test_manage_reset_owner_prints_link(engine, monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "https://pools.example.com/setup/reset/" in out
     assert manage.main(["reset-owner", "--username", "nobody"]) == 1
+
+
+def test_owner_created_elsewhere_is_picked_up(engine, monkeypatch, tmp_path):
+    """A seed script or another worker creating the owner ends setup mode in
+    this process too, instead of leaving /setup open."""
+    app, c = fresh(engine, monkeypatch, tmp_path)
+    make_owner(engine, username="alex.morgan", password=PW)
+    r = c.get("/login", follow_redirects=False)
+    assert r.status_code == 200 and app.state.needs_owner is False
+    assert c.get("/setup/welcome", follow_redirects=False).headers["location"] == "/login"

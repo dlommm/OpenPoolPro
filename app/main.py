@@ -214,6 +214,18 @@ def create_app(engine=None) -> FastAPI:
     async def require_auth(request, call_next):
         path = request.url.path
         in_setup = path == "/setup" or path.startswith("/setup/")
+        # These flags are cached per process, but the owner can appear (or the
+        # upgraded owner finish their profile) outside this process: another
+        # worker, a seed script, a restore. While either is set, trust the DB.
+        if app.state.needs_owner or app.state.setup_legacy:
+            from sqlalchemy.orm import Session as _S
+
+            from app import setup_flow as _sf
+            with _S(app.state.engine) as s:
+                if app.state.needs_owner and _sf.owner_exists(s):
+                    app.state.needs_owner, app.state.setup_code = False, None
+                if app.state.setup_legacy and _sf.status(s) != "legacy":
+                    app.state.setup_legacy = False
         if app.state.needs_owner and not (in_setup or path.startswith("/static/")
                                           or path in ("/manifest.json", "/sw.js", "/health")):
             return RedirectResponse("/setup", status_code=303)
