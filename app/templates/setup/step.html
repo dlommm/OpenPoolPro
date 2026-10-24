@@ -129,7 +129,7 @@
         <h1 class="h1">Tell us about {{ company.business_name or "your business" }}</h1>
         <p class="lede">These go on invoices, quotes, contracts, emails and the customer portal.</p>
         <div class="setup-grid">
-          <div class="full"><label class="lbl" for="b-name">Business name</label><input id="b-name" name="business_name" value="{{ company.business_name }}" class="inp" autocomplete="organization" placeholder="e.g. Coastline Pool Co."></div>
+          <div class="full"><label class="lbl" for="b-name">Business name</label><input id="b-name" name="business_name" value="{{ company.business_name }}" class="inp" autocomplete="organization" placeholder="e.g. Example Pool Co."></div>
           <div><label class="lbl" for="b-phone">Phone</label><input id="b-phone" type="tel" name="company_phone" value="{{ company.company_phone }}" class="inp"></div>
           <div><label class="lbl" for="b-email">Email customers reply to</label><input id="b-email" type="email" name="company_email" value="{{ company.company_email }}" class="inp"></div>
           <div class="full"><label class="lbl" for="b-addr">Business address</label><input id="b-addr" name="company_address" value="{{ company.company_address }}" class="inp" placeholder="Street, city, state ZIP"></div>
@@ -233,7 +233,7 @@
               <div><label class="lbl" for="m-port">Port</label><input id="m-port" name="smtp_port" value="{{ smtp.port or 587 }}" class="inp num" inputmode="numeric"></div>
               <div><label class="lbl" for="m-user">Username</label><input id="m-user" name="smtp_user" value="{{ smtp.user or owner_email }}" class="inp" autocomplete="off"></div>
               <div><label class="lbl" for="m-pass">App password</label><input id="m-pass" type="password" name="smtp_pass" class="inp" autocomplete="new-password"><p class="help">For Gmail, create an app password in your Google account.</p></div>
-              <div class="full"><label class="lbl" for="m-from">Send as</label><input id="m-from" name="smtp_from" value="{{ smtp.sender or '' }}" class="inp" placeholder="Coastline Pool Co. &lt;office@example.com&gt;"></div>
+              <div class="full"><label class="lbl" for="m-from">Send as</label><input id="m-from" name="smtp_from" value="{{ smtp.sender or '' }}" class="inp" placeholder="Example Pool Co. &lt;office@example.com&gt;"></div>
             </div>
             <p class="help">Microsoft 365 sign-in and a test email are in Admin › System.</p>
           </details>

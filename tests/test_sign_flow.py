@@ -90,7 +90,7 @@ def test_sign_page_wears_the_company_appearance(client, engine, monkeypatch):
     resolved for it too, even though the request carries no session."""
     _, token, _ = _sent_contract(client, engine, monkeypatch)
     with Session(engine) as s:
-        models.set_setting(s, "business_name", "Coastline Pool Co.")
+        models.set_setting(s, "business_name", "Example Pool Co.")
         s.commit()
     client.cookies.clear()
     assert 'data-theme="aqua-atelier"' in client.get(f"/sign/{token}").text

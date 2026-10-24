@@ -106,7 +106,7 @@ def test_two_step_enrolment_in_setup(engine, monkeypatch, tmp_path):
 
 def test_business_prices_look_and_water_save(engine, monkeypatch, tmp_path):
     app, c = start(engine, monkeypatch, tmp_path)
-    c.post("/setup/business", data={"business_name": "Coastline Pool Co.", "company_phone": "555-0100",
+    c.post("/setup/business", data={"business_name": "Example Pool Co.", "company_phone": "555-0100",
                                     "timezone": "America/Chicago", "default_state": "tx"})
     with Session(engine) as s:
         tiers = s.scalars(select(models.RateTier)).all()
@@ -116,7 +116,7 @@ def test_business_prices_look_and_water_save(engine, monkeypatch, tmp_path):
     c.post("/setup/water", data={"chem": [str(chem.id)]})
     c.post("/setup/look", data={"palette": "coral", "nav_layout": "side"})
     with Session(engine) as s:
-        assert models.get_setting(s, "business_name", "") == "Coastline Pool Co."
+        assert models.get_setting(s, "business_name", "") == "Example Pool Co."
         assert models.get_setting(s, "timezone", "") == "America/Chicago"
         assert models.get_setting(s, "default_state", "") == "TX"
         assert s.get(models.RateTier, tiers[0].id).rate_cents == 4950
@@ -172,10 +172,10 @@ def test_sign_in_resumes_setup(engine, monkeypatch, tmp_path):
 
 def test_login_page_shows_business_name(client, engine):
     with Session(engine) as s:
-        models.set_setting(s, "business_name", "Coastline Pool Co.")
+        models.set_setting(s, "business_name", "Example Pool Co.")
         s.commit()
     anon = TestClient(client.app)
-    assert "Coastline Pool Co." in anon.get("/login").text
+    assert "Example Pool Co." in anon.get("/login").text
 
 
 def test_upgraded_owner_finishes_profile(engine, monkeypatch, tmp_path):

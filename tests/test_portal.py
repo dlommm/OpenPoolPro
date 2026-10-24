@@ -208,7 +208,7 @@ def test_the_portal_wears_the_company_appearance(client, engine, anon):
     exception handler behind the same middleware."""
     ids = _fixtures(engine)
     with Session(engine) as s:
-        models.set_setting(s, "business_name", "Coastline Pool Co.")
+        models.set_setting(s, "business_name", "Example Pool Co.")
         s.commit()
     page = anon.get(f"/portal/{_token(engine, ids['ours']['customer'])}").text
     assert 'data-theme="aqua-atelier"' in page

@@ -40,10 +40,10 @@ def run() -> None:
 
         # --- Company profile + billing settings ---
         for key, value in [
-            ("business_name", "Coastline Pools"),
-            ("company_address", "142 Marina Way, Naples, FL 34102"),
+            ("business_name", "Example Pool Co."),
+            ("company_address", "100 Example Harbor Way, Naples, FL 34102"),
             ("company_phone", "(239) 555-0142"),
-            ("company_email", "service@coastlinepools.example"),
+            ("company_email", "service@example.com"),
             ("company_license", "CPC-1458792"),
             ("chem_markup_percent", "15"),
         ]:
@@ -85,17 +85,17 @@ def run() -> None:
         # filter/sort have real variety to demonstrate on a fresh install.
         demo = [
             ("Marcus & Lena Alvarez", "(239) 555-0111", "marcus.alvarez@example.com",
-             "88 Gulfshore Blvd", "Cocoa Beach", "FL", "32931", "weekly",
+             "88 Driftwood Ln", "Cocoa Beach", "FL", "32931", "weekly",
              ("Main pool", "rectangle", 32, 16, 5.0, "chlorine", "pebble", "pool"),
              ("Spa", "rectangle", 8, 8, 3.5, "chlorine", "tile", "spa")),
             ("Priya Nair", "(239) 555-0122", "priya.nair@example.com",
-             "17 Seagate Dr", "Melbourne", "FL", "32901", "biweekly",
+             "17 Tidewater Ct", "Melbourne", "FL", "32901", "biweekly",
              ("Backyard", "oval", 30, 15, 4.5, "salt", "plaster", "pool"), None),
             ("The Whitfield Estate", "(239) 555-0133", "estate@whitfield.example",
-             "5 Port Royal Ln", "Satellite Beach", "FL", "32937", "weekly",
+             "5 Heron Cove Ln", "Satellite Beach", "FL", "32937", "weekly",
              ("Lap pool", "rectangle", 40, 20, 5.5, "salt", "tile", "pool"), None),
             ("Dana Cole", "(239) 555-0144", "dana.cole@example.com",
-             "230 Banyan St", "Merritt Island", "FL", "32952", "weekly",
+             "230 Sandpiper Way", "Merritt Island", "FL", "32952", "weekly",
              ("Above-ground", "round", 24, None, 4.33, "chlorine", "vinyl", "pool"), None),
         ]
         if not s.scalars(select(models.Customer)).first():
